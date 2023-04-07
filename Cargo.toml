@@ -24,3 +24,7 @@ plonky2_field = { path = "../plonky2lib/field" }
 [[bin]]
 name = "header_proof_generator"
 path = "src/header_proof_generator.rs"
+
+[[bin]]
+name = "grandpa_justif_proof_generator"
+path = "src/grandpa_justif_proof_generator.rs"

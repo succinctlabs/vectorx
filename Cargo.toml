@@ -1,0 +1,26 @@
+[package]
+name = "justify"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.2.0", features = ["full"] }
+tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
+futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "std"] }
+serde_json = "1.0.86"
+serde = {version = "1", features= ["derive"]}
+# sc-finality-grandpa = {git = "https://github.com/paritytech/substrate.git"}
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
+sp-core = "6.0.0"
+avail-subxt = {git = "https://github.com/maticnetwork/avail.git"}
+subxt = "0.24"
+hex = "0.4.3"
+avail_proof_generators = { path = "../plonky2lib/avail-finality-experiments" }
+plonky2 = { path = "../plonky2lib/plonky2" }
+plonky2_field = { path = "../plonky2lib/field" }
+
+[[bin]]
+name = "header_proof_generator"
+path = "src/header_proof_generator.rs"

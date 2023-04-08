@@ -92,7 +92,7 @@ pub async fn main() {
     let mut sub = sub.unwrap();
     let mut previous_block_hash = None;
 
-    // Wait for new justification
+    // Wait for headers
     while let Some(Ok(header)) = sub.next().await {
         let block_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
         println!("got a header with number {:?} and hash {:?}", header.number, block_hash);

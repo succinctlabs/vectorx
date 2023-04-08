@@ -1,12 +1,14 @@
-use std::ops::Deref;
+use std::sync::Arc;
 
 use avail_subxt::api::runtime_types::sp_core::crypto::KeyTypeId;
 use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
 use futures_util::future::join_all;
 use futures_util::StreamExt;
+use plonky2::plonk::config::{PoseidonGoldilocksConfig, GenericConfig};
+use avail_proof_generators::gadgets::consensus::{build_grandpa_justification_verifier, GrandpaJustificationVerifierTargets};
 use serde::de::Error;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sp_core::{
     blake2_256, bytes,
     crypto::Pair,
@@ -14,7 +16,7 @@ use sp_core::{
     H256,
 };
 use subxt::rpc::RpcParams;
-// use anyhow::Result;
+use jsonrpsee::ws_client::WsClientBuilder;
 
 #[derive(Deserialize, Debug)]
 pub struct SubscriptionMessageResult {
@@ -80,143 +82,82 @@ pub enum SignerMessage {
     PrecommitMessage(Precommit),
 }
 
+const D: usize = 2;
+type C = PoseidonGoldilocksConfig;
+type F = <C as GenericConfig<D>>::F;
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct JustificationNotification(pub sp_core::Bytes);
+
+// Perform a highly unsafe type-casting between two types hidden behind an Arc.
+pub unsafe fn unsafe_arc_cast<T, U>(arc: Arc<T>) -> Arc<U> {
+	let ptr = Arc::into_raw(arc).cast::<U>();
+	Arc::from_raw(ptr)
+}
+
+/// Represents a Hash in this library
+pub type Hash = H256;
+
+/// Finality for block B is proved by providing:
+/// 1) the justification for the descendant block F;
+/// 2) headers sub-chain (B; F] if B != F;
+#[derive(Debug, PartialEq, Encode, Decode, Clone)]
+pub struct FinalityProof<H: codec::Codec> {
+	/// The hash of block F for which justification is provided.
+	pub block: Hash,
+	/// Justification of the block F.
+	pub justification: Vec<u8>,
+	/// The set of headers in the range (B; F] that we believe are unknown to the caller. Ordered.
+	pub unknown_headers: Vec<H>,
+}
+
 #[tokio::main]
 pub async fn main() {
-    //let url = "wss://devnet06.dataavailability.link:28546";
+    // Compile the header validation circuit
+    //let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+    //let targets = build_grandpa_justification_verifier(&mut builder, 1);
+
+    //let header_validation_circuit = builder.build::<C>();
+
     let url: &str = "wss://testnet.avail.tools:443/ws";
-
     let c = build_client(url).await.unwrap();
-    let mut e = c.events().subscribe().await.unwrap().filter_events::<(
-        api::grandpa::events::NewAuthorities,
-        api::grandpa::events::Paused,
-        api::grandpa::events::Resumed,
-    )>();
-
-    tokio::spawn(async move {
-        while let Some(ev) = e.next().await {
-            let event_details = ev.unwrap();
-            match event_details.event {
-                (Some(new_auths), None, None) => println!("New auths: {new_auths:?}"),
-                (None, Some(paused), None) => println!("Auth set paused: {paused:?}"),
-                (None, None, Some(resumed)) => println!("Auth set resumed: {resumed:?}"),
-                _ => unreachable!(),
-            }
-        }
-    });
-
-    let t = c.rpc().deref();
-    let sub: Result<subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
+    let t = c.rpc();
+    let sub: Result<subxt::rpc::Subscription<Header>, subxt::Error> = t
         .subscribe(
-            "grandpa_subscribeJustifications",
+            "chain_subscribeFinalizedHeads",
             RpcParams::new(),
-            "grandpa_unsubscribeJustifications",
+            "chain_unsubscribeFinalizedHeads",
         )
         .await;
 
     let mut sub = sub.unwrap();
 
-    // Wait for new justification
-    while let Some(Ok(justification)) = sub.next().await {
-        println!("Justification: {justification:?}");
+    // How often we want to generate a proof of grandpa justification
+    const FINALIZATION_PERIOD: usize = 5;
 
-        // Get the header corresponding to the new justification
-        let header = c
-            .rpc()
-            .header(Some(justification.commit.target_hash))
-            .await
-            .unwrap()
-            .unwrap();
-        // A bit redundant, but just to make sure the hash is correct
-        let calculated_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
+    // Wait for headers
+    while let Some(Ok(header)) = sub.next().await {
+        println!("Got header: {:?}", header.number);
+        if header.number % (FINALIZATION_PERIOD as u32) == 0 {
+            println!("Going to retrieve the justification for header: {:?}", header.number);
+            let encoded_header = header.encode();
 
-        // println!("Header is {header:?}");
-        let header_number = header.number;
-        println!("header number is {header_number:?}");
-
-        // let encoded_header = header.encode();
-	    // println!("Header encoding is {encoded_header:?}");
-
-        assert_eq!(justification.commit.target_hash, calculated_hash);
-        // Get current authority set ID
-        let set_id_key = api::storage().grandpa().current_set_id();
-        let set_id = c.storage().fetch(&set_id_key, None).await.unwrap().unwrap();
-        // println!("Current set id: {set_id:?}");
-
-        let unencoded_message = (
-            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
-            &justification.round,
-            &set_id,
-        );
-
-        // Form a message which is signed in the justification
-        let signed_message = Encode::encode(&(
-            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
-            &justification.round,
-            &set_id,
-        ));
-
-        // Verify all the signatures of the justification and extract the public keys
-        let sig_owners_fut = justification
-            .commit
-            .precommits
-            .iter()
-            .map(|precommit| async {
-                let is_ok = <ed25519::Pair as Pair>::verify_weak(
-                    &precommit.clone().signature.0[..],
-                    signed_message.as_slice(),
-                    &precommit.clone().id,
-                );
-                assert!(is_ok, "Not signed by this signature!");
-                // println!("Justification AccountId: {p:?}");
-                let session_key_key_owner = api::storage().session().key_owner(
-                    KeyTypeId(sp_core::crypto::key_types::GRANDPA.0),
-                    precommit.clone().id.0,
-                );
-                c.storage().fetch(&session_key_key_owner, None).await
-            })
-            .collect::<Vec<_>>();
-        let sig_owners = join_all(sig_owners_fut)
-            .await
-            .into_iter()
-            .map(|e| e.unwrap().unwrap())
-            .collect::<Vec<_>>();
-
-        // Get the current authority set and extract all owner accounts and weights
-        let authority_set_key = api::storage().babe().authorities();
-        let authority_set = c
-            .storage()
-            .fetch(&authority_set_key, None)
-            .await
-            .unwrap()
-            .unwrap();
-        let auth_set_fut = authority_set.0.iter().map(|e| async {
-            let (public_key, weight) = e.clone();
-            let pk = public_key.0 .0;
-            let session_key_key_owner = api::storage()
-                .session()
-                .key_owner(KeyTypeId(sp_core::crypto::key_types::BABE.0), pk);
-            let f = c.storage().fetch(&session_key_key_owner, None).await;
-            (f.unwrap().unwrap(), weight)
-        });
-
-        let auth_owners = join_all(auth_set_fut).await;
-
-        // Calculate the total weight of the authority set
-        let total_weight: u64 = auth_owners.iter().map(|e| e.1).sum();
-
-        // Crosscheck all the weight and calculate how much was in the concensus
-        let weight: u64 = sig_owners
-            .iter()
-            .map(|e| {
-                auth_owners
-                    .iter()
-                    .find(|e1| e1.0.eq(e))
-                    .map(|e| e.1)
-                    .unwrap_or(0)
-            })
-            .sum();
-        println!("Total auth weight: {total_weight}");
-        println!("Total weight signed: {weight}");
-        assert!(weight as f64 >= ((total_weight as f64) * 2. / 3.));
+            let relay_ws_client = Arc::new(WsClientBuilder::default().build(url).await);
+            let encoded_justification = finality_grandpa_rpc::GrandpaApiClient::<JustificationNotification, H256, u32>::prove_finality(
+                &*unsafe {
+					unsafe_arc_cast::<_, jsonrpsee_ws_client::WsClient>(
+						relay_ws_client
+					)
+				},
+                header.number)
+                .await.unwrap().unwrap().0;
+    
+                let finality_proof = FinalityProof::<H256>::decode(&mut &encoded_justification[..]).unwrap();
+    
+                let justification =
+                    GrandpaJustification::decode(&mut &finality_proof.justification[..]).unwrap();
+    
+                println!("justification is {:?}", justification);
+        }
     }
 }

@@ -20,6 +20,10 @@ hex = "0.4.3"
 avail_proof_generators = { path = "../plonky2lib/avail-finality-experiments" }
 plonky2 = { path = "../plonky2lib/plonky2" }
 plonky2_field = { path = "../plonky2lib/field" }
+jsonrpsee = { version = "0.16.2", features = ["async-client", "jsonrpsee-ws-client"] }
+jsonrpsee-ws-client = "0.16.2"
+finality-grandpa-rpc = { package = "sc-finality-grandpa-rpc", git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.36" }
+
 
 [[bin]]
 name = "header_proof_generator"

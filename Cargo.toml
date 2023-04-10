@@ -31,8 +31,8 @@ subxt = "0.24"
 
 [[bin]]
 name = "header_proof_generator"
-path = "src/header_proof_generator.rs"
+path = "src/offchain_actors/header_proof_generator.rs"
 
 [[bin]]
 name = "grandpa_justif_proof_generator"
-path = "src/grandpa_justif_proof_generator.rs"
+path = "src/offchain_actors/grandpa_justif_proof_generator.rs"

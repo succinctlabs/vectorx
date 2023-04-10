@@ -128,7 +128,7 @@ fn generate_proof(
         let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
         let sig = EDDSASignature { r: sig_r, s: sig_s };
 
-        let pubkey_bytes = hex::decode(pub_keys[i]).unwrap();
+        let pubkey_bytes = pub_keys[i].0.to_vec();
         let pub_key = decompress_point(&pubkey_bytes[..]);
         assert!(pub_key.is_valid());
 
@@ -219,6 +219,16 @@ pub async fn main() {
                 pub_keys.push(justification.commit.precommits[i].id);
             }
 
+            /*
+            println!("encoded_header is {:?}", encoded_header);
+            println!("encoded messages is {:?}", encoded_message);
+            let signatures_vec = signatures.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
+            println!("signatures are {:?}", signatures_vec);
+
+            let pub_keys_vec = pub_keys.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
+            println!("pub_keys are {:?}", pub_keys_vec);
+            */
+
             println!("generating proof for justification.  block hash: {:?}, block number: {:?}", header.encode(), header.number);
             let proof_gen_start_time = SystemTime::now();
             let proof = generate_proof(
@@ -230,7 +240,7 @@ pub async fn main() {
                 targets.clone()
             );
             let proof_gen_end_time = SystemTime::now();
-            let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    
+            let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();
         }
     }
 }

@@ -15,14 +15,18 @@ serde = {version = "1", features= ["derive"]}
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
 sp-core = "6.0.0"
 avail-subxt = {git = "https://github.com/maticnetwork/avail.git"}
-subxt = "0.24"
 hex = "0.4.3"
 avail_proof_generators = { path = "../plonky2lib/avail-finality-experiments" }
 plonky2 = { path = "../plonky2lib/plonky2" }
 plonky2_field = { path = "../plonky2lib/field" }
+ed25519 = { path = "../plonky2lib/ed25519" }
 jsonrpsee = { version = "0.16.2", features = ["async-client", "jsonrpsee-ws-client"] }
 jsonrpsee-ws-client = "0.16.2"
 finality-grandpa-rpc = { package = "sc-finality-grandpa-rpc", git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.36" }
+finality-grandpa = "0.16.0"
+num = { version = "0.4", features = [ "rand" ] }
+#subxt = { git = "https://github.com/paritytech/subxt", rev = "d92352ad739836a4100e1ef1db607acc82ed8c5a", features = ["substrate-compat"] }
+subxt = "0.24"
 
 
 [[bin]]

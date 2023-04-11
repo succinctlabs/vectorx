@@ -293,7 +293,12 @@ pub async fn main() {
                 targets.clone()
             );
             let proof_gen_end_time = SystemTime::now();
-            let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();
+            let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    
+            if proof.is_some() {
+                println!("generated proof.  proof time is {:?}", proof_gen_duration);
+            } else {
+                println!("failed to generate proof");
+            }
         }
     }
 }

@@ -138,7 +138,9 @@ fn generate_proof(
 
     let encoded_messsage_bits = to_bits(encoded_message.to_vec());
 
-    for i in 0..signatures.len() {
+    // We are hardcoding verifition of 7 signatures for now.
+    // Avail testnet has 10 validators, so a quorum [ceil(2/3*n)] is 7.
+    for i in 0..7 {
         let sig_r = decompress_point(&signatures[i][0..32]);
         assert!(sig_r.is_valid());
 

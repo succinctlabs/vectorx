@@ -2,7 +2,6 @@
 use std::time::SystemTime;
 
 use avail_proof_generators::gadgets::consensus::{GrandpaJustificationVerifierTargets, build_grandpa_justification_verifier};
-use avail_subxt::api::runtime_types::sp_core::crypto::KeyTypeId;
 use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
 use ::ed25519::curve::ed25519::Ed25519;
@@ -10,7 +9,6 @@ use ::ed25519::curve::eddsa::{EDDSASignature, verify_message, EDDSAPublicKey};
 use ::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use ::ed25519::gadgets::curve::{decompress_point, WitnessAffinePoint};
 use ::ed25519::gadgets::nonnative::WitnessNonNative;
-use futures_util::future::join_all;
 use num::BigUint;
 use plonky2::iop::witness::{PartialWitness, Witness};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -21,7 +19,6 @@ use plonky2_field::goldilocks_field::GoldilocksField;
 use plonky2_field::types::Field;
 use serde::de::Error;
 use serde::Deserialize;
-use sp_core::ByteArray;
 use sp_core::{
     blake2_256, bytes,
     crypto::Pair,
@@ -272,17 +269,6 @@ pub async fn main() {
             }
 
             let encoded_header = header.encode();
-
-            /*
-            println!("encoded_header is {:?}", encoded_header);
-            println!("encoded messages is {:?}", encoded_message);
-            */
-            //let signatures_vec = signatures.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
-            //println!("signatures are {:?}", signatures_vec);
-
-            //let pub_keys_vec = pub_keys.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
-            //println!("pub_keys are {:?}", pub_keys_vec);
-
             let proof_gen_start_time = SystemTime::now();
             let proof = generate_proof(
                 &grandpa_justif_circuit,
@@ -295,7 +281,19 @@ pub async fn main() {
             let proof_gen_end_time = SystemTime::now();
             let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    
             if proof.is_some() {
-                println!("generated proof.  proof time is {:?}", proof_gen_duration);
+                println!("generated proof.  proof gen time is {:?}", proof_gen_duration);
+
+                let proof_verification_start_time = SystemTime::now();
+                let verification_res = grandpa_justif_circuit.verify(proof.unwrap());
+                let proof_verification_end_time = SystemTime::now();
+                let proof_verification_time = proof_verification_end_time.duration_since(proof_verification_start_time).unwrap();
+                println!("proof verification time is {:?}", proof_verification_time);
+
+                if !verification_res.is_err() {
+                    println!("proof verification succeeded");
+                } else {
+                    println!("proof verification failed");
+                }
             } else {
                 println!("failed to generate proof");
             }

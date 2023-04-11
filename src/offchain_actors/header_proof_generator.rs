@@ -106,6 +106,18 @@ pub async fn main() {
             let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    
             if proof.is_some() {
                 println!("generated proof.  proof time is {:?}", proof_gen_duration);
+
+                let proof_verification_start_time = SystemTime::now();
+                let verification_res = header_validation_circuit.verify(proof.unwrap());
+                let proof_verification_end_time = SystemTime::now();
+                let proof_verification_time = proof_verification_end_time.duration_since(proof_verification_start_time).unwrap();
+                println!("proof verification time is {:?}", proof_verification_time);
+
+                if !verification_res.is_err() {
+                    println!("proof verification succeeded");
+                } else {
+                    println!("proof verification failed");
+                }
             } else {
                 println!("failed to generate proof");
             }

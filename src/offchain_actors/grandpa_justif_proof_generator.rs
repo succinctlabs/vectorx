@@ -120,8 +120,8 @@ fn generate_proof(
     granda_justif_circuit: &CircuitData<F, C, D>,
     encoded_header: Vec<u8>,
     encoded_message: Vec<u8>,
-    signatures: Vec<Signature>,
-    pub_keys: Vec<EdPublic>,
+    signatures: Vec<[u8; 64]>,
+    pub_keys: Vec<[u8; 32]>,
     targets: GrandpaJustificationVerifierTargets<Curve>
 ) -> Option<ProofWithPublicInputs<F, C, D>> {
     let mut pw: PartialWitness<F> = PartialWitness::new();
@@ -142,16 +142,14 @@ fn generate_proof(
     let encoded_messsage_bits = to_bits(encoded_message.to_vec());
 
     for i in 0..signatures.len() {
-        let signature = signatures[i].0;
-        let sig_r = decompress_point(&signature[0..32]);
+        let sig_r = decompress_point(&signatures[i][0..32]);
         assert!(sig_r.is_valid());
 
-        let sig_s_biguint = BigUint::from_bytes_le(&signature[32..64]);
+        let sig_s_biguint = BigUint::from_bytes_le(&signatures[i][32..64]);
         let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
         let sig = EDDSASignature { r: sig_r, s: sig_s };
 
-        let pubkey_bytes = pub_keys[i].0.to_vec();
-        let pub_key = decompress_point(&pubkey_bytes[..]);
+        let pub_key = decompress_point(&pub_keys[i][..]);
         assert!(pub_key.is_valid());
 
         assert!(verify_message(
@@ -278,26 +276,24 @@ pub async fn main() {
             /*
             println!("encoded_header is {:?}", encoded_header);
             println!("encoded messages is {:?}", encoded_message);
-            let signatures_vec = signatures.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
-            println!("signatures are {:?}", signatures_vec);
-
-            let pub_keys_vec = pub_keys.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
-            println!("pub_keys are {:?}", pub_keys_vec);
             */
+            //let signatures_vec = signatures.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
+            //println!("signatures are {:?}", signatures_vec);
 
-            /*
+            //let pub_keys_vec = pub_keys.iter().map(|x| x.0.to_vec()).collect::<Vec<Vec<u8>>>();
+            //println!("pub_keys are {:?}", pub_keys_vec);
+
             let proof_gen_start_time = SystemTime::now();
             let proof = generate_proof(
                 &grandpa_justif_circuit,
                 encoded_header,
                 encoded_message,
                 signatures,
-                pub_keys,
+                sig_owners,
                 targets.clone()
             );
             let proof_gen_end_time = SystemTime::now();
             let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();
-            */
         }
     }
 }

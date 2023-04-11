@@ -2,6 +2,7 @@
 use std::time::SystemTime;
 
 use avail_proof_generators::gadgets::consensus::{GrandpaJustificationVerifierTargets, build_grandpa_justification_verifier};
+use avail_subxt::api::runtime_types::sp_core::crypto::KeyTypeId;
 use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
 use ::ed25519::curve::ed25519::Ed25519;
@@ -9,6 +10,7 @@ use ::ed25519::curve::eddsa::{EDDSASignature, verify_message, EDDSAPublicKey};
 use ::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use ::ed25519::gadgets::curve::{decompress_point, WitnessAffinePoint};
 use ::ed25519::gadgets::nonnative::WitnessNonNative;
+use futures_util::future::join_all;
 use num::BigUint;
 use plonky2::iop::witness::{PartialWitness, Witness};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -19,9 +21,11 @@ use plonky2_field::goldilocks_field::GoldilocksField;
 use plonky2_field::types::Field;
 use serde::de::Error;
 use serde::Deserialize;
+use sp_core::ByteArray;
 use sp_core::{
     blake2_256, bytes,
-    ed25519::{Public as EdPublic, Signature},
+    crypto::Pair,
+    ed25519::{self, Public as EdPublic, Signature},
     H256,
 };
 use subxt::rpc::RpcParams;
@@ -116,7 +120,7 @@ fn generate_proof(
     granda_justif_circuit: &CircuitData<F, C, D>,
     encoded_header: Vec<u8>,
     encoded_message: Vec<u8>,
-    signatures: Vec<&Signature>,
+    signatures: Vec<Signature>,
     pub_keys: Vec<EdPublic>,
     targets: GrandpaJustificationVerifierTargets<Curve>
 ) -> Option<ProofWithPublicInputs<F, C, D>> {
@@ -138,7 +142,7 @@ fn generate_proof(
     let encoded_messsage_bits = to_bits(encoded_message.to_vec());
 
     for i in 0..signatures.len() {
-        let signature = signatures[i].0.to_vec();
+        let signature = signatures[i].0;
         let sig_r = decompress_point(&signature[0..32]);
         assert!(sig_r.is_valid());
 
@@ -196,7 +200,7 @@ pub async fn main() {
     let mut sub = sub.unwrap();
 
     // How often we want to generate a proof of grandpa justification
-    const FINALIZATION_PERIOD: usize = 5;
+    const FINALIZATION_PERIOD: usize = 20;
 
     // Wait for headers
     while let Some(Ok(justification)) = sub.next().await {
@@ -207,6 +211,8 @@ pub async fn main() {
             .await
             .unwrap()
             .unwrap();
+
+        println!("Got justification for header with number: {:?}", header.number);
 
         if header.number % (FINALIZATION_PERIOD as u32) == 0 {
             let block_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
@@ -223,9 +229,49 @@ pub async fn main() {
                 &set_id,
             ));
 
+            let signatures = justification.
+            commit.
+            precommits.
+            iter().
+            map(|x| x.clone().signature.0).collect::<Vec<_>>();
+
+            let sig_owners = justification
+            .commit
+            .precommits
+            .iter()
+            .map(|precommit| {
+                let is_ok = <ed25519::Pair as Pair>::verify_weak(
+                    &precommit.clone().signature.0[..],
+                    encoded_message.as_slice(),
+                    &precommit.clone().id,
+                );
+                assert!(is_ok, "Not signed by this signature!");
+                assert!(precommit.signature.0.len() == 64);
+                assert!(precommit.id.0.len() == 32);
+                precommit.clone().id.0
+            })
+            .collect::<Vec<_>>();
+
             // retrieve the signatures
-            let signatures = justification.commit.precommits.iter().map(|x| &x.signature).collect::<Vec<&Signature>>();
-            let pub_keys = justification.commit.precommits.iter().map(|x| x.id).collect::<Vec<EdPublic>>();
+            let encoded_messsage_bits = to_bits(encoded_message.clone());
+
+            for i in 0..signatures.len() {
+                let sig_r = decompress_point(&signatures[i][0..32]);
+                assert!(sig_r.is_valid());
+        
+                let sig_s_biguint = BigUint::from_bytes_le(&signatures[i][32..64]);
+                let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
+                let sig = EDDSASignature { r: sig_r, s: sig_s };
+        
+                let pub_key = decompress_point(&sig_owners[i][0..32]);
+                assert!(pub_key.is_valid());
+        
+                assert!(verify_message(
+                    &encoded_messsage_bits,
+                    &sig,
+                    &EDDSAPublicKey(pub_key)
+                ));
+            }
 
             let encoded_header = header.encode();
 
@@ -239,7 +285,7 @@ pub async fn main() {
             println!("pub_keys are {:?}", pub_keys_vec);
             */
 
-            println!("generating proof for justification.  block hash: {:?}, block number: {:?}", header.encode(), header.number);
+            /*
             let proof_gen_start_time = SystemTime::now();
             let proof = generate_proof(
                 &grandpa_justif_circuit,
@@ -251,6 +297,7 @@ pub async fn main() {
             );
             let proof_gen_end_time = SystemTime::now();
             let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();
+            */
         }
     }
 }

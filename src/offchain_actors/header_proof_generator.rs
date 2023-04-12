@@ -99,20 +99,15 @@ pub async fn main() {
 
         if !previous_block_hash.is_none() {
             let encoded_header = header.encode();
-            println!("generating proof for header {:?}; parent hash {:?}", block_hash, subxt::ext::sp_runtime::traits::Header::parent_hash(&header));
+            println!("generating proof!");
             let proof_gen_start_time = SystemTime::now();
             let proof = generate_proof(&header_validation_circuit, previous_block_hash.unwrap(), encoded_header, targets.clone());
             let proof_gen_end_time = SystemTime::now();
             let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    
             if proof.is_some() {
-                println!("generated proof.  proof time is {:?}", proof_gen_duration);
+                println!("proof generated - time: {:?}", proof_gen_duration);
 
-                let proof_verification_start_time = SystemTime::now();
                 let verification_res = header_validation_circuit.verify(proof.unwrap());
-                let proof_verification_end_time = SystemTime::now();
-                let proof_verification_time = proof_verification_end_time.duration_since(proof_verification_start_time).unwrap();
-                println!("proof verification time is {:?}", proof_verification_time);
-
                 if !verification_res.is_err() {
                     println!("proof verification succeeded");
                 } else {
@@ -122,6 +117,8 @@ pub async fn main() {
                 println!("failed to generate proof");
             }
         }
+
+        println!("\n\n\n");
 
         previous_block_hash = Some(block_hash);
     }

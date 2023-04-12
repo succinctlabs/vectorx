@@ -213,7 +213,7 @@ pub async fn main() {
 
         if header.number % (FINALIZATION_PERIOD as u32) == 0 {
             let block_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
-            println!("Going to generate justification for header with number: {:?} and hash: {:?}", header.number, block_hash);
+            println!("Generate justification for header with number: {:?} and hash: {:?}", header.number, block_hash);
 
             // Get current authority set ID
             let set_id_key = api::storage().grandpa().current_set_id();
@@ -289,7 +289,7 @@ pub async fn main() {
                 let verification_res = grandpa_justif_circuit.verify(proof.unwrap());
                 let proof_verification_end_time = SystemTime::now();
                 let proof_verification_time = proof_verification_end_time.duration_since(proof_verification_start_time).unwrap();
-                println!("proof verification time is {:?}", proof_verification_time);
+                println!("proof generated - time: {:?}", proof_verification_time);
 
                 if !verification_res.is_err() {
                     println!("proof verification succeeded");
@@ -300,5 +300,7 @@ pub async fn main() {
                 println!("failed to generate proof");
             }
         }
+
+        println!("\n\n\n");
     }
 }

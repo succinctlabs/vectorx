@@ -4302,6 +4302,7 @@ dependencies = [
  "plonky2",
  "plonky2_field",
  "serde",
+ "sp-state-machine 0.12.0",
  "subxt 0.24.0",
  "tokio",
  "tokio-tungstenite",

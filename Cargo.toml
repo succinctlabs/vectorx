@@ -7,16 +7,17 @@ edition = "2021"
 ### Dependencies
 
 [dependencies]
-tokio = { version = "1.2.0", features = ["full"] }
-tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "std"] }
-serde = {version = "1", features= ["derive"]}
 hex = "0.4.3"
 num = { version = "0.4", features = [ "rand" ] }
+serde = {version = "1", features= ["derive"]}
+tokio = { version = "1.2.0", features = ["full"] }
+tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 
 # Avail/Substrate dependencies
 avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "1f9ba05"}
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
+sp-state-machine = "0.12.0"
 subxt = "0.24"
 
 # Avail circuits
@@ -36,3 +37,7 @@ path = "src/offchain_actors/header_proof_generator.rs"
 [[bin]]
 name = "grandpa_justif_proof_generator"
 path = "src/offchain_actors/grandpa_justif_proof_generator.rs"
+
+[[bin]]
+name = "get_events"
+path = "src/utils/get_events.rs"

@@ -10,9 +10,15 @@ use plonky2::iop::witness::{PartialWitness, Witness};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
 use plonky2::plonk::config::{PoseidonGoldilocksConfig, GenericConfig};
-use sp_core::{H256, blake2_256};
 use avail_proof_generators::gadgets::avail::{verify_headers, VerifySubchainTarget};
-use subxt::rpc::RpcParams;
+
+use subxt::{
+	ext::{
+		sp_core::{blake2_256, H256},
+	},
+    rpc::RpcParams,
+};
+
 
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;

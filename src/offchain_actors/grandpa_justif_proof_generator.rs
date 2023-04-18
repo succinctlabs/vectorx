@@ -19,13 +19,14 @@ use plonky2_field::goldilocks_field::GoldilocksField;
 use plonky2_field::types::Field;
 use serde::de::Error;
 use serde::Deserialize;
-use sp_core::{
-    blake2_256, bytes,
-    crypto::Pair,
-    ed25519::{self, Public as EdPublic, Signature},
-    H256,
+
+use subxt::{
+	ext::{
+		sp_core::{blake2_256, bytes, crypto::Pair, ed25519::{self, Public as EdPublic, Signature}, H256},
+	},
+    rpc::RpcParams,
 };
-use subxt::rpc::RpcParams;
+
 
 const D: usize = 2;
 type C = PoseidonGoldilocksConfig;
@@ -299,8 +300,7 @@ pub async fn main() {
             } else {
                 println!("failed to generate proof");
             }
+            println!("\n\n\n");
         }
-
-        println!("\n\n\n");
     }
 }

@@ -1,0 +1,24 @@
+[package]
+name = "succinct_avail_offchain_actors"
+version = "0.1.0"
+edition = "2021"
+
+
+### Dependencies
+
+[dependencies]
+hex = "0.4.3"
+tokio = { version = "1.2.0", features = ["full"] }
+
+# Avail/Substrate dependencies
+avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "1f9ba05"}
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
+sp-state-machine = "0.12.0"
+subxt = "0.24"
+
+
+### Binaries
+
+[[bin]]
+name = "get_events"
+path = "src/get_events.rs"

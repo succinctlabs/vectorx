@@ -1,5 +1,5 @@
 [package]
-name = "succinct-avail"
+name = "succinct_avail_offchain_actors"
 version = "0.1.0"
 edition = "2021"
 
@@ -21,10 +21,10 @@ sp-state-machine = "0.12.0"
 subxt = "0.24"
 
 # Avail circuits
-avail_proof_generators = { path = "../plonky2lib/avail-finality-experiments" }
-plonky2 = { path = "../plonky2lib/plonky2" }
-plonky2_field = { path = "../plonky2lib/field" }
-ed25519 = { path = "../plonky2lib/ed25519" }
+succinct_avail_proof_generators = { path = "../circuits" }
+plonky2 = { path = "../../../plonky2lib/plonky2" }
+plonky2_field = { path = "../../../plonky2lib/field" }
+ed25519 = { path = "../../../plonky2lib/ed25519" }
 
 
 
@@ -32,12 +32,8 @@ ed25519 = { path = "../plonky2lib/ed25519" }
 
 [[bin]]
 name = "header_proof_generator"
-path = "src/offchain_actors/header_proof_generator.rs"
+path = "src/header_proof_generator.rs"
 
 [[bin]]
 name = "grandpa_justif_proof_generator"
-path = "src/offchain_actors/grandpa_justif_proof_generator.rs"
-
-[[bin]]
-name = "get_events"
-path = "src/utils/get_events.rs"
+path = "src/grandpa_justif_proof_generator.rs"

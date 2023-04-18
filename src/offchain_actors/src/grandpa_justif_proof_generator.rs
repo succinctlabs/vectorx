@@ -1,7 +1,7 @@
 
 use std::time::SystemTime;
 
-use avail_proof_generators::gadgets::consensus::{GrandpaJustificationVerifierTargets, build_grandpa_justification_verifier};
+use succinct_avail_proof_generators::consensus::{GrandpaJustificationVerifierTargets, build_grandpa_justification_verifier};
 use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
 use ::ed25519::curve::ed25519::Ed25519;

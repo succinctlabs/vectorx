@@ -10,7 +10,7 @@ use plonky2::iop::witness::{PartialWitness, Witness};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
 use plonky2::plonk::config::{PoseidonGoldilocksConfig, GenericConfig};
-use avail_proof_generators::gadgets::avail::{verify_headers, VerifySubchainTarget};
+use succinct_avail_proof_generators::avail::{verify_headers, VerifySubchainTarget};
 
 use subxt::{
 	ext::{

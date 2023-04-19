@@ -62,8 +62,6 @@ pub fn generate_header_validation_proof(header_validation_circuit: &Option<Circu
 
     pw.set_target(targets.encoded_header_sizes[0], F::from_canonical_usize(header.len()));
 
-    println!("set the target");
-
     let proof = header_validation_circuit.as_ref().unwrap().prove(pw);
 
     println!("set the target");
@@ -78,5 +76,5 @@ pub fn generate_header_validation_proof(header_validation_circuit: &Option<Circu
 
 #[tarpc::service]
 pub trait ProofGenerator {
-    async fn generate_header_proof(previous_block_hash: H256, block_hash: H256, header: Vec<u8>) -> String;
+    async fn generate_header_proof(previous_block_hash: H256, block_hash: H256, header: Vec<u8>) -> ProofWithPublicInputs<F, C, D>;
 }

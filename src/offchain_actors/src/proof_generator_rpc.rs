@@ -2,17 +2,17 @@ use std::{net::{IpAddr, Ipv6Addr, SocketAddr}, time::SystemTime};
 
 use futures::{future, prelude::*};
 use plonky2_field::goldilocks_field::GoldilocksField;
-use plonky2::plonk::circuit_data::CircuitData;
+use plonky2::plonk::{circuit_data::CircuitData, proof::ProofWithPublicInputs};
 use tarpc::{
     context,
     server::{self, incoming::Incoming, Channel},
     tokio_serde::formats::Json,
 };
 use subxt::ext::sp_core::H256;
-use service::{C, D, ProofGenerator, create_header_validation_circuit, generate_header_validation_proof};
+use service::{C, F, D, ProofGenerator, create_header_validation_circuit, generate_header_validation_proof};
 use succinct_avail_proof_generators::avail::VerifySubchainTarget;
 
-static mut HEADER_VALIDATION_CIRCUIT: Option<CircuitData<GoldilocksField, C, D>> = None;
+static mut HEADER_VALIDATION_CIRCUIT: Option<CircuitData<F, C, D>> = None;
 static mut HEADER_VALIDATION_TARGETS: Option<VerifySubchainTarget> = None;
 
 #[derive(Clone)]
@@ -20,7 +20,7 @@ struct ProofGeneratorServer(SocketAddr);
 
 #[tarpc::server]
 impl ProofGenerator for ProofGeneratorServer {
-    async fn generate_header_proof(self, _: context::Context, previous_block_hash: H256, block_hash: H256, header: Vec<u8>) -> String {
+    async fn generate_header_proof(self, _: context::Context, previous_block_hash: H256, block_hash: H256, header: Vec<u8>) -> ProofWithPublicInputs<F, C, D> {
         println!("Got a generate_header_proof request with previous_block_hash: {:?} and block_hash: {:?}", previous_block_hash, block_hash);
 
         unsafe {
@@ -32,7 +32,7 @@ impl ProofGenerator for ProofGeneratorServer {
             let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    
             if proof.is_some() {
                 println!("proof generated - time: {:?}", proof_gen_duration);
-                let verification_res = HEADER_VALIDATION_CIRCUIT.as_ref().unwrap().verify(proof.unwrap());
+                let verification_res = HEADER_VALIDATION_CIRCUIT.as_ref().unwrap().verify(proof.clone().unwrap());
                 if !verification_res.is_err() {
                     println!("proof verification succeeded");
                 } else {
@@ -41,9 +41,9 @@ impl ProofGenerator for ProofGeneratorServer {
             } else {
                 println!("failed to generate proof");
             }
-        }
 
-        return "hello".to_string();
+            proof.unwrap()
+        }
     }
 }
 

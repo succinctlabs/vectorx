@@ -48,10 +48,10 @@ pub async fn main() -> anyhow::Result<()>  {
             let mut context = context::current();
             context.deadline = SystemTime::now() + Duration::from_secs(600);
 
-            let hello =client.generate_header_proof(context, previous_block_hash.unwrap(), block_hash, encoded_header.clone()).await;
+            let res = client.generate_header_proof(context, previous_block_hash.unwrap(), block_hash, encoded_header.clone()).await;
         
-            match hello {
-                Ok(hello) => println!("{hello:?}"),
+            match res {
+                Ok(proof) => println!("Retrieve header vlaidation proof: {:?}", proof),
                 Err(e) => println!("{:?}", anyhow::Error::from(e)),
             }
         }

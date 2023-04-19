@@ -70,8 +70,6 @@ pub fn generate_header_validation_proof(header_validation_circuit: &Option<Circu
 
     let proof = header_validation_circuit.as_ref().unwrap().prove(pw);
 
-    println!("set the target");
-
     match proof {
         Ok(v) => return Some(v),
         Err(e) => println!("error parsing header: {e:?}"),

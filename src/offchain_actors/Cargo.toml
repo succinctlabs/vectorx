@@ -7,12 +7,13 @@ edition = "2021"
 ### Dependencies
 
 [dependencies]
-futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "std"] }
+anyhow = "1.0"
+futures = "0.3"
 hex = "0.4.3"
 num = { version = "0.4", features = [ "rand" ] }
-serde = {version = "1", features= ["derive"]}
-tokio = { version = "1.2.0", features = ["full"] }
-tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
+serde = { version = "1", features= ["derive"] }
+tarpc = { version = "0.33", features = ["full"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 
 # Avail/Substrate dependencies
 avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "1f9ba05"}
@@ -30,6 +31,10 @@ ed25519 = { path = "../../../plonky2lib/ed25519" }
 
 ### Binaries
 
+[lib]
+name = "service"
+path = "src/lib.rs"
+
 [[bin]]
 name = "header_proof_generator"
 path = "src/header_proof_generator.rs"
@@ -37,3 +42,7 @@ path = "src/header_proof_generator.rs"
 [[bin]]
 name = "grandpa_justif_proof_generator"
 path = "src/grandpa_justif_proof_generator.rs"
+
+[[bin]]
+name = "proof_generator_rpc"
+path = "src/proof_generator_rpc.rs"

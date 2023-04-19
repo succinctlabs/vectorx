@@ -91,7 +91,7 @@ pub const CHUNK_128_BYTES: usize = 128;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
-    let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52356);
+    let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52357);
 
     let mut transport = tarpc::serde_transport::tcp::connect(server_addr, Json::default);
     transport.config_mut().max_frame_length(usize::MAX);

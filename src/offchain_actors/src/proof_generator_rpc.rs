@@ -1,4 +1,5 @@
 use std::{net::{IpAddr, Ipv6Addr, SocketAddr}, time::SystemTime};
+use clap::Parser;
 
 use futures::{future, prelude::*};
 use plonky2::plonk::{circuit_data::CircuitData, proof::ProofWithPublicInputs};
@@ -89,6 +90,13 @@ impl ProofGenerator for ProofGeneratorServer {
 
 }
 
+#[derive(Parser)]
+struct Flags {
+    /// Sets the port number to listen on.
+    #[clap(long)]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()>  {
     let (header_validation_circuit, header_validation_targets) = create_header_validation_circuit();
@@ -100,7 +108,8 @@ async fn main() -> anyhow::Result<()>  {
         GRANDPA_JUSTIF_VERIFICATION_TARGETS = Some(grandpa_justif_verification_targets);
     }
 
-    let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52356);
+    let flags = Flags::parse();
+    let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), flags.port);
     let mut listener = tarpc::serde_transport::tcp::listen(&server_addr, Json::default).await?;
     println!("Listening on port {}", listener.local_addr().port());
     listener.config_mut().max_frame_length(usize::MAX);

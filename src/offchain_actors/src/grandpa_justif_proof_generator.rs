@@ -204,7 +204,7 @@ pub async fn main() -> anyhow::Result<()> {
             ).await;
         
             match res {
-                Ok(proof) => println!("Retrieve grandpa justification verification proof: {:?}", proof),
+                Ok(_) => println!("Retrieved grandpa justification verification proof for block: number - {:?}; hash - {:?}", header.number, block_hash),
                 Err(e) => println!("{:?}", anyhow::Error::from(e)),
             }
 

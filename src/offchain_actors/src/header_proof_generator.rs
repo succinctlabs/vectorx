@@ -51,7 +51,7 @@ pub async fn main() -> anyhow::Result<()> {
             let res = client.generate_header_proof(context, previous_block_hash.unwrap(), block_hash, encoded_header.clone()).await;
         
             match res {
-                Ok(proof) => println!("Retrieve header vlaidation proof: {:?}", proof),
+                Ok(_) => println!("Retrieved header validation for block: number - {:?}; hash - {:?}", header.number, block_hash),
                 Err(e) => println!("{:?}", anyhow::Error::from(e)),
             }
         }

@@ -43,6 +43,8 @@ impl ProofGenerator for ProofGeneratorServer {
                 println!("failed to generate proof");
             }
 
+            println!("\n\n\n");
+
             proof.unwrap()
         }
     }
@@ -82,6 +84,8 @@ impl ProofGenerator for ProofGeneratorServer {
             } else {
                 println!("failed to generate proof");
             }
+
+            println!("\n\n\n");
 
             proof.unwrap()
         }

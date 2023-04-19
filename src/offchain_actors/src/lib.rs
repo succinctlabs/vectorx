@@ -90,7 +90,7 @@ pub fn generate_header_validation_proof(header_validation_circuit: &Option<Circu
 
 pub fn create_grandpa_justification_verifier_circuit() -> (CircuitData<GoldilocksField, C, D>, GrandpaJustificationVerifierTargets<Curve>) {
     // Compile the header validation circuit
-    println!("Compiling the header validation circuit...");
+    println!("Compiling the grandpa justification verifier circuit...");
 
     let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
     let grandpa_justif_targets = build_grandpa_justification_verifier::<GoldilocksField, Curve, D>(&mut builder, CHUNK_128_BYTES * 10, 7);

@@ -17,7 +17,7 @@ use tarpc::{client, context};
 use tarpc::tokio_serde::formats::Json;
 
 #[tokio::main]
-pub async fn main() -> anyhow::Result<()>  {
+pub async fn main() -> anyhow::Result<()> {
     let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52356);
 
     let mut transport = tarpc::serde_transport::tcp::connect(server_addr, Json::default);

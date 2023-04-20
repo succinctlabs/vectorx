@@ -33,7 +33,12 @@ pub async fn main() {
         let event = e.unwrap();
         let name = event.variant_name();
         println!("event is {:?}\n\n\n", name);
+        println!("event pallet index is {:?}\n\n\n", event.pallet_index());
+        println!("event variant index is {:?}\n\n\n", event.variant_index());
+        println!("event data is {:?}\n\n\n", event.bytes());
     }
+
+    println!("last event is {:?}\n\n", events.iter().last().unwrap().unwrap().variant_name());
 
     // Construct the storage key for the events
     let mut events_storage_key = twox_128(b"System").to_vec();

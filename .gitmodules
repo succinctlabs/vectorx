@@ -1,3 +1,4 @@
 [submodule "contracts/lib/solidity-merkle-trees"]
 	path = contracts/lib/solidity-merkle-trees
 	url = https://github.com/succinctlabs/solidity-merkle-trees.git
+	branch = kevjue/enable_scale_functions

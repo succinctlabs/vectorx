@@ -1,0 +1,3 @@
+[submodule "contracts/lib/solidity-merkle-trees"]
+	path = contracts/lib/solidity-merkle-trees
+	url = https://github.com/polytope-labs/solidity-merkle-trees.git

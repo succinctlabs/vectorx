@@ -4,85 +4,92 @@ use avail_subxt::build_client;
 use subxt::{ext::{sp_runtime::scale_info::{TypeDef, interner::UntrackedSymbol}}, Metadata};
 use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128 };
 
+#[derive(Debug)]
+struct ChunkSize {
+    size: u32,
+    is_seq: bool,
+}
 
-fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>, is_var_sized: &mut bool) -> u32 {
-    let mut field_size = 0_u32;
-
+fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>, type_chunk_sizes: &mut Vec<ChunkSize>) {
     let td = md.runtime_metadata().types.resolve(substrate_type.id).unwrap();
+
+    // Get the last chunk size obj
+    let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
 
     match &td.type_def {
         TypeDef::Composite(c) => {
             for f in c.fields.iter() {
-                field_size += get_type_size(md, &f.ty, is_var_sized);
-
+                get_type_size(md, &f.ty, type_chunk_sizes);
             }
         }
 
         TypeDef::Variant(v) => {
             for v in v.variants.iter() {
                 for f in v.fields.iter() {
-                    field_size += get_type_size(md, &f.ty, is_var_sized);
+                    get_type_size(md, &f.ty, type_chunk_sizes);
                 }
             }
         }
 
         TypeDef::Sequence(s) => {
-            /*
-            let seq_element_size = get_type_size(md, &s.type_param, num_seq);
-            return (seq_element_size, true);
-            */
+            assert!(last_chunk_size.is_seq == false);
 
-            *is_var_sized = true;
-            return 0;
+            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: true});
+            get_type_size(md, &s.type_param, type_chunk_sizes);
+            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false})
         }
 
         TypeDef::Array(a) => {
             let array_len = a.len;
-            let element_size = get_type_size(md, &a.type_param, is_var_sized);
+            let mut array_element_size = Vec::new();
+            array_element_size.push(ChunkSize{size: 0, is_seq: false});
+            get_type_size(md, &a.type_param,  &mut array_element_size);
 
-            field_size += array_len * element_size;
+            assert!(array_element_size.len() == 1 && array_element_size[0].is_seq == false);
+
+            (*last_chunk_size).size += array_len * array_element_size[0].size;
         }
 
         TypeDef::Tuple(t) => {
             for f in t.fields.iter() {
-                field_size += get_type_size(md, &f, is_var_sized);
+                get_type_size(md, &f, type_chunk_sizes);
             }
         }
 
         TypeDef::Primitive(p) => {
             match p {
                     Bool => {
-                        field_size += 1;
+                        last_chunk_size.size += 1;
                     }
                     U8 => {
-                        field_size += 1;
+                        last_chunk_size.size += 1;
                     }
                     U16 => {
-                        field_size += 2;
+                        last_chunk_size.size += 2;
                     }
                     U32 => {
-                        field_size += 4;
+                        last_chunk_size.size += 4;
                     }
                     U64 => {
-                        field_size += 8;
+                        last_chunk_size.size += 8;
                     }
                     U128 => {
-                        field_size += 16;
+                        last_chunk_size.size += 16;
                     }
                     I8 => {
-                        field_size += 1;
+                        last_chunk_size.size += 1;
                     }
                     I16 => {
-                        field_size += 2;
+                        last_chunk_size.size += 2;
                     }
                     I32 => {
-                        field_size += 4;
+                        last_chunk_size.size += 4;
                     }
                     I64 => {
-                        field_size += 8;
+                        last_chunk_size.size += 8;
                     }
                     I128 => {
-                        field_size += 16;
+                        last_chunk_size.size += 16;
                     }
                     _ => {
                         println!("\t\tprimitive type is {:?}", p);
@@ -90,15 +97,15 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
                 }
         }
 
+        /*
         TypeDef::Compact(c) => {
             *is_var_sized = true;
             return 0;
         }
+        */
 
         _ => { println!("Unhandled type {:?}", td.type_def) }
     }
-
-    field_size
 }
 
 #[tokio::main]
@@ -123,16 +130,13 @@ pub async fn main() {
                 match td {
                     TypeDef::Variant(v) => {
                         for v in v.variants.iter() {
-                            let mut event_size = 0;
-                            let mut is_var_sized = false;
+                            let mut type_chunk_sizes = Vec::new();
+                            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false});
                             for f in v.fields.iter() {
-                                event_size += get_type_size(&md, &f.ty, &mut is_var_sized);
+                                get_type_size(&md, &f.ty, &mut type_chunk_sizes);
                             }
-                            if is_var_sized {
-                                println!("\tEvent {:?} is var sized", v.name);
-                            } else {
-                                //println!("\tEvent {:?} has size {:?}", v.name, event_size);
-                            }
+
+                            println!("\tEvent {:?} has type_chunk_sizes of {:?}", v.name, type_chunk_sizes);
                         }                
                     }
 

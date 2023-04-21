@@ -4,7 +4,8 @@ use avail_subxt::build_client;
 use subxt::{ext::{sp_runtime::scale_info::{TypeDef, interner::UntrackedSymbol}}, Metadata};
 use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128 };
 
-fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>) -> u32 {
+
+fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>, is_var_sized: &mut bool) -> u32 {
     let mut field_size = 0_u32;
 
     let td = md.runtime_metadata().types.resolve(substrate_type.id).unwrap();
@@ -12,36 +13,42 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>)
     match &td.type_def {
         TypeDef::Composite(c) => {
             for f in c.fields.iter() {
-                field_size += get_type_size(md, &f.ty);
+                field_size += get_type_size(md, &f.ty, is_var_sized);
+
             }
         }
 
         TypeDef::Variant(v) => {
             for v in v.variants.iter() {
                 for f in v.fields.iter() {
-                    field_size += get_type_size(md, &f.ty);
+                    field_size += get_type_size(md, &f.ty, is_var_sized);
                 }
             }
         }
-        /*
+
         TypeDef::Sequence(s) => {
-            println!("\t\tsequence type is {:?}", s.name);
-            output_event_type(md, &s.fields);
+            /*
+            let seq_element_size = get_type_size(md, &s.type_param, num_seq);
+            return (seq_element_size, true);
+            */
+
+            *is_var_sized = true;
+            return 0;
         }
-        */
 
         TypeDef::Array(a) => {
             let array_len = a.len;
-            let element_size = get_type_size(md, &a.type_param);
+            let element_size = get_type_size(md, &a.type_param, is_var_sized);
 
             field_size += array_len * element_size;
         }
 
-        /*
         TypeDef::Tuple(t) => {
-            println!("\t\ttuple type is {:?}", t.name);
-            output_event_type(md, &t.fields);
-        }*/
+            for f in t.fields.iter() {
+                field_size += get_type_size(md, &f, is_var_sized);
+            }
+        }
+
         TypeDef::Primitive(p) => {
             match p {
                     Bool => {
@@ -82,19 +89,13 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>)
                     }
                 }
         }
-        /*
+
         TypeDef::Compact(c) => {
-            println!("\t\tcompact type is {:?}", c.name);
-            output_event_type(md, &c.fields);
+            *is_var_sized = true;
+            return 0;
         }
-        TypeDef::BitSequence(b) => {
-            println!("\t\tbit sequence type is {:?}", b.name);
-            output_event_type(md, &b.fields);
-        }
-        */
-        _ => {
-            println!("\t\ttype is {:?}", td.type_def);
-        }
+
+        _ => { println!("Unhandled type {:?}", td.type_def) }
     }
 
     field_size
@@ -122,11 +123,16 @@ pub async fn main() {
                 match td {
                     TypeDef::Variant(v) => {
                         for v in v.variants.iter() {
-                            let mut type_size = 0_u32;
+                            let mut event_size = 0;
+                            let mut is_var_sized = false;
                             for f in v.fields.iter() {
-                                type_size += get_type_size(&md, &f.ty);
+                                event_size += get_type_size(&md, &f.ty, &mut is_var_sized);
                             }
-                            println!("\tvariant index is {:?} and size is {:?}", v.index, type_size);
+                            if is_var_sized {
+                                println!("\tEvent {:?} is var sized", v.name);
+                            } else {
+                                //println!("\tEvent {:?} has size {:?}", v.name, event_size);
+                            }
                         }                
                     }
 

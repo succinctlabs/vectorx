@@ -22,3 +22,7 @@ subxt = "0.24"
 [[bin]]
 name = "get_events"
 path = "src/get_events.rs"
+
+[[bin]]
+name = "get_event_types"
+path = "src/get_event_types.rs"

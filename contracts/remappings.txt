@@ -1,0 +1,7 @@
+ds-test/=lib/solidity-merkle-trees/lib/forge-std/lib/ds-test/src/
+erc4626-tests/=lib/solidity-merkle-trees/lib/openzeppelin-contracts/lib/erc4626-tests/
+forge-std/=lib/solidity-merkle-trees/lib/forge-std/src/
+foundry-std/=lib/foundry-std/src/
+openzeppelin-contracts/=lib/solidity-merkle-trees/lib/openzeppelin-contracts/
+openzeppelin/=lib/solidity-merkle-trees/lib/openzeppelin-contracts/contracts/
+solidity-merkle-trees/=lib/solidity-merkle-trees/

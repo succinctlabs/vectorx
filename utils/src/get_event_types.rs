@@ -7,7 +7,10 @@ use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, 
 #[derive(Debug)]
 struct ChunkSize {
     size: u32,
+    is_compact_int: bool,
+
     is_seq: bool,
+    sequence_chunks: Option<Vec<ChunkSize>>,
 }
 
 fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>, type_chunk_sizes: &mut Vec<ChunkSize>) {
@@ -34,12 +37,10 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
                 assert!(type_chunk_sizes.last().unwrap().is_seq == false);
             }
 
-            let mut seq_element_size = Vec::new();
-            seq_element_size.push(ChunkSize{size: 0, is_seq: true});
-            get_type_size(md, &s.type_param, &mut seq_element_size);
-            assert!(seq_element_size.len() == 1 && seq_element_size[0].is_seq == true);
+            let mut sequence_chunks = Vec::new();
+            get_type_size(md, &s.type_param, &mut sequence_chunks);
 
-            type_chunk_sizes.append(&mut seq_element_size);
+            type_chunk_sizes.push(ChunkSize{size: 0, is_compact_int: false, is_seq: true, sequence_chunks: Some(sequence_chunks)});
         }
 
         TypeDef::Array(a) => {
@@ -50,7 +51,7 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
 
             // Get the last chunk size obj
             if type_chunk_sizes.len() == 0 {
-                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false})
+                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false, is_compact_int: false, sequence_chunks: None})
             }
 
             let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
@@ -67,7 +68,7 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
         TypeDef::Primitive(p) => {
             // Get the last chunk size obj
             if type_chunk_sizes.len() == 0 {
-                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false})
+                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false, is_compact_int: false, sequence_chunks: None})
             }
 
             let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
@@ -112,12 +113,9 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
                 }
         }
 
-        /*
         TypeDef::Compact(c) => {
-            *is_var_sized = true;
-            return 0;
+            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false, is_compact_int: true, sequence_chunks: None});
         }
-        */
 
         _ => { println!("Unhandled type {:?}", td.type_def) }
     }

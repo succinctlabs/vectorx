@@ -605,6 +605,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
 
 [[package]]
+name = "enum_extract"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11578f9e8496eeb626c549e1b340a57e479840ff7ae13fe12d4dbd97c18779d1"
+
+[[package]]
 name = "environmental"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2794,6 +2800,7 @@ name = "succinct_avail_offchain_actors"
 version = "0.1.0"
 dependencies = [
  "avail-subxt",
+ "enum_extract",
  "hex",
  "parity-scale-codec",
  "sp-state-machine",

@@ -7,6 +7,7 @@ edition = "2021"
 ### Dependencies
 
 [dependencies]
+enum_extract = "0.1.1"
 hex = "0.4.3"
 tokio = { version = "1.2.0", features = ["full"] }
 
@@ -24,5 +25,5 @@ name = "get_events"
 path = "src/get_events.rs"
 
 [[bin]]
-name = "get_event_types"
-path = "src/get_event_types.rs"
+name = "gen_avail_event_types"
+path = "src/gen_avail_event_types.rs"

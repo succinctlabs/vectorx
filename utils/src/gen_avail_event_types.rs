@@ -1,19 +1,33 @@
 use std::any::TypeId;
 
 use avail_subxt::build_client;
+use enum_extract::extract;
 use subxt::{ext::{sp_runtime::scale_info::{TypeDef, interner::UntrackedSymbol}}, Metadata};
 use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128 };
 
 #[derive(Debug)]
-struct ChunkSize {
-    size: u32,
-    is_compact_int: bool,
-
-    is_seq: bool,
-    sequence_chunks: Option<Vec<ChunkSize>>,
+enum Chunk {
+    ConstantSize(u32),
+    Compact,
+    Sequence(Vec<Chunk>),
 }
 
-fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>, type_chunk_sizes: &mut Vec<ChunkSize>) {
+fn add_constant_size(size: u32, type_chunk_sizes: &mut Vec<Chunk>) {
+    if type_chunk_sizes.len() > 0 {
+        match type_chunk_sizes.last_mut().unwrap() {
+            Chunk::ConstantSize(s) => {
+                *s += size;
+            }
+            _ => {
+                type_chunk_sizes.push(Chunk::ConstantSize(size));
+            }
+        }
+    } else {
+        type_chunk_sizes.push(Chunk::ConstantSize(size));
+    }
+}
+
+fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>, type_chunk_sizes: &mut Vec<Chunk>) {
     let td = md.runtime_metadata().types.resolve(substrate_type.id).unwrap();
 
     match &td.type_def {
@@ -32,31 +46,20 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
         }
 
         TypeDef::Sequence(s) => {
-            // Assert we are not already in a sequence
-            if type_chunk_sizes.len() > 0 {
-                assert!(type_chunk_sizes.last().unwrap().is_seq == false);
-            }
-
             let mut sequence_chunks = Vec::new();
             get_type_size(md, &s.type_param, &mut sequence_chunks);
 
-            type_chunk_sizes.push(ChunkSize{size: 0, is_compact_int: false, is_seq: true, sequence_chunks: Some(sequence_chunks)});
+            type_chunk_sizes.push(Chunk::Sequence(sequence_chunks));
         }
 
         TypeDef::Array(a) => {
             let array_len = a.len;
             let mut array_element_size = Vec::new();
             get_type_size(md, &a.type_param,  &mut array_element_size);
-            assert!(array_element_size.len() == 1 && array_element_size[0].is_seq == false);
+            assert!(array_element_size.len() == 1);
+            assert!(matches!(array_element_size[0], Chunk::ConstantSize {..}));
 
-            // Get the last chunk size obj
-            if type_chunk_sizes.len() == 0 {
-                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false, is_compact_int: false, sequence_chunks: None})
-            }
-
-            let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
-
-            (*last_chunk_size).size += array_len * array_element_size[0].size;
+            add_constant_size(array_len * extract!(Chunk::ConstantSize(_), array_element_size[0]).unwrap(), type_chunk_sizes);
         }
 
         TypeDef::Tuple(t) => {
@@ -66,55 +69,51 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
         }
 
         TypeDef::Primitive(p) => {
-            // Get the last chunk size obj
-            if type_chunk_sizes.len() == 0 {
-                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false, is_compact_int: false, sequence_chunks: None})
-            }
-
-            let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
-
+            let primitive_size:u32;
             match p {
                     Bool => {
-                        last_chunk_size.size += 1;
+                        primitive_size = 1;
                     }
                     U8 => {
-                        last_chunk_size.size += 1;
+                        primitive_size = 1;
                     }
                     U16 => {
-                        last_chunk_size.size += 2;
+                        primitive_size =  2;
                     }
                     U32 => {
-                        last_chunk_size.size += 4;
+                        primitive_size = 4;
                     }
                     U64 => {
-                        last_chunk_size.size += 8;
+                        primitive_size = 8;
                     }
                     U128 => {
-                        last_chunk_size.size += 16;
+                        primitive_size = 16;
                     }
                     I8 => {
-                        last_chunk_size.size += 1;
+                        primitive_size = 1;
                     }
                     I16 => {
-                        last_chunk_size.size += 2;
+                        primitive_size = 2;
                     }
                     I32 => {
-                        last_chunk_size.size += 4;
+                        primitive_size = 4;
                     }
                     I64 => {
-                        last_chunk_size.size += 8;
+                        primitive_size = 8;
                     }
                     I128 => {
-                        last_chunk_size.size += 16;
+                        primitive_size = 16;
                     }
                     _ => {
-                        println!("\t\tprimitive type is {:?}", p);
+                        panic!("\t\tunhandled primitive type of {:?}", p);
                     }
                 }
+
+            add_constant_size(primitive_size, type_chunk_sizes);
         }
 
-        TypeDef::Compact(c) => {
-            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false, is_compact_int: true, sequence_chunks: None});
+        TypeDef::Compact(_) => {
+            type_chunk_sizes.push(Chunk::Compact);
         }
 
         _ => { println!("Unhandled type {:?}", td.type_def) }
@@ -160,3 +159,17 @@ pub async fn main() {
         }
     }
 }
+
+
+/*
+#[test]
+fn test_get_type_size() {
+    // pallet is "ImOnline"(20)
+    // event is "SomeOffline"(2)
+
+    let palent_idx = 20;
+    let event_idx = 2;
+    event_data = [4, 84, 86, 92, 68, 217, 86, 27, 84, 33, 157, 68, 32, 5, 81, 171, 48, 223, 54, 187, 202, 12, 215, 119, 153, 24, 104, 224, 147, 68, 199, 15, 117, 27, 149, 141, 163, 204, 231, 204, 4, 2, 103, 1, 23, 142, 125, 100, 45, 45, 27, 139, 81, 54, 4, 164, 206, 101, 103, 123, 218, 213, 223, 55, 70, 58, 88, 59, 44, 12, 216, 111, 45, 155, 160, 151, 213, 227, 52, 12, 46, 12, 15, 87, 245, 255, 17, 27, 7, 16, 63, 159, 186, 177, 121, 176, 48, 1];
+   
+}
+*/

@@ -13,9 +13,6 @@ struct ChunkSize {
 fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>, type_chunk_sizes: &mut Vec<ChunkSize>) {
     let td = md.runtime_metadata().types.resolve(substrate_type.id).unwrap();
 
-    // Get the last chunk size obj
-    let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
-
     match &td.type_def {
         TypeDef::Composite(c) => {
             for f in c.fields.iter() {
@@ -32,20 +29,31 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
         }
 
         TypeDef::Sequence(s) => {
-            assert!(last_chunk_size.is_seq == false);
+            // Assert we are not already in a sequence
+            if type_chunk_sizes.len() > 0 {
+                assert!(type_chunk_sizes.last().unwrap().is_seq == false);
+            }
 
-            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: true});
-            get_type_size(md, &s.type_param, type_chunk_sizes);
-            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false})
+            let mut seq_element_size = Vec::new();
+            seq_element_size.push(ChunkSize{size: 0, is_seq: true});
+            get_type_size(md, &s.type_param, &mut seq_element_size);
+            assert!(seq_element_size.len() == 1 && seq_element_size[0].is_seq == true);
+
+            type_chunk_sizes.append(&mut seq_element_size);
         }
 
         TypeDef::Array(a) => {
             let array_len = a.len;
             let mut array_element_size = Vec::new();
-            array_element_size.push(ChunkSize{size: 0, is_seq: false});
             get_type_size(md, &a.type_param,  &mut array_element_size);
-
             assert!(array_element_size.len() == 1 && array_element_size[0].is_seq == false);
+
+            // Get the last chunk size obj
+            if type_chunk_sizes.len() == 0 {
+                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false})
+            }
+
+            let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
 
             (*last_chunk_size).size += array_len * array_element_size[0].size;
         }
@@ -57,6 +65,13 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
         }
 
         TypeDef::Primitive(p) => {
+            // Get the last chunk size obj
+            if type_chunk_sizes.len() == 0 {
+                type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false})
+            }
+
+            let last_chunk_size = type_chunk_sizes.last_mut().unwrap();
+
             match p {
                     Bool => {
                         last_chunk_size.size += 1;
@@ -131,7 +146,6 @@ pub async fn main() {
                     TypeDef::Variant(v) => {
                         for v in v.variants.iter() {
                             let mut type_chunk_sizes = Vec::new();
-                            type_chunk_sizes.push(ChunkSize{size: 0, is_seq: false});
                             for f in v.fields.iter() {
                                 get_type_size(&md, &f.ty, &mut type_chunk_sizes);
                             }

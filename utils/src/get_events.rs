@@ -57,7 +57,7 @@ pub async fn main() {
     // Retrieve the storage proof for the event key
     let proof = c.rpc().read_proof(keys, block_hash).await.unwrap();
 
-    // Conver the ReadProof type to StorageProof type
+    // Convert the ReadProof type to StorageProof type
     // Sample conversion of ReadProof to StorageProof here: https://github.com/paritytech/substrate/blob/785115b3a13901b0c708af8166430bcc9c71f28f/client/rpc/src/state/state_full.rs#L365
     let mut sp_vec = Vec::new();
     for i in 0..proof.proof.len() {
@@ -66,7 +66,6 @@ pub async fn main() {
     let sp = StorageProof::new(sp_vec);
 
     // Can also check proof here:  https://github.com/polytope-labs/solidity-merkle-trees/blob/main/src/MerklePatricia.sol#L31
-    let local_result1 = read_proof_check::<BlakeTwo256, _>(header.state_root, sp, keys).unwrap();
-
-    println!("local_result1 is {:?}\n\n\n", local_result1);
+    let proof_check_res = read_proof_check::<BlakeTwo256, _>(header.state_root, sp, keys).unwrap();
+    println!("proof_check_res is {:?}\n\n\n", proof_check_res);
 }

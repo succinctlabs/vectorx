@@ -1,3 +1,5 @@
+mod gen_avail_event_types;
+
 use avail_subxt::build_client;
 use avail_subxt::primitives::Header;
 use sp_state_machine::{read_proof_check, StorageProof};
@@ -15,7 +17,6 @@ pub async fn main() {
 
     let c = build_client(url).await.unwrap();
 
-
     // The block hash for block 576728 (https://testnet.avail.tools/#/explorer/query/576728)
     let block_hash_vec = hex::decode("b71429ef80257a25358e386e4ca1debe72c38ea69d833e23416a4225fabb1a78").unwrap();
     let mut block_hash_array: [u8; 32] = [0; 32];
@@ -29,22 +30,13 @@ pub async fn main() {
 
     // Get the events from this block
     let events = c.events().at(block_hash).await.unwrap();
-
     for e in events.iter() {
         let event = e.unwrap();
         let name = event.variant_name();
         println!("event is {:?}\n\n\n", name);
         println!("event pallet is {:?}({:?})\n\n\n", event.pallet_name(), event.pallet_index());
         println!("event variant is {:?}({:?})\n\n\n", event.variant_name(), event.variant_index());
-        println!("event data is {:?}\n\n\n", event.bytes());
-        println!("event metadata is {:?}\n\n\n", c.metadata().event(event.pallet_index(), event.variant_index()).unwrap());
-        println!("event metadata type 51 is {:?}\n\n\n", c.metadata().runtime_metadata().types.resolve(51));
-        println!("event metadata type 52 is {:?}\n\n\n", c.metadata().runtime_metadata().types.resolve(52));
-        println!("event metadata type 53 is {:?}\n\n\n", c.metadata().runtime_metadata().types.resolve(53));
-        println!("event metadata type 54 is {:?}\n\n\n", c.metadata().runtime_metadata().types.resolve(54));
-        println!("event metadata type 8 is {:?}\n\n\n", c.metadata().runtime_metadata().types.resolve(8));
-        println!("event metadata type 1 is {:?}\n\n\n", c.metadata().runtime_metadata().types.resolve(1));
-        println!("event metadata type 2 is {:?}\n\n\n", c.metadata().runtime_metadata().types.resolve(2));
+        println!("event byte data is {:?}\n\n\n", event.bytes());
     }
 
     // Construct the storage key for the events
@@ -65,6 +57,7 @@ pub async fn main() {
     // Retrieve the storage proof for the event key
     let proof = c.rpc().read_proof(keys, block_hash).await.unwrap();
 
+    // Conver the ReadProof type to StorageProof type
     // Sample conversion of ReadProof to StorageProof here: https://github.com/paritytech/substrate/blob/785115b3a13901b0c708af8166430bcc9c71f28f/client/rpc/src/state/state_full.rs#L365
     let mut sp_vec = Vec::new();
     for i in 0..proof.proof.len() {

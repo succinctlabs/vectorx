@@ -1,11 +1,15 @@
 use std::any::TypeId;
+use std::collections::HashMap;
+use std::io::{Cursor, Read};
 
 use avail_subxt::build_client;
+use codec::{Decode, IoReader};
 use enum_extract::extract;
 use subxt::{ext::{sp_runtime::scale_info::{TypeDef, interner::UntrackedSymbol}}, Metadata};
 use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128 };
 
-#[derive(Debug)]
+
+#[derive(Debug, Clone)]
 enum Chunk {
     ConstantSize(u32),
     Compact,
@@ -120,19 +124,20 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
     }
 }
 
-#[tokio::main]
-pub async fn main() {
+pub async fn get_type_chunks() -> HashMap<u8, HashMap<u8, Vec<Chunk>>>{
     let url: &str = "wss://testnet.avail.tools:443/ws";
 
     let c = build_client(url).await.unwrap();
-
     let md = c.metadata();
 
-    let pallets = &md.runtime_metadata().pallets;
+    let mut avail_event_type_chunks = HashMap::new();
 
+    let pallets = &md.runtime_metadata().pallets;
     for p in pallets.iter() {
         println!("pallet is {:?}", p.name);
         println!("pallet index is {:?}", p.index);
+        let mut pallet_event_type_chunks = HashMap::new();
+
         if p.event.is_some() {
             let events = md.runtime_metadata().types.resolve(p.event.as_ref().unwrap().ty.id);
 
@@ -148,28 +153,64 @@ pub async fn main() {
                             }
 
                             println!("\tEvent {:?} has type_chunk_sizes of {:?}", v.name, type_chunk_sizes);
+                            pallet_event_type_chunks.insert(v.index, type_chunk_sizes);
                         }                
                     }
 
                     _ => { panic!("Unexpected td of {:?}", td) }
                 }
+
             }
 
+            avail_event_type_chunks.insert(p.index, pallet_event_type_chunks);
             println!("\n\n\n");
+        }
+    }
+
+    avail_event_type_chunks
+}
+
+
+fn read_chunk<R: std::io::Read>(chunk: &Chunk, io_reader: &mut IoReader<R>) {
+    match chunk {
+        Chunk::ConstantSize(size) => {
+            let mut buf: Vec<u8> = vec![0; *size as usize];
+            io_reader.0.read_exact(buf.as_mut_slice()).unwrap();
+        }
+
+        Chunk::Sequence(sequence_chunks) => {
+            let sequence_length = codec::Compact::<u64>::decode(io_reader).unwrap();
+            for i in 0..sequence_length.0 {
+                for inner_chunk in sequence_chunks.iter() {
+                    read_chunk(inner_chunk, io_reader);
+                }
+            }
+        }
+
+        Chunk::Compact => {
+            let _ = codec::Compact::<u64>::decode(io_reader).unwrap();
         }
     }
 }
 
 
-/*
-#[test]
-fn test_get_type_size() {
+#[tokio::test]
+async fn test_nested_sequence() {
     // pallet is "ImOnline"(20)
     // event is "SomeOffline"(2)
 
-    let palent_idx = 20;
+    let type_chunks = get_type_chunks().await;
+
+    let pallet_idx = 20;
     let event_idx = 2;
-    event_data = [4, 84, 86, 92, 68, 217, 86, 27, 84, 33, 157, 68, 32, 5, 81, 171, 48, 223, 54, 187, 202, 12, 215, 119, 153, 24, 104, 224, 147, 68, 199, 15, 117, 27, 149, 141, 163, 204, 231, 204, 4, 2, 103, 1, 23, 142, 125, 100, 45, 45, 27, 139, 81, 54, 4, 164, 206, 101, 103, 123, 218, 213, 223, 55, 70, 58, 88, 59, 44, 12, 216, 111, 45, 155, 160, 151, 213, 227, 52, 12, 46, 12, 15, 87, 245, 255, 17, 27, 7, 16, 63, 159, 186, 177, 121, 176, 48, 1];
-   
+    let event_data: [u8; 98] = [4, 84, 86, 92, 68, 217, 86, 27, 84, 33, 157, 68, 32, 5, 81, 171, 48, 223, 54, 187, 202, 12, 215, 119, 153, 24, 104, 224, 147, 68, 199, 15, 117, 27, 149, 141, 163, 204, 231, 204, 4, 2, 103, 1, 23, 142, 125, 100, 45, 45, 27, 139, 81, 54, 4, 164, 206, 101, 103, 123, 218, 213, 223, 55, 70, 58, 88, 59, 44, 12, 216, 111, 45, 155, 160, 151, 213, 227, 52, 12, 46, 12, 15, 87, 245, 255, 17, 27, 7, 16, 63, 159, 186, 177, 121, 176, 48, 1];
+    let event_data_cursor = Cursor::new(&event_data);
+    let mut io_reader = IoReader(event_data_cursor);
+
+    // Retrieve the chunk definition for the event
+    let chunks = type_chunks.get(&pallet_idx).unwrap().get(&event_idx).unwrap();
+
+    for c in chunks.iter() {
+        read_chunk(c, &mut io_reader)
+    }
 }
-*/

@@ -179,8 +179,8 @@ fn read_chunk<R: std::io::Read>(chunk: &Chunk, io_reader: &mut IoReader<R>) {
         }
 
         Chunk::Sequence(sequence_chunks) => {
-            let sequence_length = codec::Compact::<u64>::decode(io_reader).unwrap();
-            for i in 0..sequence_length.0 {
+            let sequence_length = codec::Compact::<u128>::decode(io_reader).unwrap();
+            for _ in 0..sequence_length.0 {
                 for inner_chunk in sequence_chunks.iter() {
                     read_chunk(inner_chunk, io_reader);
                 }
@@ -188,7 +188,7 @@ fn read_chunk<R: std::io::Read>(chunk: &Chunk, io_reader: &mut IoReader<R>) {
         }
 
         Chunk::Compact => {
-            let _ = codec::Compact::<u64>::decode(io_reader).unwrap();
+            let _ = codec::Compact::<u128>::decode(io_reader).unwrap();
         }
     }
 }

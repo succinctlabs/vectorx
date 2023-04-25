@@ -42,6 +42,8 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
         }
 
         TypeDef::Variant(v) => {
+            // First byte is the Variant index
+            add_constant_size(1, type_chunk_sizes);
             for v in v.variants.iter() {
                 for f in v.fields.iter() {
                     get_type_size(md, &f.ty, type_chunk_sizes);
@@ -147,12 +149,20 @@ pub async fn get_type_chunks() -> HashMap<u8, HashMap<u8, Vec<Chunk>>>{
                 match td {
                     TypeDef::Variant(v) => {
                         for v in v.variants.iter() {
+                            println!("\tEvent {:?} has index of {:?}", v.name, v.index);
                             let mut type_chunk_sizes = Vec::new();
+
+                            // Seems like there are an extra 4 bytes in front of events for System.ExtrinsicSuccess events
+                            // TODO:  Check if this is true for other System pallets
+                            if p.index == 0 && v.index == 0 {
+                                add_constant_size(4, &mut type_chunk_sizes);
+                            }
+
                             for f in v.fields.iter() {
                                 get_type_size(&md, &f.ty, &mut type_chunk_sizes);
                             }
 
-                            println!("\tEvent {:?} has type_chunk_sizes of {:?}", v.name, type_chunk_sizes);
+                            println!("\tEvent {:?} has type_chunk_sizes of {:?}\n\n\n", v.name, type_chunk_sizes);
                             pallet_event_type_chunks.insert(v.index, type_chunk_sizes);
                         }                
                     }

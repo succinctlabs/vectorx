@@ -210,6 +210,8 @@ async fn test_nested_sequence() {
     // Retrieve the chunk definition for the event
     let chunks = type_chunks.get(&pallet_idx).unwrap().get(&event_idx).unwrap();
 
+    println!("ImOnline.Someoffline event has chunks of {:?}", chunks);
+
     for c in chunks.iter() {
         read_chunk(c, &mut io_reader)
     }

@@ -1,6 +1,4 @@
-pragma solidity 0.8.16;
-
-import {ILightClient} from "src/lightclient/interfaces/ILightClient.sol";
+pragma solidity 0.8.17;
 
 struct Groth16Proof {
     uint256[2] a;
@@ -10,12 +8,12 @@ struct Groth16Proof {
 
 struct EpochProof {
     uint64 epochIndex;
-    bytes[] merkle_proof;  // Proof that it's within the state root
+    bytes[] merkleProof;  // Proof that it's within the state root
 }
 
 struct EventListProof {
     bytes encodedEventList;
-    bytes[] merkle_proof; // Proof that it's within the state
+    bytes[] merkleProof; // Proof that it's within the state
 }
 
 // Currently, the light client will do a step update for every block
@@ -41,8 +39,8 @@ struct LightClientRotate {
     EventListProof eventListProof;
 }
 
-struct Authorities {
-    bytes32 eddsa_pub_key;
+struct Authority {
+    bytes32 eddsaPubKey;
     uint64 weight;
 }
 
@@ -53,16 +51,16 @@ struct Authorities {
 /// @author Succinct Labs
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
-contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
+contract AvailLightClient {
     uint256 public immutable GENESIS_SLOT;    // May not need this if we can assume this is 0
 
     uint256 public immutable START_CHECKPOINT_SLOT;
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_ROOT;
 
-    uint16 public immutable NUM_AUTHORITIES = 10;
-    uint16 public immutable FINALITY_THRESHOLD = 7;  // This is Ceil(2/3 * NUM_AUTHORITIES)
-    uint32 public immutable SLOTS_PER_EPOCH = 180;
+    uint16 public constant NUM_AUTHORITIES = 10;
+    uint16 public constant FINALITY_THRESHOLD = 7;  // This is Ceil(2/3 * NUM_AUTHORITIES)
+    uint32 public constant SLOTS_PER_EPOCH = 180;
 
     /// @notice The latest block_number the light client has a header for.  This header may not have a 
     ///         grandpa justification submitted for it yet.
@@ -76,10 +74,10 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
     uint64 public epochIndex;
 
     /// @notice The latest block_number the light client has a finalized header for.
-    uint32 public finalizedHead = 0;
+    uint32 public finalizedHead;
 
     /// @notice The latest block_hash the light client has a finalized header for.
-    uint32 public finalizedHeadRoot = 0;
+    uint32 public finalizedHeadRoot;
 
     /// @notice Maps from a block number to an Avail header root.
     mapping(uint32 => bytes32) public headerRoots;
@@ -88,35 +86,45 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
     mapping(uint32 => bytes32) public executionStateRoots;
 
     /// @notice Maps from a epoch index to the authorities
-    mapping(uint64 => Authorities[NUM_VALIDATORS]) public authorities;
+    mapping(uint64 => Authority[NUM_AUTHORITIES]) public authorities;
 
-    event HeadUpdate(uint32 indexed block_number, bytes32 indexed root);
-    event FinalizedHeadUpdate(uint32 indexed block_number, bytes32 indexed root);
-    event AuthoritiesUpdate(uint64 indexed epoch_index);
+    event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
+    event FinalizedHeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
+    event AuthoritiesUpdate(uint64 indexed epochIndex);
 
     constructor(
         uint32 genesisSlot,
-        Authorities startCheckpointAuthorities[NUM_AUTHORITIES],
+        Authority[NUM_AUTHORITIES] memory startCheckpointAuthorities,
         uint32 startCheckpointSlot,
         uint32 startCheckpointBlockNumber,
         bytes32 startCheckpointHeaderRoot,
+        bytes32 startCheckpointExecutionRoot
     ) {
         GENESIS_SLOT = genesisSlot;
         START_CHECKPOINT_SLOT = startCheckpointSlot;
         START_CHECKPOINT_BLOCK_NUMBER = startCheckpointBlockNumber;
         START_CHECKPOINT_HEADER_ROOT = startCheckpointHeaderRoot;
 
-        start_epoch_index = epoch_index(genesisSlot);
-        setAuthorities(start_epoch_index, startCheckpointAuthorities);
+        epochIndex = getEpochIndex(genesisSlot);
+        setAuthorities(epochIndex, startCheckpointAuthorities);
 
         head = startCheckpointBlockNumber;
-        finalized_head = startCheckpointBlockNumber;
+        finalizedHead = startCheckpointBlockNumber;
+
+        headerRoots[startCheckpointBlockNumber] = startCheckpointHeaderRoot;
+        executionStateRoots[startCheckpointBlockNumber] = startCheckpointExecutionRoot;
     }
 
     function getEpochIndex(uint32 slot) internal pure returns (uint64) {
-        return (slot - genesis_slot) / SLOTS_PER_EPOCH;
+        return uint64((slot - GENESIS_SLOT) / SLOTS_PER_EPOCH);
     }
 
+    function setAuthorities(uint64 _epochIndex, Authority[NUM_AUTHORITIES] memory _authorities) internal {
+        authorities[_epochIndex] = _authorities;
+        emit AuthoritiesUpdate(_epochIndex);
+    }
+
+    /*
     /// @notice Updates the head of the light client to the provided slot.
     /// @dev The conditions for updating the head of the light client involve checking:
     ///      1) The parent hash is correctly decoded from the header
@@ -172,4 +180,5 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
 
         emit FinalizedHeadUpdate(update.blockNumber, update.headerRoot);
     }
+    */
 }

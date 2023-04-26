@@ -73,8 +73,14 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
     ///         grandpa justification submitted for it yet.
     uint32 public headRoot;
 
+    /// @notice The current epoch index
+    uint64 public epochIndex;
+
     /// @notice The latest block_number the light client has a finalized header for.
-    uint32 public finalized_head = 0;
+    uint32 public finalizedHead = 0;
+
+    /// @notice The latest block_hash the light client has a finalized header for.
+    uint32 public finalizedHeadRoot = 0;
 
     /// @notice Maps from a block number to an Avail header root.
     mapping(uint32 => bytes32) public headerRoots;
@@ -108,7 +114,7 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
         finalized_head = startCheckpointBlockNumber;
     }
 
-    function epochIndex(uint32 slot) internal pure returns (uint64) {
+    function getEpochIndex(uint32 slot) internal pure returns (uint64) {
         return (slot - genesis_slot) / SLOTS_PER_EPOCH;
     }
 
@@ -131,6 +137,7 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
             revert("Update block number not correct");
         }
 
+        // TODO:  Need to implement
         // zkLightClientStep(update);
 
         head = update.blockNumber;
@@ -141,96 +148,29 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
         emit HeadUpdate(update.blockNumber, update.headerRoot);
     }
 
-    /// @notice TODO - This function is not yet implemented
-    function zkLightClientStep(LightClientStep memory update) internal view {
-        /* Groth16Proof memory proof = update.proof;
-        uint256[4] memory inputs = [uint256(t), uint256];
-        require(verifyProofStep(proof.a, proof.b, proof.c, inputs)); */
-    }
-
-    /// @notice Sets the sync committee for the next sync committeee period.
-    /// @dev A commitment to the the next sync committeee is signed by the current sync committee.
-    function rotate(LightClientRotate memory update) external {
-        LightClientStep memory stepUpdate = update.step;
-        bool finalized = processStep(update.step);
-        uint256 currentPeriod = getSyncCommitteePeriod(stepUpdate.finalizedSlot);
-        uint256 nextPeriod = currentPeriod + 1;
-
-        zkLightClientRotate(update);
-
-        if (finalized) {
-            setSyncCommitteePoseidon(nextPeriod, update.syncCommitteePoseidon);
-        }
-    }
-
-
-    /// @notice Serializes the public inputs and verifies the rotate proof.
-    function zkLightClientRotate(LightClientRotate memory update) internal view {
-        Groth16Proof memory proof = update.proof;
-        uint256[65] memory inputs;
-
-        uint256 syncCommitteeSSZNumeric = uint256(update.syncCommitteeSSZ);
-        for (uint256 i = 0; i < 32; i++) {
-            inputs[32 - 1 - i] = syncCommitteeSSZNumeric % 2 ** 8;
-            syncCommitteeSSZNumeric = syncCommitteeSSZNumeric / 2 ** 8;
-        }
-        uint256 finalizedHeaderRootNumeric = uint256(update.step.finalizedHeaderRoot);
-        for (uint256 i = 0; i < 32; i++) {
-            inputs[64 - i] = finalizedHeaderRootNumeric % 2 ** 8;
-            finalizedHeaderRootNumeric = finalizedHeaderRootNumeric / 2 ** 8;
-        }
-        inputs[32] = uint256(SSZ.toLittleEndian(uint256(update.syncCommitteePoseidon)));
-
-        require(verifyProofRotate(proof.a, proof.b, proof.c, inputs));
-    }
-
-    /// @notice Gets the sync committee period from a slot.
-    function getSyncCommitteePeriod(uint256 slot) internal view returns (uint256) {
-        return slot / SLOTS_PER_PERIOD;
-    }
-
-    /// @notice Gets the current slot for the chain the light client is reflecting.
-    function getCurrentSlot() internal view returns (uint256) {
-        return (block.timestamp - GENESIS_TIME) / SECONDS_PER_SLOT;
-    }
-
-    /// @notice Sets the current slot for the chain the light client is reflecting.
-    /// @dev Checks if roots exists for the slot already. If there is, check for a conflict between
-    ///      the given roots and the existing roots. If there is an existing header but no
-    ///      conflict, do nothing. This avoids timestamp renewal DoS attacks.
-    function setSlotRoots(uint256 slot, bytes32 finalizedHeaderRoot, bytes32 executionStateRoot)
-        internal
-    {
-        if (headers[slot] != bytes32(0)) {
-            if (headers[slot] != finalizedHeaderRoot) {
-                consistent = false;
-            }
-            return;
-        }
-        if (executionStateRoots[slot] != bytes32(0)) {
-            if (executionStateRoots[slot] != executionStateRoot) {
-                consistent = false;
-            }
-            return;
+    function finalize(LightClientFinalize memory update) external {
+        if (update.blockNumber <= finalizedHead) {
+            revert("Finalized block number is before the current finalized head");
         }
 
-        head = slot;
-        headers[slot] = finalizedHeaderRoot;
-        executionStateRoots[slot] = executionStateRoot;
-        timestamps[slot] = block.timestamp;
-        emit HeadUpdate(slot, finalizedHeaderRoot);
-    }
-
-    /// @notice Sets the sync committee poseidon for a given period.
-    function setSyncCommitteePoseidon(uint256 period, bytes32 poseidon) internal {
-        if (
-            syncCommitteePoseidons[period] != bytes32(0)
-                && syncCommitteePoseidons[period] != poseidon
-        ) {
-            consistent = false;
-            return;
+        // This will check for both a bad inputted headerRoot and for no headerRoot
+        if (headerRoot[update.blockNumber] != update.headerRoot) {
+            revert("Finalized block header root is not correct");
         }
-        syncCommitteePoseidons[period] = poseidon;
-        emit SyncCommitteeUpdate(period, poseidon);
+
+        if (getEpochIndex(update.slotProof.slot) != epochIndex) {
+            revert("Not in the current epoch");
+        }
+
+        // Check to see that we are in the correct epoch
+        verifySlotProof(update.slotProof);
+
+        // TODO:  Need to implement
+        // ZKLightClientFinalize(update);
+
+        finalizedHead = update.blockNumber;
+        finalizedHeadRoot = update.headerRoot;
+
+        emit FinalizedHeadUpdate(update.blockNumber, update.headerRoot);
     }
 }

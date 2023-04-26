@@ -44,6 +44,8 @@ struct Authority {
     uint64 weight;
 }
 
+uint16 constant NUM_AUTHORITIES = 10;
+
 // TODO:  Need to figure out what types are slots in the avail/substate code.
 // TODO:  Should create a new type alias for block numbers
 
@@ -58,7 +60,6 @@ contract AvailLightClient {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_ROOT;
 
-    uint16 public constant NUM_AUTHORITIES = 10;
     uint16 public constant FINALITY_THRESHOLD = 7;  // This is Ceil(2/3 * NUM_AUTHORITIES)
     uint32 public constant SLOTS_PER_EPOCH = 180;
 
@@ -115,12 +116,16 @@ contract AvailLightClient {
         executionStateRoots[startCheckpointBlockNumber] = startCheckpointExecutionRoot;
     }
 
-    function getEpochIndex(uint32 slot) internal pure returns (uint64) {
+    function getEpochIndex(uint32 slot) internal view returns (uint64) {
         return uint64((slot - GENESIS_SLOT) / SLOTS_PER_EPOCH);
     }
 
     function setAuthorities(uint64 _epochIndex, Authority[NUM_AUTHORITIES] memory _authorities) internal {
-        authorities[_epochIndex] = _authorities;
+        for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
+            authorities[_epochIndex][i].eddsaPubKey  = _authorities[i].eddsaPubKey;
+            authorities[_epochIndex][i].weight = _authorities[i].weight;
+        }
+
         emit AuthoritiesUpdate(_epochIndex);
     }
 

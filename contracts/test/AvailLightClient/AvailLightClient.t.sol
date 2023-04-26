@@ -4,11 +4,14 @@ import "forge-std/Vm.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 
-import {Authority, AvailLightClient} from "src/AvailLightClient.sol";
+import {AvailLightClientFixture} from "test/AvailLightClient/AvailLightClientFixture.sol";
+import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
-contract AvailLightClientTest is Test {
+contract AvailLightClientTest is Test, AvailLightClientFixture {
     uint256 constant FIXTURE_BLOCK_START = 576727;
     uint256 constant FIXTURE_BLOCK_END = 576727;
+
+    Fixture[] fixtures;
 
     function setUp() public {
         // read all fixtures from entire directory

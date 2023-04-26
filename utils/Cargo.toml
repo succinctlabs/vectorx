@@ -23,3 +23,7 @@ subxt = "0.24"
 [[bin]]
 name = "get_events"
 path = "src/get_events.rs"
+
+[[bin]]
+name = "get_epoch_index"
+path = "src/get_epoch_index.rs"

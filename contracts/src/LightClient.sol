@@ -8,9 +8,9 @@ struct Groth16Proof {
     uint256[2] c;
 }
 
-struct SlotProof {
-    uint32 slot;
-    bytes[] merkle_proof;  // Proof that it's within the state
+struct EpochProof {
+    uint64 epochIndex;
+    bytes[] merkle_proof;  // Proof that it's within the state root
 }
 
 struct EventListProof {
@@ -32,14 +32,13 @@ struct LightClientFinalize {
     uint32 blockNumber;
     bytes32 headerRoot;
     Groth16Proof proof;
-    SlotProof slotProof;
+    EpochProof epochProof;
 }
 
 // For now, we are just going to verify the rotate purely in solidity
 struct LightClientRotate {
     uint32 blockNumber;
     EventListProof eventListProof;
-    SlotProof slotProof;
 }
 
 struct Authorities {
@@ -158,12 +157,12 @@ contract AvailLightClient is ILightClient, StepVerifier, RotateVerifier {
             revert("Finalized block header root is not correct");
         }
 
-        if (getEpochIndex(update.slotProof.slot) != epochIndex) {
+        if (update.epochProof.epochIndex != epochIndex) {
             revert("Not in the current epoch");
         }
 
         // Check to see that we are in the correct epoch
-        verifySlotProof(update.slotProof);
+        verifyEpochProof(update.epochProof);
 
         // TODO:  Need to implement
         // ZKLightClientFinalize(update);

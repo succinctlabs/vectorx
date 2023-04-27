@@ -145,14 +145,13 @@ contract AvailLightClient {
         emit HeadUpdate(update.blockNumber, update.headerRoot);
     }
 
-    /*
     function finalize(LightClientFinalize memory update) external {
         if (update.blockNumber <= finalizedHead) {
             revert("Finalized block number is before the current finalized head");
         }
 
         // This will check for both a bad inputted headerRoot and for no headerRoot
-        if (headerRoot[update.blockNumber] != update.headerRoot) {
+        if (headerRoots[update.blockNumber] != update.headerRoot) {
             revert("Finalized block header root is not correct");
         }
 
@@ -161,15 +160,13 @@ contract AvailLightClient {
         }
 
         // Check to see that we are in the correct epoch
-        verifyEpochProof(update.epochProof);
+        // verifyEpochProof(update.epochProof);
 
         // TODO:  Need to implement
         // ZKLightClientFinalize(update);
 
         finalizedHead = update.blockNumber;
-        finalizedHeadRoot = update.headerRoot;
 
         emit FinalizedHeadUpdate(update.blockNumber, update.headerRoot);
     }
-    */
 }

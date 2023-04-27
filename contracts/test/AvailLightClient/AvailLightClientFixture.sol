@@ -10,6 +10,7 @@ import {AvailLightClient, NUM_AUTHORITIES} from "src/AvailLightClient.sol";
 contract AvailLightClientFixture is CommonBase {
     struct Fixture {
         Initial initial;
+        Step step;
     }
 
     struct Initial {
@@ -19,6 +20,13 @@ contract AvailLightClientFixture is CommonBase {
         bytes32 startCheckpointExecutionRoot;
         bytes32 startCheckpointHeaderRoot;
         uint32 startCheckpointSlot;
+    }
+
+    struct Step {
+        uint32 blockNumber;
+        bytes32 executionStateRoot;
+        bytes32 headerRoot;
+        bytes32 parentRoot;
     }
 
     function newAvailLightClient(Initial memory initial)

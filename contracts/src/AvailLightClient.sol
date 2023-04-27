@@ -8,12 +8,12 @@ struct Groth16Proof {
 
 struct EpochProof {
     uint64 epochIndex;
-    bytes[] merkleProof;  // Proof that it's within the state root
+    //bytes[] merkleProof;  // Proof that it's within the state root
 }
 
 struct EventListProof {
     bytes encodedEventList;
-    bytes[] merkleProof; // Proof that it's within the state
+    //bytes[] merkleProof; // Proof that it's within the state
 }
 
 // Currently, the light client will do a step update for every block
@@ -22,14 +22,14 @@ struct LightClientStep {
     bytes32 headerRoot;
     bytes32 parentRoot;
     bytes32 executionStateRoot;
-    Groth16Proof proof;
+    //Groth16Proof proof;
 }
 
 // Used for a GRANDPA justification finality proof
 struct LightClientFinalize {
     uint32 blockNumber;
     bytes32 headerRoot;
-    Groth16Proof proof;
+    //Groth16Proof proof;
     EpochProof epochProof;
 }
 
@@ -116,7 +116,6 @@ contract AvailLightClient {
         emit AuthoritiesUpdate(_epochIndex);
     }
 
-    /*
     /// @notice Updates the head of the light client to the provided slot.
     /// @dev The conditions for updating the head of the light client involve checking:
     ///      1) The parent hash is correctly decoded from the header
@@ -128,25 +127,25 @@ contract AvailLightClient {
     ///      TODO:  Modify this smart contract to not make this assumptions.  This means that the smart contract will
     ///             basically need to be able to store forks that are not yet finalized.
     function step(LightClientStep memory update) external {
-        if (update.parentRoot != headRoot) {
-            revert("Update block doesn't build off of head");
-        }
-
         if (update.blockNumber != head + 1) {
             revert("Update block number not correct");
+        }
+
+        if (update.parentRoot != headerRoots[update.blockNumber - 1]) {
+            revert("Update block doesn't build off of head");
         }
 
         // TODO:  Need to implement
         // zkLightClientStep(update);
 
         head = update.blockNumber;
-        headRoot = update.headerRoot;
         headerRoots[update.blockNumber] = update.headerRoot;
         executionStateRoots[update.blockNumber] = update.executionStateRoot;
 
         emit HeadUpdate(update.blockNumber, update.headerRoot);
     }
 
+    /*
     function finalize(LightClientFinalize memory update) external {
         if (update.blockNumber <= finalizedHead) {
             revert("Finalized block number is before the current finalized head");

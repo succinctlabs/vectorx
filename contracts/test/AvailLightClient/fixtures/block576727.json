@@ -17,5 +17,11 @@
         "startCheckpointExecutionRoot": "0xee4ad636031fc1c7df369a90af680d54543c0de95bf40ab723289846715b95ad",
         "startCheckpointHeaderRoot": "0x91257bc931df2d9a91f32dae6ca607ae9e411b38ed8738738eafe7bb816d1464",
         "startCheckpointSlot": 84060913
+    },
+    "step": {
+        "blockNumber": 576728,
+        "executionStateRoot": "0x110769b4c5b850bd3b8276b39daf6dece324cef62e214c3768a7a12da7a8ff7c",
+        "headerRoot": "0xb71429ef80257a25358e386e4ca1debe72c38ea69d833e23416a4225fabb1a78",
+        "parentRoot": "0x91257bc931df2d9a91f32dae6ca607ae9e411b38ed8738738eafe7bb816d1464"
     }
 }

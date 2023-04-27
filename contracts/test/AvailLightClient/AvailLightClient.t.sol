@@ -4,7 +4,7 @@ import "forge-std/Vm.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 
-import {AvailLightClient, NUM_AUTHORITIES} from "src/AvailLightClient.sol";
+import {AvailLightClient, LightClientStep, NUM_AUTHORITIES} from "src/AvailLightClient.sol";
 import {AvailLightClientFixture} from "test/AvailLightClient/AvailLightClientFixture.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
@@ -57,5 +57,17 @@ contract AvailLightClientTest is Test, AvailLightClientFixture {
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
             assertTrue(lc.authorityPuKeys(epochIndex, i) == initial.authorityPubKeys[i]);
         }
+    }
+
+    function test_AvailLightClientStep() public {
+        AvailLightClient lc = newAvailLightClient(fixtures[0].initial);
+        LightClientStep memory step;
+        
+        step.blockNumber = fixtures[0].step.blockNumber;
+        step.executionStateRoot = fixtures[0].step.executionStateRoot;
+        step.headerRoot = fixtures[0].step.headerRoot;
+        step.parentRoot = fixtures[0].step.parentRoot;
+
+        lc.step(step);
     }
 }

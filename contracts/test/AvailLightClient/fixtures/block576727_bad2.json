@@ -1,0 +1,27 @@
+{
+    "initial": {
+        "authorityPubKeys": [
+            "0x0c7b217a62b4cf3dbaed046b3fd2dfef0591206b4fc1ad16ea6dcfb8c2614c55",
+            "0x8d9b15ea8335270510135b7f7c5ef94e0df70e751d3c5f95fd1aa6d7766929b6",
+            "0xe1288d95d48c12389b4398d2bf76998e9452c40e022bd63f9da529855d427b24",
+            "0xcc6de644a35f4b205603fa125612df211d4f9d75e07c84d85cd35ea32a6b1ced",
+            "0xe4c08a068e72a466e2f377e862b5b2ed473c4f0e58d7d265a123ad11fef2a797",
+            "0x2ba7c00bfcc12b56a306c41ec44c411042d0b837a40d80fc652fa58ccfb78600",
+            "0x079590df34cd1fa2f83cb1ef770b3e254abb00fa7dbfb2f7f21b383a7a726bb2",
+            "0x335a446d556bd8b12d2e87b2c2b0a2b612f89c959ac60f955c334489c0363e43",
+            "0xd4bb88f5cf51c64c98fddcf13839a48de35859804e4e3b6db227e9b157d832ec",
+            "0x483e7490bc12a4e782224a513bbf581dfd85e89117b4e0f5663b77075e041097"
+        ],
+        "genesisSlot": 83483474,
+        "startCheckpointBlockNumber": 576727,
+        "startCheckpointExecutionRoot": "0xee4ad636031fc1c7df369a90af680d54543c0de95bf40ab723289846715b95ad",
+        "startCheckpointHeaderRoot": "0x91257bc931df2d9a91f32dae6ca607ae9e411b38ed8738738eafe7bb816d1464",
+        "startCheckpointSlot": 84060913
+    },
+    "step": {
+        "blockNumber": 576729,
+        "executionStateRoot": "0x110769b4c5b850bd3b8276b39daf6dece324cef62e214c3768a7a12da7a8ff7c",
+        "headerRoot": "0xb71429ef80257a25358e386e4ca1debe72c38ea69d833e23416a4225fabb1a78",
+        "parentRoot": "0x91257bc931df2d9a91f32dae6ca607ae9e411b38ed8738738eafe7bb816d1464"
+    }
+}

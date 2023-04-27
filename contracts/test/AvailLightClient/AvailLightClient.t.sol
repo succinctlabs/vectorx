@@ -69,5 +69,48 @@ contract AvailLightClientTest is Test, AvailLightClientFixture {
         step.parentRoot = fixtures[0].step.parentRoot;
 
         lc.step(step);
+
+        assertTrue(lc.head() == step.blockNumber);
+        assertTrue(lc.finalizedHead() != step.blockNumber);
+        assertTrue(lc.headerRoots(step.blockNumber) == step.headerRoot);
+        assertTrue(lc.executionStateRoots(step.blockNumber) == step.executionStateRoot);
+    }
+
+    function test_AvailLightClientStep_badParentRoot() public {
+        string memory path = string.concat(
+            vm.projectRoot(), "/test/AvailLightClient/fixtures/block576727_bad1.json"
+        );
+        bytes memory parsed = vm.parseJson(vm.readFile(path));
+        Fixture memory fixture = abi.decode(parsed, (Fixture));
+
+        AvailLightClient lc = newAvailLightClient(fixture.initial);
+        LightClientStep memory step;
+        
+        step.blockNumber = fixture.step.blockNumber;
+        step.executionStateRoot = fixture.step.executionStateRoot;
+        step.headerRoot = fixture.step.headerRoot;
+        step.parentRoot = fixture.step.parentRoot;
+
+        vm.expectRevert();
+        lc.step(step);
+    }
+
+    function test_AvailLightClientStep_badBlockNumber() public {
+        string memory path = string.concat(
+            vm.projectRoot(), "/test/AvailLightClient/fixtures/block576727_bad2.json"
+        );
+        bytes memory parsed = vm.parseJson(vm.readFile(path));
+        Fixture memory fixture = abi.decode(parsed, (Fixture));
+
+        AvailLightClient lc = newAvailLightClient(fixture.initial);
+        LightClientStep memory step;
+        
+        step.blockNumber = fixture.step.blockNumber;
+        step.executionStateRoot = fixture.step.executionStateRoot;
+        step.headerRoot = fixture.step.headerRoot;
+        step.parentRoot = fixture.step.parentRoot;
+
+        vm.expectRevert();
+        lc.step(step);
     }
 }

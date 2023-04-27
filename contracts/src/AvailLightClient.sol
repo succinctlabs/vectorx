@@ -39,11 +39,6 @@ struct LightClientRotate {
     EventListProof eventListProof;
 }
 
-struct Authority {
-    bytes32 eddsaPubKey;
-    uint64 weight;
-}
-
 uint16 constant NUM_AUTHORITIES = 10;
 
 // TODO:  Need to figure out what types are slots in the avail/substate code.
@@ -67,18 +62,11 @@ contract AvailLightClient {
     ///         grandpa justification submitted for it yet.
     uint32 public head;
 
-    /// @notice The latest block_hash the light client has a header for.  This header may not have a 
-    ///         grandpa justification submitted for it yet.
-    uint32 public headRoot;
-
     /// @notice The current epoch index
     uint64 public epochIndex;
 
     /// @notice The latest block_number the light client has a finalized header for.
     uint32 public finalizedHead;
-
-    /// @notice The latest block_hash the light client has a finalized header for.
-    uint32 public finalizedHeadRoot;
 
     /// @notice Maps from a block number to an Avail header root.
     mapping(uint32 => bytes32) public headerRoots;
@@ -86,8 +74,8 @@ contract AvailLightClient {
     /// @notice Maps from a block number to the execution state root.
     mapping(uint32 => bytes32) public executionStateRoots;
 
-    /// @notice Maps from a epoch index to the authorities
-    mapping(uint64 => Authority[NUM_AUTHORITIES]) public authorities;
+    /// @notice Maps from a epoch index to the authorities' pub keys
+    mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authorityPuKeys;
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event FinalizedHeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
@@ -95,7 +83,7 @@ contract AvailLightClient {
 
     constructor(
         uint32 genesisSlot,
-        Authority[NUM_AUTHORITIES] memory startCheckpointAuthorities,
+        bytes32[NUM_AUTHORITIES] memory startCheckpointAuthorities,
         uint32 startCheckpointSlot,
         uint32 startCheckpointBlockNumber,
         bytes32 startCheckpointHeaderRoot,
@@ -106,7 +94,7 @@ contract AvailLightClient {
         START_CHECKPOINT_BLOCK_NUMBER = startCheckpointBlockNumber;
         START_CHECKPOINT_HEADER_ROOT = startCheckpointHeaderRoot;
 
-        epochIndex = getEpochIndex(genesisSlot);
+        epochIndex = calculateEpochIndex(startCheckpointSlot);
         setAuthorities(epochIndex, startCheckpointAuthorities);
 
         head = startCheckpointBlockNumber;
@@ -116,14 +104,13 @@ contract AvailLightClient {
         executionStateRoots[startCheckpointBlockNumber] = startCheckpointExecutionRoot;
     }
 
-    function getEpochIndex(uint32 slot) internal view returns (uint64) {
+    function calculateEpochIndex(uint32 slot) internal view returns (uint64) {
         return uint64((slot - GENESIS_SLOT) / SLOTS_PER_EPOCH);
     }
 
-    function setAuthorities(uint64 _epochIndex, Authority[NUM_AUTHORITIES] memory _authorities) internal {
+    function setAuthorities(uint64 _epochIndex, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
-            authorities[_epochIndex][i].eddsaPubKey  = _authorities[i].eddsaPubKey;
-            authorities[_epochIndex][i].weight = _authorities[i].weight;
+            authorityPuKeys[_epochIndex][i]  = _authorities[i];
         }
 
         emit AuthoritiesUpdate(_epochIndex);

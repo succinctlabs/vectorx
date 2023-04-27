@@ -12,18 +12,6 @@
             "0xd4bb88f5cf51c64c98fddcf13839a48de35859804e4e3b6db227e9b157d832ec",
             "0x483e7490bc12a4e782224a513bbf581dfd85e89117b4e0f5663b77075e041097"
         ],
-        "authorityWeights": [
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1,
-            1
-        ],
         "genesisSlot": 83483474,
         "startCheckpointBlockNumber": 576727,
         "startCheckpointExecutionRoot": "0xee4ad636031fc1c7df369a90af680d54543c0de95bf40ab723289846715b95ad",

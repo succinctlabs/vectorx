@@ -4,7 +4,7 @@ import "forge-std/Vm.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 
-import {AvailLightClient, LightClientStep, NUM_AUTHORITIES} from "src/AvailLightClient.sol";
+import {AvailLightClient, AuthoritySetProof, LightClientStep, LightClientFinalize, NUM_AUTHORITIES} from "src/AvailLightClient.sol";
 import {AvailLightClientFixture} from "test/AvailLightClient/AvailLightClientFixture.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
@@ -43,19 +43,14 @@ contract AvailLightClientTest is Test, AvailLightClientFixture {
 
         Initial memory initial = fixtures[0].initial;
 
-        assertTrue(lc.GENESIS_SLOT() == initial.genesisSlot);
-        assertTrue(lc.START_CHECKPOINT_SLOT() == initial.startCheckpointSlot);
         assertTrue(lc.START_CHECKPOINT_BLOCK_NUMBER() == initial.startCheckpointBlockNumber);
         assertTrue(lc.head() == initial.startCheckpointBlockNumber);
         assertTrue(lc.finalizedHead() == initial.startCheckpointBlockNumber);
         assertTrue(lc.headerRoots(initial.startCheckpointBlockNumber) == initial.startCheckpointHeaderRoot);
         assertTrue(lc.executionStateRoots(initial.startCheckpointBlockNumber) == initial.startCheckpointExecutionRoot);
 
-        uint64 epochIndex = lc.epochIndex();
-        assertTrue(epochIndex == 3207);
-
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
-            assertTrue(lc.authorityPuKeys(epochIndex, i) == initial.authorityPubKeys[i]);
+            assertTrue(lc.authorityPuKeys(initial.startCheckpointAuthoritySetID, i) == initial.authorityPubKeys[i]);
         }
     }
 
@@ -112,5 +107,34 @@ contract AvailLightClientTest is Test, AvailLightClientFixture {
 
         vm.expectRevert();
         lc.step(step);
+    }
+
+    function test_AvailLightClientStepAndFinalize() public {
+        AvailLightClient lc = newAvailLightClient(fixtures[0].initial);
+        LightClientStep memory step;
+
+        step.blockNumber = fixtures[0].step.blockNumber;
+        step.executionStateRoot = fixtures[0].step.executionStateRoot;
+        step.headerRoot = fixtures[0].step.headerRoot;
+        step.parentRoot = fixtures[0].step.parentRoot;
+
+        lc.step(step);
+
+        assertTrue(lc.head() == step.blockNumber);
+        assertTrue(lc.finalizedHead() != step.blockNumber);
+        assertTrue(lc.headerRoots(step.blockNumber) == step.headerRoot);
+        assertTrue(lc.executionStateRoots(step.blockNumber) == step.executionStateRoot);
+
+        LightClientFinalize memory finalize;
+
+        finalize.blockNumber = fixtures[0].finalize.blockNumber;
+        finalize.headerRoot = fixtures[0].finalize.headerRoot;
+        finalize.authoritySetProof = AuthoritySetProof({
+            authoritySetID: fixtures[0].finalize.authoritySetID,
+            merkleProof: fixtures[0].finalize.merkleProof
+        });
+        lc.finalize(finalize);
+
+        assertTrue(lc.finalizedHead() == finalize.blockNumber);
     }
 }

@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use avail_subxt::{build_client, primitives::Header};
+use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
 use serde::de::Error;
 use serde::Deserialize;
@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use subxt::{
 	ext::{
-		sp_core::{bytes, Bytes, ed25519::{Public as EdPublic, Signature}, H256},
+		sp_core::{bytes, Bytes, crypto::Pair, ed25519::{self, Public as EdPublic, Signature}, H256},
 	},
     rpc::RpcParams,
 };
@@ -105,21 +105,48 @@ pub enum FinalityProofError {
 
 #[tokio::main]
 pub async fn main() {
+    let header_num = 576728;
     let url: &str = "wss://testnet.avail.tools:443/ws";
 
     let c = build_client(url).await.unwrap();
     let t = c.rpc().deref();
-    
+
     let mut params = RpcParams::new();
-    let _ = params.push(577729);
-
-    //Result<Option<EncodedFinalityProof>, sc_consensus_grandpa::FinalityProofError>
-
+    let _ = params.push(header_num);
     let encoded_finality_proof = t.request::<EncodedFinalityProof>("grandpa_proveFinality", params).await.unwrap();
     let finality_proof: FinalityProof = Decode::decode(&mut encoded_finality_proof.0.0.as_slice()).unwrap();
-    let justfication: GrandpaJustification = Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
+    let justification: GrandpaJustification = Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
 
-    println!("{:?}", justfication);
+    println!("{:?}", justification);
     println!("finality_proof:block {:?}", finality_proof.block);
-    println!("finality_proof:unknown_headers {:?}", finality_proof.unknown_headers.len());
+    println!("finality_proof:unknown_headers length {:?}", finality_proof.unknown_headers.len());
+    for header in finality_proof.unknown_headers.iter() {
+        println!("finality_proof:unknown_header number {:?}", header.number);
+    }
+
+    let set_id_key = api::storage().grandpa().current_set_id();
+    let set_id = c.storage().fetch(&set_id_key, Some(finality_proof.block)).await.unwrap().unwrap() - 1;
+    println!("set_id {:?}", set_id);
+
+    // Form a message which is signed in the justification
+    let signed_message = Encode::encode(&(
+        &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
+        &justification.round,
+        &set_id,
+    ));
+
+    // Verify all the signatures of the justification
+    let _ = justification
+        .commit
+        .precommits
+        .iter()
+        .for_each(|precommit| {
+            let is_ok = <ed25519::Pair as Pair>::verify_weak(
+                &precommit.clone().signature.0[..],
+                signed_message.as_slice(),
+                &precommit.clone().id,
+            );
+            println!("is_ok {:?}", is_ok);
+            assert!(is_ok);
+        });
 }

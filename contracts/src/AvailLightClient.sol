@@ -1,14 +1,16 @@
 pragma solidity 0.8.17;
 
+import "solidity-merkle-trees/src/MerklePatricia.sol";
+
 struct Groth16Proof {
     uint256[2] a;
     uint256[2][2] b;
     uint256[2] c;
 }
 
-struct EpochProof {
-    uint64 epochIndex;
-    //bytes[] merkleProof;  // Proof that it's within the state root
+struct AuthoritySetProof {
+    uint64 authoritySetID;
+    bytes[] merkleProof;  // Proof that it's within the state root
 }
 
 struct EventListProof {
@@ -30,7 +32,9 @@ struct LightClientFinalize {
     uint32 blockNumber;
     bytes32 headerRoot;
     //Groth16Proof proof;
-    EpochProof epochProof;
+
+    // The authority set id from the previous block (and verified against that block's state root)
+    AuthoritySetProof authoritySetProof;
 }
 
 // For now, we are just going to verify the rotate purely in solidity
@@ -49,21 +53,18 @@ uint16 constant NUM_AUTHORITIES = 10;
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
 contract AvailLightClient {
-    uint256 public immutable GENESIS_SLOT;    // May not need this if we can assume this is 0
-
-    uint256 public immutable START_CHECKPOINT_SLOT;
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_ROOT;
 
     uint16 public constant FINALITY_THRESHOLD = 7;  // This is Ceil(2/3 * NUM_AUTHORITIES)
     uint32 public constant SLOTS_PER_EPOCH = 180;
 
+    // TwoX hash of Grandpa::CurrentSetId
+    bytes public constant GRANDPA_AUTHORITIES_SETID_KEY = hex'5f9cc45b7a00c5899361e1c6099678dc8a2d09463effcc78a22d75b9cb87dffc';
+
     /// @notice The latest block_number the light client has a header for.  This header may not have a 
     ///         grandpa justification submitted for it yet.
     uint32 public head;
-
-    /// @notice The current epoch index
-    uint64 public epochIndex;
 
     /// @notice The latest block_number the light client has a finalized header for.
     uint32 public finalizedHead;
@@ -74,7 +75,7 @@ contract AvailLightClient {
     /// @notice Maps from a block number to the execution state root.
     mapping(uint32 => bytes32) public executionStateRoots;
 
-    /// @notice Maps from a epoch index to the authorities' pub keys
+    /// @notice Maps from a authority set id to the authorities' pub keys
     mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authorityPuKeys;
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
@@ -82,30 +83,22 @@ contract AvailLightClient {
     event AuthoritiesUpdate(uint64 indexed epochIndex);
 
     constructor(
-        uint32 genesisSlot,
         bytes32[NUM_AUTHORITIES] memory startCheckpointAuthorities,
-        uint32 startCheckpointSlot,
+        uint64 startCheckpointAuthoritySetID,
         uint32 startCheckpointBlockNumber,
         bytes32 startCheckpointHeaderRoot,
         bytes32 startCheckpointExecutionRoot
     ) {
-        GENESIS_SLOT = genesisSlot;
-        START_CHECKPOINT_SLOT = startCheckpointSlot;
         START_CHECKPOINT_BLOCK_NUMBER = startCheckpointBlockNumber;
         START_CHECKPOINT_HEADER_ROOT = startCheckpointHeaderRoot;
 
-        epochIndex = calculateEpochIndex(startCheckpointSlot);
-        setAuthorities(epochIndex, startCheckpointAuthorities);
+        setAuthorities(startCheckpointAuthoritySetID, startCheckpointAuthorities);
 
         head = startCheckpointBlockNumber;
         finalizedHead = startCheckpointBlockNumber;
 
         headerRoots[startCheckpointBlockNumber] = startCheckpointHeaderRoot;
         executionStateRoots[startCheckpointBlockNumber] = startCheckpointExecutionRoot;
-    }
-
-    function calculateEpochIndex(uint32 slot) internal view returns (uint64) {
-        return uint64((slot - GENESIS_SLOT) / SLOTS_PER_EPOCH);
     }
 
     function setAuthorities(uint64 _epochIndex, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
@@ -155,15 +148,19 @@ contract AvailLightClient {
             revert("Finalized block header root is not correct");
         }
 
-        if (update.epochProof.epochIndex != epochIndex) {
-            revert("Not in the current epoch");
+        // Check to see that we are using the correct authority set
+        bytes[] memory keys = new bytes[](1);
+        keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
+        bytes memory proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber-1], 
+                                                                    update.authoritySetProof.merkleProof,
+                                                                    keys)[0];
+
+        if (ScaleCodec.decodeUint64(proof_ret) != update.authoritySetProof.authoritySetID) {
+            revert("Finalized block authority set proof is not correct");
         }
 
-        // Check to see that we are in the correct epoch
-        // verifyEpochProof(update.epochProof);
-
         // TODO:  Need to implement
-        // ZKLightClientFinalize(update);
+        // ZKLightClientFinalize(update, update.authoritySetProof.authoritySetID);
 
         finalizedHead = update.blockNumber;
 

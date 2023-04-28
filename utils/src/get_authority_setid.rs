@@ -15,8 +15,8 @@ pub async fn main() {
 
     let c = build_client(url).await.unwrap();
 
-    // The block hash for block 576728 (https://testnet.avail.tools/#/explorer/query/576728)
-    let block_hash_vec = hex::decode("b71429ef80257a25358e386e4ca1debe72c38ea69d833e23416a4225fabb1a78").unwrap();
+    // The block hash for block 576727 (https://testnet.avail.tools/#/explorer/query/576728)
+    let block_hash_vec = hex::decode("91257bc931df2d9a91f32dae6ca607ae9e411b38ed8738738eafe7bb816d1464").unwrap();
 
     let mut block_hash_array: [u8; 32] = [0; 32];
     for i in 0..block_hash_vec.len() {
@@ -28,8 +28,8 @@ pub async fn main() {
     let header: Header = c.rpc().header(block_hash).await.unwrap().unwrap();
 
     // Construct the storage key for the epoch index
-    let mut epoch_index_storage_key = twox_128(b"Babe").to_vec();
-    epoch_index_storage_key.extend(twox_128(b"EpochIndex").to_vec());
+    let mut epoch_index_storage_key = twox_128(b"Grandpa").to_vec();
+    epoch_index_storage_key.extend(twox_128(b"CurrentSetId").to_vec());
     let sk = StorageKey(epoch_index_storage_key);
 
     // Output the storage key as a byte array

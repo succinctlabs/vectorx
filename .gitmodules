@@ -4,7 +4,7 @@
 [submodule "contracts/lib/solidity-merkle-trees"]
 	path = contracts/lib/solidity-merkle-trees
 	url = https://github.com/succinctlabs/solidity-merkle-trees.git
-	branch = kevjue/additional_encodings
+	branch = kevjue/add_MP_for_epoch_index
 [submodule "contracts/lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts

@@ -11,6 +11,7 @@ enum_extract = "0.1.1"
 hex = "0.4.3"
 serde = {version = "1", features= ["derive"]}
 serde_json = "1.0.86"
+thiserror = "1.0"
 tokio = { version = "1.2.0", features = ["full"] }
 
 # Avail/Substrate dependencies
@@ -28,12 +29,16 @@ name = "get_events"
 path = "src/get_events.rs"
 
 [[bin]]
-name = "get_epoch_index"
-path = "src/get_epoch_index.rs"
+name = "get_authority_setid"
+path = "src/get_authority_setid.rs"
 
 [[bin]]
-name = "get_justification"
-path = "src/get_justification.rs"
+name = "retrieve_justification"
+path = "src/retrieve_justification.rs"
+
+[[bin]]
+name = "subscribe_justifications"
+path = "src/subscribe_justifications.rs"
 
 [[bin]]
 name = "gen_avail_event_types"

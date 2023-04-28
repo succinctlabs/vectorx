@@ -15,7 +15,7 @@ struct AuthoritySetProof {
 
 struct EventListProof {
     bytes encodedEventList;
-    //bytes[] merkleProof; // Proof that it's within the state
+    bytes[] merkleProof; // Proof that it's within the state
 }
 
 // Currently, the light client will do a step update for every block
@@ -41,6 +41,7 @@ struct LightClientFinalize {
 struct LightClientRotate {
     uint32 blockNumber;
     EventListProof eventListProof;
+    AuthoritySetProof authoritySetProof;
 }
 
 uint16 constant NUM_AUTHORITIES = 10;
@@ -61,6 +62,9 @@ contract AvailLightClient {
 
     // TwoX hash of Grandpa::CurrentSetId
     bytes public constant GRANDPA_AUTHORITIES_SETID_KEY = hex'5f9cc45b7a00c5899361e1c6099678dc8a2d09463effcc78a22d75b9cb87dffc';
+
+    // TwxX hash of System::Events
+    bytes public constant SYSTEM_EVENTS_KEY = hex'26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7';
 
     /// @notice The latest block_number the light client has a header for.  This header may not have a 
     ///         grandpa justification submitted for it yet.
@@ -165,5 +169,37 @@ contract AvailLightClient {
         finalizedHead = update.blockNumber;
 
         emit FinalizedHeadUpdate(update.blockNumber, update.headerRoot);
+    }
+
+    function rotate(LightClientRotate memory update) external {
+        if (update.blockNumber <= finalizedHead) {
+            revert("Rotate block number is not finalized yet");
+        }
+
+        // TODO.  The two proof verifications can be done in a single batch verification.
+        //        We may not need this since the authority rotation will be snarkify-ed.
+        // Verify the new authority set id
+        bytes[] memory auth_set_keys = new bytes[](1);
+        auth_set_keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
+        bytes memory auth_set_proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
+                                                                              update.authoritySetProof.merkleProof,
+                                                                              auth_set_keys)[0];
+
+        if (ScaleCodec.decodeUint64(auth_set_proof_ret) != update.authoritySetProof.authoritySetID) {
+            revert("Incorrect authority set ID committed to the state root");
+        }
+
+        // Verify the encoded event list
+        bytes[] memory system_events_keys = new bytes[](1);
+        system_events_keys[0] = SYSTEM_EVENTS_KEY;
+        bytes memory system_events_proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
+                                                                                   update.authoritySetProof.merkleProof,
+                                                                                   system_events_keys)[0];
+
+        // See here for bytes comparison:  https://ethereum.stackexchange.com/a/99342
+        if (system_events_proof_ret.length != update.eventListProof.encodedEventList.length ||
+            keccak256(system_events_proof_ret) == keccak256(update.eventListProof.encodedEventList)) {
+            revert("Incorrect event list committed to the state root");
+        }
     }
 }

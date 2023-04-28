@@ -5,6 +5,7 @@ use std::io::{Cursor, Read};
 use avail_subxt::build_client;
 use codec::{Decode, IoReader};
 use enum_extract::extract;
+use itertools::Itertools;
 use subxt::{ext::{sp_runtime::scale_info::{TypeDef, interner::UntrackedSymbol}}, Metadata};
 use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128 };
 
@@ -126,7 +127,7 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
     }
 }
 
-pub async fn get_type_chunks() -> HashMap<u8, HashMap<u8, Vec<Chunk>>>{
+async fn get_type_chunks() -> HashMap<u8, HashMap<u8, Vec<Chunk>>>{
     let url: &str = "wss://testnet.avail.tools:443/ws";
 
     let c = build_client(url).await.unwrap();
@@ -201,6 +202,90 @@ fn read_chunk<R: std::io::Read>(chunk: &Chunk, io_reader: &mut IoReader<R>) {
             let _ = codec::Compact::<u128>::decode(io_reader).unwrap();
         }
     }
+}
+
+
+#[tokio::main]
+pub async fn main() {
+    let contract_template = "
+contract AvailEventScaleChunks {
+    enum CHUNK_TYPE{ CONSTANT_SIZE, COMPACT, SEQUENCE }
+
+    struct Chunk {
+        CHUNK_TYPE chunk_type;
+        uint32 size;
+        Chunk[] sequence_chunks;
+    }
+
+    mapping(uint8 => mapping(uint8 => Chunk[])) event_chunks;
+
+    constructor() {
+{CONSTRUCTOR_CODE}
+    }
+}";
+
+    let type_chunks = get_type_chunks().await;
+    let mut constructor_code = "".to_owned();
+    for pallet_idx in type_chunks.keys().sorted() {
+        for event_idx in type_chunks[pallet_idx].keys().sorted() {
+            let event_type_chunks = &type_chunks[pallet_idx][event_idx];
+
+            for (i, chunk) in event_type_chunks.iter().enumerate() {
+                constructor_code.push_str(format!("        event_chunks[{}][{}].push();\n", pallet_idx, event_idx).as_str());
+                match chunk {
+                    Chunk::ConstantSize(size) => {
+                        constructor_code.push_str(format!("        event_chunks[{}][{}][{}].chunk_type = CHUNK_TYPE.CONSTANT_SIZE;\n", pallet_idx, event_idx, i).as_str());
+                        constructor_code.push_str(format!("        event_chunks[{}][{}][{}].size = {};\n", pallet_idx, event_idx, i, size).as_str());
+                    }
+            
+                    Chunk::Compact => {
+                        constructor_code.push_str(format!("        event_chunks[{}][{}][{}].chunk_type = CHUNK_TYPE.COMPACT;\n", pallet_idx, event_idx, i).as_str());
+                    }
+            
+                    Chunk::Sequence(sequence_chunks) => {
+                        constructor_code.push_str(format!("        event_chunks[{}][{}][{}].chunk_type = CHUNK_TYPE.SEQUENCE;\n", pallet_idx, event_idx, i).as_str());
+                        for (j, sequence_chunk) in sequence_chunks.iter().enumerate() {
+                            constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks.push();\n", pallet_idx, event_idx, i).as_str());
+                            match sequence_chunk {
+                                Chunk::ConstantSize(size) => {
+                                    constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].chunk_type = CHUNK_TYPE.CONSTANT_SIZE;\n", pallet_idx, event_idx, i, j).as_str());
+                                    constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].size = {};\n", pallet_idx, event_idx, i, j, size).as_str());
+                                }
+            
+                                Chunk::Compact => {
+                                    constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].chunk_type = CHUNK_TYPE.COMPACT;\n", pallet_idx, event_idx, i, j).as_str());
+                                }
+            
+                                Chunk::Sequence(inner_sequence_chunks) => {
+                                    constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].chunk_type = CHUNK_TYPE.SEQUENCE;\n", pallet_idx, event_idx, i, j).as_str());
+            
+                                    for (k, inner_sequence_chunk) in inner_sequence_chunks.iter().enumerate() {
+                                        constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].sequence_chunks.push();\n", pallet_idx, event_idx, i, j).as_str());
+                                        match inner_sequence_chunk {
+                                            Chunk::ConstantSize(size) => {
+                                                constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].sequence_chunks[{}].chunk_type = CHUNK_TYPE.CONSTANT_SIZE;\n", pallet_idx, event_idx, i, j, k).as_str());
+                                                constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].sequence_chunks[{}].size = {};\n", pallet_idx, event_idx, i, j, k, size).as_str());
+                                            }
+            
+                                            Chunk::Compact => {
+                                                constructor_code.push_str(format!("        event_chunks[{}][{}][{}].sequence_chunks[{}].sequence_chunks[{}].chunk_type = CHUNK_TYPE.COMPACT;\n", pallet_idx, event_idx, i, j, k).as_str());
+                                            }
+            
+                                            Chunk::Sequence(_) => {
+                                                panic!("Nested sequence of depth 2 is not supported");
+                                            }
+                                        }
+                                    }            
+                                }
+                            }
+                        }
+                    }
+                }            
+            }
+        }
+    }
+
+    println!("contract_template: {}", contract_template.replace("{CONSTRUCTOR_CODE}", constructor_code.as_str()));
 }
 
 

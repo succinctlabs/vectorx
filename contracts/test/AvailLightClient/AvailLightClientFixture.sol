@@ -11,7 +11,15 @@ contract AvailLightClientFixture is CommonBase {
     struct Fixture {
         Finalize finalize;
         Initial initial;
+        Rotate rotate;
         Step step;
+    }
+
+    struct Finalize {
+        uint64 authoritySetID;
+        uint32 blockNumber;
+        bytes32 headerRoot;
+        bytes[] merkleProof;
     }
 
     struct Initial {
@@ -22,18 +30,19 @@ contract AvailLightClientFixture is CommonBase {
         bytes32 startCheckpointHeaderRoot;
     }
 
+    struct Rotate {
+        uint32 blockNumber;
+        bytes encodedEventList;
+        bytes[] encodedEventListProof;
+        uint64 newAuthoritySetID;
+        bytes[] newAuthoritySetIDProof;
+    }
+
     struct Step {
         uint32 blockNumber;
         bytes32 executionStateRoot;
         bytes32 headerRoot;
         bytes32 parentRoot;
-    }
-
-    struct Finalize {
-        uint64 authoritySetID;
-        uint32 blockNumber;
-        bytes32 headerRoot;
-        bytes[] merkleProof;
     }
 
     function newAvailLightClient(Initial memory initial)

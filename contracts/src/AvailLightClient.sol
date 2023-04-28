@@ -41,7 +41,7 @@ struct LightClientFinalize {
 struct LightClientRotate {
     uint32 blockNumber;
     EventListProof eventListProof;
-    AuthoritySetProof authoritySetProof;
+    AuthoritySetProof newAuthoritySetProof;
 }
 
 uint16 constant NUM_AUTHORITIES = 10;
@@ -172,7 +172,7 @@ contract AvailLightClient {
     }
 
     function rotate(LightClientRotate memory update) external {
-        if (update.blockNumber <= finalizedHead) {
+        if (update.blockNumber > finalizedHead) {
             revert("Rotate block number is not finalized yet");
         }
 
@@ -182,10 +182,10 @@ contract AvailLightClient {
         bytes[] memory auth_set_keys = new bytes[](1);
         auth_set_keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
         bytes memory auth_set_proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
-                                                                              update.authoritySetProof.merkleProof,
+                                                                              update.newAuthoritySetProof.merkleProof,
                                                                               auth_set_keys)[0];
 
-        if (ScaleCodec.decodeUint64(auth_set_proof_ret) != update.authoritySetProof.authoritySetID) {
+        if (ScaleCodec.decodeUint64(auth_set_proof_ret) != update.newAuthoritySetProof.authoritySetID) {
             revert("Incorrect authority set ID committed to the state root");
         }
 
@@ -193,12 +193,12 @@ contract AvailLightClient {
         bytes[] memory system_events_keys = new bytes[](1);
         system_events_keys[0] = SYSTEM_EVENTS_KEY;
         bytes memory system_events_proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
-                                                                                   update.authoritySetProof.merkleProof,
+                                                                                   update.eventListProof.merkleProof,
                                                                                    system_events_keys)[0];
 
         // See here for bytes comparison:  https://ethereum.stackexchange.com/a/99342
         if (system_events_proof_ret.length != update.eventListProof.encodedEventList.length ||
-            keccak256(system_events_proof_ret) == keccak256(update.eventListProof.encodedEventList)) {
+            keccak256(system_events_proof_ret) != keccak256(update.eventListProof.encodedEventList)) {
             revert("Incorrect event list committed to the state root");
         }
     }

@@ -4,7 +4,13 @@ import "forge-std/Vm.sol";
 import "forge-std/console.sol";
 import "forge-std/Test.sol";
 
-import {AvailLightClient, AuthoritySetProof, LightClientStep, LightClientFinalize, NUM_AUTHORITIES} from "src/AvailLightClient.sol";
+import {AvailLightClient,
+        AuthoritySetProof,
+        EventListProof,
+        LightClientStep,
+        LightClientFinalize,
+        LightClientRotate,
+        NUM_AUTHORITIES} from "src/AvailLightClient.sol";
 import {AvailLightClientFixture} from "test/AvailLightClient/AvailLightClientFixture.sol";
 import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
@@ -136,5 +142,48 @@ contract AvailLightClientTest is Test, AvailLightClientFixture {
         lc.finalize(finalize);
 
         assertTrue(lc.finalizedHead() == finalize.blockNumber);
+    }
+
+    function test_AvailLightClientStepFinalizeRotate() public {
+        AvailLightClient lc = newAvailLightClient(fixtures[0].initial);
+        LightClientStep memory step;
+
+        step.blockNumber = fixtures[0].step.blockNumber;
+        step.executionStateRoot = fixtures[0].step.executionStateRoot;
+        step.headerRoot = fixtures[0].step.headerRoot;
+        step.parentRoot = fixtures[0].step.parentRoot;
+
+        lc.step(step);
+
+        assertTrue(lc.head() == step.blockNumber);
+        assertTrue(lc.finalizedHead() != step.blockNumber);
+        assertTrue(lc.headerRoots(step.blockNumber) == step.headerRoot);
+        assertTrue(lc.executionStateRoots(step.blockNumber) == step.executionStateRoot);
+
+        LightClientFinalize memory finalize;
+
+        finalize.blockNumber = fixtures[0].finalize.blockNumber;
+        finalize.headerRoot = fixtures[0].finalize.headerRoot;
+        finalize.authoritySetProof = AuthoritySetProof({
+            authoritySetID: fixtures[0].finalize.authoritySetID,
+            merkleProof: fixtures[0].finalize.merkleProof
+        });
+        lc.finalize(finalize);
+
+        assertTrue(lc.finalizedHead() == finalize.blockNumber);
+
+        LightClientRotate memory rotate;
+
+        rotate.blockNumber = fixtures[0].rotate.blockNumber;
+        rotate.eventListProof = EventListProof({
+            encodedEventList: fixtures[0].rotate.encodedEventList,
+            merkleProof: fixtures[0].rotate.encodedEventListProof
+        });
+        rotate.newAuthoritySetProof = AuthoritySetProof({
+            authoritySetID: fixtures[0].rotate.newAuthoritySetID,
+            merkleProof: fixtures[0].rotate.newAuthoritySetIDProof
+        });
+
+        lc.rotate(rotate);
     }
 }

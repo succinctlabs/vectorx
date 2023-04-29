@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
 import { NUM_AUTHORITIES } from "src/AvailLightClient.sol";
+import "forge-std/Test.sol";
 
 contract AvailEventScaleChunks {
     enum chunkType{ CONSTANT_SIZE, COMPACT, SEQUENCE }
@@ -469,6 +470,8 @@ contract AvailEventScaleChunks {
         return authorities;
     }
 
+    event ChunkJumpedOver(chunkType chunkType, uint256 offset);
+
     function jumpOverChunk(Chunk memory chunk, ByteSlice memory encodedEventsListSlice) internal {
         if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
             Bytes.read(encodedEventsListSlice, chunk.size);
@@ -477,10 +480,14 @@ contract AvailEventScaleChunks {
         } else if (chunk.chunkType == chunkType.SEQUENCE) {
             uint256 numChunks = ScaleCodec.decodeUintCompact(encodedEventsListSlice);
             for (uint256 i = 0; i < numChunks; i++) {
-                jumpOverChunk(chunk.sequenceChunks[i], encodedEventsListSlice);
+                for (uint256 j = 0; j < chunk.sequenceChunks.length; j++) {
+                    jumpOverChunk(chunk.sequenceChunks[j], encodedEventsListSlice);
+                }
             }
         } else {
             revert("Unknown chunk type");
         }
+
+        emit ChunkJumpedOver(chunk.chunkType, encodedEventsListSlice.offset);
     }
 }

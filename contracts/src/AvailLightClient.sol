@@ -179,26 +179,26 @@ contract AvailLightClient {
         // TODO.  The two proof verifications can be done in a single batch verification.
         //        We may not need this since the authority rotation will be snarkify-ed.
         // Verify the new authority set id
-        bytes[] memory auth_set_keys = new bytes[](1);
-        auth_set_keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory auth_set_proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
-                                                                              update.newAuthoritySetProof.merkleProof,
-                                                                              auth_set_keys)[0];
+        bytes[] memory authSetKeys = new bytes[](1);
+        authSetKeys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
+        bytes memory authSetProofRet = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
+                                                                           update.newAuthoritySetProof.merkleProof,
+                                                                           authSetKeys)[0];
 
-        if (ScaleCodec.decodeUint64(auth_set_proof_ret) != update.newAuthoritySetProof.authoritySetID) {
+        if (ScaleCodec.decodeUint64(authSetProofRet) != update.newAuthoritySetProof.authoritySetID) {
             revert("Incorrect authority set ID committed to the state root");
         }
 
         // Verify the encoded event list
-        bytes[] memory system_events_keys = new bytes[](1);
-        system_events_keys[0] = SYSTEM_EVENTS_KEY;
-        bytes memory system_events_proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
-                                                                                   update.eventListProof.merkleProof,
-                                                                                   system_events_keys)[0];
+        bytes[] memory systemEventsKeys = new bytes[](1);
+        systemEventsKeys[0] = SYSTEM_EVENTS_KEY;
+        bytes memory systemEventsProofRet = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
+                                                                                update.eventListProof.merkleProof,
+                                                                                systemEventsKeys)[0];
 
         // See here for bytes comparison:  https://ethereum.stackexchange.com/a/99342
-        if (system_events_proof_ret.length != update.eventListProof.encodedEventList.length ||
-            keccak256(system_events_proof_ret) != keccak256(update.eventListProof.encodedEventList)) {
+        if (systemEventsProofRet.length != update.eventListProof.encodedEventList.length ||
+            keccak256(systemEventsProofRet) != keccak256(update.eventListProof.encodedEventList)) {
             revert("Incorrect event list committed to the state root");
         }
     }

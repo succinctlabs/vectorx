@@ -27,7 +27,7 @@ struct EventListProof {
 
 
 struct Header {
-    bytes32 parentHash;
+    uint32 blockNumber;
     bytes32 stateRoot;
     bytes32 extrinsicsRoot;
     bytes32 dataRoot;
@@ -44,9 +44,10 @@ struct Step {
 
     // This proof is used to verify the following:
     // 1) There exists a sequence of block headers that have the following properties:
-    //     a) Those headers are chained together via the parent_hash field
-    //     b) Those headers have the submitted headerRoots (basically that those roots are the blake2 digest of those headers).
-    //     c) Those headers have the submitted executionStateRoots and dataRoots.
+    //     a) Those headers are chained together via the parent_hash field and have incremental block numbers.
+    //     b) The first header has the block number and parent hash that is stored in the smart contract.
+    //     c) Those headers have the submitted headerRoots (basically that those roots are the blake2 digest of those headers).
+    //     d) Those headers have the submitted executionStateRoots and dataRoots.
     // 2) There exist a valid GRANDPA justification that finalized the last block in the headers field
     //     a) This GRANDPA justification has been signed by the validators within the authority set ID within the authoritySetIDProof field.
     //Groth16Proof proof;
@@ -57,9 +58,6 @@ struct Step {
 // Note that the verification logic is currently done purely in solidity since the Avail testnet's authority set is small,
 // but this will need to be converted into a snark proof.
 struct Rotate {
-    // Block number that contains the GRANDPA newAuthorities event.
-    uint32 blockNumber;
-
     // This field specifies and proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
     EventListProof eventListProof;
 
@@ -79,12 +77,11 @@ contract LightClient is EventDecoder {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_ROOT;
 
-    /// @notice The latest block_number the light client has a header for.  This header may not have a 
-    ///         grandpa justification submitted for it yet.
+    /// @notice The latest block_number the light client has a finalized header for.
     uint32 public head;
 
-    /// @notice The latest block_number the light client has a finalized header for.
-    uint32 public finalizedHead;
+    /// @notice The active authority set ID
+    uint64 public activeAuthoritySetID;
 
     /// @notice Maps from a block number to an Avail header root.
     mapping(uint32 => bytes32) public headerRoots;
@@ -96,7 +93,6 @@ contract LightClient is EventDecoder {
     mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authoritySets;
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
-    event FinalizedHeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event AuthoritySetUpdate(uint64 indexed authoritySetID);
 
     constructor(
@@ -112,7 +108,6 @@ contract LightClient is EventDecoder {
         setAuthorities(startCheckpointAuthoritySetID, startCheckpointAuthorities);
 
         head = startCheckpointBlockNumber;
-        finalizedHead = startCheckpointBlockNumber;
 
         headerRoots[startCheckpointBlockNumber] = startCheckpointHeaderRoot;
         executionStateRoots[startCheckpointBlockNumber] = startCheckpointExecutionRoot;
@@ -137,38 +132,22 @@ contract LightClient is EventDecoder {
     ///      TODO:  Modify this smart contract to not make this assumptions.  This means that the smart contract will
     ///             basically need to be able to store forks that are not yet finalized.
     function step(Step memory update) external {
-        if (update.blockNumber != head + 1) {
-            revert("Update block number not correct");
+        // First verify that the authority set is correct.
+        if (update.authoritySetIDProof.authoritySetID != activeAuthoritySetID) {
+            revert("Authority set ID is not correct");
         }
 
-        if (update.parentRoot != headerRoots[update.blockNumber - 1]) {
-            revert("Update block doesn't build off of head");
+        // Check to see that the last block's authority set ID is correct.
+        bytes32 authSetIDMerkleRoot;
+        if (update.headers.length > 1) {
+            authSetIDMerkleRoot = update.headers[update.headers.length-2].executionStateRoot;
+        } else {
+            authSetIDMerkleRoot = executionStateRoots[head];
         }
 
-        // TODO:  Need to implement
-        // zkLightClientStep(update);
-
-        head = update.blockNumber;
-        headerRoots[update.blockNumber] = update.headerRoot;
-        executionStateRoots[update.blockNumber] = update.executionStateRoot;
-
-        emit HeadUpdate(update.blockNumber, update.headerRoot);
-    }
-
-    function finalize(Finalize memory update) external {
-        if (update.blockNumber <= finalizedHead) {
-            revert("Finalized block number is before the current finalized head");
-        }
-
-        // This will check for both a bad inputted headerRoot and for no headerRoot
-        if (headerRoots[update.blockNumber] != update.headerRoot) {
-            revert("Finalized block header root is not correct");
-        }
-
-        // Check to see that we are using the correct authority set
         bytes[] memory keys = new bytes[](1);
         keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber-1], 
+        bytes memory proof_ret = MerklePatricia.VerifySubstrateProof(authSetIDMerkleRoot,
                                                                      update.authoritySetIDProof.merkleProof,
                                                                      keys)[0];
 
@@ -177,24 +156,29 @@ contract LightClient is EventDecoder {
         }
 
         // TODO:  Need to implement
-        // ZKLightClientFinalize(update, update.authoritySetProof.authoritySetID);
+        // zkLightClientStep(update.proof, head, headerRoots[head], authoritySets[activeAuthoritySetID]);
 
-        finalizedHead = update.blockNumber;
+        // Note that the snark proof above verifies that the first header is correctly linked to the current head.
+        for (uint16 i = 0; i < update.headers.length; i ++) {
+            Header header = update.headers[i];
+            headerRoots[header.blockNumber] = header.headerRoot;
+            executionStateRoots[header.blockNumber] = header.executionStateRoot;
+        }
 
-        emit FinalizedHeadUpdate(update.blockNumber, update.headerRoot);
+        Header lastHeader = update.headers[update.headers.length - 1];
+        head = lastHeader.blockNumber;
+
+        emit HeadUpdate(lastHeader.blockNumber, lastHeader.headerRoot);
     }
 
     function rotate(Rotate memory update) external {
-        if (update.blockNumber > finalizedHead) {
-            revert("Rotate block number is not finalized yet");
-        }
+        // First call step
+        step(update.step);
 
-        // TODO.  The two proof verifications can be done in a single batch verification.
-        //        We may not need this since the authority rotation will be snarkify-ed.
         // Verify the new authority set id
         bytes[] memory authSetKeys = new bytes[](1);
         authSetKeys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory authSetProofRet = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
+        bytes memory authSetProofRet = MerklePatricia.VerifySubstrateProof(executionStateRoots[head],
                                                                            update.newAuthoritySetIDProof.merkleProof,
                                                                            authSetKeys)[0];
 

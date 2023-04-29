@@ -4,50 +4,72 @@ import "solidity-merkle-trees/src/MerklePatricia.sol";
 import { EventDecoder } from "src/EventDecoder.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 
+
 struct Groth16Proof {
     uint256[2] a;
     uint256[2][2] b;
     uint256[2] c;
 }
 
+
 // Storage value and proof
 struct AuthoritySetIDProof {
     uint64 authoritySetID;
-    bytes[] merkleProof;  // Proof that it's within the state root
+    bytes[] merkleProof;  // Proof that it's within the state root.
 }
+
 
 // Storage value and proof
 struct EventListProof {
     bytes encodedEventList;
-    bytes[] merkleProof; // Proof that it's within the state
+    bytes[] merkleProof; // Proof that it's within the state root.
 }
+
+
+struct Header {
+    bytes32 parentHash;
+    bytes32 stateRoot;
+    bytes32 extrinsicsRoot;
+    bytes32 dataRoot;
+}
+
 
 struct Step {
-    uint32 blockNumber;
-    bytes32 headerRoot;
-    bytes32 parentRoot;
-    bytes32 executionStateRoot;
-    //Groth16Proof proof;
-}
+    Header[] headers;
 
-// Used for a GRANDPA justification finality proof
-struct Finalize {
-    uint32 blockNumber;
-    bytes32 headerRoot;
-    //Groth16Proof proof;
-
-    // The authority set id from the previous block (and verified against that block's state root)
+    // This field specifies and proves the last header's authority set id.
+    // Note that this is proven aginst the state root of the 2nd to last header (which may already be saved in the smart contract's state).
+    // Note that we can move this verfiication logic into the proof field, if we need to save on the gas.
     AuthoritySetIDProof authoritySetIDProof;
+
+    // This proof is used to verify the following:
+    // 1) There exists a sequence of block headers that have the following properties:
+    //     a) Those headers are chained together via the parent_hash field
+    //     b) Those headers have the submitted headerRoots (basically that those roots are the blake2 digest of those headers).
+    //     c) Those headers have the submitted executionStateRoots and dataRoots.
+    // 2) There exist a valid GRANDPA justification that finalized the last block in the headers field
+    //     a) This GRANDPA justification has been signed by the validators within the authority set ID within the authoritySetIDProof field.
+    //Groth16Proof proof;
 }
 
-// For now, we are just going to verify the rotate purely in solidity
+
+// This is used to update the light client's authority set.
+// Note that the verification logic is currently done purely in solidity since the Avail testnet's authority set is small,
+// but this will need to be converted into a snark proof.
 struct Rotate {
+    // Block number that contains the GRANDPA newAuthorities event.
     uint32 blockNumber;
+
+    // This field specifies and proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
     EventListProof eventListProof;
+
+    // This field specifies and proves the new authority set's ID (proved against the state root of the blockNumber).
     AuthoritySetIDProof newAuthoritySetIDProof;
+
+    // This field updates the light client's headers up to Rotate.blocknumber.
+    Step step;
 }
 
-// TODO:  Should create a new type alias for block numbers
 
 /// @title Light Client for Avail Blockchain
 /// @author Succinct Labs

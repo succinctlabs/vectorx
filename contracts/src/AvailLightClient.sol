@@ -46,7 +46,6 @@ struct LightClientRotate {
     AuthoritySetProof newAuthoritySetProof;
 }
 
-// TODO:  Need to figure out what types are slots in the avail/substate code.
 // TODO:  Should create a new type alias for block numbers
 
 /// @title Avail Light Client
@@ -71,7 +70,7 @@ contract AvailLightClient is AvailEventScaleChunks {
     mapping(uint32 => bytes32) public executionStateRoots;
 
     /// @notice Maps from a authority set id to the authorities' pub keys
-    mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authorityPuKeys;
+    mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authorityPubKeys;
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event FinalizedHeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
@@ -98,7 +97,7 @@ contract AvailLightClient is AvailEventScaleChunks {
 
     function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
-            authorityPuKeys[authoritySetID][i]  = _authorities[i];
+            authorityPubKeys[authoritySetID][i]  = _authorities[i];
         }
 
         emit AuthoritiesUpdate(authoritySetID);

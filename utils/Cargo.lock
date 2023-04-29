@@ -1160,6 +1160,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f56a2d0bc861f9165be4eb3442afd3c236d8a98afd426f65d92324ae1091a484"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2802,9 +2811,13 @@ dependencies = [
  "avail-subxt",
  "enum_extract",
  "hex",
+ "itertools",
  "parity-scale-codec",
+ "serde",
+ "serde_json",
  "sp-state-machine",
  "subxt",
+ "thiserror",
  "tokio",
 ]
 

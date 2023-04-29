@@ -2,7 +2,7 @@ pragma solidity 0.8.17;
 
 import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
-import { NUM_AUTHORITIES } from "src/AvailLightClient.sol";
+import { NUM_AUTHORITIES } from "src/Constants.sol";
 import "forge-std/Test.sol";
 
 contract AvailEventScaleChunks {
@@ -418,13 +418,13 @@ contract AvailEventScaleChunks {
     }
 
 
-    function decodeAuthoritySet(bytes memory encodedEventList) external returns (bytes32[] memory) {
+    function decodeAuthoritySet(bytes memory encodedEventList) public returns (bytes32[NUM_AUTHORITIES] memory) {
         ByteSlice memory encodedEventsListSlice = ByteSlice(encodedEventList, 0);
 
         // First get the length of the encoded_events_list
         uint256 num_events = ScaleCodec.decodeUintCompact(encodedEventsListSlice);
 
-        bytes32[] memory authorities = new bytes32[](NUM_AUTHORITIES);
+        bytes32[NUM_AUTHORITIES] memory authorities;
 
         uint8 phase;
         uint8 palletIndex;
@@ -447,6 +447,9 @@ contract AvailEventScaleChunks {
 
                 // The next element is the length of the encoded new authorities list
                 uint256 numAuthorities = ScaleCodec.decodeUintCompact(encodedEventsListSlice);
+                if (numAuthorities != NUM_AUTHORITIES) {
+                    revert("Incorrect number of authorities");
+                }
 
                 // Parse the scale encoded authorities
                 for (uint256 j = 0; j < numAuthorities; j++) {

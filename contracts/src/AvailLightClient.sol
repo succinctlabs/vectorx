@@ -1,6 +1,8 @@
 pragma solidity 0.8.17;
 
 import "solidity-merkle-trees/src/MerklePatricia.sol";
+import { AvailEventScaleChunks } from "src/EventScaleChunks.sol";
+import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 
 struct Groth16Proof {
     uint256[2] a;
@@ -44,8 +46,6 @@ struct LightClientRotate {
     AuthoritySetProof newAuthoritySetProof;
 }
 
-uint16 constant NUM_AUTHORITIES = 10;
-
 // TODO:  Need to figure out what types are slots in the avail/substate code.
 // TODO:  Should create a new type alias for block numbers
 
@@ -53,18 +53,9 @@ uint16 constant NUM_AUTHORITIES = 10;
 /// @author Succinct Labs
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
-contract AvailLightClient {
+contract AvailLightClient is AvailEventScaleChunks {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_ROOT;
-
-    uint16 public constant FINALITY_THRESHOLD = 7;  // This is Ceil(2/3 * NUM_AUTHORITIES)
-    uint32 public constant SLOTS_PER_EPOCH = 180;
-
-    // TwoX hash of Grandpa::CurrentSetId
-    bytes public constant GRANDPA_AUTHORITIES_SETID_KEY = hex'5f9cc45b7a00c5899361e1c6099678dc8a2d09463effcc78a22d75b9cb87dffc';
-
-    // TwxX hash of System::Events
-    bytes public constant SYSTEM_EVENTS_KEY = hex'26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7';
 
     /// @notice The latest block_number the light client has a header for.  This header may not have a 
     ///         grandpa justification submitted for it yet.
@@ -105,12 +96,12 @@ contract AvailLightClient {
         executionStateRoots[startCheckpointBlockNumber] = startCheckpointExecutionRoot;
     }
 
-    function setAuthorities(uint64 _epochIndex, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
+    function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
-            authorityPuKeys[_epochIndex][i]  = _authorities[i];
+            authorityPuKeys[authoritySetID][i]  = _authorities[i];
         }
 
-        emit AuthoritiesUpdate(_epochIndex);
+        emit AuthoritiesUpdate(authoritySetID);
     }
 
     /// @notice Updates the head of the light client to the provided slot.
@@ -201,5 +192,11 @@ contract AvailLightClient {
             keccak256(systemEventsProofRet) != keccak256(update.eventListProof.encodedEventList)) {
             revert("Incorrect event list committed to the state root");
         }
+
+        bytes32[NUM_AUTHORITIES] memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
+        if (newAuthorities.length != NUM_AUTHORITIES) {
+            revert("Incorrect number of authorities in the event list");
+        }
+        setAuthorities(update.newAuthoritySetProof.authoritySetID, newAuthorities);
     }
 }

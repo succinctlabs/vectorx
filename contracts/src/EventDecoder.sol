@@ -5,7 +5,7 @@ import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.
 import { NUM_AUTHORITIES } from "src/Constants.sol";
 import "forge-std/Test.sol";
 
-contract AvailEventScaleChunks {
+contract EventDecoder {
     enum chunkType{ CONSTANT_SIZE, COMPACT, SEQUENCE }
 
     struct Chunk {

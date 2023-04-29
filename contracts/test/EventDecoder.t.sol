@@ -2,14 +2,14 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import "../src/EventScaleChunks.sol";
-import { NUM_AUTHORITIES } from "../src/Constants.sol";
+import { EventDecoder } from "src/EventDecoder.sol";
+import { NUM_AUTHORITIES } from "src/Constants.sol";
 
 contract EventScaleChunksTest is Test {
-    AvailEventScaleChunks decoder;
+    EventDecoder decoder;
 
     function setUp() public {
-        decoder = new AvailEventScaleChunks();
+        decoder = new EventDecoder();
     }
 
     function testDecodeEventsListOne() public {

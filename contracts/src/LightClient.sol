@@ -1,7 +1,7 @@
 pragma solidity 0.8.17;
 
 import "solidity-merkle-trees/src/MerklePatricia.sol";
-import { AvailEventScaleChunks } from "src/EventScaleChunks.sol";
+import { EventDecoder } from "src/EventDecoder.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 
 struct Groth16Proof {
@@ -10,18 +10,19 @@ struct Groth16Proof {
     uint256[2] c;
 }
 
-struct AuthoritySetProof {
+// Storage value and proof
+struct AuthoritySetIDProof {
     uint64 authoritySetID;
     bytes[] merkleProof;  // Proof that it's within the state root
 }
 
+// Storage value and proof
 struct EventListProof {
     bytes encodedEventList;
     bytes[] merkleProof; // Proof that it's within the state
 }
 
-// Currently, the light client will do a step update for every block
-struct LightClientStep {
+struct Step {
     uint32 blockNumber;
     bytes32 headerRoot;
     bytes32 parentRoot;
@@ -30,29 +31,29 @@ struct LightClientStep {
 }
 
 // Used for a GRANDPA justification finality proof
-struct LightClientFinalize {
+struct Finalize {
     uint32 blockNumber;
     bytes32 headerRoot;
     //Groth16Proof proof;
 
     // The authority set id from the previous block (and verified against that block's state root)
-    AuthoritySetProof authoritySetProof;
+    AuthoritySetIDProof authoritySetIDProof;
 }
 
 // For now, we are just going to verify the rotate purely in solidity
-struct LightClientRotate {
+struct Rotate {
     uint32 blockNumber;
     EventListProof eventListProof;
-    AuthoritySetProof newAuthoritySetProof;
+    AuthoritySetIDProof newAuthoritySetIDProof;
 }
 
 // TODO:  Should create a new type alias for block numbers
 
-/// @title Avail Light Client
+/// @title Light Client for Avail Blockchain
 /// @author Succinct Labs
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
-contract AvailLightClient is AvailEventScaleChunks {
+contract LightClient is EventDecoder {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_ROOT;
 
@@ -70,11 +71,11 @@ contract AvailLightClient is AvailEventScaleChunks {
     mapping(uint32 => bytes32) public executionStateRoots;
 
     /// @notice Maps from a authority set id to the authorities' pub keys
-    mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authorityPubKeys;
+    mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authoritySets;
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event FinalizedHeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
-    event AuthoritiesUpdate(uint64 indexed epochIndex);
+    event AuthoritySetUpdate(uint64 indexed authoritySetID);
 
     constructor(
         bytes32[NUM_AUTHORITIES] memory startCheckpointAuthorities,
@@ -97,10 +98,10 @@ contract AvailLightClient is AvailEventScaleChunks {
 
     function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
-            authorityPubKeys[authoritySetID][i]  = _authorities[i];
+            authoritySets[authoritySetID][i]  = _authorities[i];
         }
 
-        emit AuthoritiesUpdate(authoritySetID);
+        emit AuthoritySetUpdate(authoritySetID);
     }
 
     /// @notice Updates the head of the light client to the provided slot.
@@ -113,7 +114,7 @@ contract AvailLightClient is AvailEventScaleChunks {
     ///      The header will later provate that in the finalize function.
     ///      TODO:  Modify this smart contract to not make this assumptions.  This means that the smart contract will
     ///             basically need to be able to store forks that are not yet finalized.
-    function step(LightClientStep memory update) external {
+    function step(Step memory update) external {
         if (update.blockNumber != head + 1) {
             revert("Update block number not correct");
         }
@@ -132,7 +133,7 @@ contract AvailLightClient is AvailEventScaleChunks {
         emit HeadUpdate(update.blockNumber, update.headerRoot);
     }
 
-    function finalize(LightClientFinalize memory update) external {
+    function finalize(Finalize memory update) external {
         if (update.blockNumber <= finalizedHead) {
             revert("Finalized block number is before the current finalized head");
         }
@@ -146,10 +147,10 @@ contract AvailLightClient is AvailEventScaleChunks {
         bytes[] memory keys = new bytes[](1);
         keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
         bytes memory proof_ret = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber-1], 
-                                                                    update.authoritySetProof.merkleProof,
-                                                                    keys)[0];
+                                                                     update.authoritySetIDProof.merkleProof,
+                                                                     keys)[0];
 
-        if (ScaleCodec.decodeUint64(proof_ret) != update.authoritySetProof.authoritySetID) {
+        if (ScaleCodec.decodeUint64(proof_ret) != update.authoritySetIDProof.authoritySetID) {
             revert("Finalized block authority set proof is not correct");
         }
 
@@ -161,7 +162,7 @@ contract AvailLightClient is AvailEventScaleChunks {
         emit FinalizedHeadUpdate(update.blockNumber, update.headerRoot);
     }
 
-    function rotate(LightClientRotate memory update) external {
+    function rotate(Rotate memory update) external {
         if (update.blockNumber > finalizedHead) {
             revert("Rotate block number is not finalized yet");
         }
@@ -172,10 +173,10 @@ contract AvailLightClient is AvailEventScaleChunks {
         bytes[] memory authSetKeys = new bytes[](1);
         authSetKeys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
         bytes memory authSetProofRet = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
-                                                                           update.newAuthoritySetProof.merkleProof,
+                                                                           update.newAuthoritySetIDProof.merkleProof,
                                                                            authSetKeys)[0];
 
-        if (ScaleCodec.decodeUint64(authSetProofRet) != update.newAuthoritySetProof.authoritySetID) {
+        if (ScaleCodec.decodeUint64(authSetProofRet) != update.newAuthoritySetIDProof.authoritySetID) {
             revert("Incorrect authority set ID committed to the state root");
         }
 
@@ -193,9 +194,6 @@ contract AvailLightClient is AvailEventScaleChunks {
         }
 
         bytes32[NUM_AUTHORITIES] memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
-        if (newAuthorities.length != NUM_AUTHORITIES) {
-            revert("Incorrect number of authorities in the event list");
-        }
-        setAuthorities(update.newAuthoritySetProof.authoritySetID, newAuthorities);
+        setAuthorities(update.newAuthoritySetIDProof.authoritySetID, newAuthorities);
     }
 }

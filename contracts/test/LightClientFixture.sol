@@ -1,13 +1,14 @@
 pragma solidity 0.8.17;
 
 import "forge-std/Common.sol";
-import {AvailLightClient, NUM_AUTHORITIES} from "src/AvailLightClient.sol";
+import { NUM_AUTHORITIES } from "src/Constants.sol";
+import { LightClient } from "src/LightClient.sol";
 
 /// @notice Helper contract for parsing the JSON fixture, and converting them to the correct types.
 /// @dev    The weird ordering here is because vm.parseJSON require alphabetical ordering of the
 ///         fields in the struct, and odd types with conversions are due to the way the JSON is
 ///         handled.
-contract AvailLightClientFixture is CommonBase {
+contract LightClientFixture is CommonBase {
     struct Fixture {
         Finalize finalize;
         Initial initial;
@@ -45,16 +46,16 @@ contract AvailLightClientFixture is CommonBase {
         bytes32 parentRoot;
     }
 
-    function newAvailLightClient(Initial memory initial)
+    function newLightClient(Initial memory initial)
         public
-        returns (AvailLightClient)
+        returns (LightClient)
     {
         bytes32[NUM_AUTHORITIES] memory authorities;
         for (uint256 i = 0; i < NUM_AUTHORITIES; i++) {
             authorities[i] = initial.authorityPubKeys[i];
         }
 
-        return new AvailLightClient(
+        return new LightClient(
             authorities,
             initial.startCheckpointAuthoritySetID,
             initial.startCheckpointBlockNumber,

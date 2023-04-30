@@ -127,16 +127,7 @@ contract LightClient is EventDecoder {
         doStep(update);
     }
 
-    /// @notice Updates the head of the light client to the provided slot.
-    /// @dev The conditions for updating the head of the light client involve checking:
-    ///      1) The parent hash is correctly decoded from the header
-    ///      2) The execution state root is correctly decoded from the header
-    ///      3) The block number if correctly decoded from the header
-    ///      4) The header hash is correct
-    ///      Note that this function currently assumes that the operator knows that this header is finalized.
-    ///      The header will later provate that in the finalize function.
-    ///      TODO:  Modify this smart contract to not make this assumptions.  This means that the smart contract will
-    ///             basically need to be able to store forks that are not yet finalized.
+    /// @notice Updates the head of the light client with the provided list of headers.
     function doStep(Step memory update) internal {
         // First verify that the authority set is correct.
         if (update.authoritySetIDProof.authoritySetID != activeAuthoritySetID) {
@@ -179,9 +170,12 @@ contract LightClient is EventDecoder {
         emit HeadUpdate(lastHeader.blockNumber, lastHeader.headerHash);
     }
 
+    /// @notice Rotates the authority set and will optionally execute a step.
     function rotate(Rotate memory update) external {
         // First call step
-        doStep(update.step);
+        if (update.step.headers.length > 0) {
+            doStep(update.step);
+        }
 
         // Verify the new authority set id
         bytes[] memory authSetKeys = new bytes[](1);

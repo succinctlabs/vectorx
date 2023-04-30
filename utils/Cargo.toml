@@ -33,8 +33,12 @@ name = "get_authority_setid"
 path = "src/get_authority_setid.rs"
 
 [[bin]]
-name = "retrieve_justification"
-path = "src/retrieve_justification.rs"
+name = "get_justification"
+path = "src/get_justification.rs"
+
+[[bin]]
+name = "get_header"
+path = "src/get_header.rs"
 
 [[bin]]
 name = "subscribe_justifications"

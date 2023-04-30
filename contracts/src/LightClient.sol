@@ -28,8 +28,8 @@ struct EventListProof {
 
 struct Header {
     uint32 blockNumber;
+    bytes32 headerHash;
     bytes32 stateRoot;
-    bytes32 extrinsicsRoot;
     bytes32 dataRoot;
 }
 
@@ -75,7 +75,7 @@ struct Rotate {
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
 contract LightClient is EventDecoder {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
-    bytes32 public immutable START_CHECKPOINT_HEADER_ROOT;
+    bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
 
     /// @notice The latest block_number the light client has a finalized header for.
     uint32 public head;
@@ -83,11 +83,14 @@ contract LightClient is EventDecoder {
     /// @notice The active authority set ID
     uint64 public activeAuthoritySetID;
 
-    /// @notice Maps from a block number to an Avail header root.
-    mapping(uint32 => bytes32) public headerRoots;
+    /// @notice Maps from a block number to an Avail header hash.
+    mapping(uint32 => bytes32) public headerHashes;
 
-    /// @notice Maps from a block number to the execution state root.
-    mapping(uint32 => bytes32) public executionStateRoots;
+    /// @notice Maps from a block number to the state root.
+    mapping(uint32 => bytes32) public stateRoots;
+
+    /// @notice Maps from a block number to the data root.
+    mapping(uint32 => bytes32) public dataRoots;
 
     /// @notice Maps from a authority set id to the authorities' pub keys
     mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authoritySets;
@@ -96,29 +99,32 @@ contract LightClient is EventDecoder {
     event AuthoritySetUpdate(uint64 indexed authoritySetID);
 
     constructor(
-        bytes32[NUM_AUTHORITIES] memory startCheckpointAuthorities,
         uint64 startCheckpointAuthoritySetID,
-        uint32 startCheckpointBlockNumber,
-        bytes32 startCheckpointHeaderRoot,
-        bytes32 startCheckpointExecutionRoot
+        bytes32[NUM_AUTHORITIES] memory startCheckpointAuthorities,
+        Header memory startCheckpointHeader
     ) {
-        START_CHECKPOINT_BLOCK_NUMBER = startCheckpointBlockNumber;
-        START_CHECKPOINT_HEADER_ROOT = startCheckpointHeaderRoot;
+        START_CHECKPOINT_BLOCK_NUMBER = startCheckpointHeader.blockNumber;
+        START_CHECKPOINT_HEADER_HASH = startCheckpointHeader.headerHash;
+        headerHashes[startCheckpointHeader.blockNumber] = startCheckpointHeader.headerHash;
+        stateRoots[startCheckpointHeader.blockNumber] = startCheckpointHeader.stateRoot;
+        dataRoots[startCheckpointHeader.blockNumber] = startCheckpointHeader.dataRoot;
+        head = startCheckpointHeader.blockNumber;
+        emit HeadUpdate(head, startCheckpointHeader.headerHash);
 
         setAuthorities(startCheckpointAuthoritySetID, startCheckpointAuthorities);
-
-        head = startCheckpointBlockNumber;
-
-        headerRoots[startCheckpointBlockNumber] = startCheckpointHeaderRoot;
-        executionStateRoots[startCheckpointBlockNumber] = startCheckpointExecutionRoot;
     }
 
     function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
             authoritySets[authoritySetID][i]  = _authorities[i];
         }
+        activeAuthoritySetID = authoritySetID;
 
-        emit AuthoritySetUpdate(authoritySetID);
+        emit AuthoritySetUpdate(activeAuthoritySetID);
+    }
+
+    function step(Step memory update) external {
+        doStep(update);
     }
 
     /// @notice Updates the head of the light client to the provided slot.
@@ -131,7 +137,7 @@ contract LightClient is EventDecoder {
     ///      The header will later provate that in the finalize function.
     ///      TODO:  Modify this smart contract to not make this assumptions.  This means that the smart contract will
     ///             basically need to be able to store forks that are not yet finalized.
-    function step(Step memory update) external {
+    function doStep(Step memory update) internal {
         // First verify that the authority set is correct.
         if (update.authoritySetIDProof.authoritySetID != activeAuthoritySetID) {
             revert("Authority set ID is not correct");
@@ -140,9 +146,9 @@ contract LightClient is EventDecoder {
         // Check to see that the last block's authority set ID is correct.
         bytes32 authSetIDMerkleRoot;
         if (update.headers.length > 1) {
-            authSetIDMerkleRoot = update.headers[update.headers.length-2].executionStateRoot;
+            authSetIDMerkleRoot = update.headers[update.headers.length-2].stateRoot;
         } else {
-            authSetIDMerkleRoot = executionStateRoots[head];
+            authSetIDMerkleRoot = stateRoots[head];
         }
 
         bytes[] memory keys = new bytes[](1);
@@ -159,26 +165,28 @@ contract LightClient is EventDecoder {
         // zkLightClientStep(update.proof, head, headerRoots[head], authoritySets[activeAuthoritySetID]);
 
         // Note that the snark proof above verifies that the first header is correctly linked to the current head.
+        Header memory header;
         for (uint16 i = 0; i < update.headers.length; i ++) {
-            Header header = update.headers[i];
-            headerRoots[header.blockNumber] = header.headerRoot;
-            executionStateRoots[header.blockNumber] = header.executionStateRoot;
+            header = update.headers[i];
+            headerHashes[header.blockNumber] = header.headerHash;
+            stateRoots[header.blockNumber] = header.stateRoot;
+            dataRoots[header.blockNumber] = header.dataRoot;
         }
 
-        Header lastHeader = update.headers[update.headers.length - 1];
+        Header memory lastHeader = update.headers[update.headers.length - 1];
         head = lastHeader.blockNumber;
 
-        emit HeadUpdate(lastHeader.blockNumber, lastHeader.headerRoot);
+        emit HeadUpdate(lastHeader.blockNumber, lastHeader.headerHash);
     }
 
     function rotate(Rotate memory update) external {
         // First call step
-        step(update.step);
+        doStep(update.step);
 
         // Verify the new authority set id
         bytes[] memory authSetKeys = new bytes[](1);
         authSetKeys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory authSetProofRet = MerklePatricia.VerifySubstrateProof(executionStateRoots[head],
+        bytes memory authSetProofRet = MerklePatricia.VerifySubstrateProof(stateRoots[head],
                                                                            update.newAuthoritySetIDProof.merkleProof,
                                                                            authSetKeys)[0];
 
@@ -189,7 +197,7 @@ contract LightClient is EventDecoder {
         // Verify the encoded event list
         bytes[] memory systemEventsKeys = new bytes[](1);
         systemEventsKeys[0] = SYSTEM_EVENTS_KEY;
-        bytes memory systemEventsProofRet = MerklePatricia.VerifySubstrateProof(executionStateRoots[update.blockNumber],
+        bytes memory systemEventsProofRet = MerklePatricia.VerifySubstrateProof(stateRoots[head],
                                                                                 update.eventListProof.merkleProof,
                                                                                 systemEventsKeys)[0];
 

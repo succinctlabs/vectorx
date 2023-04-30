@@ -83,7 +83,6 @@ pub enum SignerMessage {
 
 #[tokio::main]
 pub async fn main() {
-    //let url = "wss://devnet06.dataavailability.link:28546";
     let url: &str = "wss://testnet.avail.tools:443/ws";
 
     let c = build_client(url).await.unwrap();

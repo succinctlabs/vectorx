@@ -121,7 +121,7 @@ pub (crate) mod tests {
         signatures: Vec<Vec<u8>>,
         pub_keys: Vec<Vec<u8>>,
     ) -> Vec<PrecommitTarget<Ed25519>> {
-        let mut precommits = Vec::with_capacity(precommit_message.len());
+        let mut precommits = Vec::new();
         for i in 0..precommit_message.len() {
             let sig_r = decompress_point(&signatures[i][0..32]);
             assert!(sig_r.is_valid());

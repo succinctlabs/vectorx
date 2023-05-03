@@ -7,16 +7,15 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
 use plonky2::iop::target::Target;
-use crate::utils::{ QUORUM_SIZE, HASH_SIZE };
+use crate::utils::{ QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH };
 use crate::decoder::{ CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
+#[derive(Clone, Debug)]
 pub struct PrecommitTarget<C: Curve> {
     pub precommit_message: Vec<Target>,
     pub signature: EDDSASignatureTarget<C>,
     pub pub_key: EDDSAPublicKeyTarget<C>,
 }
-
-const ENCODED_MESSAGE_LENGTH: usize = 53;
 
 pub trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
     fn verify_justification(
@@ -43,10 +42,10 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
     ) {
         assert!(signed_precommits.len() == QUORUM_SIZE, "Number of signed precommits is not correct");
         for i in 0..QUORUM_SIZE {
-            assert!(signed_precommits[i].precommit_message.len() == ENCODED_MESSAGE_LENGTH, "Precommit message is not the correct length");
+            assert!(signed_precommits[i].precommit_message.len() == ENCODED_PRECOMMIT_LENGTH, "Precommit message is not the correct length");
 
             // Range check the encoded msg
-            for j in 0..ENCODED_MESSAGE_LENGTH {
+            for j in 0..ENCODED_PRECOMMIT_LENGTH {
                 self.range_check(signed_precommits[i].precommit_message[j], 8);
             }
 
@@ -64,8 +63,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             // self.connect(justification_round, decoded_precommit_msg.justification_round);
 
             // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
-            let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);
-            for j in 0..ENCODED_MESSAGE_LENGTH {
+            let mut encoded_msg_bits = Vec::with_capacity(ENCODED_PRECOMMIT_LENGTH * 8);
+            for j in 0..ENCODED_PRECOMMIT_LENGTH {
                 let mut bits = self.split_le(signed_precommits[i].precommit_message[j], 8);
 
                 // Needs to be in bit big endian order for the EDDSA verification circuit
@@ -75,9 +74,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 }
             }
 
-            let eddsa_verify_circuit = verify_message_circuit(self, ENCODED_MESSAGE_LENGTH as u128);
+            let eddsa_verify_circuit = verify_message_circuit(self, ENCODED_PRECOMMIT_LENGTH as u128);
 
-            for j in 0..ENCODED_MESSAGE_LENGTH * 8 {
+            for j in 0..ENCODED_PRECOMMIT_LENGTH * 8 {
                 self.connect(encoded_msg_bits[j].target, eddsa_verify_circuit.msg[j].target);
             }
 
@@ -90,11 +89,12 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 }
 
 #[cfg(test)]
-mod tests {
+pub (crate) mod tests {
     use std::time::SystemTime;
 
     use anyhow::Result;
     use ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
+    use ed25519::curve::ed25519::Ed25519;
     use ed25519::field::ed25519_scalar::Ed25519Scalar;
     use ed25519::gadgets::curve::{decompress_point, CircuitBuilderCurve, WitnessAffinePoint};
     use ed25519::gadgets::eddsa::{verify_message_circuit, EDDSAPublicKeyTarget, EDDSASignatureTarget};
@@ -103,15 +103,62 @@ mod tests {
     use ed25519_dalek::{PublicKey, Signature};
     use hex::decode;
     use num::BigUint;
+    use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, Witness};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     
+    use plonky2_field::extension::Extendable;
     use plonky2_field::types::Field;
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget};
-    use crate::utils::{to_bits, MAX_HEADER_SIZE};
+    use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE};
+
+    pub fn generate_precommits<F: RichField + Extendable<D>, const D: usize>(
+        builder: &mut CircuitBuilder<F, D>,
+        precommit_message: Vec<Vec<u8>>,
+        signatures: Vec<Vec<u8>>,
+        pub_keys: Vec<Vec<u8>>,
+    ) -> Vec<PrecommitTarget<Ed25519>> {
+        let mut precommits = Vec::with_capacity(precommit_message.len());
+        for i in 0..precommit_message.len() {
+            let signature = hex::decode(signatures[i].clone()).unwrap();
+
+            let sig_r = decompress_point(&signature[0..32]);
+            assert!(sig_r.is_valid());
+
+            let sig_s_biguint = BigUint::from_bytes_le(&signature[32..64]);
+            let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
+            let sig = EDDSASignature { r: sig_r, s: sig_s };
+
+            let pubkey_bytes = hex::decode(pub_keys[i].clone()).unwrap();
+            let pub_key = decompress_point(&pubkey_bytes[..]);
+            assert!(pub_key.is_valid());
+
+            let precommit_message_bits = to_bits(precommit_message[i].clone());
+
+            assert!(verify_message(
+                &precommit_message_bits,
+                &sig,
+                &EDDSAPublicKey(pub_key)
+            ));
+
+            let precommit_message_target = precommit_message[i].iter().map(|x| builder.constant(F::from_canonical_u8(*x))).collect::<Vec<_>>();
+
+            precommits.push(
+                PrecommitTarget{
+                    precommit_message: precommit_message_target,
+                    signature: EDDSASignatureTarget{
+                        r: builder.constant_affine_point(sig_r),
+                        s: builder.constant_nonnative(sig_s),
+                    },
+                    pub_key: EDDSAPublicKeyTarget(builder.constant_affine_point(pub_key)),
+                }
+            );
+        }
+        precommits
+    }
 
     #[test]
     fn test_avail_eddsa_circuit() -> Result<()> {
@@ -300,7 +347,13 @@ mod tests {
         let block_number_target = builder.constant(F::from_canonical_u32(block_number));
         let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
 
-        let mut precommit_targets = Vec::new();
+        let mut precommit_targets = generate_precommits(
+            &mut builder,
+            (0..QUORUM_SIZE).map(|_| encoded_precommit.clone().to_vec()).collect::<Vec<_>>(),
+            signatures.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            pub_keys.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+        );
+
         for i in 0..signatures.len() {
             let signature = hex::decode(signatures[i]).unwrap();
 

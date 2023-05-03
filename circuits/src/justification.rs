@@ -255,14 +255,18 @@ mod tests {
     fn test_grandpa_verification_simple() -> Result<()> {
         // Circuit inputs start
         let encoded_precommit = [
-            1, 98, 241, 170, 246, 41, 123, 134, 179, 116, 148, 72, 214, 108, 196, 61, 234, 218, 73, 148, 12, 57, 18, 164, 236, 73, 22, 52, 64,
-            88, 232, 240, 101, 95, 24, 8, 0, 104, 11, 0, 0, 0, 0, 0, 0, 240, 1, 0, 0, 0, 0, 0, 0];
+            1,
+            98, 241, 170, 246, 41, 123, 134, 179, 116, 148, 72, 214, 108, 196, 61, 234, 218, 73, 148, 12, 57, 18, 164, 236, 73, 22, 52, 64,
+            88, 232, 240, 101,
+            95, 24, 8, 0,
+            104, 11, 0, 0, 0, 0, 0, 0,
+            240, 1, 0, 0, 0, 0, 0, 0];
 
         let encoded_precommit_bits = to_bits(encoded_precommit.to_vec());
 
         let block_hash = hex::decode("62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065").unwrap();
         let block_number = 530527u32;
-        let authority_set_id = 629;
+        let authority_set_id = 496;
 
         let signatures = vec![
             "3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c",

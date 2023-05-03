@@ -1,6 +1,8 @@
 use ed25519::curve::curve_types::Curve;
+use ed25519::gadgets::curve::CircuitBuilderCurve;
 use ed25519::gadgets::eddsa::verify_message_circuit;
 use ed25519::gadgets::eddsa::{EDDSATargets, EDDSASignatureTarget, EDDSAPublicKeyTarget};
+use ed25519::gadgets::nonnative::CircuitBuilderNonNative;
 use ed25519::sha512::blake2b::{make_blake2b_circuit};
 use ed25519::sha512::blake2b::Blake2bTarget;
 use plonky2::hash::hash_types::RichField;
@@ -8,7 +10,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2_field::extension::Extendable;
 use plonky2::iop::target::Target;
-use crate::utils::{ MAX_HEADER_SIZE, NUM_VALIDATORS};
+use crate::utils::{ MAX_HEADER_SIZE, NUM_VALIDATORS, HASH_SIZE};
 use crate::decoder::{ CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
 pub struct SignedPrecommitTarget<C: Curve> {
@@ -56,7 +58,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         let blake2_target = make_blake2b_circuit(
             self, 
             MAX_HEADER_SIZE * 8,
-            32
+            HASH_SIZE
         );  // 32 bytes = 256 bits
         for i in 0..MAX_HEADER_SIZE {
             let mut bits = self.split_le(grandpa_justification.encoded_header[i], 8);
@@ -69,7 +71,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
         // Check to make sure the encoded message is correct.
         // First byte should have a value of 1
-        let one = self.constant(F::from_canonical_u8(1));
+        let one = self.one();
         self.connect(grandpa_justification.encoded_message[0], one);
 
         // The next 32 bytes of the encoded message should equal to the blake2_target digest.
@@ -102,17 +104,16 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             }
         }
 
-        let mut signatures: Vec<EDDSASignatureTarget<C>> = Vec::with_capacity(NUM_VALIDATORS);
-        let mut pub_keys = Vec::with_capacity(NUM_VALIDATORS);
-        for _i in 0..NUM_VALIDATORS {
+        for i in 0..NUM_VALIDATORS {
             let eddsa_verify_circuit = verify_message_circuit(self, ENCODED_MESSAGE_LENGTH as u128);
 
             for j in 0..ENCODED_MESSAGE_LENGTH * 8 {
                 self.connect(encoded_msg_bits[j].target, eddsa_verify_circuit.msg[j].target);
             }
 
-            signatures.push(eddsa_verify_circuit.sig);
-            pub_keys.push(eddsa_verify_circuit.pub_key);
+            self.connect_affine_point(&eddsa_verify_circuit.sig.r,&grandpa_justification.signatures[i].r);
+            self.connect_nonnative(&eddsa_verify_circuit.sig.s,&grandpa_justification.signatures[i].s);
+            self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &grandpa_justification.pub_keys[i].0);
         }
     }
 

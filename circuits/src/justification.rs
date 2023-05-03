@@ -25,7 +25,9 @@ pub trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
         finalized_block_hash: Vec<Target>,
         finalized_block_num: Target,
         authority_set_id: Target,
-        justification_round: Target,
+
+        // TODO:  Need to figure out how to verify this field
+        //justification_round: Target,
     );
 }
 
@@ -37,7 +39,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         finalized_block_hash: Vec<Target>,
         finalized_block_num: Target,
         authority_set_id: Target,
-        justification_round: Target,
+        // justification_round: Target,
     ) {
         assert!(signed_precommits.len() == QUORUM_SIZE, "Number of signed precommits is not correct");
         for i in 0..QUORUM_SIZE {
@@ -48,6 +50,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 self.range_check(signed_precommits[i].precommit_message[j], 8);
             }
 
+            // TODO:  Need to double check that the signature and pub key are range checked
+
             // Verify that the precommit's fields match the claimed finalized block's
             // Note that we are currently assuming that all of the authorities sign on the finalized block,
             // as opposed to a decendent of that block.
@@ -57,7 +61,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 self.connect(finalized_block_hash[j], decoded_precommit_msg.block_hash[j]);
             }
             self.connect(authority_set_id, decoded_precommit_msg.authority_set_id);
-            self.connect(justification_round, decoded_precommit_msg.justification_round);
+            // self.connect(justification_round, decoded_precommit_msg.justification_round);
 
             // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
             let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);
@@ -66,8 +70,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
                 // Needs to be in bit big endian order for the EDDSA verification circuit
                 bits.reverse();
-                for j in 0..8 {
-                    encoded_msg_bits.push(bits[j]);
+                for k in 0..8 {
+                    encoded_msg_bits.push(bits[k]);
                 }
             }
 
@@ -257,7 +261,6 @@ mod tests {
         let block_hash = hex::decode("62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065").unwrap();
         let block_number = 530527u32;
         let authority_set_id = 496;
-        let justification_round = 15339;
 
         let signatures = vec![
             "3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c",
@@ -296,7 +299,6 @@ mod tests {
 
         let block_number_target = builder.constant(F::from_canonical_u32(block_number));
         let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
-        let justification_round_target = builder.constant(F::from_canonical_u64(justification_round));
 
         let mut precommit_targets = Vec::new();
         for i in 0..signatures.len() {
@@ -336,7 +338,6 @@ mod tests {
             block_hash_target,
             block_number_target,
             authority_set_id_target,
-            justification_round_target,
         );
 
         let pw = PartialWitness::new();

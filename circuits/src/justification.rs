@@ -10,7 +10,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2_field::extension::Extendable;
 use plonky2::iop::target::Target;
-use crate::utils::{ MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE};
+use crate::utils::{ MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE };
 use crate::decoder::{ CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
 pub struct SignedPrecommitTarget<C: Curve> {
@@ -48,6 +48,11 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         &mut self,
         grandpa_justification: GrandpaJustificationVerifierTargets<C>
     ) {
+        // Range check the encoded msg
+        for i in 0..ENCODED_MESSAGE_LENGTH {
+            self.range_check(grandpa_justification.encoded_message[i], 8);
+        }
+
         let decoded_header = self.decode_header(
             EncodedHeaderTarget {
                 header_bytes: grandpa_justification.encoded_header.clone(),
@@ -68,6 +73,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 self.connect(bits[j].target, blake2_target.message[i * 8 + j].target);
             }
         }
+
+        self.connect(blake2_target.message_len, grandpa_justification.encoded_header_length);
 
         // Check to make sure the encoded message is correct.
         // First byte should have a value of 1
@@ -138,7 +145,6 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     
-    use plonky2_field::goldilocks_field::GoldilocksField;
     use plonky2_field::types::Field;
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, GrandpaJustificationVerifierTargets};
@@ -328,17 +334,17 @@ mod tests {
 
         let mut encoded_header_target = Vec::new();
         for i in 0..encoded_header.len() {
-            encoded_header_target.push(builder.constant(GoldilocksField(encoded_header[i])));
+            encoded_header_target.push(builder.constant(F::from_canonical_u8(encoded_header[i])));
         }
         for _ in encoded_header.len() .. MAX_HEADER_SIZE {
-            encoded_header_target.push(builder.constant(GoldilocksField(0)));
+            encoded_header_target.push(builder.constant(F::from_canonical_u8(0)));
         }
 
-        let encoded_header_length_target = builder.constant(GoldilocksField(encoded_header.len() as u64));
+        let encoded_header_length_target = builder.constant(F::from_canonical_usize(encoded_header.len()));
 
         let mut encoded_msg_target = Vec::new();
         for i in 0..encoded_msg.len() {
-            encoded_msg_target.push(builder.constant(GoldilocksField(encoded_msg[i] as u64)));
+            encoded_msg_target.push(builder.constant(F::from_canonical_u8(encoded_msg[i])));
         }
 
         let mut pub_key_targets = Vec::new();

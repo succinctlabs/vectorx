@@ -1,9 +1,8 @@
 use ed25519::curve::curve_types::Curve;
 use ed25519::gadgets::curve::CircuitBuilderCurve;
 use ed25519::gadgets::eddsa::verify_message_circuit;
-use ed25519::gadgets::eddsa::{EDDSATargets, EDDSASignatureTarget, EDDSAPublicKeyTarget};
+use ed25519::gadgets::eddsa::{EDDSASignatureTarget, EDDSAPublicKeyTarget};
 use ed25519::gadgets::nonnative::CircuitBuilderNonNative;
-use ed25519::sha512::blake2b::Blake2bTarget;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
@@ -11,36 +10,22 @@ use plonky2::iop::target::Target;
 use crate::utils::{ QUORUM_SIZE, HASH_SIZE };
 use crate::decoder::{ CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
-pub struct SignedPrecommitTarget<C: Curve> {
-    pub block_hash: Blake2bTarget,
-    pub block_num: Target,
-    pub eddsa_sig: EDDSATargets<C>,
-}
-
-pub struct GrandpaJustificationTarget<C: Curve> {
-    pub round: Target,     // Technically, this field is a u64, and a target is slightly smaller.  But I think its a safe value for now.
-    pub signed_precommits: Vec<SignedPrecommitTarget<C>>
-}
-
-
-pub struct GrandpaJustificationVerifierTarget<C: Curve> {
-    // Justification related fields
-    pub precommit: EncodedPrecommitTarget,
-    pub signatures: Vec<EDDSASignatureTarget<C>>,
-    pub pub_keys: Vec<EDDSAPublicKeyTarget<C>>,
-
-    // Claimed finalized block related fields
-    pub block_hash: Vec<Target>,      // The block's hash that is finalized by this justification
-    pub block_num: Target,            // The block's number that is finalized by this justification
-    pub authority_set_id: Target,     // The active authority set ID for the finalized block
+pub struct PrecommitTarget<C: Curve> {
+    pub precommit_message: Vec<Target>,
+    pub signature: EDDSASignatureTarget<C>,
+    pub pub_key: EDDSAPublicKeyTarget<C>,
 }
 
 const ENCODED_MESSAGE_LENGTH: usize = 53;
 
-trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
+pub trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
     fn verify_justification(
         &mut self,
-        grandpa_justification: GrandpaJustificationVerifierTarget<C>,
+        signed_precommits: Vec<PrecommitTarget<C>>,
+        finalized_block_hash: Vec<Target>,
+        finalized_block_num: Target,
+        authority_set_id: Target,
+        justification_round: Target,
     );
 }
 
@@ -48,47 +33,53 @@ trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
 impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrandpaJustificationVerifier<C> for CircuitBuilder<F, D> {
     fn verify_justification(
         &mut self,
-        grandpa_justification: GrandpaJustificationVerifierTarget<C>
+        signed_precommits: Vec<PrecommitTarget<C>>,
+        finalized_block_hash: Vec<Target>,
+        finalized_block_num: Target,
+        authority_set_id: Target,
+        justification_round: Target,
     ) {
-        assert!(grandpa_justification.precommit.0.len() == ENCODED_MESSAGE_LENGTH, "Encoded message length is not correct");
-        assert!(grandpa_justification.signatures.len() == QUORUM_SIZE, "Number of signatures is not correct");
-        assert!(grandpa_justification.pub_keys.len() == QUORUM_SIZE, "Number of public keys is not correct");
-
-        // Range check the encoded msg
-        for i in 0..ENCODED_MESSAGE_LENGTH {
-            self.range_check(grandpa_justification.precommit.0[i], 8);
-        }
-
-        // Verify that the precommit's fields match the claimed finalized block's
-        let decoded_precommit_msg = self.decode_precommit(grandpa_justification.precommit.clone());
-        self.connect(grandpa_justification.block_num, decoded_precommit_msg.block_number);
-        for i in 0..HASH_SIZE {
-            self.connect(grandpa_justification.block_hash[i], decoded_precommit_msg.block_hash[i]);
-        }
-        self.connect(grandpa_justification.authority_set_id, decoded_precommit_msg.authority_set_id);
-
-        // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
-        let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);
-        for i in 0..ENCODED_MESSAGE_LENGTH {
-            let mut bits = self.split_le(grandpa_justification.precommit.0[i], 8);
-
-            // Needs to be in bit big endian order for the EDDSA verification circuit
-            bits.reverse();
-            for j in 0..8 {
-                encoded_msg_bits.push(bits[j]);
-            }
-        }
-
+        assert!(signed_precommits.len() == QUORUM_SIZE, "Number of signed precommits is not correct");
         for i in 0..QUORUM_SIZE {
+            assert!(signed_precommits[i].precommit_message.len() == ENCODED_MESSAGE_LENGTH, "Precommit message is not the correct length");
+
+            // Range check the encoded msg
+            for j in 0..ENCODED_MESSAGE_LENGTH {
+                self.range_check(signed_precommits[i].precommit_message[j], 8);
+            }
+
+            // Verify that the precommit's fields match the claimed finalized block's
+            // Note that we are currently assuming that all of the authorities sign on the finalized block,
+            // as opposed to a decendent of that block.
+            let decoded_precommit_msg = self.decode_precommit(EncodedPrecommitTarget(signed_precommits[i].precommit_message.clone()));
+            self.connect(finalized_block_num, decoded_precommit_msg.block_number);
+            for j in 0..HASH_SIZE {
+                self.connect(finalized_block_hash[j], decoded_precommit_msg.block_hash[i]);
+            }
+            self.connect(authority_set_id, decoded_precommit_msg.authority_set_id);
+            self.connect(justification_round, decoded_precommit_msg.justification_round);
+
+            // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
+            let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);
+            for i in 0..ENCODED_MESSAGE_LENGTH {
+                let mut bits = self.split_le(signed_precommits[i].precommit_message[i], 8);
+
+                // Needs to be in bit big endian order for the EDDSA verification circuit
+                bits.reverse();
+                for j in 0..8 {
+                    encoded_msg_bits.push(bits[j]);
+                }
+            }
+
             let eddsa_verify_circuit = verify_message_circuit(self, ENCODED_MESSAGE_LENGTH as u128);
 
             for j in 0..ENCODED_MESSAGE_LENGTH * 8 {
                 self.connect(encoded_msg_bits[j].target, eddsa_verify_circuit.msg[j].target);
             }
 
-            self.connect_affine_point(&eddsa_verify_circuit.sig.r,&grandpa_justification.signatures[i].r);
-            self.connect_nonnative(&eddsa_verify_circuit.sig.s,&grandpa_justification.signatures[i].s);
-            self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &grandpa_justification.pub_keys[i].0);
+            self.connect_affine_point(&eddsa_verify_circuit.sig.r,&signed_precommits[i].signature.r);
+            self.connect_nonnative(&eddsa_verify_circuit.sig.s,&signed_precommits[i].signature.s);
+            self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &signed_precommits[i].pub_key.0);
         }
     }
 
@@ -115,8 +106,7 @@ mod tests {
     
     use plonky2_field::types::Field;
 
-    use crate::decoder::EncodedPrecommitTarget;
-    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, GrandpaJustificationVerifierTarget};
+    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget};
     use crate::utils::{to_bits, MAX_HEADER_SIZE};
 
     #[test]
@@ -267,6 +257,7 @@ mod tests {
         let block_hash = hex::decode("62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065").unwrap();
         let block_number = 530527u32;
         let authority_set_id = 496;
+        let justification_round = 15339;
 
         let signatures = vec![
             "3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c",
@@ -305,9 +296,9 @@ mod tests {
 
         let block_number_target = builder.constant(F::from_canonical_u32(block_number));
         let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
+        let justification_round_target = builder.constant(F::from_canonical_u64(justification_round));
 
-        let mut pub_key_targets = Vec::new();
-        let mut signature_targets = Vec::new();
+        let mut precommit_targets = Vec::new();
         for i in 0..signatures.len() {
             let signature = hex::decode(signatures[i]).unwrap();
 
@@ -328,24 +319,25 @@ mod tests {
                 &EDDSAPublicKey(pub_key)
             ));
 
-            pub_key_targets.push(EDDSAPublicKeyTarget(builder.constant_affine_point(pub_key)));
-            signature_targets.push(EDDSASignatureTarget{
-                r: builder.constant_affine_point(sig_r),
-                s: builder.constant_nonnative(sig_s),
-            });
+            precommit_targets.push(
+                PrecommitTarget{
+                    precommit_message: encoded_precommit_target.clone(),
+                    signature: EDDSASignatureTarget{
+                        r: builder.constant_affine_point(sig_r),
+                        s: builder.constant_nonnative(sig_s),
+                    },
+                    pub_key: EDDSAPublicKeyTarget(builder.constant_affine_point(pub_key)),
+                }
+            )
         }
 
-        let grandpa_just = GrandpaJustificationVerifierTarget {
-            precommit: EncodedPrecommitTarget(encoded_precommit_target),
-            signatures: signature_targets,
-            pub_keys: pub_key_targets,
-
-            block_hash: block_hash_target,
-            block_num: block_number_target,
-            authority_set_id: authority_set_id_target,
-        };
-
-        builder.verify_justification(grandpa_just);
+        builder.verify_justification(
+            precommit_targets,
+            block_hash_target,
+            block_number_target,
+            authority_set_id_target,
+            justification_round_target,
+        );
 
         let pw = PartialWitness::new();
         let data = builder.build::<C>();

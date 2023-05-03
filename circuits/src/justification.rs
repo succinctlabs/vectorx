@@ -10,7 +10,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2_field::extension::Extendable;
 use plonky2::iop::target::Target;
-use crate::utils::{ MAX_HEADER_SIZE, NUM_VALIDATORS, HASH_SIZE};
+use crate::utils::{ MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE};
 use crate::decoder::{ CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
 pub struct SignedPrecommitTarget<C: Curve> {
@@ -104,7 +104,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             }
         }
 
-        for i in 0..NUM_VALIDATORS {
+        for i in 0..QUORUM_SIZE {
             let eddsa_verify_circuit = verify_message_circuit(self, ENCODED_MESSAGE_LENGTH as u128);
 
             for j in 0..ENCODED_MESSAGE_LENGTH * 8 {

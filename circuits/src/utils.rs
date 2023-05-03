@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 use ed25519::sha512::blake2b::CHUNK_128_BYTES;
 
 pub const NUM_VALIDATORS: usize = 10;
+pub const QUORUM_SIZE: usize = 7;  // 2/3 + 1 of NUM_VALIDATORS
 pub const MAX_NUM_HEADERS_PER_STEP: usize = 5;
 
 //pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes

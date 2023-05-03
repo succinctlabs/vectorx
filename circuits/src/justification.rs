@@ -113,6 +113,7 @@ pub (crate) mod tests {
     use plonky2_field::types::Field;
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget};
+    use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_AUTHORITY_PUB_KEYS, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH};
     use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE};
 
     pub fn generate_precommits<F: RichField + Extendable<D>, const D: usize>(
@@ -291,99 +292,26 @@ pub (crate) mod tests {
 
     #[test]
     fn test_grandpa_verification_simple() -> Result<()> {
-        // Circuit inputs start
-        let encoded_precommit = [
-            1,
-            98, 241, 170, 246, 41, 123, 134, 179, 116, 148, 72, 214, 108, 196, 61, 234, 218, 73, 148, 12, 57, 18, 164, 236, 73, 22, 52, 64,
-            88, 232, 240, 101,
-            95, 24, 8, 0,
-            104, 11, 0, 0, 0, 0, 0, 0,
-            240, 1, 0, 0, 0, 0, 0, 0];
-
-        let encoded_precommit_bits = to_bits(encoded_precommit.to_vec());
-
-        let block_hash = hex::decode("62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065").unwrap();
-        let block_number = 530527u32;
-        let authority_set_id = 496;
-
-        let signatures = vec![
-            "3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c",
-            "48f851a4cb99db770461b3b42e7a055fb4801a2a4d2627691e52d0bb955bc8c6c490b0d04d97365e39b7cffeb4489318f28deddbc0710a57f4d94a726a98df01",
-            "cbc199cf5754103a3a52d51795596c1535a8766ea84073d6c064db28fa0a357521dd912516d694813e21d279a72f11b59029bed7671db6b0d2ee0cd68d0ebb0f",
-            "8f006a2ac7cd3396d20d2230204e2742fd413bde5c4ad6ad688f01def90ae2b80bcfee0507aedbcc01a389c74f7c5315eadedff800f3ff8d7482c2d8afe47500",
-            "d5b234c6268f1d822217ac2a88358d31ec14f8f975b0f5d3f87ada7dd88e87400f11e9aac94cab3c2d1e8d38088cc505e9426f35d07a5ae9f7bb5c33244f160a",
-            "da57013e372c8cd4aa7bc6c6112d9404325e8d48fcc02c51ad915a725ee0424c3a54cee03dfe315d91f3e6a576f8134a17b28717485340c9ac1ebfe7fc72360f",
-            "b22b809b0249ee4e8d43d3aee1a2f40bd529f9eaaa6493d7ec8198b5c93a15ce1e7d653d2aaf710ebfef4ff5aec8e120faf22776417b3621bf6b9de4af540805"
-        ];
-        let pub_keys = vec![
-            "0e0945b2628f5c3b4e2a6b53df997fc693344af985b11e3054f36a384cc4114b",
-            "5568a33085a85e1680b83823c6b4b8a0b51d506748b5d5266dd536e258e18a9d",
-            "8916179559464bd193d94b053b250a0edf3da5b61d1f2bf2bf2640930dfd2c0e",
-            "8d9b15ea8335270510135b7f7c5ef94e0df70e751d3c5f95fd1aa6d7766929b6",
-            "8e9edb840fcf9ce51b9d2e65dcae423aafd03ab5973da8d806207395a26af66e",
-            "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",
-            "e4c08a068e72a466e2f377e862b5b2ed473c4f0e58d7d265a123ad11fef2a797"
-        ];
-        // Circuit inputs end
-
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
 
-        let mut encoded_precommit_target = Vec::new();
-        for i in 0..encoded_precommit.len() {
-            encoded_precommit_target.push(builder.constant(F::from_canonical_u8(encoded_precommit[i])));
-        }
-
-        let mut block_hash_target = Vec::new();
-        for i in 0..block_hash.len() {
-            block_hash_target.push(builder.constant(F::from_canonical_u8(block_hash[i])));
-        }
-
-        let block_number_target = builder.constant(F::from_canonical_u32(block_number));
-        let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
-
         let precommit_targets = generate_precommits(
             &mut builder,
-            (0..QUORUM_SIZE).map(|_| encoded_precommit.clone().to_vec()).collect::<Vec<_>>(),
-            signatures.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            pub_keys.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            (0..QUORUM_SIZE).map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
         );
 
-        /*
-        for i in 0..signatures.len() {
-            let signature = hex::decode(signatures[i]).unwrap();
-
-            let sig_r = decompress_point(&signature[0..32]);
-            assert!(sig_r.is_valid());
-
-            let sig_s_biguint = BigUint::from_bytes_le(&signature[32..64]);
-            let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
-            let sig = EDDSASignature { r: sig_r, s: sig_s };
-
-            let pubkey_bytes = hex::decode(pub_keys[i]).unwrap();
-            let pub_key = decompress_point(&pubkey_bytes[..]);
-            assert!(pub_key.is_valid());
-
-            assert!(verify_message(
-                &encoded_precommit_bits,
-                &sig,
-                &EDDSAPublicKey(pub_key)
-            ));
-
-            precommit_targets.push(
-                PrecommitTarget{
-                    precommit_message: encoded_precommit_target.clone(),
-                    signature: EDDSASignatureTarget{
-                        r: builder.constant_affine_point(sig_r),
-                        s: builder.constant_nonnative(sig_s),
-                    },
-                    pub_key: EDDSAPublicKeyTarget(builder.constant_affine_point(pub_key)),
-                }
-            )
+        let mut block_hash_target = Vec::new();
+        let block_hash_bytes = hex::decode(BLOCK_530527_BLOCK_HASH).unwrap();
+        for i in 0..block_hash_bytes.len() {
+            block_hash_target.push(builder.constant(F::from_canonical_u8(block_hash_bytes[i])));
         }
-        */
+
+        let authority_set_id_target = builder.constant(F::from_canonical_u64(BLOCK_530527_AUTHORITY_SET_ID));
+        let block_number_target = builder.constant(F::from_canonical_u32(530527u32));
 
         builder.verify_justification(
             precommit_targets,

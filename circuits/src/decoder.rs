@@ -212,7 +212,8 @@ mod tests {
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2_field::types::Field;
-    use crate::utils::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT, MAX_HEADER_SIZE};
+    use crate::utils::MAX_HEADER_SIZE;
+    use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
     fn test_compact_int(

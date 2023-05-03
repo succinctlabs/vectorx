@@ -138,15 +138,15 @@ mod tests {
     use plonky2_field::types::Field;
 
     use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
-    use crate::utils::{
-        to_bits,
+    use crate::utils::{to_bits,QUORUM_SIZE};
+    use crate::utils::tests::{
         BLOCK_530527_HEADER,
         BLOCK_530527_AUTHORITY_SET_ID,
         BLOCK_530527_PARENT_HASH,
         BLOCK_530527_PRECOMMIT_MESSAGE,
         BLOCK_530527_AUTHORITY_SIGS,
         BLOCK_530527_AUTHORITY_PUB_KEYS,
-        QUORUM_SIZE};
+    };
     use crate::justification::tests::generate_precommits;
 
     fn test_step(

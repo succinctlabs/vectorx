@@ -7,11 +7,10 @@ use ed25519::sha512::blake2b::{make_blake2b_circuit};
 use ed25519::sha512::blake2b::Blake2bTarget;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2_field::extension::Extendable;
 use plonky2::iop::target::Target;
 use crate::utils::{ MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE };
-use crate::decoder::{ CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
+use crate::decoder::{ CircuitBuilderHeaderDecoder, EncodedHeaderTarget, CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
 pub struct SignedPrecommitTarget<C: Curve> {
     pub block_hash: Blake2bTarget,
@@ -95,9 +94,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
         // The next 4 bytes of the encoded message should equal to the block number in little endian byte order
         let block_num = decoded_header.block_number;
-        let alpha = self.constant(F::from_canonical_u16(256));
-        let encoded_message_block_num = reduce_with_powers_circuit(self, &grandpa_justification.encoded_message[33..37], alpha);
-        self.connect(encoded_message_block_num, block_num);
+        let decoded_precommit_msg = self.decode_precommit(EncodedPrecommitTarget(grandpa_justification.encoded_message));
+        self.connect(block_num, decoded_precommit_msg.block_number);
 
         // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
         let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);

@@ -10,7 +10,7 @@ use tarpc::{
 };
 use subxt::ext::sp_core::H256;
 use service::{Curve, C, F, D, ProofGenerator, create_header_validation_circuit, generate_header_validation_proof, create_grandpa_justification_verifier_circuit, generate_grandpa_justification_verifier_proof};
-use succinct_avail_proof_generators::{avail::VerifySubchainTarget, consensus::GrandpaJustificationVerifierTargets};
+use succinct_avail_proof_generators::{step::VerifySubchainTarget, justification::GrandpaJustificationVerifierTargets};
 
 static mut HEADER_VALIDATION_CIRCUIT: Option<CircuitData<F, C, D>> = None;
 static mut HEADER_VALIDATION_TARGETS: Option<VerifySubchainTarget> = None;

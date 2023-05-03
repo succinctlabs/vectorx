@@ -1,6 +1,6 @@
 use ed25519::curve::curve_types::Curve;
 use ed25519::gadgets::eddsa::verify_message_circuit;
-use ed25519::gadgets::eddsa::{ EDDSATargets, EDDSASignatureTarget, EDDSAPublicKeyTarget };
+use ed25519::gadgets::eddsa::{EDDSATargets, EDDSASignatureTarget, EDDSAPublicKeyTarget};
 use ed25519::sha512::blake2b::{make_blake2b_circuit, CHUNK_128_BYTES};
 use ed25519::sha512::blake2b::Blake2bTarget;
 use plonky2::hash::hash_types::RichField;
@@ -8,8 +8,8 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2_field::extension::Extendable;
 use plonky2::iop::target::Target;
-
-use crate::encoding::make_scale_header_circuit;
+use crate::utils::{ MAX_HEADER_SIZE, NUM_VALIDATORS};
+use crate::decoder::{ CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
 pub struct SignedPrecommitTarget<C: Curve> {
     pub block_hash: Blake2bTarget,
@@ -33,111 +33,89 @@ pub struct GrandpaJustificationVerifierTargets<C: Curve> {
 
 const ENCODED_MESSAGE_LENGTH: usize = 53;
 
-pub fn build_grandpa_justification_verifier<F: RichField + Extendable<D>, C: Curve, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-    max_encoded_header_length: usize,   // in bytes
-    num_validators: usize
-) -> GrandpaJustificationVerifierTargets<C> {
-    let mut encoded_header = Vec::with_capacity(max_encoded_header_length as usize);
-    for _i in 0..max_encoded_header_length {
-        encoded_header.push(builder.add_virtual_target());
-    }
+trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
+    fn verify_justification(
+        &mut self,
+        grandpa_justification: GrandpaJustificationVerifierTargets<C>,
+    );
+}
 
-    // Range check the encoded header elements.  Should be between 0 - 255 (inclusive)
-    for i in 0..max_encoded_header_length {
-        builder.range_check(encoded_header[i], 8);
-    }
+// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
+impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrandpaJustificationVerifier<C> for CircuitBuilder<F, D> {
+    fn verify_justification(
+        &mut self,
+        grandpa_justification: GrandpaJustificationVerifierTargets<C>
+    ) {
+        let decoded_header = self.decode_header(
+            EncodedHeaderTarget {
+                header_bytes: grandpa_justification.encoded_header.clone(),
+                header_size: grandpa_justification.encoded_header_length
+            }
+        );
 
-    let scale_header_decoder = make_scale_header_circuit(builder, max_encoded_header_length);
-    let scale_header_deocder_input = scale_header_decoder.get_encoded_header_target();
+        let blake2_target = make_blake2b_circuit(
+            self, 
+            CHUNK_128_BYTES * 8 * 10, 
+            32
+        );  // 32 bytes = 256 bits
+        for i in 0..MAX_HEADER_SIZE {
+            let mut bits = self.split_le(grandpa_justification.encoded_header[i], 8);
+            // want the bits in big endian order
+            bits.reverse();
+            for j in 0..8 {
+                self.connect(bits[j].target, blake2_target.message[i * 8 + j].target);
+            }
+        }
 
-    for i in 0..max_encoded_header_length {
-        builder.connect(encoded_header[i], scale_header_deocder_input[i]);
-    }
+        // Check to make sure the encoded message is correct.
+        // First byte should have a value of 1
+        let one = self.constant(F::from_canonical_u8(1));
+        self.connect(grandpa_justification.encoded_message[0], one);
 
-    let blake2_target = make_blake2b_circuit(
-        builder, 
-        CHUNK_128_BYTES * 8 * 10, 
-        32
-    );  // 32 bytes = 256 bits
-    for i in 0..max_encoded_header_length {
-        let mut bits = builder.split_le(encoded_header[i], 8);
-        // want the bits in big endian order
-        bits.reverse();
-        for j in 0..8 {
-            builder.connect(bits[j].target, blake2_target.message[i * 8 + j].target);
+        // The next 32 bytes of the encoded message should equal to the blake2_target digest.
+        // Note that the blake2_target digest is in bits where the bit ordering is big endian.
+        // We will need to reverse that bit ordering when calculating the byte value, since the
+        // we are using the builder's le_sum function (input is little endian) to calculate the byte value.
+        for i in 0..32 {
+            // Get 8 bit chunk of the blake2_target digest
+            let digest_bit_chunk = blake2_target.digest[i * 8..(i + 1) * 8].to_vec();
+            let digest_byte = self.le_sum(digest_bit_chunk.iter().rev());
+
+            self.connect(digest_byte, grandpa_justification.encoded_message[i + 1]);
+        }
+
+        // The next 4 bytes of the encoded message should equal to the block number in little endian byte order
+        let block_num = decoded_header.block_number;
+        let alpha = self.constant(F::from_canonical_u16(256));
+        let encoded_message_block_num = reduce_with_powers_circuit(self, &grandpa_justification.encoded_message[33..37], alpha);
+        self.connect(encoded_message_block_num, block_num);
+
+        // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
+        let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);
+        for i in 0..ENCODED_MESSAGE_LENGTH {
+            let mut bits = self.split_le(grandpa_justification.encoded_message[i], 8);
+
+            // Needs to be in bit big endian order for the EDDSA verification circuit
+            bits.reverse();
+            for j in 0..8 {
+                encoded_msg_bits.push(bits[j]);
+            }
+        }
+
+        let mut signatures: Vec<EDDSASignatureTarget<C>> = Vec::with_capacity(NUM_VALIDATORS);
+        let mut pub_keys = Vec::with_capacity(NUM_VALIDATORS);
+        for _i in 0..NUM_VALIDATORS {
+            let eddsa_verify_circuit = verify_message_circuit(self, ENCODED_MESSAGE_LENGTH as u128);
+
+            for j in 0..ENCODED_MESSAGE_LENGTH * 8 {
+                self.connect(encoded_msg_bits[j].target, eddsa_verify_circuit.msg[j].target);
+            }
+
+            signatures.push(eddsa_verify_circuit.sig);
+            pub_keys.push(eddsa_verify_circuit.pub_key);
         }
     }
 
-    let encoded_header_length_target = builder.add_virtual_target();
-    builder.connect(blake2_target.message_len, encoded_header_length_target);
-
-    let mut encoded_message = Vec::with_capacity(ENCODED_MESSAGE_LENGTH);
-    for _i in 0..ENCODED_MESSAGE_LENGTH {
-        encoded_message.push(builder.add_virtual_target());
-    }
-
-    // Range check the encoded message elements
-    for i in 0..ENCODED_MESSAGE_LENGTH {
-        builder.range_check(encoded_message[i], 8);
-    }
-
-    // Check to make sure the encoded message is correct.
-    // First byte should have a value of 1
-    let one = builder.constant(F::from_canonical_u8(1));
-    builder.connect(encoded_message[0], one);
-
-    // The next 32 bytes of the encoded message should equal to the blake2_target digest.
-    // Note that the blake2_target digest is in bits where the bit ordering is big endian.
-    // We will need to reverse that bit ordering when calculating the byte value, since the
-    // we are using the builder's le_sum function (input is little endian) to calculate the byte value.
-    for i in 0..32 {
-        // Get 8 bit chunk of the blake2_target digest
-        let digest_bit_chunk = blake2_target.digest[i * 8..(i + 1) * 8].to_vec();
-        let digest_byte = builder.le_sum(digest_bit_chunk.iter().rev());
-
-        builder.connect(digest_byte, encoded_message[i + 1]);
-    }
-
-    // The next 4 bytes of the encoded message should equal to the block number in little endian byte order
-    let block_num = scale_header_decoder.get_number(builder);
-    let alpha = builder.constant(F::from_canonical_u16(256));
-    let encoded_message_block_num = reduce_with_powers_circuit(builder, &encoded_message[33..37], alpha);
-    builder.connect(encoded_message_block_num, block_num);
-
-
-    // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
-    let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);
-    for i in 0..ENCODED_MESSAGE_LENGTH {
-        let mut bits = builder.split_le(encoded_message[i], 8);
-
-        // Needs to be in bit big endian order for the EDDSA verification circuit
-        bits.reverse();
-        for j in 0..8 {
-            encoded_msg_bits.push(bits[j]);
-        }
-    }
-
-    let mut signatures = Vec::with_capacity(num_validators);
-    let mut pub_keys = Vec::with_capacity(num_validators);
-    for _i in 0..num_validators {
-        let eddsa_verify_circuit = verify_message_circuit(builder, ENCODED_MESSAGE_LENGTH as u128);
-
-        for j in 0..ENCODED_MESSAGE_LENGTH * 8 {
-            builder.connect(encoded_msg_bits[j].target, eddsa_verify_circuit.msg[j].target);
-        }
-
-        signatures.push(eddsa_verify_circuit.sig);
-        pub_keys.push(eddsa_verify_circuit.pub_key);
-    }
-
-    GrandpaJustificationVerifierTargets {
-        encoded_header: encoded_header,
-        encoded_header_length: encoded_header_length_target,
-        encoded_message: encoded_message,
-        signatures: signatures,
-        pub_keys: pub_keys
-    }
 }
 
 #[cfg(test)]
@@ -145,12 +123,11 @@ mod tests {
     use std::time::SystemTime;
 
     use anyhow::Result;
-    use ed25519::curve::ed25519::Ed25519;
     use ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
     use ed25519::field::ed25519_scalar::Ed25519Scalar;
-    use ed25519::gadgets::curve::{decompress_point, WitnessAffinePoint};
-    use ed25519::gadgets::eddsa::verify_message_circuit;
-    use ed25519::gadgets::nonnative::WitnessNonNative;
+    use ed25519::gadgets::curve::{decompress_point, CircuitBuilderCurve, WitnessAffinePoint};
+    use ed25519::gadgets::eddsa::{verify_message_circuit, EDDSAPublicKeyTarget, EDDSASignatureTarget};
+    use ed25519::gadgets::nonnative::{CircuitBuilderNonNative, WitnessNonNative};
     use ed25519::sha512::blake2b::{ make_blake2b_circuit, CHUNK_128_BYTES };
     use ed25519_dalek::{PublicKey, Signature};
     use hex::decode;
@@ -159,10 +136,12 @@ mod tests {
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    
     use plonky2_field::goldilocks_field::GoldilocksField;
     use plonky2_field::types::Field;
 
-    use crate::consensus::build_grandpa_justification_verifier;
+    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, GrandpaJustificationVerifierTargets};
+    use crate::utils::to_bits;
 
     #[test]
     fn test_avail_eddsa_circuit() -> Result<()> {
@@ -296,21 +275,6 @@ mod tests {
         data.verify(proof)
     }
 
-    fn to_bits(msg: Vec<u8>) -> Vec<bool> {
-        let mut res = Vec::new();
-        for i in 0..msg.len() {
-            let char = msg[i];
-            for j in 0..8 {
-                if (char & (1 << 7 - j)) != 0 {
-                    res.push(true);
-                } else {
-                    res.push(false);
-                }
-            }
-        }
-        res
-    }
-
     #[test]
     fn test_grandpa_verification_simple() -> Result<()> {
         // Circuit inputs start
@@ -359,25 +323,25 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
-        type Curve = Ed25519;
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
-        let grandpa_justif_targets = build_grandpa_justification_verifier::<GoldilocksField, Curve, D>(&mut builder, CHUNK_128_BYTES * 10, signatures.len());
 
-        let mut pw = PartialWitness::<GoldilocksField>::new();
-
+        let mut encoded_header_target = Vec::new();
         for i in 0..encoded_header.len() {
-            pw.set_target(grandpa_justif_targets.encoded_header[i], GoldilocksField(encoded_header[i]));
+            encoded_header_target.push(builder.constant(GoldilocksField(encoded_header[i])));
         }
-        for i in encoded_header.len() .. CHUNK_128_BYTES * 10 {
-            pw.set_target(grandpa_justif_targets.encoded_header[i], GoldilocksField(0));
+        for _ in encoded_header.len() .. CHUNK_128_BYTES * 10 {
+            encoded_header_target.push(builder.constant(GoldilocksField(0)));
         }
 
-        pw.set_target(grandpa_justif_targets.encoded_header_length, GoldilocksField(encoded_header.len() as u64));
+        let encoded_header_length_target = builder.constant(GoldilocksField(encoded_header.len() as u64));
 
+        let mut encoded_msg_target = Vec::new();
         for i in 0..encoded_msg.len() {
-            pw.set_target(grandpa_justif_targets.encoded_message[i], GoldilocksField(encoded_msg[i] as u64));
+            encoded_msg_target.push(builder.constant(GoldilocksField(encoded_msg[i] as u64)));
         }
 
+        let mut pub_key_targets = Vec::new();
+        let mut signature_targets = Vec::new();
         for i in 0..signatures.len() {
             let signature = hex::decode(signatures[i]).unwrap();
 
@@ -398,12 +362,24 @@ mod tests {
                 &EDDSAPublicKey(pub_key)
             ));
 
-            // eddsa verification witness stuff
-            pw.set_affine_point_target(&grandpa_justif_targets.pub_keys[i].0, &pub_key);
-            pw.set_affine_point_target(&grandpa_justif_targets.signatures[i].r, &sig_r);
-            pw.set_nonnative_target(&grandpa_justif_targets.signatures[i].s, &sig_s);
+            pub_key_targets.push(EDDSAPublicKeyTarget(builder.constant_affine_point(pub_key)));
+            signature_targets.push(EDDSASignatureTarget{
+                r: builder.constant_affine_point(sig_r),
+                s: builder.constant_nonnative(sig_s),
+            });
         }
 
+        let grandpa_just = GrandpaJustificationVerifierTargets {
+            encoded_header: encoded_header_target,
+            encoded_header_length: encoded_header_length_target,
+            encoded_message: encoded_msg_target,
+            signatures: signature_targets,
+            pub_keys: pub_key_targets,
+        };
+
+        builder.verify_justification(grandpa_just);
+
+        let pw = PartialWitness::new();
         let data = builder.build::<C>();
         let proof_gen_start_time = SystemTime::now();
         let proof = data.prove(pw).unwrap();

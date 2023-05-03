@@ -7,7 +7,7 @@ use plonky2_field::goldilocks_field::GoldilocksField;
 use plonky2_field::types::Field;
 
 use subxt::ext::sp_core::H256;
-use succinct_avail_proof_generators::{avail::{verify_headers, VerifySubchainTarget}, consensus::{build_grandpa_justification_verifier, GrandpaJustificationVerifierTargets}};
+use succinct_avail_proof_generators::{step::{verify_headers, VerifySubchainTarget}, justification::{build_grandpa_justification_verifier, GrandpaJustificationVerifierTargets}};
 
 pub const D: usize = 2;
 pub type C = PoseidonGoldilocksConfig;

@@ -1,12 +1,14 @@
 use std::marker::PhantomData;
 use ed25519::sha512::blake2b::CHUNK_128_BYTES;
 
-pub const MAX_HEADER_SIZE:usize = CHUNK_128_BYTES * 10; // 1280 bytes
-pub const HASH_SIZE:usize = 32;                         // in bytes
+pub const NUM_VALIDATORS: usize = 10;
+pub const MAX_NUM_HEADERS_PER_STEP: usize = 5;
+
+pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
+pub const HASH_SIZE: usize = 32;                         // in bytes
 
 
 use plonky2::{
-    util::reducing::ReducingFactorTarget,
     iop::{
         target::Target,
         generator::{SimpleGenerator, GeneratedValues},
@@ -17,13 +19,8 @@ use plonky2::{
 };
 use plonky2_field::extension::Extendable;
 
-pub trait CircuitBuilderUtils {
-    fn reduce(
-        &mut self,
-        base: u16,
-        terms: Vec<Target>,
-    ) -> Target;
 
+pub trait CircuitBuilderUtils {
     fn int_div(
         &mut self,
         dividend: Target,
@@ -37,22 +34,8 @@ pub trait CircuitBuilderUtils {
     ) -> Vec<Target>;
 }
 
+
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
-    fn reduce(
-        &mut self,
-        base: u16,
-        terms: Vec<Target>,
-    ) -> Target {
-        let zero = self.zero();
-        let reduce_base = self.constant(F::from_canonical_u16(base)).to_ext_target(zero);
-
-        // cover the terms to extension fields
-        let terms_extension = terms.iter().map(|x| x.to_ext_target(zero)).collect::<Vec<_>>();
-
-        let reduced_value = ReducingFactorTarget::new(reduce_base).reduce(terms_extension.as_slice(), self);
-        reduced_value.to_target_array()[0]
-    }
-
     fn int_div(
         &mut self,
         dividend: Target,
@@ -86,7 +69,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
 
         // Assert that all vectors have the same length
         targets.iter().for_each(|t| {
-            assert_eq!(t.len(), targets[0].len());
+            assert_eq!(t.len(), v_size);
         });
 
         (0..v_size).map(|i| {
@@ -94,8 +77,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
                 index, 
                 targets.iter().map(|t| {
                     t[i]
-                }
-            ).collect::<Vec<_>>())
+                }).collect::<Vec<_>>())
         }).collect::<Vec<_>>()
     }
 
@@ -113,6 +95,7 @@ struct FloorDivGenerator<
     remainder: Target,
     _marker: PhantomData<F>,
 }
+
 
 impl<
     F: RichField + Extendable<D>,
@@ -132,6 +115,22 @@ impl<
         out_buffer.set_target(self.quotient, F::from_canonical_u32(quotient));
         out_buffer.set_target(self.remainder, F::from_canonical_u32(remainder));
     }    
+}
+
+
+pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
+    let mut res = Vec::new();
+    for i in 0..msg.len() {
+        let char = msg[i];
+        for j in 0..8 {
+            if (char & (1 << 7 - j)) != 0 {
+                res.push(true);
+            } else {
+                res.push(false);
+            }
+        }
+    }
+    res
 }
 
 

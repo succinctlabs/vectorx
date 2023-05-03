@@ -1,4 +1,4 @@
-use plonky2::hash::hash_types::RichField;
+use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powers_circuit};
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
@@ -26,9 +26,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder fo
         // Get all of the possible bytes that could be used to represent the compact int
 
         let zero_mode_value = compact_bytes[0];
-        let one_mode_value = self.reduce(256, compact_bytes[0..2].to_vec());
-        let two_mode_value = self.reduce(256, compact_bytes[0..4].to_vec());
-        let three_mode_value = self.reduce(256, compact_bytes[1..5].to_vec());
+        let alpha = self.constant(F::from_canonical_u16(256));
+        let one_mode_value = reduce_with_powers_circuit(self, &compact_bytes[0..2], alpha);
+        let two_mode_value = reduce_with_powers_circuit(self, &compact_bytes[0..4], alpha);
+        let three_mode_value = reduce_with_powers_circuit(self, &compact_bytes[1..5], alpha);
         let value = self.random_access(compress_mode, vec![zero_mode_value, one_mode_value, two_mode_value, three_mode_value]);
 
         // Will need to divide by 4 (remove least 2 significnat bits) for mode 0, 1, 2.  Those bits stores the encoding mode
@@ -51,20 +52,20 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder fo
 }
 
 
-struct EncodedHeaderTarget {
-    header_bytes: Vec<Target>,
-    header_size: Target,
+pub struct EncodedHeaderTarget {
+    pub header_bytes: Vec<Target>,
+    pub header_size: Target,
 }
 
-struct HeaderTarget {
-    block_number: Target,
-    parent_hash: Vec<Target>,    // Vector of 32 bytes
-    state_root: Vec<Target>,     // Vector of 32 bytes
-    //data_root: Vec<Target>,      // Vector of 32 bytes
+pub struct HeaderTarget {
+    pub block_number: Target,
+    pub parent_hash: Vec<Target>,    // Vector of 32 bytes
+    pub state_root: Vec<Target>,     // Vector of 32 bytes
+    // pub data_root: Vec<Target>,      // Vector of 32 bytes
 }
 
 
-trait CircuitBuilderHeaderDecoder {
+pub trait CircuitBuilderHeaderDecoder {
     fn decode_header(
         &mut self,
         header: EncodedHeaderTarget,
@@ -94,11 +95,12 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
 
         let state_root_target = self.random_access_vec(compress_mode, all_possible_state_roots);
 
+        // Can't get this to work yet.  Getting an error with the random_access gate
         /*
         let mut all_possible_data_roots = Vec::new();
 
-        // 98 is the minimum total size of all the header's fields before the data root
-        const DATA_ROOT_MIN_START_IDX: usize = 98;
+        // 97 bytes is the minimum total size of all the header's fields before the data root
+        const DATA_ROOT_MIN_START_IDX: usize = 97;
         for start_idx in DATA_ROOT_MIN_START_IDX..MAX_HEADER_SIZE - HASH_SIZE {
             all_possible_data_roots.push(header.header_bytes[start_idx..start_idx+HASH_SIZE].to_vec());
         }
@@ -110,8 +112,9 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
             all_possible_data_roots.push(vec![self.zero(); HASH_SIZE]);
         }
 
-        let ninety_eight = self.constant(F::from_canonical_usize(DATA_ROOT_MIN_START_IDX));
-        let data_root_idx = self.sub(header.header_size, ninety_eight);
+        let data_root_min_idx = self.constant(F::from_canonical_usize(DATA_ROOT_MIN_START_IDX));
+        let data_root_idx = self.sub(header.header_size, data_root_min_idx);
+
         let data_root_target = self.random_access_vec(data_root_idx, all_possible_data_roots);
         */
 
@@ -128,15 +131,13 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use plonky2::iop::witness::{PartialWitness, Witness};
+    use plonky2::iop::witness::{PartialWitness};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2_field::types::Field;
-
-    use crate::utils::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT, MAX_HEADER_SIZE, HASH_SIZE};
-    use crate::encoding::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
-
+    use crate::utils::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT, MAX_HEADER_SIZE};
+    use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
     fn test_compact_int(
         encoded_bytes: [u8; 5],

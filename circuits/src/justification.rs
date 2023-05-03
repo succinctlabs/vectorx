@@ -123,12 +123,10 @@ pub (crate) mod tests {
     ) -> Vec<PrecommitTarget<Ed25519>> {
         let mut precommits = Vec::with_capacity(precommit_message.len());
         for i in 0..precommit_message.len() {
-            let signature = hex::decode(signatures[i].clone()).unwrap();
-
-            let sig_r = decompress_point(&signature[0..32]);
+            let sig_r = decompress_point(&signatures[i][0..32]);
             assert!(sig_r.is_valid());
 
-            let sig_s_biguint = BigUint::from_bytes_le(&signature[32..64]);
+            let sig_s_biguint = BigUint::from_bytes_le(&signatures[i][32..64]);
             let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
             let sig = EDDSASignature { r: sig_r, s: sig_s };
 

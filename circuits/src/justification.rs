@@ -54,7 +54,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             let decoded_precommit_msg = self.decode_precommit(EncodedPrecommitTarget(signed_precommits[i].precommit_message.clone()));
             self.connect(finalized_block_num, decoded_precommit_msg.block_number);
             for j in 0..HASH_SIZE {
-                self.connect(finalized_block_hash[j], decoded_precommit_msg.block_hash[i]);
+                self.connect(finalized_block_hash[j], decoded_precommit_msg.block_hash[j]);
             }
             self.connect(authority_set_id, decoded_precommit_msg.authority_set_id);
             self.connect(justification_round, decoded_precommit_msg.justification_round);

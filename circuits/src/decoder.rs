@@ -155,6 +155,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
 }
 
 
+#[derive(Clone, Debug)]
 pub struct EncodedPrecommitTarget(pub Vec<Target>);
 
 pub struct PrecommitTarget {

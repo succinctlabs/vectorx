@@ -130,8 +130,7 @@ pub (crate) mod tests {
             let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
             let sig = EDDSASignature { r: sig_r, s: sig_s };
 
-            let pubkey_bytes = hex::decode(pub_keys[i].clone()).unwrap();
-            let pub_key = decompress_point(&pubkey_bytes[..]);
+            let pub_key = decompress_point(&pub_keys[i][..]);
             assert!(pub_key.is_valid());
 
             let precommit_message_bits = to_bits(precommit_message[i].clone());

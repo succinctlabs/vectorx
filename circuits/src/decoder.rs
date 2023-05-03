@@ -1,6 +1,7 @@
 use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powers_circuit};
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2_field::extension::Extendable;
 use crate::utils::{ CircuitBuilderUtils, HASH_SIZE, MAX_HEADER_SIZE };
 
@@ -9,6 +10,12 @@ trait CircuitBuilderScaleDecoder {
         &mut self,
         compact_bytes: Vec<Target>,
     ) -> (Target, Target, Target);
+
+    fn decode_fixed_int(
+        &mut self,
+        bytes: Vec<Target>,
+        num_bytes: usize,
+    ) -> Target;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -49,6 +56,27 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder fo
 
         (decoded_int, compress_mode, encoded_byte_length)
     }
+
+
+    // WARNING !!!!
+    // Note that this only works for fixed ints that are 64 bytes or less, since the goldilocks field is a little under 64 bytes.
+    // So technically, it doesn't even work for 64 byte ints, but for now assume that all u64 values we encounter are less than
+    // the goldilocks field size.
+    fn decode_fixed_int(
+        &mut self,
+        bytes: Vec<Target>,
+        value_byte_length: usize,
+    ) -> Target {
+        assert!(bytes.len() == value_byte_length);
+        assert!(value_byte_length <= 64);
+
+        let alpha = self.constant(F::from_canonical_u16(256));
+        let value = reduce_with_powers_circuit(self, &bytes, alpha);
+
+        value
+    }
+
+
 }
 
 
@@ -127,6 +155,54 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
     }
 }
 
+
+pub struct EncodedPrecommitTarget(pub Vec<Target>);
+
+pub struct PrecommitTarget {
+    pub block_hash: Vec<Target>,   // Vector of 32 bytes
+    pub block_number: Target,
+    pub justification_round: Target,
+    pub authority_set_id: Target,
+}
+
+
+pub trait CircuitBuilderPrecommitDecoder {
+    fn decode_precommit(
+        &mut self,
+        precommit: EncodedPrecommitTarget,
+    ) -> PrecommitTarget;
+}
+
+// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
+impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecoder for CircuitBuilder<F, D> {
+    fn decode_precommit(
+        &mut self,
+        precommit: EncodedPrecommitTarget,
+    ) -> PrecommitTarget {
+        // The first byte is the variant number and should be 1
+        let one = self.one();
+        self.connect(precommit.0[0], one);
+
+        // The next 32 bytes is the block hash
+        let block_hash = precommit.0[1..33].to_vec();
+
+        // The next 4 bytes is the block number
+        let block_number = self.decode_fixed_int(precommit.0[33..37].to_vec(), 4);
+
+        // The next 8 bytes is the justification round
+        let justification_round = self.decode_fixed_int(precommit.0[37..45].to_vec(), 8);
+
+        // The next 8 bytes is the authority set id
+        let authority_set_id = self.decode_fixed_int(precommit.0[45..53].to_vec(), 8);
+
+        PrecommitTarget {
+            block_hash: block_hash,
+            block_number: block_number,
+            justification_round: justification_round,
+            authority_set_id: authority_set_id,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

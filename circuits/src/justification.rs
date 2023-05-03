@@ -49,13 +49,13 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         let decoded_header = self.decode_header(
             EncodedHeaderTarget {
                 header_bytes: grandpa_justification.encoded_header.clone(),
-                header_size: grandpa_justification.encoded_header_length
+                header_size: grandpa_justification.encoded_header_length,
             }
         );
 
         let blake2_target = make_blake2b_circuit(
             self, 
-            CHUNK_128_BYTES * 8 * 10, 
+            MAX_HEADER_SIZE * 8,
             32
         );  // 32 bytes = 256 bits
         for i in 0..MAX_HEADER_SIZE {
@@ -128,7 +128,7 @@ mod tests {
     use ed25519::gadgets::curve::{decompress_point, CircuitBuilderCurve, WitnessAffinePoint};
     use ed25519::gadgets::eddsa::{verify_message_circuit, EDDSAPublicKeyTarget, EDDSASignatureTarget};
     use ed25519::gadgets::nonnative::{CircuitBuilderNonNative, WitnessNonNative};
-    use ed25519::sha512::blake2b::{ make_blake2b_circuit, CHUNK_128_BYTES };
+    use ed25519::sha512::blake2b::{ make_blake2b_circuit };
     use ed25519_dalek::{PublicKey, Signature};
     use hex::decode;
     use num::BigUint;
@@ -141,7 +141,7 @@ mod tests {
     use plonky2_field::types::Field;
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, GrandpaJustificationVerifierTargets};
-    use crate::utils::to_bits;
+    use crate::utils::{to_bits, MAX_HEADER_SIZE};
 
     #[test]
     fn test_avail_eddsa_circuit() -> Result<()> {
@@ -246,7 +246,7 @@ mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let targets = make_blake2b_circuit(
             &mut builder,
-            CHUNK_128_BYTES * 8 * 10,
+            MAX_HEADER_SIZE * 8,
             hash_len
         );
 
@@ -256,7 +256,7 @@ mod tests {
             pw.set_bool_target(targets.message[i], hash_msg_bits[i]);
         }
 
-        for i in hash_msg_bits.len()..CHUNK_128_BYTES * 8 * 10 {
+        for i in hash_msg_bits.len() .. MAX_HEADER_SIZE*8 {
             pw.set_bool_target(targets.message[i], false);
         }
 
@@ -329,7 +329,7 @@ mod tests {
         for i in 0..encoded_header.len() {
             encoded_header_target.push(builder.constant(GoldilocksField(encoded_header[i])));
         }
-        for _ in encoded_header.len() .. CHUNK_128_BYTES * 10 {
+        for _ in encoded_header.len() .. MAX_HEADER_SIZE {
             encoded_header_target.push(builder.constant(GoldilocksField(0)));
         }
 

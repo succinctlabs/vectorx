@@ -1,304 +1,172 @@
-use std::marker::PhantomData;
-use itertools::izip;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::generator::{SimpleGenerator, GeneratedValues};
-use plonky2::iop::target::{Target, BoolTarget};
-use plonky2::iop::witness::{PartitionWitness, Witness};
+use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2_ecdsa::gadgets::biguint::BigUintTarget;
 use plonky2_field::extension::Extendable;
-use plonky2_u32::gadgets::arithmetic_u32::U32Target;
+use crate::utils::{ CircuitBuilderUtils, HASH_SIZE, MAX_HEADER_SIZE };
 
-pub fn make_scale_header_circuit<F: RichField + Extendable<D>, const D: usize>(
-    builder: &mut CircuitBuilder<F, D>,
-    max_encoded_header_size: usize
-) -> ScaleHeaderTarget
-{
-    let mut scale_header = ScaleHeaderTarget{ targets: Vec::with_capacity(max_encoded_header_size as usize) };
-
-    for _i in 0..max_encoded_header_size {
-        scale_header.targets.push(builder.add_virtual_target());
-    }
-
-    scale_header
+trait CircuitBuilderScaleDecoder {
+    fn decode_compact_int(
+        &mut self,
+        compact_bytes: Vec<Target>,
+    ) -> (Target, Target, Target);
 }
 
-// Scale Byte encoded representation of 
-// Avail headers
-pub struct ScaleHeaderTarget {
-    targets: Vec<Target>,
+// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
+impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder for CircuitBuilder<F, D> {
+    fn decode_compact_int(
+        &mut self,
+        compact_bytes: Vec<Target>
+    ) -> (Target, Target, Target) {
+        // For now, assume that compact_bytes is 5 bytes long
+        assert!(compact_bytes.len() == 5);
+
+        let bits = self.split_le(compact_bytes[0], 8);
+        let compress_mode = self.le_sum(bits[0..2].iter());
+
+        // Get all of the possible bytes that could be used to represent the compact int
+
+        let zero_mode_value = compact_bytes[0];
+        let one_mode_value = self.reduce(256, compact_bytes[0..2].to_vec());
+        let two_mode_value = self.reduce(256, compact_bytes[0..4].to_vec());
+        let three_mode_value = self.reduce(256, compact_bytes[1..5].to_vec());
+        let value = self.random_access(compress_mode, vec![zero_mode_value, one_mode_value, two_mode_value, three_mode_value]);
+
+        // Will need to divide by 4 (remove least 2 significnat bits) for mode 0, 1, 2.  Those bits stores the encoding mode
+        let three = self.constant(F::from_canonical_u8(3));
+        let is_eq_three = self.is_equal(compress_mode, three);
+        let div_by_4 = self.not(is_eq_three);
+
+        let four = self.constant(F::from_canonical_u8(4));
+        let value_div_4 = self.int_div(value, four);
+
+        let decoded_int = self.select(div_by_4, value_div_4, value);
+
+        let five = self.constant(F::from_canonical_u8(5));
+        let one = self.one();
+        let two = self.two();
+        let encoded_byte_length = self.random_access(compress_mode, vec![one, two, four, five]);
+
+        (decoded_int, compress_mode, encoded_byte_length)
+    }
 }
 
-impl ScaleHeaderTarget {
-    pub fn get_encoded_header_target(&self) -> &Vec<Target> {
-        &self.targets
-    }
 
-    pub fn get_parent_hash(&self) -> Vec<Target> {
-        self.targets[0..32].to_vec()
-    }
+struct EncodedHeaderTarget {
+    header_bytes: Vec<Target>,
+    header_size: Target,
+}
 
-    pub fn get_number<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-    ) -> Target {
-        // Can need up to 5 bytes to represent u32 compactly in SCALE
-        let compact = self.targets[32..37].to_vec();
+struct HeaderTarget {
+    block_number: Target,
+    parent_hash: Vec<Target>,    // Vector of 32 bytes
+    state_root: Vec<Target>,     // Vector of 32 bytes
+    //data_root: Vec<Target>,      // Vector of 32 bytes
+}
 
-        // Compute compact_byte mod 4 to determine how many bytes to use
-        let byte_mod = self.get_byte_mod(builder);
-        let (compact_length, cb_cases) = self.get_compact_length(builder, byte_mod, compact);
-        let length_branch = self.get_length_branch(builder, compact_length);
 
-        // Determine whether to divide by four or not, based off
-        // https://github.com/polkascan/py-scale-codec/blob/master/scalecodec/types.py#L113
-        let dividend = builder.random_access(byte_mod, cb_cases.to_vec());
-        let quotient = self.get_floor_div_by_four(builder, dividend);
-        let res = builder.select(length_branch, quotient, dividend);
-        res
-    }
+trait CircuitBuilderHeaderDecoder {
+    fn decode_header(
+        &mut self,
+        header: EncodedHeaderTarget,
+    ) -> HeaderTarget;
+}
 
-    fn get_byte_mod<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>
-    ) -> Target {
-        let compact_byte_limb = vec![U32Target(self.targets[32])];
-        let compact_byte_biguint = BigUintTarget { limbs: compact_byte_limb };
-        const B: usize = 4;
-        let byte_mod_vec = builder.split_le_base::<B>(compact_byte_biguint.get_limb(0).0, 16);
-        byte_mod_vec[0]
-    }
+// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
+impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder for CircuitBuilder<F, D> {
+    fn decode_header(
+        &mut self,
+        header: EncodedHeaderTarget,
+    ) -> HeaderTarget {
 
-    /// Compute compact length based on byte_mod, then return 
-    /// compact length along with cases of which compact bytes to use for 
-    /// later computation
-    /// Python implementation: https://github.com/polkascan/py-scale-codec/blob/master/scalecodec/types.py#L45-L59
-    fn get_compact_length<F: RichField + Extendable<D>, const D: usize>(
-        &self, 
-        builder: &mut CircuitBuilder<F, D>, 
-        byte_mod: Target, 
-        compact: Vec<Target>
-    ) -> (Target, [Target; 4]) {
-        let (cl_case_zero, cb_case_zero) = self.byte_mod_case_zero(builder, compact.clone());
-        let (cl_case_one, cb_case_one) = self.byte_mod_case_one(builder, compact.clone());
-        let (cl_case_two, cb_case_two) = self.byte_mod_case_two(builder, compact.clone());
-        let (cl_case_three, cb_case_three) = self.byte_mod_case_three(builder, compact.clone());
-        let cl_cases = [cl_case_zero, cl_case_one, cl_case_two, cl_case_three];
-        let cb_cases = [cb_case_zero, cb_case_one, cb_case_two, cb_case_three];
-        let compact_length = builder.random_access(byte_mod, cl_cases.to_vec());
-        (compact_length, cb_cases)
-    }
+        // The first 32 bytes are the parent hash
+        let parent_hash_target = header.header_bytes[0..32].to_vec();
 
-    /// Compute which branch to take based on compact length of encoding
-    fn get_length_branch<F: RichField + Extendable<D>, const D: usize>(
-        &self, 
-        builder: &mut CircuitBuilder<F, D>, 
-        compact_length: Target
-    ) -> BoolTarget {
-        let one = builder.constant(F::from_canonical_u8(1));
-        let two = builder.constant(F::from_canonical_u8(2));
-        let four = builder.constant(F::from_canonical_u8(4));
-        let is_one = builder.is_equal(compact_length, one);
-        let is_two = builder.is_equal(compact_length, two);
-        let is_four = builder.is_equal(compact_length, four);
-        let intermediate = builder.add(is_one.target, is_two.target);
-        let condition_one = builder.add(intermediate, is_four.target);
-        builder.is_equal(condition_one, one)
-    }
+        // Next field is the block number
+        // Can need up to 5 bytes to represent a compact u32
+        const MAX_BLOCK_NUMBER_SIZE: usize = 5;
+        let (block_number_target, compress_mode, _) = self.decode_compact_int(header.header_bytes[32..32+MAX_BLOCK_NUMBER_SIZE].to_vec());
 
-    /// Helper to calculate integer division in a field
-    /// Used in https://github.com/polkascan/py-scale-codec/blob/master/scalecodec/types.py#L113
-    fn get_floor_div_by_four<F: RichField + Extendable<D>, const D: usize>(
-        &self, 
-        builder: &mut CircuitBuilder<F, D>, 
-        dividend: Target,
-    ) -> Target {
-        let four = builder.constant(F::from_canonical_u8(4));
-        let quotient = builder.add_virtual_target();
-        let remainder = builder.add_virtual_target();
+        let mut all_possible_state_roots = Vec::new();
+        all_possible_state_roots.push(header.header_bytes[33..33+HASH_SIZE].to_vec());
+        all_possible_state_roots.push(header.header_bytes[34..34+HASH_SIZE].to_vec());
+        all_possible_state_roots.push(header.header_bytes[36..36+HASH_SIZE].to_vec());
+        all_possible_state_roots.push(header.header_bytes[37..37+HASH_SIZE].to_vec());
 
-        builder.add_simple_generator(FloorDivGenerator::<F, D> {
-            divisor: four,
-            dividend,
-            quotient,
-            remainder,
-            _marker: PhantomData
-        });
-        let base = builder.mul(quotient, four);
-        let rhs = builder.add(base, remainder);
-        let is_equal = builder.is_equal(rhs, dividend);
-        builder.assert_one(is_equal.target);
-        quotient
-    }
+        let state_root_target = self.random_access_vec(compress_mode, all_possible_state_roots);
 
-    // Byte mod 0 case when decoding Scale CompactU32
-    fn byte_mod_case_zero<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        compact: Vec<Target>
-    ) -> (Target, Target) {
-        let compact_length = builder.constant(F::from_canonical_u8(1));
-        let compact_bytes = self.from_bytes_le(builder, vec![compact[0]]);
-        (compact_length, compact_bytes)
-    }
+        /*
+        let mut all_possible_data_roots = Vec::new();
 
-    // Byte mod 1 case when decoding Scale CompactU32
-    fn byte_mod_case_one<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        compact: Vec<Target>
-    ) -> (Target, Target) {
-        let compact_length = builder.constant(F::from_canonical_u8(2));
-        let compact_bytes = self.from_bytes_le(builder, compact[0..2].to_vec());
-        (compact_length, compact_bytes)
-    }
-
-    // Byte mod 2 case when decoding Scale CompactU32
-    fn byte_mod_case_two<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        compact: Vec<Target>
-    ) -> (Target, Target) {
-        let compact_length = builder.constant(F::from_canonical_u8(4));
-        let compact_bytes = self.from_bytes_le(builder, compact[0..4].to_vec());
-        (compact_length, compact_bytes)
-    }
-
-    // Byte mod 3 case when decoding Scale CompactU32
-    fn byte_mod_case_three<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        compact: Vec<Target>
-    ) -> (Target, Target) {
-        let compact_length = builder.constant(F::from_canonical_u8(5));
-        let compact_bytes = self.from_bytes_le(builder, compact[1..].to_vec());
-        (compact_length, compact_bytes)
-    }
-
-    pub fn get_state_root<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-    ) -> Vec<Target> {
-        let byte_mod = self.get_byte_mod(builder);
-        let case_one = &(self.targets[33..65]);
-        let case_two = &(self.targets[34..66]);
-        let case_three = &(self.targets[37..69]);
-        let case_four = &(self.targets[36..68]);
-        self.random_access_vec(builder, byte_mod, case_one, case_two, case_three, case_four)
-    }
-
-    pub fn get_extrinsic_root<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-    ) -> Vec<Target> {
-        let byte_mod = self.get_byte_mod(builder);
-        let case_one = &(self.targets[65..97]);
-        let case_two = &(self.targets[66..98]);
-        let case_three = &(self.targets[69..101]);
-        let case_four = &(self.targets[68..100]);
-        self.random_access_vec(builder, byte_mod, case_one, case_two, case_three, case_four)
-    }
-
-    fn random_access_vec<F: RichField + Extendable<D>, const D: usize>(
-        &self, 
-        builder: &mut CircuitBuilder<F, D>,
-        // b: BoolTarget, 
-        index: Target,
-        v0: &[Target],
-        v1: &[Target],
-        v2: &[Target],
-        v3: &[Target],
-    ) -> Vec<Target> {
-        izip!(v0, v1, v2, v3)
-            .map(|(t0, t1, t2, t3)| 
-                    builder.random_access(index, vec![*t0, *t1, *t2, *t3]))
-            .collect::<Vec<_>>()
-    }
-
-    fn from_bytes_le<F: RichField + Extendable<D>, const D: usize>(
-        &self,
-        builder: &mut CircuitBuilder<F, D>,
-        targets: Vec<Target>
-    ) -> Target {
-        let base = builder.constant(F::from_canonical_usize(256));
-        let mut pow = builder.constant(F::from_canonical_usize(1));
-        let mut sum = builder.constant(F::from_canonical_usize(0));
-        for i in 0..targets.len() {
-            let curr = builder.mul(targets[i], pow);
-            pow = builder.mul(pow, base);
-            sum = builder.add(sum, curr);
+        // 98 is the minimum total size of all the header's fields before the data root
+        const DATA_ROOT_MIN_START_IDX: usize = 98;
+        for start_idx in DATA_ROOT_MIN_START_IDX..MAX_HEADER_SIZE - HASH_SIZE {
+            all_possible_data_roots.push(header.header_bytes[start_idx..start_idx+HASH_SIZE].to_vec());
         }
-        sum
+
+        // Need to pad all_possible_data_roots to be length of a power of 2
+        let min_power_of_2 = ((MAX_HEADER_SIZE - HASH_SIZE) as f32).log2().ceil() as usize;
+        let all_possible_data_roots_size = 2usize.pow(min_power_of_2 as u32);
+        for _ in all_possible_data_roots.len()..all_possible_data_roots_size {
+            all_possible_data_roots.push(vec![self.zero(); HASH_SIZE]);
+        }
+
+        let ninety_eight = self.constant(F::from_canonical_usize(DATA_ROOT_MIN_START_IDX));
+        let data_root_idx = self.sub(header.header_size, ninety_eight);
+        let data_root_target = self.random_access_vec(data_root_idx, all_possible_data_roots);
+        */
+
+        HeaderTarget {
+            parent_hash: parent_hash_target,
+            block_number: block_number_target,
+            state_root: state_root_target,
+            //data_root: data_root_target,
+        }
     }
 }
 
-#[derive(Debug)]
-struct FloorDivGenerator<
-    F: RichField + Extendable<D>,
-    const D: usize
-> {
-    divisor: Target,
-    dividend: Target,
-    quotient: Target,
-    remainder: Target,
-    _marker: PhantomData<F>,
-}
-
-impl<
-    F: RichField + Extendable<D>,
-    const D: usize,
-> SimpleGenerator<F> for FloorDivGenerator<F, D> {
-    fn dependencies(&self) -> Vec<Target> {
-        Vec::from([self.dividend])
-    }
-
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-        let divisor = witness.get_target(self.divisor);
-        let dividend = witness.get_target(self.dividend);
-        let divisor_int = divisor.to_canonical_u64() as u32;
-        let dividend_int = dividend.to_canonical_u64() as u32;
-        let quotient = dividend_int / divisor_int;
-        let remainder = dividend_int % divisor_int;
-        out_buffer.set_target(self.quotient, F::from_canonical_u32(quotient));
-        out_buffer.set_target(self.remainder, F::from_canonical_u32(remainder));
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use codec::Encode;
-    use rand::Rng;
     use plonky2::iop::witness::{PartialWitness, Witness};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2_field::types::Field;
 
-    use crate::encoding::ScaleHeaderTarget;
+    use crate::utils::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT, MAX_HEADER_SIZE, HASH_SIZE};
+    use crate::encoding::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
-    #[test]
-    fn test_zero() -> Result<()>{
+
+    fn test_compact_int(
+        encoded_bytes: [u8; 5],
+        expected_int: u64,
+        expected_compress_mode: u8,
+        expected_length: u8
+    ) -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         let config = CircuitConfig::standard_recursion_config();
-        let mut pw = PartialWitness::new();
+        let pw = PartialWitness::new();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let header_bytes = [0u8; 326];
-        let mut header = ScaleHeaderTarget { targets: Vec::with_capacity(header_bytes.len()) };
-        for _ in 0..header_bytes.len() {
-            header.targets.push(builder.add_virtual_target());
-        }
-        for i in 0..header_bytes.len() {
-            let felt = F::from_canonical_u8(header_bytes[i]);
-            pw.set_target(header.targets[i], felt);
+        let mut encoded_bytes_target = Vec::new();
+
+        for i in 0..encoded_bytes.len() {
+            encoded_bytes_target.push(builder.constant(F::from_canonical_u8(encoded_bytes[i])));
         }
 
-        let number = header.get_number(&mut builder);
-        let val = builder.constant(F::from_canonical_u8(0));
-        builder.connect(number, val);
+        let (decoded_int, compress_mode, length) = builder.decode_compact_int(encoded_bytes_target);
+
+        let expected_int = builder.constant(F::from_canonical_u64(expected_int));
+        builder.connect(decoded_int, expected_int);
+
+        let expected_compress_mode = builder.constant(F::from_canonical_u8(expected_compress_mode));
+        builder.connect(compress_mode, expected_compress_mode);
+
+        let expected_length = builder.constant(F::from_canonical_u8(expected_length));
+        builder.connect(length, expected_length);
         
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;
@@ -307,128 +175,86 @@ mod tests {
     }
 
     #[test]
-    fn test_one() -> Result<()>{
+    fn test_decode_compact_int_0() -> Result<()> {
+        let encoded_bytes = [0u8; 5];
+        let expected_value = 0;
+        test_compact_int(encoded_bytes, expected_value, 0, 1)
+    }
+
+    #[test]
+    fn test_decode_compact_int_1() -> Result<()> {
+        let encoded_bytes = [4, 0, 0, 0, 0];
+        let expected_value = 1;
+        test_compact_int(encoded_bytes, expected_value, 0, 1)
+    }
+
+    #[test]
+    fn test_decode_compact_int_64() -> Result<()> {
+        let encoded_bytes = [1, 1, 0, 0, 0];
+        let expected_value = 64;
+        test_compact_int(encoded_bytes, expected_value, 1, 2)
+    }
+
+    #[test]
+    fn test_decode_compact_int_65() -> Result<()> {
+        let encoded_bytes = [5, 1, 0, 0, 0];
+        let expected_value = 65;
+        test_compact_int(encoded_bytes, expected_value, 1, 2)
+    }
+
+    #[test]
+    fn test_decode_compact_int_16384() -> Result<()>  {
+        let encoded_bytes = [2, 0, 1, 0, 0];
+        let expected_value = 16384;
+        test_compact_int(encoded_bytes, expected_value, 2, 4)
+    }
+
+    #[test]
+    fn test_decode_compact_int_1073741824() -> Result<()> {
+        let encoded_bytes = [3, 0, 0, 0, 64];
+        let expected_value = 1073741824;
+        test_compact_int(encoded_bytes, expected_value, 3, 5)
+    }
+
+    #[test]
+    fn test_decode_block() -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
         let config = CircuitConfig::standard_recursion_config();
-        let mut pw = PartialWitness::new();
+        let pw = PartialWitness::new();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut header_bytes = [0u8; 326];
-        header_bytes[32] = 4;
-        let mut header = ScaleHeaderTarget { targets: Vec::with_capacity(header_bytes.len()) };
-        for _ in 0..header_bytes.len() {
-            header.targets.push(builder.add_virtual_target());
-        }
-        for i in 0..header_bytes.len() {
-            let felt = F::from_canonical_u8(header_bytes[i]);
-            pw.set_target(header.targets[i], felt);
+        let mut header_bytes_target = BLOCK_576728_HEADER.iter().map(|b| {
+            builder.constant(F::from_canonical_u8(*b))
+        }).collect::<Vec<_>>();
+        let header_size = builder.constant(F::from_canonical_usize(BLOCK_576728_HEADER.len()));
+
+        // pad the header bytes
+        for _ in BLOCK_576728_HEADER.len()..MAX_HEADER_SIZE {
+            header_bytes_target.push(builder.zero());
         }
 
-        let number = header.get_number(&mut builder);
-        let val = builder.constant(F::from_canonical_u8(1));
-        builder.connect(number, val);
-        
+        let decoded_header = builder.decode_header(EncodedHeaderTarget{header_bytes: header_bytes_target, header_size});
+
+        let expected_block_number = builder.constant(F::from_canonical_u64(576728));
+        builder.connect(decoded_header.block_number, expected_block_number);
+
+        let expected_parent_hash = hex::decode(BLOCK_576728_PARENT_HASH).unwrap();
+        for i in 0..expected_parent_hash.len() {
+            let expected_parent_hash_byte = builder.constant(F::from_canonical_u8(expected_parent_hash[i]));
+            builder.connect(decoded_header.parent_hash[i], expected_parent_hash_byte);
+        }
+
+        let expected_state_root = hex::decode(BLOCK_576728_STATE_ROOT).unwrap();
+        for i in 0..expected_state_root.len() {
+            let expected_state_root_byte = builder.constant(F::from_canonical_u8(expected_state_root[i]));
+            builder.connect(decoded_header.state_root[i], expected_state_root_byte);
+        }
+
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;
 
         data.verify(proof)
-    }
-
-    #[test]
-    fn test_avail_block() -> Result<()>{
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        let config = CircuitConfig::standard_recursion_config();
-        let mut pw = PartialWitness::new();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
-
-        let mut header_bytes = [0u8; 326].to_vec();
-        let slice = &[186u8, 220, 20, 0];
-        header_bytes.splice(32..36, slice.iter().cloned());
-        let mut header = ScaleHeaderTarget { targets: Vec::with_capacity(header_bytes.len()) };
-        for _ in 0..header_bytes.len() {
-            header.targets.push(builder.add_virtual_target());
-        }
-        for i in 0..header_bytes.len() {
-            let felt = F::from_canonical_u8(header_bytes[i]);
-            pw.set_target(header.targets[i], felt);
-        }
-
-        let number = header.get_number(&mut builder);
-        let val = builder.constant(F::from_canonical_usize(341806));
-        builder.connect(number, val);
-        
-        let data = builder.build::<C>();
-        let proof = data.prove(pw)?;
-
-        data.verify(proof)
-    }
-
-    fn test_random_between_range(low: u32, high: u32) -> Result<()> {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-        let config = CircuitConfig::standard_recursion_config();
-        let mut pw = PartialWitness::new();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
-
-        let (r, r_enc) = rand_to_scale_bytes(low, high);
-
-        let mut header_bytes = [0u8; 326].to_vec();
-        let slice = &(r_enc[..]);
-        header_bytes.splice(32..32+slice.len(), slice.iter().cloned());
-        let mut header = ScaleHeaderTarget { targets: Vec::with_capacity(header_bytes.len()) };
-        for _ in 0..header_bytes.len() {
-            header.targets.push(builder.add_virtual_target());
-        }
-        for i in 0..header_bytes.len() {
-            let felt = F::from_canonical_u8(header_bytes[i]);
-            pw.set_target(header.targets[i], felt);
-        }
-
-        let number = header.get_number(&mut builder);
-        let val = builder.constant(F::from_canonical_usize(r as usize));
-        builder.connect(number, val);
-        
-        let data = builder.build::<C>();
-        let proof = data.prove(pw)?;
-
-        data.verify(proof)
-    }
-
-    #[test]
-    fn test_random_case_one() -> Result<()> {
-        test_random_between_range(0, 63+1)
-    }
-
-    #[test]
-    fn test_random_case_two() -> Result<()> {
-        test_random_between_range(64, 16383+1)
-    }
-
-    #[test]
-    fn test_random_case_three() -> Result<()> {
-        test_random_between_range(16384, 1073741823+1)
-    }
-
-    #[test]
-    fn test_random_case_four() -> Result<()> {
-        test_random_between_range(1073741824, u32::MAX)
-    }
-
-    fn rand_to_scale_bytes(low: u32, high: u32) -> (u32, Vec<u8>) {
-        let mut rng = rand::thread_rng();
-        let r = rng.gen_range(low..high);
-        let s = ScaleNumber { number: r };
-        (r, Encode::encode(&s))
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq, Encode)]
-    struct ScaleNumber {
-        #[codec(compact)]
-        pub number: u32
     }
 }

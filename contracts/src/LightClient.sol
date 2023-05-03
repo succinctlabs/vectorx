@@ -77,10 +77,10 @@ contract LightClient is EventDecoder {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
 
-    /// @notice The latest block_number the light client has a finalized header for.
+    /// @notice The latest finalized header's block number.
     uint32 public head;
 
-    /// @notice The active authority set ID
+    /// @notice The active authority set ID.
     uint64 public activeAuthoritySetID;
 
     /// @notice Maps from a block number to an Avail header hash.

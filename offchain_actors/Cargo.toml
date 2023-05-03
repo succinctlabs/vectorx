@@ -24,9 +24,9 @@ subxt = "0.24"
 
 # Avail circuits
 succinct_avail_proof_generators = { path = "../circuits" }
-plonky2 = { path = "../../../plonky2lib/plonky2" }
-plonky2_field = { path = "../../../plonky2lib/field" }
-ed25519 = { path = "../../../plonky2lib/ed25519" }
+plonky2 = { path = "../../plonky2lib/plonky2" }
+plonky2_field = { path = "../../plonky2lib/field" }
+ed25519 = { path = "../../plonky2lib/ed25519" }
 
 
 

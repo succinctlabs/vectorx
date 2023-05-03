@@ -3,9 +3,6 @@ use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, pl
 use plonky2_field::extension::Extendable;
 use crate::encoding::make_scale_header_circuit;
 
-const MAX_HEADER_SIZE:usize = CHUNK_128_BYTES * 10; // 1280 bytes
-const HASH_SIZE:usize = 32; // in bytes
-
 #[derive(Clone)]
 pub struct VerifySubchainTarget {
     pub head_block_hash: Vec<BoolTarget>,   // The input is a vector of bits (in BE bit order)
@@ -33,6 +30,8 @@ pub fn verify_headers<F: RichField + Extendable<D>, const D: usize>(
         encoded_headers.push(encoded_header);
         encoded_header_sizes.push(builder.add_virtual_target());
     }
+
+    // TODO: Need to do range checks on the bytes of the encoded headers
 
     let mut head_block_hash = Vec::new();
     for _i in 0 .. HASH_SIZE * 8 {

@@ -1,7 +1,7 @@
 use ed25519::curve::curve_types::Curve;
 use ed25519::gadgets::eddsa::verify_message_circuit;
 use ed25519::gadgets::eddsa::{EDDSATargets, EDDSASignatureTarget, EDDSAPublicKeyTarget};
-use ed25519::sha512::blake2b::{make_blake2b_circuit, CHUNK_128_BYTES};
+use ed25519::sha512::blake2b::{make_blake2b_circuit};
 use ed25519::sha512::blake2b::Blake2bTarget;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;

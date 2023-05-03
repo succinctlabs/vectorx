@@ -1,7 +1,6 @@
 use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powers_circuit};
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2_field::extension::Extendable;
 use crate::utils::{ CircuitBuilderUtils, HASH_SIZE, MAX_HEADER_SIZE };
 

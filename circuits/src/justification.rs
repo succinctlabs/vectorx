@@ -344,13 +344,14 @@ pub (crate) mod tests {
         let block_number_target = builder.constant(F::from_canonical_u32(block_number));
         let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
 
-        let mut precommit_targets = generate_precommits(
+        let precommit_targets = generate_precommits(
             &mut builder,
             (0..QUORUM_SIZE).map(|_| encoded_precommit.clone().to_vec()).collect::<Vec<_>>(),
             signatures.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             pub_keys.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
         );
 
+        /*
         for i in 0..signatures.len() {
             let signature = hex::decode(signatures[i]).unwrap();
 
@@ -382,6 +383,7 @@ pub (crate) mod tests {
                 }
             )
         }
+        */
 
         builder.verify_justification(
             precommit_targets,

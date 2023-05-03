@@ -61,8 +61,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
             // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
             let mut encoded_msg_bits = Vec::with_capacity(ENCODED_MESSAGE_LENGTH * 8);
-            for i in 0..ENCODED_MESSAGE_LENGTH {
-                let mut bits = self.split_le(signed_precommits[i].precommit_message[i], 8);
+            for j in 0..ENCODED_MESSAGE_LENGTH {
+                let mut bits = self.split_le(signed_precommits[i].precommit_message[j], 8);
 
                 // Needs to be in bit big endian order for the EDDSA verification circuit
                 bits.reverse();

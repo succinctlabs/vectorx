@@ -320,4 +320,28 @@ mod tests {
         )
     }
 
+    #[test]
+    fn test_verify_headers_twenty() -> Result<()> {
+        let mut headers = Vec::new();
+        headers.push(BLOCK_530518_HEADER.to_vec());
+        headers.push(BLOCK_530519_HEADER.to_vec());
+        headers.push(BLOCK_530520_HEADER.to_vec());
+        headers.push(BLOCK_530521_HEADER.to_vec());
+        headers.push(BLOCK_530522_HEADER.to_vec());
+        headers.push(BLOCK_530523_HEADER.to_vec());
+        headers.push(BLOCK_530524_HEADER.to_vec());
+        headers.push(BLOCK_530525_HEADER.to_vec());
+        headers.push(BLOCK_530526_HEADER.to_vec());
+        headers.push(BLOCK_530527_HEADER.to_vec());
+        let head_block_hash = hex::decode(BLOCK_530518_PARENT_HASH).unwrap();
+        test_step(
+            headers,
+            head_block_hash,
+            530517,
+            BLOCK_530527_AUTHORITY_SET_ID,
+            BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
+            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+        )
+    }
 }

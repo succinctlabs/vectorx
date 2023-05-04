@@ -100,10 +100,13 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
 
             // Verify that the block numbers are sequential
+            let one = self.one();
             if i == 0 {
-                self.connect(subchain.head_block_num, decoded_header.block_number);
+                let expected_block_num = self.add(subchain.head_block_num, one);
+                self.connect(expected_block_num, decoded_header.block_number);
             } else {
-                self.connect(decoded_block_nums[i-1], decoded_header.block_number);
+                let expected_block_num = self.add(decoded_block_nums[i-1], one);
+                self.connect(expected_block_num, decoded_header.block_number);
             }
 
             decoded_block_nums.push(decoded_header.block_number);

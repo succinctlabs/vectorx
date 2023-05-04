@@ -358,7 +358,7 @@ mod tests {
         test_step(
             headers,
             head_block_hash,
-            530517,
+            530507,
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),

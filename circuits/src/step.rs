@@ -154,8 +154,18 @@ mod tests {
     use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
     use crate::utils::{to_bits,QUORUM_SIZE};
     use crate::utils::tests::{
-        BLOCK_530526_HEADER,
+        BLOCK_530518_PARENT_HASH,
+        BLOCK_530518_HEADER,
+        BLOCK_530519_HEADER,
+        BLOCK_530520_HEADER,
+        BLOCK_530521_HEADER,
+        BLOCK_530522_HEADER,
+        BLOCK_530523_PARENT_HASH,
+        BLOCK_530523_HEADER,
+        BLOCK_530524_HEADER,
+        BLOCK_530525_HEADER,
         BLOCK_530526_PARENT_HASH,
+        BLOCK_530526_HEADER,
         BLOCK_530527_HEADER,
         BLOCK_530527_AUTHORITY_SET_ID,
         BLOCK_530527_PARENT_HASH,
@@ -264,4 +274,50 @@ mod tests {
             BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
         )
     }
+
+    #[test]
+    fn test_verify_headers_five() -> Result<()> {
+        let mut headers = Vec::new();
+        headers.push(BLOCK_530523_HEADER.to_vec());
+        headers.push(BLOCK_530524_HEADER.to_vec());
+        headers.push(BLOCK_530525_HEADER.to_vec());
+        headers.push(BLOCK_530526_HEADER.to_vec());
+        headers.push(BLOCK_530527_HEADER.to_vec());
+        let head_block_hash = hex::decode(BLOCK_530523_PARENT_HASH).unwrap();
+        test_step(
+            headers,
+            head_block_hash,
+            530522,
+            BLOCK_530527_AUTHORITY_SET_ID,
+            BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
+            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+        )
+    }
+
+    #[test]
+    fn test_verify_headers_ten() -> Result<()> {
+        let mut headers = Vec::new();
+        headers.push(BLOCK_530518_HEADER.to_vec());
+        headers.push(BLOCK_530519_HEADER.to_vec());
+        headers.push(BLOCK_530520_HEADER.to_vec());
+        headers.push(BLOCK_530521_HEADER.to_vec());
+        headers.push(BLOCK_530522_HEADER.to_vec());
+        headers.push(BLOCK_530523_HEADER.to_vec());
+        headers.push(BLOCK_530524_HEADER.to_vec());
+        headers.push(BLOCK_530525_HEADER.to_vec());
+        headers.push(BLOCK_530526_HEADER.to_vec());
+        headers.push(BLOCK_530527_HEADER.to_vec());
+        let head_block_hash = hex::decode(BLOCK_530518_PARENT_HASH).unwrap();
+        test_step(
+            headers,
+            head_block_hash,
+            530522,
+            BLOCK_530527_AUTHORITY_SET_ID,
+            BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
+            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+        )
+    }
+
 }

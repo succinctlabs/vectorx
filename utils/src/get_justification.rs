@@ -105,7 +105,7 @@ pub enum FinalityProofError {
 
 #[tokio::main]
 pub async fn main() {
-    let header_num = 576728;
+    let header_num = 530527;
     let url: &str = "wss://testnet.avail.tools:443/ws";
 
     let c = build_client(url).await.unwrap();
@@ -149,4 +149,6 @@ pub async fn main() {
             println!("is_ok {:?}", is_ok);
             assert!(is_ok);
         });
+
+    println!("justficiation.round is {:?}", justification.round);
 }

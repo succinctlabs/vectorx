@@ -25,10 +25,6 @@ pub trait CircuitBuilderStep<C: Curve> {
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<C> for CircuitBuilder<F, D> {
-
-    // This function will accept an array of encoded header targets (and their sizes), and verify that 
-    // they are sequential within the chain.
-    // Specifically, it wll verify that each header's parent hash is equal to the block hash of the previous header.
     fn step(
         &mut self,
         subchain: VerifySubchainTarget,
@@ -119,17 +115,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         for i in 0 .. HASH_SIZE {
             last_calculated_hash_bytes.push(self.le_sum(last_calculated_hash[i*8..i*8+8].to_vec().iter().rev()));
         }
-
-        /*
-        let expected_block_hash = hex::decode("62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065").unwrap();
-        let mut expected_block_hash_targets = Vec::new();
-        for i in 0 .. HASH_SIZE {
-            expected_block_hash_targets.push(self.constant(F::from_canonical_u8(expected_block_hash[i])));
-        }
-        for i in 0 .. HASH_SIZE {
-            self.connect(expected_block_hash_targets[i], last_calculated_hash_bytes[i]);
-        }
-        */
 
         // Now verify the grandpa justification
         self.verify_justification(

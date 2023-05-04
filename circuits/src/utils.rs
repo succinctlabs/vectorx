@@ -139,6 +139,7 @@ pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
 
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub (crate) mod tests {
     use super::{ENCODED_PRECOMMIT_LENGTH, QUORUM_SIZE};
 

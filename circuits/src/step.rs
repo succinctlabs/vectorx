@@ -154,6 +154,17 @@ mod tests {
     use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
     use crate::utils::{to_bits,QUORUM_SIZE};
     use crate::utils::tests::{
+        BLOCK_530508_PARENT_HASH,
+        BLOCK_530508_HEADER,
+        BLOCK_530509_HEADER,
+        BLOCK_530510_HEADER,
+        BLOCK_530511_HEADER,
+        BLOCK_530512_HEADER,
+        BLOCK_530513_HEADER,
+        BLOCK_530514_HEADER,
+        BLOCK_530515_HEADER,
+        BLOCK_530516_HEADER,
+        BLOCK_530517_HEADER,
         BLOCK_530518_PARENT_HASH,
         BLOCK_530518_HEADER,
         BLOCK_530519_HEADER,
@@ -323,6 +334,16 @@ mod tests {
     #[test]
     fn test_verify_headers_twenty() -> Result<()> {
         let mut headers = Vec::new();
+        headers.push(BLOCK_530508_HEADER.to_vec());
+        headers.push(BLOCK_530509_HEADER.to_vec());
+        headers.push(BLOCK_530510_HEADER.to_vec());
+        headers.push(BLOCK_530511_HEADER.to_vec());
+        headers.push(BLOCK_530512_HEADER.to_vec());
+        headers.push(BLOCK_530513_HEADER.to_vec());
+        headers.push(BLOCK_530514_HEADER.to_vec());
+        headers.push(BLOCK_530515_HEADER.to_vec());
+        headers.push(BLOCK_530516_HEADER.to_vec());
+        headers.push(BLOCK_530517_HEADER.to_vec());
         headers.push(BLOCK_530518_HEADER.to_vec());
         headers.push(BLOCK_530519_HEADER.to_vec());
         headers.push(BLOCK_530520_HEADER.to_vec());
@@ -333,7 +354,7 @@ mod tests {
         headers.push(BLOCK_530525_HEADER.to_vec());
         headers.push(BLOCK_530526_HEADER.to_vec());
         headers.push(BLOCK_530527_HEADER.to_vec());
-        let head_block_hash = hex::decode(BLOCK_530518_PARENT_HASH).unwrap();
+        let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
         test_step(
             headers,
             head_block_hash,

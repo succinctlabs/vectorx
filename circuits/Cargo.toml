@@ -12,13 +12,12 @@ serde = {version = "1", features= ["derive"]}
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
 avail-subxt = {git = "https://github.com/availproject/avail.git"}
 hex = "0.4.3"
-plonky2 = { path = "../../../plonky2lib/plonky2" }
-plonky2_ecdsa = { path = "../../../plonky2lib/ecdsa" }
-plonky2_field = { path = "../../../plonky2lib/field" }
-plonky2_u32 = { path = "../../../plonky2lib/u32"  }
-ed25519 = { path = "../../../plonky2lib/ed25519" }
+plonky2 = { path = "../../plonky2lib/plonky2" }
+plonky2_field = { path = "../../plonky2lib/field" }
+plonky2_u32 = { path = "../../plonky2lib/u32"  }
+ed25519 = { path = "../../plonky2lib/ed25519" }
 num = { version = "0.4", features = [ "rand" ] }
 anyhow = "1.0.68"
-ed25519-dalek = { path = "../../../ed25519-dalek" }
+ed25519-dalek = { path = "../../ed25519-dalek" }
 rand = "0.8.5"
 itertools = "0.10.5"

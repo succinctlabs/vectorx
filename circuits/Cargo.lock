@@ -3519,7 +3519,6 @@ dependencies = [
  "num",
  "parity-scale-codec",
  "plonky2",
- "plonky2_ecdsa",
  "plonky2_field",
  "plonky2_u32",
  "rand 0.8.5",

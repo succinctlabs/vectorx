@@ -1,3 +1,4 @@
-pub mod avail;
-pub mod consensus;
-pub mod encoding;
+pub mod step;
+pub mod justification;
+pub mod decoder;
+pub mod utils;

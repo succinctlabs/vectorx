@@ -193,8 +193,8 @@ mod tests {
         let precommit_targets = generate_precommits(
             &mut builder,
             (0..QUORUM_SIZE).map(|_| precommit_message.clone().to_vec()).collect::<Vec<_>>(),
-            signatures.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            pub_keys.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            signatures,
+            pub_keys,
         );
 
         let head_block_num_target = builder.constant(F::from_canonical_u64(head_block_num));

@@ -137,7 +137,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 self.connect(finalized_block.hash[j], decoded_precommit_msg.block_hash[j]);
             }
             self.connect(authority_set_signers.set_id, decoded_precommit_msg.authority_set_id);
-            // self.connect(justification_round, decoded_precommit_msg.justification_round);
 
             // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
             let mut encoded_msg_bits = Vec::with_capacity(ENCODED_PRECOMMIT_LENGTH * 8);

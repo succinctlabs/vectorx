@@ -110,10 +110,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
                 index,
                 targets.iter().map(|t| {
                     t[i].target
-                }).collect::<Vec<Target>>())
+                }).collect::<Vec<_>>())
         })
         .map(|x| BoolTarget::new_unsafe(x))
-        .collect::<Vec<BoolTarget>>()
+        .collect::<Vec<_>>()
     }
 
 }
@@ -300,12 +300,12 @@ pub (crate) mod tests {
         "079590df34cd1fa2f83cb1ef770b3e254abb00fa7dbfb2f7f21b383a7a726bb2",
         "cc068bf6c1e467be8e2fdafb1d42ddafe8e66a0d05ea036c3d766cb6a0360797",
         "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",
-        "0000000000000000000000000000000000000000000000000000000000000000",
-        "0000000000000000000000000000000000000000000000000000000000000000",
-        "0000000000000000000000000000000000000000000000000000000000000000",
-        "0000000000000000000000000000000000000000000000000000000000000000",
-        "0000000000000000000000000000000000000000000000000000000000000000",
-        "0000000000000000000000000000000000000000000000000000000000000000",
+        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",    // Can be any valid pubkey
+        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",    // Can be any valid pubkey
+        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",    // Can be any valid pubkey
+        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",    // Can be any valid pubkey
+        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",    // Can be any valid pubkey
+        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",    // Can be any valid pubkey
     ];
     pub const BLOCK_530527_AUTHORITY_SET_COMMITMENT: &str = "0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6";
 }

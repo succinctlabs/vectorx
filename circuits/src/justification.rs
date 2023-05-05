@@ -78,11 +78,11 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.connect(check_third_second_bits, zero);
         }
 
-        /*
         // First check to see that we have the right authority set
         // Calculate the hash for the authority set
         // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
         let input_padding = (CHUNK_128_BYTES * 8) - ((NUM_AUTHORITIES * 256) % (CHUNK_128_BYTES * 8));
+        assert!(input_padding == 512);
         let hash_circuit = make_blake2b_circuit(
             self,
             NUM_AUTHORITIES * 256 + input_padding,   // each EDDSA pub key in compressed for is 256 bits and padding to make it fit 128 byte chunks
@@ -94,15 +94,16 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             assert!(authority_set_signers.pub_keys[i].len() == 256);
 
             for j in 0..256 {
-                self.connect(hash_circuit.message[i*256+j].target, authority_set_signers.pub_keys[i][j].target);
+                self.connect(hash_circuit.message[i*256 + j].target, authority_set_signers.pub_keys[i][j].target);
             }
         }
+
         // Add the padding
-        for i in NUM_AUTHORITIES * 256..NUM_AUTHORITIES * 256 + input_padding {
+        for i in (NUM_AUTHORITIES * 256)..(NUM_AUTHORITIES * 256 + input_padding) {
             self.connect(hash_circuit.message[i].target, zero);
         }
 
-        let authority_set_hash_input_length  = self.constant(F::from_canonical_usize(NUM_AUTHORITIES * 256));
+        let authority_set_hash_input_length  = self.constant(F::from_canonical_usize((NUM_AUTHORITIES * 256)/8));
         self.connect(hash_circuit.message_len, authority_set_hash_input_length);
 
         // Verify that the hash matches
@@ -173,7 +174,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.connect_nonnative(&eddsa_verify_circuit.sig.s,&signed_precommits[i].signature.s);
             self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &pub_key_uncompressed);
         }
-        */
     }
 
 }
@@ -204,7 +204,7 @@ pub (crate) mod tests {
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
     use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};
-    use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED};
+    use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES};
 
     pub fn generate_precommits<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
@@ -410,9 +410,9 @@ pub (crate) mod tests {
         }
 
         let mut authority_set_commitment_target = Vec::new();
-        let authority_set_bytes = hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap();
+        let authority_set_commitment_bytes = hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap();
         for i in 0..HASH_SIZE {
-            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_bytes[i])));
+            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_commitment_bytes[i])));
         }
 
         let authority_set_id_target = builder.constant(F::from_canonical_u64(BLOCK_530527_AUTHORITY_SET_ID));
@@ -455,4 +455,52 @@ pub (crate) mod tests {
 
         verification_res
     }
+
+    #[test]
+    fn test_blake2b_authority_set_commitment() -> Result<()> {
+        let mut msg = Vec::new();
+
+        for i in 0..NUM_AUTHORITIES {
+            let mut pub_key_bytes = hex::decode(BLOCK_530527_AUTHORITY_SET[i]).unwrap();
+            msg.append(pub_key_bytes.as_mut());
+        }
+
+        let msg_bits = to_bits(msg.to_vec());
+        let expected_digest = BLOCK_530527_AUTHORITY_SET_COMMITMENT;
+        let digest_bits = to_bits(hex::decode(expected_digest).unwrap());
+
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let targets = make_blake2b_circuit(
+            &mut builder,
+            NUM_AUTHORITIES * 256 + 512,
+            32,
+        );
+        let mut pw = PartialWitness::new();
+
+        for i in 0..msg_bits.len() {
+            pw.set_bool_target(targets.message[i], msg_bits[i]);
+        }
+
+        for i in msg_bits.len()..msg_bits.len() + 512 {
+            pw.set_bool_target(targets.message[i], false);
+        }
+
+        pw.set_target(targets.message_len, F::from_canonical_usize(msg.len()));
+
+        for i in 0..digest_bits.len() {
+            if digest_bits[i] {
+                builder.assert_one(targets.digest[i].target);
+            } else {
+                builder.assert_zero(targets.digest[i].target);
+            }
+        }
+
+        let data = builder.build::<C>();
+        let proof = data.prove(pw).unwrap();
+
+        data.verify(proof)
+    }    
 }

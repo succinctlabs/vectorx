@@ -45,7 +45,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         authority_set_signers: AuthoritySetSignersTarget,
         finalized_block: FinalizedBlockTarget
     ) {
-        assert!(signed_precommits.len() == NUM_AUTHORITIES, "Number of signed precommits is not correct");
+        assert!(signed_precommits.len() == QUORUM_SIZE, "Number of signed precommits is not correct");
         assert!(authority_set_signers.pub_keys.len() == NUM_AUTHORITIES, "Number of pub keys is not correct");
 
         // Range check the set_id.  It's a 64 bit number

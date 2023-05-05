@@ -8,7 +8,7 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
 use plonky2::iop::target::{Target, BoolTarget};
-use crate::utils::{ QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, CircuitBuilderUtils };
+use crate::utils::{ QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, CircuitBuilderUtils, NUM_AUTHORITIES_PADDED };
 use crate::decoder::{ CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
 #[derive(Clone, Debug)]
@@ -46,7 +46,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         finalized_block: FinalizedBlockTarget
     ) {
         assert!(signed_precommits.len() == QUORUM_SIZE, "Number of signed precommits is not correct");
-        assert!(authority_set_signers.pub_keys.len() == NUM_AUTHORITIES, "Number of pub keys is not correct");
+        assert!(authority_set_signers.pub_keys.len() == NUM_AUTHORITIES_PADDED, "Number of pub keys is not correct");
 
         // Range check the set_id.  It's a 64 bit number
         self.range_check(authority_set_signers.set_id, 64);
@@ -64,12 +64,26 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             }
         }
 
+        // Range check the indices.  They should be between 0 - (NUM_AUTHORITIES-1).
+        // Doing a range check for a value that is not less than a power of 2 is a bit tricky.
+        // For NUM_AUTHORITIES==10, we need to check two constraints:
+        // 1) The value is less than 16.
+        // 2) If the 4th significant bit is set, then the 3rd and 2nd significant bits must be zero. (Allow for the values 8 and 9)
+        let zero = self.zero();
+        for i in 0..QUORUM_SIZE {
+            self.range_check(signed_precommits[i].pub_key_idx, 4);
+            let bits = self.split_le(signed_precommits[i].pub_key_idx, 4);
+            let third_second_bits = self.or(bits[2], bits[1]);
+            let check_third_second_bits = self.select(bits[3], third_second_bits.target, zero);
+            self.connect(check_third_second_bits, zero);
+        }
+
         // First check to see that we have the right authority set
         // Calculate the hash for the authority set
         let hash_circuit = make_blake2b_circuit(
             self,
-            NUM_AUTHORITIES * 256,   // each EDDSA pub key in compressed for is 256 bits
-            HASH_SIZE
+            NUM_AUTHORITIES * 256 + 512,   // each EDDSA pub key in compressed for is 256 bits and padding to make it fit 128 byte chunks
+            HASH_SIZE,
         );
 
         // Input the pub keys into the hasher
@@ -80,6 +94,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 self.connect(hash_circuit.message[i*256+j].target, authority_set_signers.pub_keys[i][j].target);
             }
         }
+
+        let authority_set_hash_input_length  = self.constant(F::from_canonical_usize(NUM_AUTHORITIES * 256));
+        self.connect(hash_circuit.message_len, authority_set_hash_input_length);
 
         // Verify that the hash matches
         for i in 0 .. HASH_SIZE {
@@ -104,6 +121,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             // TODO:  Need to double check that the signature and pub key are range checked
 
             // Get the pub key
+            // Random access arrays must be a power of 2, so we pad the array to 16
             let pub_key = self.random_access_vec(
                 signed_precommits[i].pub_key_idx,
                 &authority_set_signers.pub_keys,
@@ -175,7 +193,7 @@ pub (crate) mod tests {
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
     use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};
-    use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE, NUM_AUTHORITIES, HASH_SIZE};
+    use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED};
 
     pub fn generate_precommits<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
@@ -370,13 +388,14 @@ pub (crate) mod tests {
 
         );
 
-        let pub_key_targets = Vec::new();
-        for i in 0..NUM_AUTHORITIES {
+        let mut pub_key_targets = Vec::new();
+        for i in 0..NUM_AUTHORITIES_PADDED {
             let mut pub_key_bits = Vec::new();
             let bits = to_bits(hex::decode(BLOCK_530527_AUTHORITY_SET[i]).unwrap());
             for j in 0..bits.len() {
                 pub_key_bits.push(builder.constant_bool(bits[j]));
             }
+            pub_key_targets.push(pub_key_bits);
         }
 
         let mut authority_set_commitment_target = Vec::new();

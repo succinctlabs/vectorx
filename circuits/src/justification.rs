@@ -103,7 +103,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.connect(hash_circuit.message[i].target, zero);
         }
 
-        let authority_set_hash_input_length  = self.constant(F::from_canonical_usize((NUM_AUTHORITIES * 256)/8));
+        // Length of the input in bytes
+        let authority_set_hash_input_length = self.constant(F::from_canonical_usize(NUM_AUTHORITIES * 32));
         self.connect(hash_circuit.message_len, authority_set_hash_input_length);
 
         // Verify that the hash matches

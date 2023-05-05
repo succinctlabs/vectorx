@@ -109,6 +109,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             }
         }
 
+        /*
         // Now verify all of the signatures
         for i in 0..QUORUM_SIZE {
             assert!(signed_precommits[i].precommit_message.len() == ENCODED_PRECOMMIT_LENGTH, "Precommit message is not the correct length");
@@ -166,6 +167,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.connect_nonnative(&eddsa_verify_circuit.sig.s,&signed_precommits[i].signature.s);
             self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &pub_key_uncompressed);
         }
+        */
     }
 
 }

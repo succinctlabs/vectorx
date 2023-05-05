@@ -3,7 +3,7 @@ use ed25519::sha512::blake2b::make_blake2b_circuit;
 use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::circuit_builder::CircuitBuilder};
 use plonky2_field::extension::Extendable;
 use crate::decoder::{CircuitBuilderHeaderDecoder, EncodedHeaderTarget};
-use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget};
+use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, AuthoritySetSignersTarget, FinalizedBlockTarget};
 use crate::utils::{MAX_HEADER_SIZE, HASH_SIZE, MAX_NUM_HEADERS_PER_STEP};
 
 #[derive(Clone)]
@@ -19,7 +19,7 @@ pub trait CircuitBuilderStep<C: Curve> {
         &mut self,
         subchain: VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_id: Target,
+        authority_set_signers: AuthoritySetSignersTarget,
     );
 }
 
@@ -29,7 +29,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         &mut self,
         subchain: VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_id: Target,
+        authority_set_signers: AuthoritySetSignersTarget,
     ) {
         assert!(subchain.encoded_headers.len() <= MAX_NUM_HEADERS_PER_STEP);
         assert!(subchain.encoded_headers.len() == subchain.encoded_header_sizes.len());
@@ -119,9 +119,11 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         // Now verify the grandpa justification
         self.verify_justification(
             signed_precommits,
-            last_calculated_hash_bytes,
-            *decoded_block_nums.last().unwrap(),
-            authority_set_id,
+            authority_set_signers,
+            FinalizedBlockTarget {
+                num: *decoded_block_nums.last().unwrap(),
+                hash: last_calculated_hash_bytes.clone(),
+            },
         );
     }
 }
@@ -136,8 +138,9 @@ mod tests {
     use plonky2_field::goldilocks_field::GoldilocksField;
     use plonky2_field::types::Field;
 
+    use crate::justification::AuthoritySetSignersTarget;
     use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
-    use crate::utils::{to_bits,QUORUM_SIZE};
+    use crate::utils::{to_bits, QUORUM_SIZE};
     use crate::utils::tests::{
         BLOCK_530508_PARENT_HASH,
         BLOCK_530508_HEADER,
@@ -167,7 +170,7 @@ mod tests {
         BLOCK_530527_PARENT_HASH,
         BLOCK_530527_PRECOMMIT_MESSAGE,
         BLOCK_530527_AUTHORITY_SIGS,
-        BLOCK_530527_AUTHORITY_PUB_KEYS,
+        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT,
     };
     use crate::justification::tests::generate_precommits;
 
@@ -179,7 +182,10 @@ mod tests {
         authority_set_id: u64,
         precommit_message: Vec<u8>,
         signatures: Vec<Vec<u8>>,
-        pub_keys: Vec<Vec<u8>>,
+
+        pub_key_indices: Vec<usize>,
+        authority_set: Vec<Vec<u8>>,
+        authority_set_commitment: Vec<u8>,
     ) -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
@@ -216,10 +222,28 @@ mod tests {
             &mut builder,
             (0..QUORUM_SIZE).map(|_| precommit_message.clone().to_vec()).collect::<Vec<_>>(),
             signatures,
-            pub_keys,
+            pub_key_indices,
+            authority_set.clone(),
         );
 
         let head_block_num_target = builder.constant(F::from_canonical_u64(head_block_num));
+
+        let mut pub_key_targets = Vec::new();
+        for i in 0..authority_set.len() {
+            let mut pub_key_bits = Vec::new();
+            let bits = to_bits(authority_set[i].clone());
+            for j in 0..bits.len() {
+                pub_key_bits.push(builder.constant_bool(bits[j]));
+            }
+            pub_key_targets.push(pub_key_bits);
+        }
+
+        let mut authority_set_commitment_target = Vec::new();
+        let authority_set_commitment_bytes = hex::decode(authority_set_commitment).unwrap();
+        for i in 0..HASH_SIZE {
+            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_commitment_bytes[i])));
+        }
+
         let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
         builder.step(
             VerifySubchainTarget {
@@ -229,7 +253,11 @@ mod tests {
                 encoded_header_sizes: header_size_targets,
             },
             precommit_targets,
-            authority_set_id_target,
+            AuthoritySetSignersTarget {
+                pub_keys: pub_key_targets,
+                commitment: authority_set_commitment_target,
+                set_id: authority_set_id_target,
+            },
         );
 
         let data = builder.build::<C>();
@@ -250,7 +278,9 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         )
     }
 
@@ -267,7 +297,9 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         )
     }
 
@@ -287,7 +319,9 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         )
     }
 
@@ -312,7 +346,9 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         )
     }
 
@@ -347,7 +383,9 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         )
     }
 }

@@ -25,8 +25,8 @@ pub struct AuthoritySetSignersTarget {
 }
 
 pub struct FinalizedBlockTarget {
-    hash: Vec<Target>,
-    num: Target,
+    pub hash: Vec<Target>,
+    pub num: Target,
 }
 
 pub trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
@@ -397,7 +397,6 @@ pub (crate) mod tests {
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-
         );
 
         let mut pub_key_targets = Vec::new();

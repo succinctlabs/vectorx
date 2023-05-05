@@ -239,9 +239,8 @@ mod tests {
         }
 
         let mut authority_set_commitment_target = Vec::new();
-        let authority_set_commitment_bytes = hex::decode(authority_set_commitment).unwrap();
         for i in 0..HASH_SIZE {
-            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_commitment_bytes[i])));
+            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_commitment[i])));
         }
 
         let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));

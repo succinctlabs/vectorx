@@ -3,7 +3,7 @@ use ed25519::gadgets::curve::CircuitBuilderCurve;
 use ed25519::gadgets::eddsa::verify_message_circuit;
 use ed25519::gadgets::eddsa::{EDDSASignatureTarget};
 use ed25519::gadgets::nonnative::CircuitBuilderNonNative;
-use ed25519::sha512::blake2b::make_blake2b_circuit;
+use ed25519::sha512::blake2b::{make_blake2b_circuit, CHUNK_128_BYTES};
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
@@ -78,11 +78,14 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.connect(check_third_second_bits, zero);
         }
 
+        /*
         // First check to see that we have the right authority set
         // Calculate the hash for the authority set
+        // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
+        let input_padding = (CHUNK_128_BYTES * 8) - ((NUM_AUTHORITIES * 256) % (CHUNK_128_BYTES * 8));
         let hash_circuit = make_blake2b_circuit(
             self,
-            NUM_AUTHORITIES * 256 + 512,   // each EDDSA pub key in compressed for is 256 bits and padding to make it fit 128 byte chunks
+            NUM_AUTHORITIES * 256 + input_padding,   // each EDDSA pub key in compressed for is 256 bits and padding to make it fit 128 byte chunks
             HASH_SIZE,
         );
 
@@ -95,7 +98,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             }
         }
         // Add the padding
-        for i in NUM_AUTHORITIES * 256..NUM_AUTHORITIES * 256 + 512 {
+        for i in NUM_AUTHORITIES * 256..NUM_AUTHORITIES * 256 + input_padding {
             self.connect(hash_circuit.message[i].target, zero);
         }
 
@@ -170,6 +173,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.connect_nonnative(&eddsa_verify_circuit.sig.s,&signed_precommits[i].signature.s);
             self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &pub_key_uncompressed);
         }
+        */
     }
 
 }

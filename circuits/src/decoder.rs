@@ -120,11 +120,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
         all_possible_state_roots.push(header.header_bytes[36..36+HASH_SIZE].to_vec());
         all_possible_state_roots.push(header.header_bytes[37..37+HASH_SIZE].to_vec());
 
-        let state_root_target = self.random_access_vec::<Target>(
+        let state_root_target = self.random_access_vec(
             compress_mode,
-            &all_possible_state_roots,
-            |x| *x,
-            |x| *x);
+            all_possible_state_roots
+        );
 
         // Can't get this to work yet.  Getting an error with the random_access gate
         /*

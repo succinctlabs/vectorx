@@ -122,11 +122,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
             // Get the pub key
             // Random access arrays must be a power of 2, so we pad the array to 16
-            let pub_key = self.random_access_vec(
+            let pub_key = self.random_access_bool_vec(
                 signed_precommits[i].pub_key_idx,
-                &authority_set_signers.pub_keys,
-                |x: &BoolTarget| x.target,
-                |x| BoolTarget::new_unsafe(*x)
+                &authority_set_signers.pub_keys
             );
             let pub_key_uncompressed = self.decompress_point(&pub_key);
 

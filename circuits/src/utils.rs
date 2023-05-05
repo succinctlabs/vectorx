@@ -15,7 +15,7 @@ pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 
 use plonky2::{
     iop::{
-        target::Target,
+        target::{Target, BoolTarget},
         generator::{SimpleGenerator, GeneratedValues},
         witness::{PartitionWitness, Witness}
     },
@@ -32,17 +32,18 @@ pub trait CircuitBuilderUtils {
         divisor: Target,
     ) -> Target;
 
-    fn random_access_vec<T>(
+    fn random_access_vec(
+        &mut self,
+        index: Target,
+        targets: Vec<Vec<Target>>,
+    ) -> Vec<Target>;
+
+    fn random_access_bool_vec(
         &mut self, 
         index: Target,
-        targets: &Vec<Vec<T>>,
-        target_converter: ToTarget<T>,
-        t_converter: FromTarget<T>,
-    ) -> Vec<T>;
+        targets: &Vec<Vec<BoolTarget>>,
+    ) -> Vec<BoolTarget>;
 }
-
-pub type ToTarget<T> = fn(&T) -> Target;
-pub type FromTarget<T> = fn(&Target) -> T;
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
     fn int_div(
@@ -67,13 +68,11 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         quotient
     }
 
-    fn random_access_vec<T>(
-        &mut self, 
+    fn random_access_vec(
+        &mut self,
         index: Target,
-        targets: &Vec<Vec<T>>,
-        target_converter: ToTarget<T>,
-        t_converter: FromTarget<T>,
-    ) -> Vec<T> {
+        targets: Vec<Vec<Target>>,
+    ) -> Vec<Target> {
         assert!(targets.len() > 0);
 
         let v_size = targets[0].len();
@@ -85,12 +84,36 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
 
         (0..v_size).map(|i| {
             self.random_access(
-                index, 
+                index,
                 targets.iter().map(|t| {
-                    target_converter(&t[i])
+                    t[i]
+                }).collect::<Vec<_>>())
+        }).collect::<Vec<_>>()
+    }
+
+    fn random_access_bool_vec(
+        &mut self,
+        index: Target,
+        targets: &Vec<Vec<BoolTarget>>,
+    ) -> Vec<BoolTarget> {
+        assert!(targets.len() > 0);
+
+        let v_size = targets[0].len();
+
+        // Assert that all vectors have the same length
+        targets.iter().for_each(|t| {
+            assert_eq!(t.len(), v_size);
+        });
+
+        (0..v_size).map(|i| {
+            self.random_access(
+                index,
+                targets.iter().map(|t| {
+                    t[i].target
                 }).collect::<Vec<Target>>())
-        }).
-        map(|x| t_converter(&x)).collect::<Vec<T>>()
+        })
+        .map(|x| BoolTarget::new_unsafe(x))
+        .collect::<Vec<BoolTarget>>()
     }
 
 }

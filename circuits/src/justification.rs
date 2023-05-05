@@ -1,33 +1,40 @@
 use ed25519::curve::curve_types::Curve;
 use ed25519::gadgets::curve::CircuitBuilderCurve;
 use ed25519::gadgets::eddsa::verify_message_circuit;
-use ed25519::gadgets::eddsa::{EDDSASignatureTarget, EDDSAPublicKeyTarget};
+use ed25519::gadgets::eddsa::{EDDSASignatureTarget};
 use ed25519::gadgets::nonnative::CircuitBuilderNonNative;
+use ed25519::sha512::blake2b::make_blake2b_circuit;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
-use plonky2::iop::target::Target;
-use crate::utils::{ QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH };
+use plonky2::iop::target::{Target, BoolTarget};
+use crate::utils::{ QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, CircuitBuilderUtils };
 use crate::decoder::{ CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
 #[derive(Clone, Debug)]
 pub struct PrecommitTarget<C: Curve> {
     pub precommit_message: Vec<Target>,
     pub signature: EDDSASignatureTarget<C>,
-    pub pub_key: EDDSAPublicKeyTarget<C>,
+    pub pub_key_idx: Target,   // The ith index in the AuthoritySetSignersTarget.pub_keys vector
+}
+
+pub struct AuthoritySetSignersTarget {
+    pub pub_keys: Vec<Vec<BoolTarget>>,           // Array of pub keys (in compressed form)
+    pub commitment: Vec<Target>,
+    pub set_id: Target,
+}
+
+pub struct FinalizedBlockTarget {
+    hash: Vec<Target>,
+    num: Target,
 }
 
 pub trait CircuitBuilderGrandpaJustificationVerifier<C: Curve> {
     fn verify_justification(
         &mut self,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        finalized_block_hash: Vec<Target>,
-        finalized_block_num: Target,
-        authority_set_id: Target,
-
-        // TODO:  Need to figure out how to verify this field
-        //justification_round: Target,
-    );
+        authority_set_signers: AuthoritySetSignersTarget,
+        finalized_block: FinalizedBlockTarget);
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -35,12 +42,57 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
     fn verify_justification(
         &mut self,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        finalized_block_hash: Vec<Target>,
-        finalized_block_num: Target,
-        authority_set_id: Target,
-        // justification_round: Target,
+        authority_set_signers: AuthoritySetSignersTarget,
+        finalized_block: FinalizedBlockTarget
     ) {
-        assert!(signed_precommits.len() == QUORUM_SIZE, "Number of signed precommits is not correct");
+        assert!(signed_precommits.len() == NUM_AUTHORITIES, "Number of signed precommits is not correct");
+        assert!(authority_set_signers.pub_keys.len() == NUM_AUTHORITIES, "Number of pub keys is not correct");
+
+        // Range check the set_id.  It's a 64 bit number
+        self.range_check(authority_set_signers.set_id, 64);
+
+        // Range check the authority set commitment
+        for i in 0..HASH_SIZE {
+            self.range_check(authority_set_signers.commitment[i], 8);
+        }
+
+        // Range check the compressed pub keys
+        // TODO: Do we really need this?
+        for i in 0..NUM_AUTHORITIES {
+            for j in 0..256 {
+                self.range_check(authority_set_signers.pub_keys[i][j].target, 1);
+            }
+        }
+
+        // First check to see that we have the right authority set
+        // Calculate the hash for the authority set
+        let hash_circuit = make_blake2b_circuit(
+            self,
+            NUM_AUTHORITIES * 256,   // each EDDSA pub key in compressed for is 256 bits
+            HASH_SIZE
+        );
+
+        // Input the pub keys into the hasher
+        for i in 0 .. NUM_AUTHORITIES {
+            assert!(authority_set_signers.pub_keys[i].len() == 256);
+
+            for j in 0..256 {
+                self.connect(hash_circuit.message[i*256+j].target, authority_set_signers.pub_keys[i][j].target);
+            }
+        }
+
+        // Verify that the hash matches
+        for i in 0 .. HASH_SIZE {
+            let mut bits = self.split_le(authority_set_signers.commitment[i], 8);
+
+            // Needs to be in bit big endian order for the EDDSA verification circuit
+            bits.reverse();
+            for j in 0..8 {
+                self.connect(hash_circuit.digest[i*8+j].target, bits[j].target);
+            }
+        }
+
+        // Now verify all of the signatures
         for i in 0..QUORUM_SIZE {
             assert!(signed_precommits[i].precommit_message.len() == ENCODED_PRECOMMIT_LENGTH, "Precommit message is not the correct length");
 
@@ -51,15 +103,24 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
             // TODO:  Need to double check that the signature and pub key are range checked
 
+            // Get the pub key
+            let pub_key = self.random_access_vec(
+                signed_precommits[i].pub_key_idx,
+                &authority_set_signers.pub_keys,
+                |x: &BoolTarget| x.target,
+                |x| BoolTarget::new_unsafe(*x)
+            );
+            let pub_key_uncompressed = self.decompress_point(&pub_key);
+
             // Verify that the precommit's fields match the claimed finalized block's
             // Note that we are currently assuming that all of the authorities sign on the finalized block,
             // as opposed to a decendent of that block.
             let decoded_precommit_msg = self.decode_precommit(EncodedPrecommitTarget(signed_precommits[i].precommit_message.clone()));
-            self.connect(finalized_block_num, decoded_precommit_msg.block_number);
+            self.connect(finalized_block.num, decoded_precommit_msg.block_number);
             for j in 0..HASH_SIZE {
-                self.connect(finalized_block_hash[j], decoded_precommit_msg.block_hash[j]);
+                self.connect(finalized_block.hash[j], decoded_precommit_msg.block_hash[j]);
             }
-            self.connect(authority_set_id, decoded_precommit_msg.authority_set_id);
+            self.connect(authority_set_signers.set_id, decoded_precommit_msg.authority_set_id);
             // self.connect(justification_round, decoded_precommit_msg.justification_round);
 
             // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
@@ -82,7 +143,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
             self.connect_affine_point(&eddsa_verify_circuit.sig.r,&signed_precommits[i].signature.r);
             self.connect_nonnative(&eddsa_verify_circuit.sig.s,&signed_precommits[i].signature.s);
-            self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &signed_precommits[i].pub_key.0);
+            self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &pub_key_uncompressed);
         }
     }
 
@@ -97,7 +158,7 @@ pub (crate) mod tests {
     use ed25519::curve::ed25519::Ed25519;
     use ed25519::field::ed25519_scalar::Ed25519Scalar;
     use ed25519::gadgets::curve::{decompress_point, CircuitBuilderCurve, WitnessAffinePoint};
-    use ed25519::gadgets::eddsa::{verify_message_circuit, EDDSAPublicKeyTarget, EDDSASignatureTarget};
+    use ed25519::gadgets::eddsa::{verify_message_circuit, EDDSASignatureTarget};
     use ed25519::gadgets::nonnative::{CircuitBuilderNonNative, WitnessNonNative};
     use ed25519::sha512::blake2b::{ make_blake2b_circuit };
     use ed25519_dalek::{PublicKey, Signature};
@@ -112,14 +173,15 @@ pub (crate) mod tests {
     use plonky2_field::extension::Extendable;
     use plonky2_field::types::Field;
 
-    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget};
-    use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_AUTHORITY_PUB_KEYS, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH};
-    use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE};
+    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
+    use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};
+    use crate::utils::{to_bits, MAX_HEADER_SIZE, QUORUM_SIZE, NUM_AUTHORITIES, HASH_SIZE};
 
     pub fn generate_precommits<F: RichField + Extendable<D>, const D: usize>(
         builder: &mut CircuitBuilder<F, D>,
         precommit_message: Vec<Vec<u8>>,
         signatures: Vec<Vec<u8>>,
+        pub_key_indices: Vec<usize>,
         pub_keys: Vec<Vec<u8>>,
     ) -> Vec<PrecommitTarget<Ed25519>> {
         let mut precommits = Vec::new();
@@ -127,19 +189,21 @@ pub (crate) mod tests {
             let sig_r = decompress_point(&signatures[i][0..32]);
             assert!(sig_r.is_valid());
 
+            let pub_key = &pub_keys[pub_key_indices[i]];
+
             let sig_s_biguint = BigUint::from_bytes_le(&signatures[i][32..64]);
             let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
             let sig = EDDSASignature { r: sig_r, s: sig_s };
 
-            let pub_key = decompress_point(&pub_keys[i][..]);
-            assert!(pub_key.is_valid());
+            let pub_key_point = decompress_point(&pub_key[..]);
+            assert!(pub_key_point.is_valid());
 
             let precommit_message_bits = to_bits(precommit_message[i].clone());
 
             assert!(verify_message(
                 &precommit_message_bits,
                 &sig,
-                &EDDSAPublicKey(pub_key)
+                &EDDSAPublicKey(pub_key_point)
             ));
 
             let precommit_message_target = precommit_message[i].iter().map(|x| builder.constant(F::from_canonical_u8(*x))).collect::<Vec<_>>();
@@ -151,7 +215,7 @@ pub (crate) mod tests {
                         r: builder.constant_affine_point(sig_r),
                         s: builder.constant_nonnative(sig_s),
                     },
-                    pub_key: EDDSAPublicKeyTarget(builder.constant_affine_point(pub_key)),
+                    pub_key_idx: builder.constant(F::from_canonical_usize(pub_key_indices[i])),
                 }
             );
         }
@@ -301,8 +365,27 @@ pub (crate) mod tests {
             &mut builder,
             (0..QUORUM_SIZE).map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_PUB_KEYS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+
         );
+
+        let pub_key_targets = Vec::new();
+        for i in 0..NUM_AUTHORITIES {
+            let mut pub_key_bits = Vec::new();
+            let bits = to_bits(hex::decode(BLOCK_530527_AUTHORITY_SET[i]).unwrap());
+            for j in 0..bits.len() {
+                pub_key_bits.push(builder.constant_bool(bits[j]));
+            }
+        }
+
+        let mut authority_set_commitment_target = Vec::new();
+        let authority_set_bytes = hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap();
+        for i in 0..HASH_SIZE {
+            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_bytes[i])));
+        }
+
+        let authority_set_id_target = builder.constant(F::from_canonical_u64(BLOCK_530527_AUTHORITY_SET_ID));
 
         let mut block_hash_target = Vec::new();
         let block_hash_bytes = hex::decode(BLOCK_530527_BLOCK_HASH).unwrap();
@@ -310,14 +393,19 @@ pub (crate) mod tests {
             block_hash_target.push(builder.constant(F::from_canonical_u8(block_hash_bytes[i])));
         }
 
-        let authority_set_id_target = builder.constant(F::from_canonical_u64(BLOCK_530527_AUTHORITY_SET_ID));
         let block_number_target = builder.constant(F::from_canonical_u32(530527u32));
 
         builder.verify_justification(
             precommit_targets,
-            block_hash_target,
-            block_number_target,
-            authority_set_id_target,
+            AuthoritySetSignersTarget {
+                pub_keys: pub_key_targets,
+                commitment: authority_set_commitment_target,
+                set_id: authority_set_id_target,
+            },
+            FinalizedBlockTarget{
+                hash: block_hash_target,
+                num: block_number_target,
+            },
         );
 
         let pw = PartialWitness::new();

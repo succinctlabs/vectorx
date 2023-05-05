@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use ed25519::sha512::blake2b::CHUNK_128_BYTES;
 
-pub const NUM_VALIDATORS: usize = 10;
+pub const NUM_AUTHORITIES: usize = 10;
 pub const QUORUM_SIZE: usize = 7;  // 2/3 + 1 of NUM_VALIDATORS
 pub const MAX_NUM_HEADERS_PER_STEP: usize = 20;
 
@@ -31,13 +31,17 @@ pub trait CircuitBuilderUtils {
         divisor: Target,
     ) -> Target;
 
-    fn random_access_vec(
+    fn random_access_vec<T>(
         &mut self, 
         index: Target,
-        targets: Vec<Vec<Target>>,
-    ) -> Vec<Target>;
+        targets: &Vec<Vec<T>>,
+        target_converter: ToTarget<T>,
+        t_converter: FromTarget<T>,
+    ) -> Vec<T>;
 }
 
+pub type ToTarget<T> = fn(&T) -> Target;
+pub type FromTarget<T> = fn(&Target) -> T;
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
     fn int_div(
@@ -62,11 +66,13 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         quotient
     }
 
-    fn random_access_vec(
+    fn random_access_vec<T>(
         &mut self, 
         index: Target,
-        targets: Vec<Vec<Target>>,
-    ) -> Vec<Target> {
+        targets: &Vec<Vec<T>>,
+        target_converter: ToTarget<T>,
+        t_converter: FromTarget<T>,
+    ) -> Vec<T> {
         assert!(targets.len() > 0);
 
         let v_size = targets[0].len();
@@ -80,9 +86,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
             self.random_access(
                 index, 
                 targets.iter().map(|t| {
-                    t[i]
-                }).collect::<Vec<_>>())
-        }).collect::<Vec<_>>()
+                    target_converter(&t[i])
+                }).collect::<Vec<Target>>())
+        }).
+        map(|x| t_converter(&x)).collect::<Vec<T>>()
     }
 
 }
@@ -122,6 +129,7 @@ impl<
 }
 
 
+// Will convert each byte into 8 bits (big endian)
 pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
     let mut res = Vec::new();
     for i in 0..msg.len() {
@@ -141,7 +149,7 @@ pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
 #[cfg(test)]
 #[allow(dead_code)]
 pub (crate) mod tests {
-    use super::{ENCODED_PRECOMMIT_LENGTH, QUORUM_SIZE};
+    use super::{ENCODED_PRECOMMIT_LENGTH, QUORUM_SIZE, NUM_AUTHORITIES};
 
     // Block 576728 contains a new authorities event
     pub const BLOCK_576728_BLOCK_HASH: &str = "b71429ef80257a25358e386e4ca1debe72c38ea69d833e23416a4225fabb1a78";
@@ -238,7 +246,6 @@ pub (crate) mod tests {
                 95, 24, 8, 0,
                 104, 11, 0, 0, 0, 0, 0, 0,
                 240, 1, 0, 0, 0, 0, 0, 0];
-    pub const BLOCK_530527_AUTHORITY_SET_ID: u64 = 496;
     pub const BLOCK_530527_AUTHORITY_SIGS: [&str; QUORUM_SIZE] = [
         "3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c",
         "48f851a4cb99db770461b3b42e7a055fb4801a2a4d2627691e52d0bb955bc8c6c490b0d04d97365e39b7cffeb4489318f28deddbc0710a57f4d94a726a98df01",
@@ -248,13 +255,27 @@ pub (crate) mod tests {
         "da57013e372c8cd4aa7bc6c6112d9404325e8d48fcc02c51ad915a725ee0424c3a54cee03dfe315d91f3e6a576f8134a17b28717485340c9ac1ebfe7fc72360f",
         "b22b809b0249ee4e8d43d3aee1a2f40bd529f9eaaa6493d7ec8198b5c93a15ce1e7d653d2aaf710ebfef4ff5aec8e120faf22776417b3621bf6b9de4af540805"
     ];
-    pub const BLOCK_530527_AUTHORITY_PUB_KEYS: [&str; QUORUM_SIZE] = [
+    pub const BLOCK_530527_PUB_KEY_INDICES: [usize; QUORUM_SIZE] = [
+        2,
+        3,
+        6,
+        1,
+        0,
+        9,
+        5,
+    ];
+    pub const BLOCK_530527_AUTHORITY_SET_ID: u64 = 496;
+    pub const BLOCK_530527_AUTHORITY_SET: [&str; NUM_AUTHORITIES] = [
+        "8e9edb840fcf9ce51b9d2e65dcae423aafd03ab5973da8d806207395a26af66e",
+        "8d9b15ea8335270510135b7f7c5ef94e0df70e751d3c5f95fd1aa6d7766929b6",
         "0e0945b2628f5c3b4e2a6b53df997fc693344af985b11e3054f36a384cc4114b",
         "5568a33085a85e1680b83823c6b4b8a0b51d506748b5d5266dd536e258e18a9d",
+        "cc6de644a35f4b205603fa125612df211d4f9d75e07c84d85cd35ea32a6b1ced",
+        "e4c08a068e72a466e2f377e862b5b2ed473c4f0e58d7d265a123ad11fef2a797",
         "8916179559464bd193d94b053b250a0edf3da5b61d1f2bf2bf2640930dfd2c0e",
-        "8d9b15ea8335270510135b7f7c5ef94e0df70e751d3c5f95fd1aa6d7766929b6",
-        "8e9edb840fcf9ce51b9d2e65dcae423aafd03ab5973da8d806207395a26af66e",
+        "079590df34cd1fa2f83cb1ef770b3e254abb00fa7dbfb2f7f21b383a7a726bb2",
+        "cc068bf6c1e467be8e2fdafb1d42ddafe8e66a0d05ea036c3d766cb6a0360797",
         "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",
-        "e4c08a068e72a466e2f377e862b5b2ed473c4f0e58d7d265a123ad11fef2a797"
     ];
+    pub const BLOCK_530527_AUTHORITY_SET_COMMITMENT: &str = "0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6";
 }

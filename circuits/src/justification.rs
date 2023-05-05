@@ -126,7 +126,13 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 signed_precommits[i].pub_key_idx,
                 &authority_set_signers.pub_keys
             );
-            let pub_key_uncompressed = self.decompress_point(&pub_key);
+
+            // Need to change the byte endianness of the pub key
+            let mut pub_key_endian = Vec::new();
+            for i in (0..32).rev() {
+                pub_key_endian.append(pub_key[i*8..(i+1)*8].to_vec().as_mut());
+            }
+            let pub_key_uncompressed = self.decompress_point(&pub_key_endian);
 
             // Verify that the precommit's fields match the claimed finalized block's
             // Note that we are currently assuming that all of the authorities sign on the finalized block,

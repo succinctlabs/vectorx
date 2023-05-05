@@ -58,6 +58,8 @@ contract LightClientTest is Test, LightClientFixture {
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
             assertTrue(lc.authoritySets(fixtureInitial.authoritySetID, i) == fixtureInitial.authorityPubKeys[i]);
         }
+
+        assertTrue(lc.authoritySetCommitments(fixtureInitial.authoritySetID) == fixtureInitial.authoritySetCommitment);
     }
 
     function test_LightClientStep() public {
@@ -159,6 +161,8 @@ contract LightClientTest is Test, LightClientFixture {
         assertTrue(lc.authoritySets(rotate.newAuthoritySetIDProof.authoritySetID, 7) == bytes32(0x335a446d556bd8b12d2e87b2c2b0a2b612f89c959ac60f955c334489c0363e43));
         assertTrue(lc.authoritySets(rotate.newAuthoritySetIDProof.authoritySetID, 8) == bytes32(0xd4bb88f5cf51c64c98fddcf13839a48de35859804e4e3b6db227e9b157d832ec));
         assertTrue(lc.authoritySets(rotate.newAuthoritySetIDProof.authoritySetID, 9) == bytes32(0x483e7490bc12a4e782224a513bbf581dfd85e89117b4e0f5663b77075e041097));
+
+        assertTrue(lc.authoritySetCommitments(fixtureRotate.newAuthoritySetID) == fixtureRotate.newAuthoritySetCommitment);
     }
 
     /*

@@ -1,6 +1,9 @@
 pragma solidity 0.8.17;
 
 import "solidity-merkle-trees/src/MerklePatricia.sol";
+import "solidity-merkle-trees/src/trie/Bytes.sol";
+import "solidity-merkle-trees/src/trie/Memory.sol";
+import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
 import { EventDecoder } from "src/EventDecoder.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 
@@ -95,6 +98,9 @@ contract LightClient is EventDecoder {
     /// @notice Maps from a authority set id to the authorities' pub keys
     mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authoritySets;
 
+    /// @notice Maps from a authority set id to the blake2b hash of the authorities' pub keys
+    mapping(uint64 => bytes32) public authoritySetCommitments;
+
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event AuthoritySetUpdate(uint64 indexed authoritySetID);
 
@@ -115,9 +121,14 @@ contract LightClient is EventDecoder {
     }
 
     function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
+        bytes memory hash_input;
+
         for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
             authoritySets[authoritySetID][i]  = _authorities[i];
+            hash_input = Bytes.concat(hash_input, Memory.toBytes(_authorities[i]));
         }
+
+        authoritySetCommitments[authoritySetID] = Bytes.toBytes32(Blake2b.blake2b(hash_input, 32));
         activeAuthoritySetID = authoritySetID;
 
         emit AuthoritySetUpdate(activeAuthoritySetID);

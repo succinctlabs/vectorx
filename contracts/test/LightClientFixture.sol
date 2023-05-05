@@ -11,6 +11,7 @@ import { Header, LightClient } from "src/LightClient.sol";
 contract LightClientFixture is CommonBase {
     struct Initial {
         bytes32[] authorityPubKeys;
+        bytes32 authoritySetCommitment;
         uint64 authoritySetID;
         uint32 blockNumber;
         bytes32 startCheckpointDataRoot;
@@ -21,6 +22,7 @@ contract LightClientFixture is CommonBase {
     struct Rotate {
         bytes encodedEventList;
         bytes[] encodedEventListProof;
+        bytes32 newAuthoritySetCommitment;
         uint64 newAuthoritySetID;
         bytes[] newAuthoritySetIDProof;
 

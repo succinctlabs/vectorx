@@ -94,6 +94,10 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 self.connect(hash_circuit.message[i*256+j].target, authority_set_signers.pub_keys[i][j].target);
             }
         }
+        // Add the padding
+        for i in NUM_AUTHORITIES * 256..NUM_AUTHORITIES * 256 + 512 {
+            self.connect(hash_circuit.message[i].target, zero);
+        }
 
         let authority_set_hash_input_length  = self.constant(F::from_canonical_usize(NUM_AUTHORITIES * 256));
         self.connect(hash_circuit.message_len, authority_set_hash_input_length);
@@ -109,7 +113,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             }
         }
 
-        /*
         // Now verify all of the signatures
         for i in 0..QUORUM_SIZE {
             assert!(signed_precommits[i].precommit_message.len() == ENCODED_PRECOMMIT_LENGTH, "Precommit message is not the correct length");
@@ -167,7 +170,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.connect_nonnative(&eddsa_verify_circuit.sig.s,&signed_precommits[i].signature.s);
             self.connect_affine_point(&eddsa_verify_circuit.pub_key.0, &pub_key_uncompressed);
         }
-        */
     }
 
 }

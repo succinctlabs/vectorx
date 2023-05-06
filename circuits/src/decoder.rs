@@ -124,7 +124,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
             compress_mode,
             &all_possible_state_roots,
             |x| *x,
-            |x| *x);
+            |x| *x,
+        );
 
         // Can't get this to work yet.  Getting an error with the random_access gate
         /*

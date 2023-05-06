@@ -262,7 +262,6 @@ mod tests {
         let data = builder.build::<C>();
         let proof = data.prove(pw).unwrap();
         data.verify(proof)
-
     }
 
     #[test]

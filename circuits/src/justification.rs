@@ -131,9 +131,11 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
             // Get the pub key
             // Random access arrays must be a power of 2, so we pad the array to 16
-            let pub_key = self.random_access_bool_vec(
+            let pub_key = self.random_access_vec::<BoolTarget>(
                 signed_precommits[i].pub_key_idx,
-                &authority_set_signers.pub_keys
+                &authority_set_signers.pub_keys,
+                |x: &BoolTarget| x.target,
+                |x| BoolTarget::new_unsafe(*x),
             );
 
             // Need to change the byte endianness of the pub key

@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use ed25519::sha512::blake2b::CHUNK_128_BYTES;
+use plonky2lib_succinct::hash_functions::blake2b::CHUNK_128_BYTES;
 
 pub const NUM_AUTHORITIES: usize = 10;
 pub const NUM_AUTHORITIES_PADDED: usize = 16;  // The random access gadget requires a power of 2, so we pad the authority set to 16
@@ -17,7 +17,7 @@ use plonky2::{
     iop::{
         target::Target,
         generator::{SimpleGenerator, GeneratedValues},
-        witness::{PartitionWitness, Witness}
+        witness::{PartitionWitness, Witness, WitnessWrite}
     },
     hash::hash_types::RichField,
     plonk::circuit_builder::CircuitBuilder

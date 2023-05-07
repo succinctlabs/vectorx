@@ -1,8 +1,8 @@
-use ed25519::{curve::{ed25519::Ed25519, eddsa::{EDDSASignature, verify_message, EDDSAPublicKey}}, gadgets::{curve::{decompress_point, WitnessAffinePoint}, nonnative::WitnessNonNative}, field::ed25519_scalar::Ed25519Scalar};
+use plonky2lib_succinct::ed25519::{curve::{ed25519::Ed25519, eddsa::{EDDSASignature, verify_message, EDDSAPublicKey}}, gadgets::{curve::{decompress_point, WitnessAffinePoint}, nonnative::WitnessNonNative}, field::ed25519_scalar::Ed25519Scalar};
 use num::BigUint;
-use plonky2::plonk::{circuit_data::{CircuitData, CircuitConfig}, config::{PoseidonGoldilocksConfig, GenericConfig}, circuit_builder::CircuitBuilder};
+use plonky2::{plonk::{circuit_data::{CircuitData, CircuitConfig}, config::{PoseidonGoldilocksConfig, GenericConfig}, circuit_builder::CircuitBuilder}, iop::witness::WitnessWrite};
 use plonky2::plonk::proof::ProofWithPublicInputs;
-use plonky2::iop::witness::{PartialWitness, Witness};
+use plonky2::iop::witness::PartialWitness;
 use plonky2_field::goldilocks_field::GoldilocksField;
 use plonky2_field::types::Field;
 

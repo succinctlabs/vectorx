@@ -42,6 +42,7 @@ version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
 dependencies = [
+ "const-random",
  "getrandom 0.2.9",
  "once_cell",
  "version_check",
@@ -381,6 +382,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-random"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "368a7a772ead6ce7e1de82bfb04c485f3db8ec744f72925af5735e29a22cc18e"
+dependencies = [
+ "const-random-macro",
+ "proc-macro-hack",
+]
+
+[[package]]
+name = "const-random-macro"
+version = "0.1.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d7d6ab3c3a2282db210df5f02c4dab6e0a7057af0fb7ebd4070f30fe05c0ddb"
+dependencies = [
+ "getrandom 0.2.9",
+ "once_cell",
+ "proc-macro-hack",
+ "tiny-keccak",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -546,6 +569,7 @@ dependencies = [
 [[package]]
 name = "curve25519-dalek"
 version = "4.0.0-rc.2"
+source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/cleanup_plonky2lib#858fe8c50d2ca3d7744f7847e7cb3fd73bfb62f7"
 dependencies = [
  "cfg-if",
  "fiat-crypto",
@@ -722,27 +746,6 @@ checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 
 [[package]]
 name = "ed25519"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "curve25519-dalek 4.0.0-rc.2",
- "hex",
- "hex-literal",
- "itertools",
- "num",
- "plonky2",
- "plonky2_ecdsa",
- "plonky2_field",
- "plonky2_u32",
- "plonky2_util",
- "rand 0.8.5",
- "regex",
- "serde",
- "sha2 0.10.6",
-]
-
-[[package]]
-name = "ed25519"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91cff35c70bba8a626e3185d8cd48cc11b5437e1a5bcd15b9b5fa3c64b6dfee7"
@@ -753,23 +756,13 @@ dependencies = [
 [[package]]
 name = "ed25519-dalek"
 version = "1.0.1"
-dependencies = [
- "curve25519-dalek 3.2.0",
- "ed25519 1.5.3",
- "rand 0.7.3",
- "serde",
- "sha2 0.9.9",
- "zeroize",
-]
-
-[[package]]
-name = "ed25519-dalek"
-version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
  "curve25519-dalek 3.2.0",
- "ed25519 1.5.3",
+ "ed25519",
+ "rand 0.7.3",
+ "serde",
  "sha2 0.9.9",
  "zeroize",
 ]
@@ -1147,12 +1140,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "half"
-version = "1.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
-
-[[package]]
 name = "hash-db"
 version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1174,6 +1161,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
  "ahash 0.7.6",
+ "rayon",
+ "serde",
 ]
 
 [[package]]
@@ -1764,13 +1753,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maybe_rayon"
-version = "0.1.0"
-dependencies = [
- "rayon",
-]
-
-[[package]]
 name = "memchr"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2220,20 +2202,23 @@ checksum = "e3d7ddaed09e0eb771a79ab0fd64609ba0afb0a8366421957936ad14cbd13630"
 
 [[package]]
 name = "plonky2"
-version = "0.1.0"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2a3d3069fc716f2733c4bafeaf57c256e507f0a599fc206f41ef273568ca2b7"
 dependencies = [
+ "ahash 0.7.6",
  "anyhow",
+ "hashbrown 0.12.3",
  "itertools",
  "keccak-hash",
  "log",
- "maybe_rayon",
  "num",
  "plonky2_field",
+ "plonky2_maybe_rayon",
  "plonky2_util",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
- "serde_cbor",
  "static_assertions",
  "unroll",
 ]
@@ -2241,22 +2226,23 @@ dependencies = [
 [[package]]
 name = "plonky2_ecdsa"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "deafe734e22d96f69df86df24e4533818b4172df745e8108dadceb7364eeaaef"
 dependencies = [
  "anyhow",
  "itertools",
  "num",
  "plonky2",
- "plonky2_field",
+ "plonky2_maybe_rayon",
  "plonky2_u32",
- "plonky2_util",
- "rand 0.8.5",
- "rayon",
  "serde",
 ]
 
 [[package]]
 name = "plonky2_field"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef0b0cfed734e8aec93ee0b49e3067a27111c355b9263fb1418bfe4c80656d12"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2269,21 +2255,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "plonky2_maybe_rayon"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "655cdcdb13c260cdb42b29b55247f2f66479d14342b6be3dc688efc54d3e24c4"
+dependencies = [
+ "rayon",
+]
+
+[[package]]
 name = "plonky2_u32"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0b4bfce2e95b9eb97a40d0d737b4e4711a0eba02175e085944497108140688f"
 dependencies = [
  "anyhow",
  "itertools",
  "num",
  "plonky2",
- "plonky2_field",
- "plonky2_util",
- "rand 0.8.5",
 ]
 
 [[package]]
 name = "plonky2_util"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a7f1a85a8cb948af5e47da488bd78c6d18d3d8cb25b490676f3b9f68bc5b5c8"
+
+[[package]]
+name = "plonky2lib_succinct"
+version = "0.1.0"
+source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/cleanup_plonky2lib#858fe8c50d2ca3d7744f7847e7cb3fd73bfb62f7"
+dependencies = [
+ "anyhow",
+ "curve25519-dalek 4.0.0-rc.2",
+ "hex",
+ "hex-literal",
+ "itertools",
+ "num",
+ "plonky2",
+ "plonky2_ecdsa",
+ "plonky2_field",
+ "plonky2_u32",
+ "plonky2_util",
+ "rand 0.8.5",
+ "regex",
+ "serde",
+ "sha2 0.10.6",
+]
 
 [[package]]
 name = "ppv-lite86"
@@ -2347,6 +2365,12 @@ dependencies = [
  "quote",
  "version_check",
 ]
+
+[[package]]
+name = "proc-macro-hack"
+version = "0.5.20+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
@@ -2845,16 +2869,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_cbor"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
-dependencies = [
- "half",
- "serde",
-]
-
-[[package]]
 name = "serde_derive"
 version = "1.0.160"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3128,8 +3142,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578959f9a7e44fd2dd96e8b8bc893cea04fcd7c00a4ffbb0b91c5013899dd02b"
 dependencies = [
  "bytes",
- "ed25519 1.5.3",
- "ed25519-dalek 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ed25519",
+ "ed25519-dalek",
  "futures",
  "libsecp256k1",
  "log",
@@ -3511,16 +3525,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "avail-subxt",
- "ed25519 0.1.0",
- "ed25519-dalek 1.0.1",
+ "ed25519-dalek",
  "futures-util",
  "hex",
  "itertools",
  "num",
  "parity-scale-codec",
  "plonky2",
+ "plonky2_ecdsa",
  "plonky2_field",
  "plonky2_u32",
+ "plonky2lib_succinct",
  "rand 0.8.5",
  "serde",
  "serde_json",

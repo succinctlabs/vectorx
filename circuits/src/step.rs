@@ -447,6 +447,11 @@ mod tests {
         headers.push(BLOCK_530527_HEADER.to_vec());
         let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
 
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
         let step_circuit = step_circuit_build::<F, C, D>(
             headers,
             head_block_hash,
@@ -479,9 +484,8 @@ mod tests {
         pw.set_proof_with_pis_target(&step_proof_target, &step_proof);
         pw.set_verifier_data_target(&step_circuit_data, &step_circuit.verifier_only);
     
-        let mut timing = TimingTree::new("recursive proof gen", Level::Info);
+        let mut timing = TimingTree::new("recursive proof gen", Level::Debug);
         let recursive_proof = prove::<F, C, D>(&recursive_circuit.prover_only, &recursive_circuit.common, pw, &mut timing).unwrap();
-        timing.print();
     
         recursive_circuit.verify(recursive_proof)
 

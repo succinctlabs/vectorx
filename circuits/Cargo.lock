@@ -3529,6 +3529,7 @@ dependencies = [
  "futures-util",
  "hex",
  "itertools",
+ "log",
  "num",
  "parity-scale-codec",
  "plonky2",

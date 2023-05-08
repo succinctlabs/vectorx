@@ -138,6 +138,7 @@ mod tests {
     use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::proof::ProofWithPublicInputs;
+    use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
 
@@ -257,11 +258,7 @@ mod tests {
             },
         );
 
-        let timing = TimingTree::new("step circuit build", Level::Info);
-        let circuit = builder.build::<C>();
-        timing.print();
-
-        circuit
+        builder.build::<C>()
     }
 
 
@@ -270,11 +267,11 @@ mod tests {
     ) -> ProofWithPublicInputs<F, C, D> {
         let pw: PartialWitness<F> = PartialWitness::new();
 
-        let timing = TimingTree::new("step proof gen", Level::Info);
-        let proof = cd.prove(pw).unwrap();
+        let mut timing = TimingTree::new("step proof gen", Level::Info);
+        let proof = prove::<F, C, D>(&cd.prover_only, &cd.common, pw, &mut timing);
         timing.print();
 
-        proof
+        proof.unwrap()
     }
 
 
@@ -473,21 +470,18 @@ mod tests {
         let step_circuit_data = builder.add_virtual_verifier_data(step_circuit.common.config.fri_config.cap_height);
         builder.verify_proof::<C>(&step_proof_target, &step_circuit_data, &step_circuit.common);
 
-        let mut timing = TimingTree::new("recursive circuit build", Level::Info);
         let recursive_circuit = builder.build::<C>();
-        timing.print();
+        for gate in recursive_circuit.common.gates.iter() {
+            println!("step_circuit: gate is {:?}", gate);
+        }
 
         let mut pw = PartialWitness::new();
         pw.set_proof_with_pis_target(&step_proof_target, &step_proof);
         pw.set_verifier_data_target(&step_circuit_data, &step_circuit.verifier_only);
     
-        timing = TimingTree::new("recursive proof gen", Level::Info);
-        let recursive_proof = recursive_circuit.prove(pw).unwrap();
+        let mut timing = TimingTree::new("recursive proof gen", Level::Info);
+        let recursive_proof = prove::<F, C, D>(&recursive_circuit.prover_only, &recursive_circuit.common, pw, &mut timing).unwrap();
         timing.print();
-
-        for gate in recursive_circuit.common.gates.iter() {
-            println!("step_circuit: gate is {:?}", gate);
-        }
     
         recursive_circuit.verify(recursive_proof)
 

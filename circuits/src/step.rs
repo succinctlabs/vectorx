@@ -260,6 +260,9 @@ mod tests {
         );
 
         let data = builder.build::<C>();
+        for gate in data.common.gates.iter() {
+            println!("gate is {:?}", gate);
+        }
         let proof = data.prove(pw).unwrap();
         data.verify(proof)
     }

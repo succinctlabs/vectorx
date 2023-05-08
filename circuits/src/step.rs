@@ -469,6 +469,7 @@ mod tests {
         }
 
         let step_proof = gen_step_proof::<F, C, D>(&step_circuit);
+        step_circuit.verify(step_proof.clone()).unwrap();
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let step_proof_target = builder.add_virtual_proof_with_pis(&step_circuit.common);

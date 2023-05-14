@@ -452,7 +452,7 @@ mod tests {
         builder_logger.filter_level(log::LevelFilter::Trace);
         builder_logger.try_init()?;
 
-        let step_circuit = step_circuit_build::<F, C, D>(
+        let inner_data = step_circuit_build::<F, C, D>(
             headers,
             head_block_hash,
             530526,
@@ -464,31 +464,32 @@ mod tests {
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
-        for gate in step_circuit.common.gates.iter() {
+        for gate in inner_data.common.gates.iter() {
             println!("step_circuit: gate is {:?}", gate);
         }
 
-        let step_proof = gen_step_proof::<F, C, D>(&step_circuit);
-        step_circuit.verify(step_proof.clone()).unwrap();
+        let inner_proof = gen_step_proof::<F, C, D>(&inner_data);
+        inner_data.verify(inner_proof.clone()).unwrap();
+  
+  
+        let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
+        let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &inner_data.common);
 
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
-        let step_proof_target = builder.add_virtual_proof_with_pis(&step_circuit.common);
-        let step_circuit_data = builder.add_virtual_verifier_data(step_circuit.common.config.fri_config.cap_height);
-        builder.verify_proof::<C>(&step_proof_target, &step_circuit_data, &step_circuit.common);
+        let outer_data = outer_builder.build::<C>();
 
-        let recursive_circuit = builder.build::<C>();
-        for gate in recursive_circuit.common.gates.iter() {
-            println!("step_circuit: gate is {:?}", gate);
+        let mut outer_pw = PartialWitness::new();
+        outer_pw.set_proof_with_pis_target(&inner_proof_target, &inner_proof);
+        outer_pw.set_verifier_data_target(&inner_verifier_data, &inner_data.verifier_only);
+
+        let outer_proof = outer_data.prove(outer_pw).unwrap();
+
+        for gate in outer_data.common.gates.iter() {
+            println!("outer_circuit: gate is {:?}", gate);
         }
 
-        let mut pw = PartialWitness::new();
-        pw.set_proof_with_pis_target(&step_proof_target, &step_proof);
-        pw.set_verifier_data_target(&step_circuit_data, &step_circuit.verifier_only);
-    
-        let mut timing = TimingTree::new("recursive proof gen", Level::Debug);
-        let recursive_proof = prove::<F, C, D>(&recursive_circuit.prover_only, &recursive_circuit.common, pw, &mut timing).unwrap();
-    
-        recursive_circuit.verify(recursive_proof)
+        outer_data.verify(outer_proof)
 
     }
 }

@@ -191,7 +191,7 @@ mod tests {
         authority_set: Vec<Vec<u8>>,
         authority_set_commitment: Vec<u8>,
     ) -> CircuitData<F, C, D> {
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursive_config());
 
         let head_block_hash_bits = to_bits(head_block_hash);
 
@@ -472,7 +472,7 @@ mod tests {
         inner_data.verify(inner_proof.clone()).unwrap();
   
   
-        let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursive_config());
         let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
         let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
         outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &inner_data.common);

@@ -56,14 +56,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.range_check(authority_set_signers.commitment[i], 8);
         }
 
-        // Range check the compressed pub keys
-        // TODO: Do we really need this?
-        for i in 0..NUM_AUTHORITIES {
-            for j in 0..256 {
-                self.range_check(authority_set_signers.pub_keys[i][j].target, 1);
-            }
-        }
-
         // Range check the indices.  They should be between 0 - (NUM_AUTHORITIES-1).
         // Doing a range check for a value that is not less than a power of 2 is a bit tricky.
         // For NUM_AUTHORITIES==10, we need to check two constraints:

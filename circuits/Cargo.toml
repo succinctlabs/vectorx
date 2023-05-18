@@ -13,12 +13,16 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 avail-subxt = {git = "https://github.com/availproject/avail.git"}
 hex = "0.4.3"
 ed25519-dalek = "1.0.1"
-plonky2 = "0.1.3"
-plonky2_ecdsa = "0.1.0"
+plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
+plonky2_ecdsa = { git = "ssh://git@github.com/succinctlabs/plonky2-ecdsa", branch="kevjue/serialization" }
 plonky2_field = "0.1.0"
-plonky2_u32 = "0.1.0"
-plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git", branch="kevjue/cleanup_plonky2lib" }
+plonky2_u32 = { git = "ssh://git@github.com/succinctlabs/plonky2-u32", branch="kevjue/serialize" }
+plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git", branch="kevjue/eddsa_verify_recursive" }
 num = { version = "0.4", features = [ "rand" ] }
 anyhow = "1.0.68"
 rand = "0.8.5"
 itertools = "0.10.5"
+log = { version = "0.4.14", default-features = false }
+
+[dev-dependencies]
+env_logger = { version = "0.9.0", default-features = false }

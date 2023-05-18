@@ -131,12 +131,16 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use plonky2::iop::witness::{PartialWitness};
+    use log::Level;
+    use plonky2::hash::hash_types::RichField;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::CircuitConfig;
+    use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2_field::goldilocks_field::GoldilocksField;
-    use plonky2_field::types::Field;
+    use plonky2::plonk::proof::ProofWithPublicInputs;
+    use plonky2::plonk::prover::prove;
+    use plonky2::util::timing::TimingTree;
+    use plonky2_field::extension::Extendable;
 
     use crate::justification::AuthoritySetSignersTarget;
     use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
@@ -174,7 +178,7 @@ mod tests {
     };
     use crate::justification::tests::generate_precommits;
 
-    fn test_step(
+    fn step_circuit_build<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
         headers: Vec<Vec<u8>>,
         head_block_hash: Vec<u8>,
         head_block_num: u64,
@@ -186,12 +190,7 @@ mod tests {
         pub_key_indices: Vec<usize>,
         authority_set: Vec<Vec<u8>>,
         authority_set_commitment: Vec<u8>,
-    ) -> Result<()> {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-
-        let pw: PartialWitness<GoldilocksField> = PartialWitness::new();
+    ) -> CircuitData<F, C, D> {
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
 
         let head_block_hash_bits = to_bits(head_block_hash);
@@ -259,8 +258,59 @@ mod tests {
             },
         );
 
-        let data = builder.build::<C>();
-        let proof = data.prove(pw).unwrap();
+        builder.build::<C>()
+    }
+
+
+    fn gen_step_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
+        cd: &CircuitData<F, C, D>,
+    ) -> ProofWithPublicInputs<F, C, D> {
+        let pw: PartialWitness<F> = PartialWitness::new();
+
+        let mut timing = TimingTree::new("step proof gen", Level::Info);
+        let proof = prove::<F, C, D>(&cd.prover_only, &cd.common, pw, &mut timing);
+        timing.print();
+
+        proof.unwrap()
+    }
+
+
+    fn test_step(
+        headers: Vec<Vec<u8>>,
+        head_block_hash: Vec<u8>,
+        head_block_num: u64,
+
+        authority_set_id: u64,
+        precommit_message: Vec<u8>,
+        signatures: Vec<Vec<u8>>,
+
+        pub_key_indices: Vec<usize>,
+        authority_set: Vec<Vec<u8>>,
+        authority_set_commitment: Vec<u8>,
+    ) -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+
+        let data = step_circuit_build::<F, C, D>(
+            headers,
+            head_block_hash,
+            head_block_num,
+    
+            authority_set_id,
+            precommit_message,
+            signatures,
+    
+            pub_key_indices,
+            authority_set,
+            authority_set_commitment,
+        );
+
+        for gate in data.common.gates.iter() {
+            println!("gate is {:?}", gate);
+        }
+
+        let proof = gen_step_proof::<F, C, D>(&data);
         data.verify(proof)
     }
 
@@ -385,5 +435,61 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         )
+    }
+
+    #[test]
+    fn test_recursive_verify_step() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+
+        let mut headers = Vec::new();
+        headers.push(BLOCK_530527_HEADER.to_vec());
+        let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let inner_data = step_circuit_build::<F, C, D>(
+            headers,
+            head_block_hash,
+            530526,
+            BLOCK_530527_AUTHORITY_SET_ID,
+            BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
+            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+        );
+
+        for gate in inner_data.common.gates.iter() {
+            println!("step_circuit: gate is {:?}", gate);
+        }
+
+        let inner_proof = gen_step_proof::<F, C, D>(&inner_data);
+        inner_data.verify(inner_proof.clone()).unwrap();
+  
+  
+        let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
+        let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &inner_data.common);
+
+        let outer_data = outer_builder.build::<C>();
+
+        let mut outer_pw = PartialWitness::new();
+        outer_pw.set_proof_with_pis_target(&inner_proof_target, &inner_proof);
+        outer_pw.set_verifier_data_target(&inner_verifier_data, &inner_data.verifier_only);
+
+        let outer_proof = outer_data.prove(outer_pw).unwrap();
+
+        for gate in outer_data.common.gates.iter() {
+            println!("outer_circuit: gate is {:?}", gate);
+        }
+
+        outer_data.verify(outer_proof)
+
     }
 }

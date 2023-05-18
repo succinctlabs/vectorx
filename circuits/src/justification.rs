@@ -56,14 +56,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             self.range_check(authority_set_signers.commitment[i], 8);
         }
 
-        // Range check the compressed pub keys
-        // TODO: Do we really need this?
-        for i in 0..NUM_AUTHORITIES {
-            for j in 0..256 {
-                self.range_check(authority_set_signers.pub_keys[i][j].target, 1);
-            }
-        }
-
         // Range check the indices.  They should be between 0 - (NUM_AUTHORITIES-1).
         // Doing a range check for a value that is not less than a power of 2 is a bit tricky.
         // For NUM_AUTHORITIES==10, we need to check two constraints:
@@ -186,6 +178,9 @@ pub (crate) mod tests {
     use std::time::SystemTime;
 
     use anyhow::Result;
+    use log::Level;
+    use plonky2::plonk::prover::prove;
+    use plonky2::util::timing::TimingTree;
     use plonky2lib_succinct::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
     use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
     use plonky2lib_succinct::ed25519::field::ed25519_scalar::Ed25519Scalar;
@@ -474,6 +469,12 @@ pub (crate) mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let targets = make_blake2b_circuit(
             &mut builder,
@@ -501,7 +502,9 @@ pub (crate) mod tests {
         }
 
         let data = builder.build::<C>();
-        let proof = data.prove(pw).unwrap();
+
+        let mut timing = TimingTree::new("proof gen", Level::Info);
+        let proof = prove::<F, C, D>(&data.prover_only, &data.common, pw, &mut timing).unwrap();
 
         data.verify(proof)
     }    

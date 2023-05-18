@@ -20,7 +20,7 @@ use plonky2::{
         witness::{PartitionWitness, Witness, WitnessWrite}
     },
     hash::hash_types::RichField,
-    plonk::circuit_builder::CircuitBuilder
+    plonk::circuit_builder::CircuitBuilder, util::serialization::{Buffer, IoResult, Read, Write}
 };
 use plonky2_field::extension::Extendable;
 
@@ -113,6 +113,25 @@ impl<
     F: RichField + Extendable<D>,
     const D: usize,
 > SimpleGenerator<F> for FloorDivGenerator<F, D> {
+    fn id(&self) -> String {
+        "FloorDivGenerator".to_string()
+    }
+
+    fn serialize(&self, dst: &mut Vec<u8>) -> IoResult<()> {
+        dst.write_target(self.divisor)?;
+        dst.write_target(self.dividend)?;
+        dst.write_target(self.quotient)?;
+        dst.write_target(self.remainder)
+    }
+
+    fn deserialize(src: &mut Buffer) -> IoResult<Self> {
+        let divisor = src.read_target()?;
+        let dividend = src.read_target()?;
+        let quotient = src.read_target()?;
+        let remainder = src.read_target()?;
+        Ok(Self { divisor, dividend, quotient, remainder, _marker: PhantomData })
+    }
+
     fn dependencies(&self) -> Vec<Target> {
         Vec::from([self.dividend])
     }

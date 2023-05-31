@@ -471,7 +471,6 @@ mod tests {
         let inner_proof = gen_step_proof::<F, C, D>(&inner_data);
         inner_data.verify(inner_proof.clone()).unwrap();
   
-  
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
         let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
@@ -490,6 +489,5 @@ mod tests {
         }
 
         outer_data.verify(outer_proof)
-
     }
 }

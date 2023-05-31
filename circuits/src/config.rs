@@ -3,7 +3,7 @@ use std::io::{BufWriter, BufReader, Cursor};
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
 use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension};
 use poseidon_rs::{Fr, FrRepr, Poseidon};
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
+use serde::{Serialize, Deserialize};
 
 use ff_ce::{PrimeField, PrimeFieldRepr};
 
@@ -19,14 +19,27 @@ impl GenericConfig<2> for PoseidonBN128GoldilocksConfig {
     type InnerHasher = PoseidonHash;
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct PoseidonBN128HashOut(Fr);
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct PoseidonBN128HashOut([u64; 4]);
 
 fn fr_to_bytes(value: Fr) -> Vec<u8> {
     let mut buf = BufWriter::new(Vec::new());
     let value_fr_repr: FrRepr = value.into_repr();
     value_fr_repr.write_be(&mut buf).unwrap();
     buf.get_ref().clone()
+}
+
+fn hash_out_to_fr(hash: PoseidonBN128HashOut) -> Fr {
+    let bytes = [
+        &hash.0[0].to_be_bytes()[..],
+        &hash.0[1].to_be_bytes()[..],
+        &hash.0[2].to_be_bytes()[..],
+        &hash.0[3].to_be_bytes()[..],
+   ].concat();
+
+    let mut fr_repr: FrRepr = Default::default();
+    fr_repr.read_be(Cursor::new(bytes.as_slice())).unwrap();
+    Fr::from_repr(fr_repr).unwrap()
 }
 
 impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut {
@@ -52,24 +65,6 @@ impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut {
                 F::from_canonical_u64(u64::from_le_bytes(arr))
             })
             .collect()
-    }
-}
-
-impl Serialize for PoseidonBN128HashOut {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        todo!()
-    }
-}
-
-impl<'de> Deserialize<'de> for PoseidonBN128HashOut {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        todo!()
     }
 }
 
@@ -112,14 +107,17 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
             state[4] = hash[0];
         };
 
-        PoseidonBN128HashOut(state[0])
+        PoseidonBN128HashOut(state[0].into_repr().0)
     }
 
     fn two_to_one(left: Self::Hash, right: Self::Hash) -> Self::Hash {
-        let state = vec![left.0, right.0, Fr::default(), Fr::default()];
+        let left_fr = hash_out_to_fr(left);
+        let right_fr = hash_out_to_fr(right);
+
+        let state = vec![left_fr, right_fr, Fr::default(), Fr::default()];
 
         // TODO: We can just have one instance of the poseidon hasher
         let psd = Poseidon::new();
-        PoseidonBN128HashOut(psd.hash(state).unwrap()[0])
+        PoseidonBN128HashOut(psd.hash(state).unwrap()[0].into_repr().0)
     }
 }

@@ -113,7 +113,7 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
     }
 
     fn two_to_one(left: Self::Hash, right: Self::Hash) -> Self::Hash {
-        let mut state = vec![left.0, right.0, Fr::default(), Fr::default()];
+        let state = vec![left.0, right.0, Fr::default(), Fr::default()];
 
         // TODO: We can just have one instance of the poseidon hasher
         let psd = Poseidon::new();

@@ -46,10 +46,10 @@ impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut {
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let limb0 = u64::from_be_bytes(bytes[0..4].try_into().unwrap());
-        let limb1 = u64::from_be_bytes(bytes[4..8].try_into().unwrap());
-        let limb2 = u64::from_be_bytes(bytes[8..12].try_into().unwrap());
-        let limb3 = u64::from_be_bytes(bytes[12..16].try_into().unwrap());
+        let limb0 = u64::from_le_bytes(bytes[0..4].try_into().unwrap());
+        let limb1 = u64::from_le_bytes(bytes[4..8].try_into().unwrap());
+        let limb2 = u64::from_le_bytes(bytes[8..12].try_into().unwrap());
+        let limb3 = u64::from_le_bytes(bytes[12..16].try_into().unwrap());
 
         Self([limb0, limb1, limb2, limb3])
     }
@@ -88,23 +88,20 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
         for permute_chunk in input.chunks(12) {
             let mut chunk_idx = 0;
             for bn128_chunk in permute_chunk.chunks(3) {
-                let mut large_value = bn128_chunk[0].to_canonical_biguint();
+                let mut bytes = bn128_chunk[0].to_canonical_u64().to_le_bytes().to_vec();
 
                 for i in 1..bn128_chunk.len() {
-                    let small_value = bn128_chunk[i].to_canonical_biguint();
-                    large_value = large_value << 64 | small_value;
+                    let chunk_bytes = bn128_chunk[i].to_canonical_u64().to_le_bytes();
+                    bytes.extend_from_slice(&chunk_bytes);
                 }
 
-                /*  TODO:  Get this working
-                let large_value_be = large_value.to_bytes_be();
-                println!("large_value_be: {:?}", large_value_be);
-                let large_value_reader = Cursor::new(large_value_be.as_slice());
-                let mut large_value_fr_repr: FrRepr = Default::default();
-                large_value_fr_repr.read_be(large_value_reader).unwrap();
-                */
+                for _i in bytes.len()..32 {
+                    bytes.push(0);
+                }
 
-                let large_value_str = large_value.to_string();
-                state[chunk_idx] = Fr::from_str(&large_value_str).unwrap();
+                let mut fr_repr: FrRepr = Default::default();
+                fr_repr.read_le(bytes.as_slice()).unwrap();
+                state[chunk_idx] = Fr::from_repr(fr_repr).unwrap();
                 chunk_idx += 1;
             };
 

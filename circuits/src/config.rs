@@ -1,4 +1,4 @@
-use std::io::{BufWriter, BufReader, Cursor};
+use std::io::Cursor;
 
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
 use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension};
@@ -22,40 +22,45 @@ impl GenericConfig<2> for PoseidonBN128GoldilocksConfig {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PoseidonBN128HashOut([u64; 4]);
 
-fn fr_to_bytes(value: Fr) -> Vec<u8> {
-    let mut buf = BufWriter::new(Vec::new());
-    let value_fr_repr: FrRepr = value.into_repr();
-    value_fr_repr.write_be(&mut buf).unwrap();
-    buf.get_ref().clone()
-}
-
 fn hash_out_to_fr(hash: PoseidonBN128HashOut) -> Fr {
     let bytes = [
-        &hash.0[0].to_be_bytes()[..],
-        &hash.0[1].to_be_bytes()[..],
-        &hash.0[2].to_be_bytes()[..],
-        &hash.0[3].to_be_bytes()[..],
+        &hash.0[0].to_le_bytes()[..],
+        &hash.0[1].to_le_bytes()[..],
+        &hash.0[2].to_le_bytes()[..],
+        &hash.0[3].to_le_bytes()[..],
    ].concat();
 
     let mut fr_repr: FrRepr = Default::default();
-    fr_repr.read_be(Cursor::new(bytes.as_slice())).unwrap();
+    fr_repr.read_le(Cursor::new(bytes.as_slice())).unwrap();
     Fr::from_repr(fr_repr).unwrap()
 }
 
 impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut {
     fn to_bytes(&self) -> Vec<u8> {
-        fr_to_bytes(self.0)
+        [
+            &self.0[0].to_le_bytes()[..],
+            &self.0[1].to_le_bytes()[..],
+            &self.0[2].to_le_bytes()[..],
+            &self.0[3].to_le_bytes()[..],
+        ].concat()
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let buf = BufReader::new(bytes);
-        let mut value: FrRepr = Default::default();
-        value.read_be(buf).unwrap();
-        Self(Fr::from_repr(value).unwrap())
+        let limb0 = u64::from_be_bytes(bytes[0..4].try_into().unwrap());
+        let limb1 = u64::from_be_bytes(bytes[4..8].try_into().unwrap());
+        let limb2 = u64::from_be_bytes(bytes[8..12].try_into().unwrap());
+        let limb3 = u64::from_be_bytes(bytes[12..16].try_into().unwrap());
+
+        Self([limb0, limb1, limb2, limb3])
     }
 
     fn to_vec(&self) -> Vec<F> {
-        let bytes = fr_to_bytes(self.0);
+        let bytes = [
+            &self.0[0].to_le_bytes()[..],
+            &self.0[1].to_le_bytes()[..],
+            &self.0[2].to_le_bytes()[..],
+            &self.0[3].to_le_bytes()[..],
+       ].concat();
         bytes
             // Chunks of 7 bytes since 8 bytes would allow collisions.
             .chunks(7)

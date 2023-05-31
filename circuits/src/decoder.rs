@@ -211,11 +211,16 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use anyhow::Result;
+    use log::Level;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::plonk::prover::prove;
+    use plonky2::util::timing::TimingTree;
     use plonky2_field::types::Field;
     use crate::config::PoseidonBN128GoldilocksConfig;
     use crate::utils::MAX_HEADER_SIZE;
@@ -373,7 +378,31 @@ mod tests {
         final_pw.set_proof_with_pis_target(&final_proof_target, &outer_proof);
         final_pw.set_verifier_data_target(&final_verifier_data, &outer_data.verifier_only);
 
-        let final_proof = final_data.prove(final_pw);
+        let mut timing = TimingTree::new("prove", Level::Debug);
+        let final_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&final_data.prover_only, &final_data.common, final_pw, &mut timing).unwrap();
+        timing.print();
+
+        let final_proof_serialized = serde_json::to_string(&final_proof).unwrap();
+        fs::write(
+            "final.proof_with_public_inputs.json",
+            final_proof_serialized,
+        )
+        .expect("Unable to write file");
+    
+        let final_vd_serialized = serde_json::to_string(&final_data.verifier_only).unwrap();
+        fs::write(
+            "final.verifier_only_circuit_data.json",
+            final_vd_serialized,
+        )
+        .expect("Unable to write file");
+
+        let final_cd_serialized = serde_json::to_string(&final_data.common).unwrap();
+        fs::write(
+            "final.common_circuit_data.json",
+            final_cd_serialized,
+        )
+        .expect("Unable to write file");
+
         Ok(())
 
 

@@ -1,4 +1,4 @@
-use std::io::{BufWriter, BufReader};
+use std::io::{BufWriter, BufReader, Cursor};
 
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
 use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension};
@@ -84,9 +84,10 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
     fn hash_no_pad(input: &[F]) -> Self::Hash {
         // TODO: We can just have one instance of the poseidon hasher
         let psd = Poseidon::new();
-        let mut state = Vec::new();
-        input.chunks(12).for_each(|permute_chunk| {
-            permute_chunk.chunks(3).for_each(|bn128_chunk| {
+        let mut state = [Fr::default(); 5].to_vec();
+        for permute_chunk in input.chunks(12) {
+            let mut chunk_idx = 0;
+            for bn128_chunk in permute_chunk.chunks(3) {
                 let mut large_value = bn128_chunk[0].to_canonical_biguint();
 
                 for i in 1..bn128_chunk.len() {
@@ -94,20 +95,22 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
                     large_value = large_value << 64 | small_value;
                 }
 
+                /*  TODO:  Get this working
                 let large_value_be = large_value.to_bytes_be();
-                let large_value_reader = BufReader::new(large_value_be.as_slice());
+                println!("large_value_be: {:?}", large_value_be);
+                let large_value_reader = Cursor::new(large_value_be.as_slice());
                 let mut large_value_fr_repr: FrRepr = Default::default();
                 large_value_fr_repr.read_be(large_value_reader).unwrap();
-                state.push(Fr::from_repr(large_value_fr_repr).unwrap());
-            });
+                */
 
-            // pad state to be length of 4
-            for _ in 0..(4 - state.len()) {
-                state.push(Fr::default());
-            }
+                let large_value_str = large_value.to_string();
+                state[chunk_idx] = Fr::from_str(&large_value_str).unwrap();
+                chunk_idx += 1;
+            };
 
-            state = psd.hash(state.clone()).unwrap();
-        });
+            let hash = psd.hash(state.clone()).unwrap();
+            state[4] = hash[0];
+        };
 
         PoseidonBN128HashOut(state[0])
     }

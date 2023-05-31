@@ -212,11 +212,12 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use plonky2::iop::witness::{PartialWitness};
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2_field::types::Field;
+    use crate::config::PoseidonBN128GoldilocksConfig;
     use crate::utils::MAX_HEADER_SIZE;
     use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
@@ -304,9 +305,15 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
         let config = CircuitConfig::standard_recursion_config();
         let pw = PartialWitness::new();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
+        let mut builder = CircuitBuilder::<F, D>::new(config.clone());
 
         let mut header_bytes_target = BLOCK_576728_HEADER.iter().map(|b| {
             builder.constant(F::from_canonical_u8(*b))
@@ -338,6 +345,37 @@ mod tests {
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;
 
-        data.verify(proof)
+        data.verify(proof.clone()).unwrap();
+
+        let mut outer_builder = CircuitBuilder::<F, D>::new(config);
+        let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&data.common);
+        let inner_verifier_data = outer_builder.add_virtual_verifier_data(data.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &data.common);
+
+        let outer_data = outer_builder.build::<C>();
+
+        let mut outer_pw = PartialWitness::new();
+        outer_pw.set_proof_with_pis_target(&inner_proof_target, &proof);
+        outer_pw.set_verifier_data_target(&inner_verifier_data, &data.verifier_only);
+
+        let outer_proof = outer_data.prove(outer_pw).unwrap();
+
+        outer_data.verify(outer_proof.clone()).unwrap();
+
+        let mut final_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let final_proof_target = final_builder.add_virtual_proof_with_pis(&outer_data.common);
+        let final_verifier_data = final_builder.add_virtual_verifier_data(outer_data.common.config.fri_config.cap_height);
+        final_builder.verify_proof::<C>(&final_proof_target, &final_verifier_data, &outer_data.common);
+
+        let final_data = final_builder.build::<PoseidonBN128GoldilocksConfig>();
+
+        let mut final_pw = PartialWitness::new();
+        final_pw.set_proof_with_pis_target(&final_proof_target, &outer_proof);
+        final_pw.set_verifier_data_target(&final_verifier_data, &outer_data.verifier_only);
+
+        let final_proof = final_data.prove(final_pw);
+        Ok(())
+
+
     }
 }

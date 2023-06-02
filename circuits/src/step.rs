@@ -502,8 +502,8 @@ mod tests {
         final_pw.set_proof_with_pis_target(&final_proof_target, &outer_proof);
         final_pw.set_verifier_data_target(&final_verifier_data, &outer_data.verifier_only);
 
-        let final_proof = final_data.prove(final_pw);
-        Ok(())
+        let final_proof = final_data.prove(final_pw).unwrap();
 
+        final_data.verify(final_proof)
     }
 }

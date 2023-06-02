@@ -2,7 +2,7 @@ use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powe
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
-use crate::utils::{ CircuitBuilderUtils, HASH_SIZE, MAX_HEADER_SIZE };
+use crate::utils::{ CircuitBuilderUtils, HASH_SIZE };
 
 trait CircuitBuilderScaleDecoder {
     fn decode_compact_int(
@@ -381,6 +381,8 @@ mod tests {
         let mut timing = TimingTree::new("prove", Level::Debug);
         let final_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&final_data.prover_only, &final_data.common, final_pw, &mut timing).unwrap();
         timing.print();
+
+        final_data.verify(final_proof.clone()).unwrap();
 
         let final_proof_serialized = serde_json::to_string(&final_proof).unwrap();
         fs::write(

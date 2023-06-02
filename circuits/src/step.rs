@@ -142,7 +142,7 @@ mod tests {
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
 
-    use crate::config::PoseidonBN128GoldilocksConfig;
+    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::justification::AuthoritySetSignersTarget;
     use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
     use crate::utils::{to_bits, QUORUM_SIZE};

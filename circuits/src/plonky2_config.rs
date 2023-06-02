@@ -6,12 +6,10 @@ use serde::{Serialize, Deserialize};
 
 use ff::{PrimeField, PrimeFieldRepr, Field as ff_Field};
 
-use crate::{Fr, FrRepr};
+use crate::{Fr, FrRepr, poseidon_bn128::GOLDILOCKS_ELEMENTS};
 use crate::poseidon_bn128::{permution, RATE};
 
-/// Poseidon hash function.
-
-/// Configuration using Poseidon over the Goldilocks field.
+/// Configuration using Poseidon BN128 over the Goldilocks field.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize)]
 pub struct PoseidonBN128GoldilocksConfig;
 impl GenericConfig<2> for PoseidonBN128GoldilocksConfig {
@@ -79,7 +77,7 @@ impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct PoseidonBN128Hash;
 impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
-    const HASH_SIZE: usize = Fr::NUM_BITS as usize / 8;
+    const HASH_SIZE: usize = 32;    // Hash output is 4 limbs of u64
     type Hash = PoseidonBN128HashOut<F>;
     type Permutation = PoseidonPermutation<F>;
 
@@ -116,24 +114,11 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
     fn hash_pad(input: &[F]) -> Self::Hash {
         let mut padded_input = input.to_vec();
         padded_input.push(F::ONE);
-        while (padded_input.len() + 1) % (RATE*3) != 0 {
+        while (padded_input.len() + 1) % (RATE*GOLDILOCKS_ELEMENTS) != 0 {
             padded_input.push(F::ZERO);
         }
         padded_input.push(F::ONE);
         Self::hash_no_pad(&padded_input)
-    }
-
-    fn hash_or_noop(inputs: &[F]) -> Self::Hash {
-        if inputs.len() * 8 <= 32 {
-            let mut inputs_bytes = vec![0u8; 32];
-            for i in 0..inputs.len() {
-                inputs_bytes[i * 8..(i + 1) * 8]
-                    .copy_from_slice(&inputs[i].to_canonical_u64().to_le_bytes());
-            }
-            PoseidonBN128HashOut::from_bytes(&inputs_bytes)
-        } else {
-            Self::hash_no_pad(inputs)
-        }
     }
 
     fn two_to_one(left: Self::Hash, right: Self::Hash) -> Self::Hash {

@@ -1,9 +1,10 @@
-pub mod config;
+pub mod plonky2_config;
 pub mod decoder;
 pub mod justification;
 pub mod poseidon_bn128;
+mod poseidon_bn128_constants;
 pub mod step;
-pub mod utils;
+mod utils;
 
 extern crate rand;
 extern crate ff;

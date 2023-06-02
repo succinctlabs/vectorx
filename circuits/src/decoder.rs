@@ -222,7 +222,7 @@ mod tests {
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::types::Field;
-    use crate::config::PoseidonBN128GoldilocksConfig;
+    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::utils::MAX_HEADER_SIZE;
     use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };

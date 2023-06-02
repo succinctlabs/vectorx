@@ -2294,17 +2294,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "poseidon-rs"
-version = "0.0.10"
-source = "git+ssh://git@github.com/succinctlabs/poseidon-rs?branch=kevjue/return_full_state#55215e580a32d87ff9db71e8f6503311b9980ecb"
-dependencies = [
- "ff_ce",
- "once_cell",
- "rand 0.4.6",
- "serde_json",
-]
-
-[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3569,6 +3558,7 @@ dependencies = [
  "futures-util",
  "hex",
  "itertools",
+ "lazy_static",
  "log",
  "num",
  "parity-scale-codec",
@@ -3577,8 +3567,7 @@ dependencies = [
  "plonky2_field",
  "plonky2_u32",
  "plonky2lib_succinct",
- "poseidon-rs",
- "rand 0.8.5",
+ "rand 0.4.6",
  "serde",
  "serde_json",
  "tokio",

@@ -27,13 +27,17 @@ pub struct PoseidonBN128HashOut<F: Field> {
     _phantom: PhantomData<F>,
 }
 
-fn hash_out_to_fr<F: Field>(hash: PoseidonBN128HashOut<F>) -> Fr {
-    let bytes = [
+fn hash_out_to_bytes<F: Field>(hash: PoseidonBN128HashOut<F>) -> Vec<u8> {
+    [
         &hash.limbs[0].to_le_bytes()[..],
         &hash.limbs[1].to_le_bytes()[..],
         &hash.limbs[2].to_le_bytes()[..],
         &hash.limbs[3].to_le_bytes()[..],
-   ].concat();
+    ].concat()
+}
+
+fn hash_out_to_fr<F: Field>(hash: PoseidonBN128HashOut<F>) -> Fr {
+    let bytes = hash_out_to_bytes(hash);
 
     let mut fr_repr: FrRepr = Default::default();
     fr_repr.read_le(Cursor::new(bytes.as_slice())).unwrap();
@@ -42,12 +46,7 @@ fn hash_out_to_fr<F: Field>(hash: PoseidonBN128HashOut<F>) -> Fr {
 
 impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
     fn to_bytes(&self) -> Vec<u8> {
-        [
-            &self.limbs[0].to_le_bytes()[..],
-            &self.limbs[1].to_le_bytes()[..],
-            &self.limbs[2].to_le_bytes()[..],
-            &self.limbs[3].to_le_bytes()[..],
-        ].concat()
+        hash_out_to_bytes(*self)
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
@@ -63,12 +62,7 @@ impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
     }
 
     fn to_vec(&self) -> Vec<F> {
-        let bytes = [
-            &self.limbs[0].to_le_bytes()[..],
-            &self.limbs[1].to_le_bytes()[..],
-            &self.limbs[2].to_le_bytes()[..],
-            &self.limbs[3].to_le_bytes()[..],
-       ].concat();
+        let bytes = hash_out_to_bytes(*self);
         bytes
             // Chunks of 7 bytes since 8 bytes would allow collisions.
             .chunks(7)
@@ -94,7 +88,6 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
 
         state[0] = Fr::zero();
         for rate_chunk in input.chunks(RATE * 3) {
-            
             for (j, bn128_chunk)in rate_chunk.chunks(3).enumerate() {
                 let mut bytes = bn128_chunk[0].to_canonical_u64().to_le_bytes().to_vec();
 

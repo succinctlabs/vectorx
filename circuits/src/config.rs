@@ -93,8 +93,9 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
         let mut state = [Fr::zero(); 4];
 
         state[0] = Fr::zero();
-        for (i, rate_chunk)in input.chunks(RATE * 3).enumerate() {
-            for (_j, bn128_chunk)in rate_chunk.chunks(3).enumerate() {
+        for rate_chunk in input.chunks(RATE * 3) {
+            
+            for (j, bn128_chunk)in rate_chunk.chunks(3).enumerate() {
                 let mut bytes = bn128_chunk[0].to_canonical_u64().to_le_bytes().to_vec();
 
                 for gl_element in bn128_chunk.iter().skip(1) {
@@ -108,7 +109,7 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
 
                 let mut fr_repr: FrRepr = Default::default();
                 fr_repr.read_le(bytes.as_slice()).unwrap();
-                state[i+1] = Fr::from_repr(fr_repr).unwrap();
+                state[j+1] = Fr::from_repr(fr_repr).unwrap();
             }
             permution(&mut state);
         }

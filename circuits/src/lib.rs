@@ -6,7 +6,6 @@ pub mod step;
 pub mod utils;
 
 extern crate rand;
-#[macro_use]
 extern crate ff;
 use ff::PrimeField;
 use ff::Field;

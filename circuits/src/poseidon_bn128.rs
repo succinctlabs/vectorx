@@ -64,12 +64,12 @@ fn partial_rounds(state: &mut PoseidonState) {
 		state[0].add_assign(&C_CONSTANTS[(FULL_ROUNDS/2+1)*WIDTH+i]);
 
 		let mut mul;
-        let mut newState0 = Fr::zero();
+        let mut new_state0 = Fr::zero();
 		for j in 0 ..WIDTH {
             mul = Fr::zero();
             mul.add_assign(&S_CONSTANTS[(WIDTH*2-1)*i+j]);  
             mul.mul_assign(&state[j]);
-			newState0.add_assign(&mul);
+			new_state0.add_assign(&mul);
 		}
 
 		for k in 1..WIDTH {
@@ -79,7 +79,7 @@ fn partial_rounds(state: &mut PoseidonState) {
             state[k].add_assign(&mul);
 		}
 
-        state[0] = newState0;
+        state[0] = new_state0;
 	}
 }
 

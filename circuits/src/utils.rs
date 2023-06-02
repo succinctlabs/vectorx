@@ -74,7 +74,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         target_converter: ToTarget<T>,
         t_converter: FromTarget<T>,
     ) -> Vec<T> {
-        assert!(targets.len() > 0);
+        assert!(!targets.is_empty());
 
         let v_size = targets[0].len();
 

@@ -1,8 +1,8 @@
-use std::{io::Cursor, marker::PhantomData};
+use std::{io::BufReader, marker::PhantomData};
 
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
 use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension, types::Field};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, ser::SerializeSeq, Deserializer};
 
 use ff::{PrimeField, PrimeFieldRepr, Field as ff_Field};
 
@@ -19,27 +19,20 @@ impl GenericConfig<2> for PoseidonBN128GoldilocksConfig {
     type InnerHasher = PoseidonHash;
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct PoseidonBN128HashOut<F: Field> {
-    limbs: [u64; 4],
+    value: Fr,
     _phantom: PhantomData<F>,
 }
 
 fn hash_out_to_bytes<F: Field>(hash: PoseidonBN128HashOut<F>) -> Vec<u8> {
+    let limbs = hash.value.into_repr().0;
     [
-        &hash.limbs[0].to_le_bytes()[..],
-        &hash.limbs[1].to_le_bytes()[..],
-        &hash.limbs[2].to_le_bytes()[..],
-        &hash.limbs[3].to_le_bytes()[..],
+        limbs[0].to_le_bytes(),
+        limbs[1].to_le_bytes(),
+        limbs[2].to_le_bytes(),
+        limbs[3].to_le_bytes(),
     ].concat()
-}
-
-fn hash_out_to_fr<F: Field>(hash: PoseidonBN128HashOut<F>) -> Fr {
-    let bytes = hash_out_to_bytes(hash);
-
-    let mut fr_repr: FrRepr = Default::default();
-    fr_repr.read_le(Cursor::new(bytes.as_slice())).unwrap();
-    Fr::from_repr(fr_repr).unwrap()
 }
 
 impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
@@ -48,13 +41,12 @@ impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let limb0 = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
-        let limb1 = u64::from_le_bytes(bytes[8..16].try_into().unwrap());
-        let limb2 = u64::from_le_bytes(bytes[16..24].try_into().unwrap());
-        let limb3 = u64::from_le_bytes(bytes[24..32].try_into().unwrap());
+        let mut fr_repr: FrRepr = Default::default();
+        fr_repr.read_le(BufReader::new(bytes)).unwrap();
+        let fr = Fr::from_repr(fr_repr).unwrap();
 
         Self {
-            limbs: [limb0, limb1, limb2, limb3],
+            value: fr,
             _phantom: PhantomData,
         }
     }
@@ -70,6 +62,29 @@ impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
                 F::from_canonical_u64(u64::from_le_bytes(arr))
             })
             .collect()
+    }
+}
+
+impl<F: RichField> Serialize for PoseidonBN128HashOut<F> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let limbs = self.value.0.0;
+        let mut seq = serializer.serialize_seq(Some(limbs.len()))?;
+        for limb in limbs.iter() {
+            seq.serialize_element(limb)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        todo!()
     }
 }
 
@@ -106,7 +121,7 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
         }
 
         PoseidonBN128HashOut{
-            limbs: state[0].into_repr().0,
+            value: state[0],
             _phantom: PhantomData,
         }
     }
@@ -121,15 +136,25 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
         Self::hash_no_pad(&padded_input)
     }
 
-    fn two_to_one(left: Self::Hash, right: Self::Hash) -> Self::Hash {
-        let left_fr = hash_out_to_fr(left);
-        let right_fr = hash_out_to_fr(right);
+    fn hash_or_noop(inputs: &[F]) -> Self::Hash {
+        if inputs.len() * 8 <= GOLDILOCKS_ELEMENTS * 8 {
+            let mut inputs_bytes = vec![0u8; 32];
+            for i in 0..inputs.len() {
+                inputs_bytes[i * 8..(i + 1) * 8]
+                    .copy_from_slice(&inputs[i].to_canonical_u64().to_le_bytes());
+            }
+            Self::Hash::from_bytes(&inputs_bytes)
+        } else {
+            Self::hash_no_pad(inputs)
+        }
+    }
 
-        let mut state = [Fr::zero(), Fr::zero(), left_fr, right_fr];
+    fn two_to_one(left: Self::Hash, right: Self::Hash) -> Self::Hash {
+        let mut state = [Fr::zero(), Fr::zero(), left.value, right.value];
         permution(&mut state);
 
         PoseidonBN128HashOut{
-            limbs: state[0].into_repr().0,
+            value: state[0],
             _phantom: PhantomData,
         }
     }

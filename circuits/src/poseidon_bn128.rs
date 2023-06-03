@@ -11,6 +11,8 @@ pub const GOLDILOCKS_ELEMENTS: usize = 3;
 
 pub type PoseidonState = [Fr; WIDTH];
 
+// This poseidon BN128 implementation is based on the following implementation:
+// https://github.com/iden3/go-iden3-crypto/blob/e5cf066b8be3da9a3df9544c65818df189fdbebe/poseidon/poseidon.go
 pub fn permution(state: &mut PoseidonState) {
     ark(state, 0);
 	full_rounds(state, true);

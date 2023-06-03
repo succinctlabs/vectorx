@@ -1,8 +1,9 @@
 use std::{io::BufReader, marker::PhantomData};
 
+use num::BigUint;
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
 use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension, types::Field};
-use serde::{Serialize, Deserialize, Serializer, ser::SerializeSeq, Deserializer};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
 use ff::{PrimeField, PrimeFieldRepr, Field as ff_Field};
 
@@ -70,12 +71,17 @@ impl<F: RichField> Serialize for PoseidonBN128HashOut<F> {
     where
         S: Serializer,
     {
+        // Output the hash as a bigint string.
         let limbs = self.value.0.0;
-        let mut seq = serializer.serialize_seq(Some(limbs.len()))?;
-        for limb in limbs.iter() {
-            seq.serialize_element(limb)?;
-        }
-        seq.end()
+        let bytes = [
+            limbs[0].to_le_bytes(),
+            limbs[1].to_le_bytes(),
+            limbs[2].to_le_bytes(),
+            limbs[3].to_le_bytes(),
+        ].concat();
+
+        let big_int = BigUint::from_bytes_le(bytes.as_slice());
+        serializer.serialize_str(big_int.to_str_radix(10).as_str())
     }
 }
 

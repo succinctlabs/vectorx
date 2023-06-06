@@ -212,14 +212,18 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::sync::Arc;
 
     use anyhow::Result;
+    use ff::PrimeField;
     use log::Level;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
+    use plonky2::util::serialization::DefaultGateSerializer;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::types::Field;
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
@@ -384,6 +388,7 @@ mod tests {
 
         final_data.verify(final_proof.clone()).unwrap();
 
+        // Serialize the final proof's artifacts to json (to be used by the gnark plonky2 verifier)
         let final_proof_serialized = serde_json::to_string(&final_proof).unwrap();
         fs::write(
             "final.proof_with_public_inputs.json",
@@ -404,6 +409,28 @@ mod tests {
             final_cd_serialized,
         )
         .expect("Unable to write file");
+
+        // Serialize the final proof into byts (to be used by the plonky2 verifier)
+        let final_proof_bytes = final_proof.to_bytes();
+        fs::write(
+            "final.proof_with_public_inputs.bytes",
+            final_proof_bytes,
+        ).expect("Unable to write file");
+
+        let final_vd_bytes = final_data.verifier_only.to_bytes().unwrap();
+        fs::write(
+            "final.verifier_only_circuit_data.bytes",
+            final_vd_bytes,
+        ).expect("Unable to write file");
+
+        let gate_serializer = DefaultGateSerializer;
+        let final_cd_bytes = final_data.common
+            .to_bytes(&gate_serializer).unwrap();
+
+        fs::write(
+            "final.common_circuit_data.bytes",
+            final_cd_bytes,
+        ).expect("Unable to write file");
 
         Ok(())
 

@@ -27,7 +27,8 @@ pub struct PoseidonBN128HashOut<F: Field> {
 }
 
 fn hash_out_to_bytes<F: Field>(hash: PoseidonBN128HashOut<F>) -> Vec<u8> {
-    let limbs = hash.value.into_repr().0;
+    let binding = hash.value.into_repr();
+    let limbs = binding.as_ref();
     [
         limbs[0].to_le_bytes(),
         limbs[1].to_le_bytes(),
@@ -72,7 +73,8 @@ impl<F: RichField> Serialize for PoseidonBN128HashOut<F> {
         S: Serializer,
     {
         // Output the hash as a bigint string.
-        let limbs = self.value.0.0;
+        let binding = self.value.into_repr();
+        let limbs = binding.as_ref();
         let bytes = [
             limbs[0].to_le_bytes(),
             limbs[1].to_le_bytes(),

@@ -197,8 +197,9 @@ mod tests {
         let head_block_hash_bits = to_bits(head_block_hash);
 
         let mut head_block_hash_target = Vec::new();
-        for i in 0..HASH_SIZE * 8 {
-            head_block_hash_target.push(builder.constant_bool(head_block_hash_bits[i]));
+        assert!(head_block_hash_bits.len() == HASH_SIZE * 8);
+        for bit in head_block_hash_bits.iter() {
+            head_block_hash_target.push(builder.constant_bool(*bit));
         }
 
         // Set the header targets
@@ -229,18 +230,19 @@ mod tests {
         let head_block_num_target = builder.constant(F::from_canonical_u64(head_block_num));
 
         let mut pub_key_targets = Vec::new();
-        for i in 0..authority_set.len() {
+        for authority in authority_set.iter() {
             let mut pub_key_bits = Vec::new();
-            let bits = to_bits(authority_set[i].clone());
-            for j in 0..bits.len() {
-                pub_key_bits.push(builder.constant_bool(bits[j]));
+            let bits = to_bits(authority.clone());
+            for bit in bits.iter() {
+                pub_key_bits.push(builder.constant_bool(*bit));
             }
             pub_key_targets.push(pub_key_bits);
         }
 
         let mut authority_set_commitment_target = Vec::new();
-        for i in 0..HASH_SIZE {
-            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_commitment[i])));
+        assert!(authority_set_commitment.len() == HASH_SIZE);
+        for authority_set_byte in authority_set_commitment.iter(){
+            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(*authority_set_byte)));
         }
 
         let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
@@ -307,9 +309,6 @@ mod tests {
             authority_set_commitment,
         );
 
-        for gate in data.common.gates.iter() {
-            println!("gate is {:?}", gate);
-        }
 
         let proof = gen_step_proof::<F, C, D>(&data);
         data.verify(proof)
@@ -464,10 +463,6 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
-
-        for gate in inner_data.common.gates.iter() {
-            println!("step_circuit: gate is {:?}", gate);
-        }
 
         let inner_proof = gen_step_proof::<F, C, D>(&inner_data);
         inner_data.verify(inner_proof.clone()).unwrap();

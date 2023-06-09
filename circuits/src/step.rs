@@ -316,8 +316,7 @@ mod tests {
 
     #[test]
     fn test_verify_headers_one() -> Result<()> {
-        let mut headers = Vec::new();
-        headers.push(BLOCK_530527_HEADER.to_vec());
+        let headers = vec![BLOCK_530527_HEADER.to_vec()];
         let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
         test_step(
             headers,
@@ -334,9 +333,7 @@ mod tests {
 
     #[test]
     fn test_verify_headers_two() -> Result<()> {
-        let mut headers = Vec::new();
-        headers.push(BLOCK_530526_HEADER.to_vec());
-        headers.push(BLOCK_530527_HEADER.to_vec());
+        let headers = vec![BLOCK_530526_HEADER.to_vec(), BLOCK_530527_HEADER.to_vec()];
         let head_block_hash = hex::decode(BLOCK_530526_PARENT_HASH).unwrap();
         test_step(
             headers,
@@ -353,12 +350,13 @@ mod tests {
 
     #[test]
     fn test_verify_headers_five() -> Result<()> {
-        let mut headers = Vec::new();
-        headers.push(BLOCK_530523_HEADER.to_vec());
-        headers.push(BLOCK_530524_HEADER.to_vec());
-        headers.push(BLOCK_530525_HEADER.to_vec());
-        headers.push(BLOCK_530526_HEADER.to_vec());
-        headers.push(BLOCK_530527_HEADER.to_vec());
+        let headers = vec![
+            BLOCK_530523_HEADER.to_vec(),
+            BLOCK_530524_HEADER.to_vec(),
+            BLOCK_530525_HEADER.to_vec(),
+            BLOCK_530526_HEADER.to_vec(),
+            BLOCK_530527_HEADER.to_vec(),
+        ];
         let head_block_hash = hex::decode(BLOCK_530523_PARENT_HASH).unwrap();
         test_step(
             headers,
@@ -375,17 +373,18 @@ mod tests {
 
     #[test]
     fn test_verify_headers_ten() -> Result<()> {
-        let mut headers = Vec::new();
-        headers.push(BLOCK_530518_HEADER.to_vec());
-        headers.push(BLOCK_530519_HEADER.to_vec());
-        headers.push(BLOCK_530520_HEADER.to_vec());
-        headers.push(BLOCK_530521_HEADER.to_vec());
-        headers.push(BLOCK_530522_HEADER.to_vec());
-        headers.push(BLOCK_530523_HEADER.to_vec());
-        headers.push(BLOCK_530524_HEADER.to_vec());
-        headers.push(BLOCK_530525_HEADER.to_vec());
-        headers.push(BLOCK_530526_HEADER.to_vec());
-        headers.push(BLOCK_530527_HEADER.to_vec());
+        let headers = vec![
+            BLOCK_530518_HEADER.to_vec(),
+            BLOCK_530519_HEADER.to_vec(),
+            BLOCK_530520_HEADER.to_vec(),
+            BLOCK_530521_HEADER.to_vec(),
+            BLOCK_530522_HEADER.to_vec(),
+            BLOCK_530523_HEADER.to_vec(),
+            BLOCK_530524_HEADER.to_vec(),
+            BLOCK_530525_HEADER.to_vec(),
+            BLOCK_530526_HEADER.to_vec(),
+            BLOCK_530527_HEADER.to_vec(),
+        ];
         let head_block_hash = hex::decode(BLOCK_530518_PARENT_HASH).unwrap();
         test_step(
             headers,
@@ -402,27 +401,28 @@ mod tests {
 
     #[test]
     fn test_verify_headers_twenty() -> Result<()> {
-        let mut headers = Vec::new();
-        headers.push(BLOCK_530508_HEADER.to_vec());
-        headers.push(BLOCK_530509_HEADER.to_vec());
-        headers.push(BLOCK_530510_HEADER.to_vec());
-        headers.push(BLOCK_530511_HEADER.to_vec());
-        headers.push(BLOCK_530512_HEADER.to_vec());
-        headers.push(BLOCK_530513_HEADER.to_vec());
-        headers.push(BLOCK_530514_HEADER.to_vec());
-        headers.push(BLOCK_530515_HEADER.to_vec());
-        headers.push(BLOCK_530516_HEADER.to_vec());
-        headers.push(BLOCK_530517_HEADER.to_vec());
-        headers.push(BLOCK_530518_HEADER.to_vec());
-        headers.push(BLOCK_530519_HEADER.to_vec());
-        headers.push(BLOCK_530520_HEADER.to_vec());
-        headers.push(BLOCK_530521_HEADER.to_vec());
-        headers.push(BLOCK_530522_HEADER.to_vec());
-        headers.push(BLOCK_530523_HEADER.to_vec());
-        headers.push(BLOCK_530524_HEADER.to_vec());
-        headers.push(BLOCK_530525_HEADER.to_vec());
-        headers.push(BLOCK_530526_HEADER.to_vec());
-        headers.push(BLOCK_530527_HEADER.to_vec());
+        let headers = vec![
+            BLOCK_530508_HEADER.to_vec(),
+            BLOCK_530509_HEADER.to_vec(),
+            BLOCK_530510_HEADER.to_vec(),
+            BLOCK_530511_HEADER.to_vec(),
+            BLOCK_530512_HEADER.to_vec(),
+            BLOCK_530513_HEADER.to_vec(),
+            BLOCK_530514_HEADER.to_vec(),
+            BLOCK_530515_HEADER.to_vec(),
+            BLOCK_530516_HEADER.to_vec(),
+            BLOCK_530517_HEADER.to_vec(),
+            BLOCK_530518_HEADER.to_vec(),
+            BLOCK_530519_HEADER.to_vec(),
+            BLOCK_530520_HEADER.to_vec(),
+            BLOCK_530521_HEADER.to_vec(),
+            BLOCK_530522_HEADER.to_vec(),
+            BLOCK_530523_HEADER.to_vec(),
+            BLOCK_530524_HEADER.to_vec(),
+            BLOCK_530525_HEADER.to_vec(),
+            BLOCK_530526_HEADER.to_vec(),
+            BLOCK_530527_HEADER.to_vec(),
+        ];
         let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
         test_step(
             headers,
@@ -443,8 +443,7 @@ mod tests {
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
 
-        let mut headers = Vec::new();
-        headers.push(BLOCK_530527_HEADER.to_vec());
+        let headers = vec![BLOCK_530527_HEADER.to_vec()];
         let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
 
         let mut builder_logger = env_logger::Builder::from_default_env();

@@ -142,6 +142,7 @@ mod tests {
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
 
+    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::justification::AuthoritySetSignersTarget;
     use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
     use crate::utils::{to_bits, QUORUM_SIZE};
@@ -471,7 +472,6 @@ mod tests {
         let inner_proof = gen_step_proof::<F, C, D>(&inner_data);
         inner_data.verify(inner_proof.clone()).unwrap();
   
-  
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
         let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
@@ -489,7 +489,21 @@ mod tests {
             println!("outer_circuit: gate is {:?}", gate);
         }
 
-        outer_data.verify(outer_proof)
+        outer_data.verify(outer_proof.clone()).unwrap();
 
+        let mut final_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let final_proof_target = final_builder.add_virtual_proof_with_pis(&outer_data.common);
+        let final_verifier_data = final_builder.add_virtual_verifier_data(outer_data.common.config.fri_config.cap_height);
+        final_builder.verify_proof::<C>(&final_proof_target, &final_verifier_data, &outer_data.common);
+
+        let final_data = final_builder.build::<PoseidonBN128GoldilocksConfig>();
+
+        let mut final_pw = PartialWitness::new();
+        final_pw.set_proof_with_pis_target(&final_proof_target, &outer_proof);
+        final_pw.set_verifier_data_target(&final_verifier_data, &outer_data.verifier_only);
+
+        let final_proof = final_data.prove(final_pw).unwrap();
+
+        final_data.verify(final_proof)
     }
 }

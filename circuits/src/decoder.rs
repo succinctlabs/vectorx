@@ -2,7 +2,7 @@ use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powe
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
-use crate::utils::{ CircuitBuilderUtils, HASH_SIZE, MAX_HEADER_SIZE };
+use crate::utils::{ CircuitBuilderUtils, HASH_SIZE };
 
 trait CircuitBuilderScaleDecoder {
     fn decode_compact_int(
@@ -211,12 +211,22 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::sync::Arc;
+
     use anyhow::Result;
-    use plonky2::iop::witness::{PartialWitness};
+    use ff::PrimeField;
+    use log::Level;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::plonk::proof::ProofWithPublicInputs;
+    use plonky2::plonk::prover::prove;
+    use plonky2::util::serialization::DefaultGateSerializer;
+    use plonky2::util::timing::TimingTree;
     use plonky2_field::types::Field;
+    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::utils::MAX_HEADER_SIZE;
     use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
@@ -304,9 +314,15 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
         let config = CircuitConfig::standard_recursion_config();
         let pw = PartialWitness::new();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
+        let mut builder = CircuitBuilder::<F, D>::new(config.clone());
 
         let mut header_bytes_target = BLOCK_576728_HEADER.iter().map(|b| {
             builder.constant(F::from_canonical_u8(*b))
@@ -338,6 +354,86 @@ mod tests {
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;
 
-        data.verify(proof)
+        data.verify(proof.clone()).unwrap();
+
+        let mut outer_builder = CircuitBuilder::<F, D>::new(config);
+        let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&data.common);
+        let inner_verifier_data = outer_builder.add_virtual_verifier_data(data.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &data.common);
+
+        let outer_data = outer_builder.build::<C>();
+
+        let mut outer_pw = PartialWitness::new();
+        outer_pw.set_proof_with_pis_target(&inner_proof_target, &proof);
+        outer_pw.set_verifier_data_target(&inner_verifier_data, &data.verifier_only);
+
+        let outer_proof = outer_data.prove(outer_pw).unwrap();
+
+        outer_data.verify(outer_proof.clone()).unwrap();
+
+        let mut final_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let final_proof_target = final_builder.add_virtual_proof_with_pis(&outer_data.common);
+        let final_verifier_data = final_builder.add_virtual_verifier_data(outer_data.common.config.fri_config.cap_height);
+        final_builder.verify_proof::<C>(&final_proof_target, &final_verifier_data, &outer_data.common);
+
+        let final_data = final_builder.build::<PoseidonBN128GoldilocksConfig>();
+
+        let mut final_pw = PartialWitness::new();
+        final_pw.set_proof_with_pis_target(&final_proof_target, &outer_proof);
+        final_pw.set_verifier_data_target(&final_verifier_data, &outer_data.verifier_only);
+
+        let mut timing = TimingTree::new("prove", Level::Debug);
+        let final_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&final_data.prover_only, &final_data.common, final_pw, &mut timing).unwrap();
+        timing.print();
+
+        final_data.verify(final_proof.clone()).unwrap();
+
+        // Serialize the final proof's artifacts to json (to be used by the gnark plonky2 verifier)
+        let final_proof_serialized = serde_json::to_string(&final_proof).unwrap();
+        fs::write(
+            "final.proof_with_public_inputs.json",
+            final_proof_serialized,
+        )
+        .expect("Unable to write file");
+    
+        let final_vd_serialized = serde_json::to_string(&final_data.verifier_only).unwrap();
+        fs::write(
+            "final.verifier_only_circuit_data.json",
+            final_vd_serialized,
+        )
+        .expect("Unable to write file");
+
+        let final_cd_serialized = serde_json::to_string(&final_data.common).unwrap();
+        fs::write(
+            "final.common_circuit_data.json",
+            final_cd_serialized,
+        )
+        .expect("Unable to write file");
+
+        // Serialize the final proof into byts (to be used by the plonky2 verifier)
+        let final_proof_bytes = final_proof.to_bytes();
+        fs::write(
+            "final.proof_with_public_inputs.bytes",
+            final_proof_bytes,
+        ).expect("Unable to write file");
+
+        let final_vd_bytes = final_data.verifier_only.to_bytes().unwrap();
+        fs::write(
+            "final.verifier_only_circuit_data.bytes",
+            final_vd_bytes,
+        ).expect("Unable to write file");
+
+        let gate_serializer = DefaultGateSerializer;
+        let final_cd_bytes = final_data.common
+            .to_bytes(&gate_serializer).unwrap();
+
+        fs::write(
+            "final.common_circuit_data.bytes",
+            final_cd_bytes,
+        ).expect("Unable to write file");
+
+        Ok(())
+
+
     }
 }

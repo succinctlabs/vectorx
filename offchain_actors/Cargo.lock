@@ -664,7 +664,7 @@ dependencies = [
 [[package]]
 name = "curve25519-dalek"
 version = "4.0.0-rc.2"
-source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/eddsa_verify_recursive#20f0e54406754fadf54a137b9eebffcfa20fee9c"
+source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#f0a662be8d5adfa82923cf0122085186e25f817a"
 dependencies = [
  "cfg-if",
  "fiat-crypto",
@@ -990,6 +990,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ff_ce"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d3a682c12d0cc98a32ab7540401a5ea1ed21d11571eea11d5829cd721f85ff0"
+dependencies = [
+ "byteorder",
+ "ff_derive_ce",
+ "hex",
+ "rand 0.4.6",
+]
+
+[[package]]
+name = "ff_derive_ce"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50c052fa6d4c2f12305ec364bfb8ef884836f3f61ea015b202372ff996d1ac4b"
+dependencies = [
+ "num-bigint 0.2.6",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "fiat-crypto"
 version = "0.1.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1060,6 +1086,12 @@ dependencies = [
  "scale-info",
  "serde",
 ]
+
+[[package]]
+name = "fuchsia-cprng"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 
 [[package]]
 name = "funty"
@@ -2815,10 +2847,10 @@ dependencies = [
 [[package]]
 name = "plonky2lib_succinct"
 version = "0.1.0"
-source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/eddsa_verify_recursive#20f0e54406754fadf54a137b9eebffcfa20fee9c"
+source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#f0a662be8d5adfa82923cf0122085186e25f817a"
 dependencies = [
  "anyhow",
- "curve25519-dalek 4.0.0-rc.2 (git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/eddsa_verify_recursive)",
+ "curve25519-dalek 4.0.0-rc.2 (git+ssh://git@github.com/succinctlabs/plonky2lib.git)",
  "hex",
  "hex-literal",
  "itertools",
@@ -2953,6 +2985,19 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "rand"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552840b97013b1a26992c11eac34bdd778e464601a4c2054b5f0bff7c6761293"
+dependencies = [
+ "fuchsia-cprng",
+ "libc",
+ "rand_core 0.3.1",
+ "rdrand",
+ "winapi",
+]
+
+[[package]]
+name = "rand"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
@@ -2995,6 +3040,21 @@ dependencies = [
  "ppv-lite86",
  "rand_core 0.6.4",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a6fdeb83b075e8266dcc8762c22776f6877a63111121f5f8c7411e5be7eed4b"
+dependencies = [
+ "rand_core 0.4.2",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c33a3c44ca05fa6f1807d8e6743f3824e8509beca625669633be0acbdf509dc"
 
 [[package]]
 name = "rand_core"
@@ -3052,6 +3112,15 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
+]
+
+[[package]]
+name = "rdrand"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
+dependencies = [
+ "rand_core 0.3.1",
 ]
 
 [[package]]
@@ -4509,9 +4578,11 @@ dependencies = [
  "anyhow",
  "avail-subxt 0.2.1",
  "ed25519-dalek",
+ "ff_ce",
  "futures-util",
  "hex",
  "itertools",
+ "lazy_static",
  "log",
  "num",
  "parity-scale-codec",
@@ -4519,8 +4590,8 @@ dependencies = [
  "plonky2_ecdsa 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-ecdsa?branch=kevjue/serialization)",
  "plonky2_field",
  "plonky2_u32 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize)",
- "plonky2lib_succinct 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/eddsa_verify_recursive)",
- "rand 0.8.5",
+ "plonky2lib_succinct 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2lib.git)",
+ "rand 0.4.6",
  "serde",
  "serde_json",
  "tokio",

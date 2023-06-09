@@ -47,7 +47,7 @@ struct Step {
 
     // This proof is used to verify the following:
     // 1) There exists a sequence of block headers that have the following properties:
-    //     a) Those headers are chained together via the parent_hash field and have incremental block numbers.
+    //     a) Those headers are chained together via the parent_hash field and have sequential block numbers.
     //     b) The first header has the block number and parent hash that is stored in the smart contract.
     //     c) Those headers have the submitted headerRoots (basically that those roots are the blake2 digest of those headers).
     //     d) Those headers have the submitted executionStateRoots and dataRoots.

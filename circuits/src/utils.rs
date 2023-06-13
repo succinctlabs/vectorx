@@ -9,6 +9,7 @@ pub const MAX_NUM_HEADERS_PER_STEP: usize = 20;
 //pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 10; // 1280 bytes.  Keep this for now.
 pub const HASH_SIZE: usize = 32;                         // in bytes
+pub const PUB_KEY_SIZE: usize = 32;                      // in bytes
 
 
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
@@ -22,29 +23,172 @@ use plonky2::{
     hash::hash_types::RichField,
     plonk::circuit_builder::CircuitBuilder, util::serialization::{Buffer, IoResult, Read, Write}
 };
-use plonky2_field::extension::Extendable;
+use plonky2_field::{extension::Extendable, types::{PrimeField, PrimeField64}};
 
+#[derive(Clone)]
+pub struct AvailHashTarget(pub [Target; HASH_SIZE]);
+
+pub trait WitnessAvailHash<F: PrimeField64>: Witness<F> {
+    fn get_avail_hash_target(&self, target: AvailHashTarget) -> [u8; HASH_SIZE];
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: &[u8; HASH_SIZE]);
+}
+
+impl<T: Witness<F>, F: PrimeField64> WitnessAvailHash<F> for T {
+    fn get_avail_hash_target(&self, target: AvailHashTarget) -> [u8; HASH_SIZE] {
+        target.0
+        .iter()
+        .map(|t| u8::try_from(self.get_target(*t).to_canonical_u64()).unwrap())
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap()
+    }
+
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: &[u8; HASH_SIZE]) {
+        for i in 0..HASH_SIZE {
+            self.set_target(target.0[i], F::from_canonical_u8(value[i]));
+        }
+    }
+}
+
+pub trait GeneratedValuesAvailHash<F: PrimeField> {
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: [u8; HASH_SIZE]);
+}
+
+impl<F: PrimeField> GeneratedValuesAvailHash<F> for GeneratedValues<F> {
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: [u8; HASH_SIZE]) {
+        for i in 0..HASH_SIZE {
+            self.set_target(target.0[i], F::from_canonical_u8(value[i]));
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct EncodedHeaderTarget {
+    pub header_bytes: [Target; MAX_HEADER_SIZE],
+    pub header_size: Target,
+}
+
+pub trait WitnessEncodedHeader<F: PrimeField64>: Witness<F> {
+    fn get_encoded_header_target(&self, target: EncodedHeaderTarget) -> Vec<u8>;
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>);
+}
+
+impl<T: Witness<F>, F: PrimeField64> WitnessEncodedHeader<F> for T {
+    fn get_encoded_header_target(&self, target: EncodedHeaderTarget) -> Vec<u8> {
+        let header_size = self.get_target(target.header_size).to_canonical_u64();
+        target.header_bytes
+        .iter()
+        .take(header_size as usize)
+        .map(|t| u8::try_from(self.get_target(*t).to_canonical_u64()).unwrap())
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap()
+    }
+
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>) {
+        let header_size = value.len();
+        self.set_target(target.header_size, F::from_canonical_u64(header_size as u64));
+        for i in 0..header_size {
+            self.set_target(target.header_bytes[i], F::from_canonical_u8(value[i]));
+        }
+
+        for i in header_size..MAX_HEADER_SIZE {
+            self.set_target(target.header_bytes[i], F::from_canonical_u8(0));
+        }
+    }
+}
+
+pub trait GeneratedValuesEncodedHeader<F: PrimeField> {
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>);
+}
+
+impl<F: PrimeField> GeneratedValuesEncodedHeader<F> for GeneratedValues<F> {
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>) {
+        let header_size = value.len();
+        self.set_target(target.header_size, F::from_canonical_u64(header_size as u64));
+        for i in 0..header_size {
+            self.set_target(target.header_bytes[i], F::from_canonical_u8(value[i]));
+        }
+
+        for i in header_size..MAX_HEADER_SIZE {
+            self.set_target(target.header_bytes[i], F::from_canonical_u8(0));
+        }
+    }
+}
 
 pub trait CircuitBuilderUtils {
+    fn add_virtual_avail_hash_target_safe(
+        &mut self,
+        set_as_public: bool
+    ) -> AvailHashTarget;
+
+    fn add_virtual_encoded_header_target_safe(
+        &mut self
+    ) -> EncodedHeaderTarget;
+
+    fn connect_hash(
+        &mut self,
+        x: AvailHashTarget,
+        y: AvailHashTarget
+    );
+
     fn int_div(
         &mut self,
         dividend: Target,
         divisor: Target,
     ) -> Target;
 
-    fn random_access_vec<T>(
+    fn random_access_vec(
         &mut self,
         index: Target,
-        targets: &Vec<Vec<T>>,
-        target_converter: ToTarget<T>,
-        t_converter: FromTarget<T>,
-    ) -> Vec<T>;
+        targets: &Vec<Vec<Target>>,
+    ) -> Vec<Target>;
 }
 
 pub type ToTarget<T> = fn(&T) -> Target;
 pub type FromTarget<T> = fn(&Target) -> T;
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
+    fn add_virtual_avail_hash_target_safe(&mut self, set_as_public: bool) -> AvailHashTarget {
+        let mut hash_target = Vec::new();
+        for _ in 0..HASH_SIZE {
+            let byte = self.add_virtual_target();
+            if set_as_public {
+                self.register_public_input(byte);
+            }
+            self.range_check(byte, 8);
+            hash_target.push(byte);
+        }
+
+        AvailHashTarget(hash_target.try_into().unwrap())
+    }
+
+    fn add_virtual_encoded_header_target_safe(&mut self) -> EncodedHeaderTarget {
+        let mut header_bytes = Vec::new();
+        for _j in 0..MAX_HEADER_SIZE {
+            let byte = self.add_virtual_target();
+            self.range_check(byte, 8);
+            header_bytes.push(byte);
+        }
+
+        let header_size = self.add_virtual_target();
+
+        EncodedHeaderTarget {
+            header_bytes: header_bytes.try_into().unwrap(),
+            header_size,
+        }
+    }
+
+    fn connect_hash(
+        &mut self,
+        x: AvailHashTarget,
+        y: AvailHashTarget
+    ) {
+        for i in 0..HASH_SIZE {
+            self.connect(x.0[i], y.0[i]);
+        }
+    }
+
     fn int_div(
         &mut self,
         dividend: Target,
@@ -67,13 +211,11 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         quotient
     }
 
-    fn random_access_vec<T>(
+    fn random_access_vec(
         &mut self,
         index: Target,
-        targets: &Vec<Vec<T>>,
-        target_converter: ToTarget<T>,
-        t_converter: FromTarget<T>,
-    ) -> Vec<T> {
+        targets: &Vec<Vec<Target>>,
+    ) -> Vec<Target> {
         assert!(!targets.is_empty());
 
         let v_size = targets[0].len();
@@ -87,10 +229,9 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
             self.random_access(
                 index,
                 targets.iter().map(|t| {
-                    target_converter(&t[i])
+                    t[i]
                 }).collect::<Vec<Target>>())
-        }).
-        map(|x| t_converter(&x)).collect::<Vec<T>>()
+        }).collect::<Vec<Target>>()
     }
 
 }

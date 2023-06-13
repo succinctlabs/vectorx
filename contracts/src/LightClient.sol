@@ -142,7 +142,7 @@ contract LightClient is EventDecoder {
     function doStep(Step memory update) internal {
         // First verify that the authority set is correct.
         if (update.authoritySetIDProof.authoritySetID != activeAuthoritySetID) {
-            revert("Authority set ID is not correct");
+            revert("Authority set ID is not currently active");
         }
 
         // Check to see that the last block's authority set ID is correct.

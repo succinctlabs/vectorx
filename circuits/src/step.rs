@@ -30,7 +30,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
     ) {
         assert!(subchain.encoded_headers.len() <= MAX_NUM_HEADERS_PER_STEP);
 
-        // We plan to store the the calculated blake2b hash (in bits) in the i'th entry in calculated_hashes
+        // We plan to store the the calculated blake2b hash (in bits) in calculated_hashes
         let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();
         let mut decoded_block_nums = Vec::new();
         for i in 0 .. subchain.encoded_headers.len() {
@@ -73,8 +73,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
                 // Needs to be in bit big endian order for the EDDSA verification circuit
                 bits.reverse();
-                for k in 0..8 {
-                    self.connect(hash_circuit.message[j*8+k].target, bits[k].target);
+                for (k, bit) in bits.iter().enumerate().take(8){
+                    self.connect(hash_circuit.message[j*8+k].target, bit.target);
                 }
             }
 
@@ -248,8 +248,8 @@ mod tests {
 
         pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
         pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
-        for i in 0..headers.len() {
-            pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], headers[i].clone());
+        for (i, header) in headers.iter().enumerate() {
+            pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
         }
 
         set_precommits_pw::<F, D, Curve>(
@@ -264,7 +264,7 @@ mod tests {
         set_authority_set_pw::<F, D, Curve>(
             &mut pw,
             &step_target.authority_set,
-            authority_set.clone(),
+            authority_set,
             authority_set_id,
             authority_set_commitment,
         );

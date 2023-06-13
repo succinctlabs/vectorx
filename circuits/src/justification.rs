@@ -309,14 +309,13 @@ pub (crate) mod tests {
 
     pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
         pw: &mut PartialWitness<F>,
-        justification_target: &JustificationTarget<C>,
+        precommit_targets: Vec<PrecommitTarget<C>>,
         precommit_messages: Vec<Vec<u8>>,
         signatures: Vec<Vec<u8>>,
         pub_key_indices: Vec<usize>,
         pub_keys: Vec<Vec<u8>>,
     ) {
-        assert!(justification_target.precommit_targets.len() == QUORUM_SIZE);
-        assert!(justification_target.authority_set_signers.pub_keys.len() == NUM_AUTHORITIES_PADDED);
+        assert!(precommit_targets.len() == QUORUM_SIZE);
         assert!(precommit_messages.len() == QUORUM_SIZE);
         assert!(signatures.len() == QUORUM_SIZE);
         assert!(pub_key_indices.len() == QUORUM_SIZE);
@@ -344,7 +343,7 @@ pub (crate) mod tests {
                 &EDDSAPublicKey(pub_key_point)
             ));
 
-            let precommit_target = &justification_target.precommit_targets[i];
+            let precommit_target = &precommit_targets[i];
             pw.set_biguint_target(&precommit_target.signature.r.x.value, &sig.r.x.to_canonical_biguint());
             pw.set_biguint_target(&precommit_target.signature.r.y.value, &sig.r.y.to_canonical_biguint());
             pw.set_biguint_target(&precommit_target.signature.s.value, &sig_s.to_canonical_biguint());
@@ -358,10 +357,21 @@ pub (crate) mod tests {
             .zip(precommit_target.precommit_message.iter())
             .for_each(|(msg_byte, msg_byte_target)| pw.set_target(*msg_byte_target, F::from_canonical_u8(*msg_byte)));
         }
+    }
+
+    pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
+        pw: &mut PartialWitness<F>,
+        authority_set_target: &AuthoritySetSignersTarget,
+        pub_keys: Vec<Vec<u8>>,
+        authority_set_id: u64,
+        authority_set_commitment: Vec<u8>,
+    ) {
+        assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
+        assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES_PADDED);
 
         // Set the authority set partial witness values
         for i in 0..pub_keys.len() {
-            let authority_set_signers_target = &justification_target.authority_set_signers.pub_keys[i];
+            let authority_set_signers_target = &authority_set_target.pub_keys[i];
             let pub_key = &pub_keys[i];
 
             assert!(pub_key.len() == PUB_KEY_SIZE);
@@ -371,7 +381,15 @@ pub (crate) mod tests {
             .zip(authority_set_signers_target.0.iter())
             .for_each(|(pub_key_byte, pub_key_byte_target)| pw.set_target(*pub_key_byte_target, F::from_canonical_u8(*pub_key_byte)));
         }
+
+        pw.set_target(authority_set_target.set_id, F::from_canonical_u64(authority_set_id));
+
+        for i in 0..HASH_SIZE {
+            pw.set_target(authority_set_target.commitment.0[i], F::from_canonical_u8(authority_set_commitment[i]));
+        }
     }
+
+
 
     #[test]
     fn test_avail_eddsa_circuit() -> Result<()> {
@@ -517,6 +535,11 @@ pub (crate) mod tests {
         type F = <C as GenericConfig<D>>::F;
         type Curve = Ed25519;
 
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw = PartialWitness::new();
 
@@ -524,23 +547,20 @@ pub (crate) mod tests {
 
         set_precommits_pw::<F, D, Curve>(
             &mut pw,
-            &justification_target,
+            justification_target.precommit_targets,
             (0..QUORUM_SIZE).map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
         );
 
-        pw.set_target(justification_target.authority_set_signers.set_id, F::from_canonical_u64(BLOCK_530527_AUTHORITY_SET_ID));
-
-        let mut authority_set_commitment_target = Vec::new();
-        let authority_set_commitment_bytes = hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap();
-        for i in 0..HASH_SIZE {
-            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(authority_set_commitment_bytes[i])));
-        }
-
-        pw.set_avail_hash_target(&justification_target.authority_set_signers.commitment, &(authority_set_commitment_bytes.try_into().unwrap()));
-
+        set_authority_set_pw::<F, D, Curve>(
+            &mut pw,
+            &justification_target.authority_set_signers,
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SET_ID,
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+        );
 
         let block_hash_bytes = hex::decode(BLOCK_530527_BLOCK_HASH).unwrap();
         pw.set_avail_hash_target(&justification_target.finalized_block.hash, &(block_hash_bytes.try_into().unwrap()));

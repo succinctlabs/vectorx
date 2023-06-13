@@ -427,7 +427,7 @@ mod tests {
             BLOCK_530526_HEADER.to_vec(),
             BLOCK_530527_HEADER.to_vec(),
         ];
-        let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
+        let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
         let head_block_num = 530507;
 
         let mut builder_logger = env_logger::Builder::from_default_env();
@@ -467,12 +467,15 @@ mod tests {
         let inner_proof = gen_step_proof::<F, C, D>(&inner_data, &pw);
         inner_data.verify(inner_proof.clone()).unwrap();
 
-
+        println!("inner circuit digest is {:?}", inner_data.verifier_only.circuit_digest);
 
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
         let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
         outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &inner_data.common);
+
+
+        outer_builder.register_public_inputs(&inner_proof_target.public_inputs);
 
         let outer_data = outer_builder.build::<C>();
 

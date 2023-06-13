@@ -177,6 +177,7 @@ mod tests {
     use plonky2_field::types::Field;
     use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
 
+    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::step::make_step_circuit;
     use crate::utils::{QUORUM_SIZE, WitnessAvailHash, WitnessEncodedHeader};
     use crate::utils::tests::{
@@ -397,36 +398,77 @@ mod tests {
         )
     }
 
-/*
     #[test]
     fn test_recursive_verify_step() -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+        type Curve = Ed25519;
 
-        let headers = vec![BLOCK_530527_HEADER.to_vec()];
+        let headers = vec![
+            BLOCK_530508_HEADER.to_vec(),
+            BLOCK_530509_HEADER.to_vec(),
+            BLOCK_530510_HEADER.to_vec(),
+            BLOCK_530511_HEADER.to_vec(),
+            BLOCK_530512_HEADER.to_vec(),
+            BLOCK_530513_HEADER.to_vec(),
+            BLOCK_530514_HEADER.to_vec(),
+            BLOCK_530515_HEADER.to_vec(),
+            BLOCK_530516_HEADER.to_vec(),
+            BLOCK_530517_HEADER.to_vec(),
+            BLOCK_530518_HEADER.to_vec(),
+            BLOCK_530519_HEADER.to_vec(),
+            BLOCK_530520_HEADER.to_vec(),
+            BLOCK_530521_HEADER.to_vec(),
+            BLOCK_530522_HEADER.to_vec(),
+            BLOCK_530523_HEADER.to_vec(),
+            BLOCK_530524_HEADER.to_vec(),
+            BLOCK_530525_HEADER.to_vec(),
+            BLOCK_530526_HEADER.to_vec(),
+            BLOCK_530527_HEADER.to_vec(),
+        ];
         let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
+        let head_block_num = 530526;
 
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
         builder_logger.filter_level(log::LevelFilter::Trace);
         builder_logger.try_init()?;
 
-        let inner_data = step_circuit_build::<F, C, D>(
-            headers,
-            head_block_hash,
-            530526,
-            BLOCK_530527_AUTHORITY_SET_ID,
-            BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut pw: PartialWitness<F> = PartialWitness::new();
+
+        let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
+
+        pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
+        pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
+        for (i, header) in headers.iter().enumerate() {
+            pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
+        }
+
+        set_precommits_pw::<F, D, Curve>(
+            &mut pw,
+            step_target.precommits.to_vec(),
+            (0..QUORUM_SIZE).map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+        );
+
+        set_authority_set_pw::<F, D, Curve>(
+            &mut pw,
+            &step_target.authority_set,
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SET_ID,
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
-        let inner_proof = gen_step_proof::<F, C, D>(&inner_data);
+        let inner_data = builder.build();
+        let inner_proof = gen_step_proof::<F, C, D>(&inner_data, &pw);
         inner_data.verify(inner_proof.clone()).unwrap();
-  
+
+
+
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
         let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
@@ -439,12 +481,11 @@ mod tests {
         outer_pw.set_verifier_data_target(&inner_verifier_data, &inner_data.verifier_only);
 
         let outer_proof = outer_data.prove(outer_pw).unwrap();
+        outer_data.verify(outer_proof.clone()).unwrap();
 
         for gate in outer_data.common.gates.iter() {
             println!("outer_circuit: gate is {:?}", gate);
         }
-
-        outer_data.verify(outer_proof.clone()).unwrap();
 
         let mut final_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let final_proof_target = final_builder.add_virtual_proof_with_pis(&outer_data.common);
@@ -459,7 +500,10 @@ mod tests {
 
         let final_proof = final_data.prove(final_pw).unwrap();
 
+        for gate in outer_data.common.gates.iter() {
+            println!("final_circuit: gate is {:?}", gate);
+        }
+
         final_data.verify(final_proof)
     }
-    */
 }

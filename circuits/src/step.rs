@@ -428,7 +428,7 @@ mod tests {
             BLOCK_530527_HEADER.to_vec(),
         ];
         let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
-        let head_block_num = 530526;
+        let head_block_num = 530507;
 
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);

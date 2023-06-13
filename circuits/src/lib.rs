@@ -3,7 +3,7 @@ pub mod decoder;
 pub mod justification;
 pub mod poseidon_bn128;
 mod poseidon_bn128_constants;
-//pub mod step;
+pub mod step;
 mod utils;
 
 extern crate rand;

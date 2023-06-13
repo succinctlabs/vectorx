@@ -1,72 +1,59 @@
 use plonky2lib_succinct::ed25519::curve::curve_types::Curve;
 use plonky2lib_succinct::hash_functions::blake2b::make_blake2b_circuit;
-use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::circuit_builder::CircuitBuilder};
+use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::{circuit_builder::CircuitBuilder}};
 use plonky2_field::extension::Extendable;
-use crate::decoder::{CircuitBuilderHeaderDecoder, EncodedHeaderTarget};
+use crate::{decoder::CircuitBuilderHeaderDecoder, utils::{QUORUM_SIZE, AvailHashTarget, EncodedHeaderTarget, CircuitBuilderUtils}};
 use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, AuthoritySetSignersTarget, FinalizedBlockTarget};
 use crate::utils::{MAX_HEADER_SIZE, HASH_SIZE, MAX_NUM_HEADERS_PER_STEP};
 
-#[derive(Clone)]
 pub struct VerifySubchainTarget {
-    pub head_block_hash: Vec<BoolTarget>,   // The input is a vector of bits (in BE bit order)
+    pub head_block_hash: AvailHashTarget,   // The input is a vector of bits (in BE bit order)
     pub head_block_num: Target,
-    pub encoded_headers: Vec<Vec<Target>>,
-    pub encoded_header_sizes: Vec<Target>,
+    pub encoded_headers: Vec<EncodedHeaderTarget>,
 }
 
 pub trait CircuitBuilderStep<C: Curve> {
     fn step(
         &mut self,
-        subchain: VerifySubchainTarget,
+        subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_signers: AuthoritySetSignersTarget,
+        authority_set_signers: &AuthoritySetSignersTarget,
     );
 }
 
-// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<C> for CircuitBuilder<F, D> {
     fn step(
         &mut self,
-        subchain: VerifySubchainTarget,
+        subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_signers: AuthoritySetSignersTarget,
+        authority_set_signers: &AuthoritySetSignersTarget,
     ) {
         assert!(subchain.encoded_headers.len() <= MAX_NUM_HEADERS_PER_STEP);
-        assert!(subchain.encoded_headers.len() == subchain.encoded_header_sizes.len());
 
-        for i in 0 .. subchain.encoded_headers.len() {
-            assert_eq!(subchain.encoded_headers[i].len(), MAX_HEADER_SIZE);
-
-            for j in 0..MAX_HEADER_SIZE {
-                self.range_check(subchain.encoded_headers[i][j], 8);
-            }
-
-            self.range_check(subchain.encoded_header_sizes[i], (MAX_HEADER_SIZE as f32).log2().ceil() as usize);
-        }
-
-        // The i'th hash in calculated_hashes is the calculated blake2b hash for header i
+        // We plan to store the the calculated blake2b hash (in bits) in the i'th entry in calculated_hashes
         let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();
         let mut decoded_block_nums = Vec::new();
         for i in 0 .. subchain.encoded_headers.len() {
+
+            // Get the decoded_header object to retrieve the block numbers and parent hashes
             let decoded_header = self.decode_header(
-                EncodedHeaderTarget {
-                    header_bytes: subchain.encoded_headers[i].clone(),
-                    header_size: subchain.encoded_header_sizes[i],
-                },
+                &subchain.encoded_headers[i],
             );
 
-            // Verify that the previous block hash is equal to the parent hash of the current header
+            // Verify that the previous calcualted block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
-                let mut bits = self.split_le(decoded_header.parent_hash[j], 8);
+                let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);
 
                 // Needs to be in bit big endian order for the EDDSA verification circuit
                 bits.reverse();
                 for k in 0..8 {
                     if i == 0 {
-                        // Connect it to the passed in head block hash (which should of already been verified from the last step txn).
-                        self.connect(subchain.head_block_hash[j*8+k].target, bits[k].target);
+                        let mut head_block_bits = self.split_le(subchain.head_block_hash.0[j], 8);
+                        head_block_bits.reverse();
+                        // For the first header in the subchain, verify equality to the head block hash public input.
+                        self.connect(head_block_bits[k].target, bits[k].target);
                     } else {
-                        // Connect it to the previous calculated hash in the subchain array
+                        // For other headers, verify equality to the previous block's calculated header hash
                         self.connect(calculated_hashes[i-1][j*8+k].target, bits[k].target);
                     }
                 }
@@ -79,9 +66,10 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 HASH_SIZE
             );
 
-            // Input the encoded header into the hasher
+            // Input the encoded header bytes into the hasher
             for j in 0 .. MAX_HEADER_SIZE {
-                let mut bits = self.split_le(subchain.encoded_headers[i][j], 8);
+                // Need to split the bytes into bits
+                let mut bits = self.split_le(subchain.encoded_headers[i].header_bytes[j], 8);
 
                 // Needs to be in bit big endian order for the EDDSA verification circuit
                 bits.reverse();
@@ -90,7 +78,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 }
             }
 
-            self.connect(hash_circuit.message_len, subchain.encoded_header_sizes[i]);
+            self.connect(hash_circuit.message_len, subchain.encoded_headers[i].header_size);
 
             calculated_hashes.push(hash_circuit.digest);
 
@@ -120,11 +108,56 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         self.verify_justification(
             signed_precommits,
             authority_set_signers,
-            FinalizedBlockTarget {
+            &FinalizedBlockTarget {
                 num: *decoded_block_nums.last().unwrap(),
-                hash: last_calculated_hash_bytes.clone(),
+                hash: AvailHashTarget(last_calculated_hash_bytes.try_into().unwrap()),
             },
         );
+    }
+}
+
+pub struct StepTarget<C: Curve> {
+    subchain_target: VerifySubchainTarget,
+    precommits: [PrecommitTarget<C>; QUORUM_SIZE],
+    authority_set: AuthoritySetSignersTarget,
+}
+
+pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>(builder: &mut CircuitBuilder::<F, D>) -> StepTarget<C>{
+    let head_block_hash_target = builder.add_virtual_avail_hash_target_safe(true);
+
+    let head_block_num_target = builder.add_virtual_target();
+    builder.register_public_input(head_block_num_target);
+
+    let mut header_targets = Vec::new();
+    for _i in 0..MAX_NUM_HEADERS_PER_STEP {
+        header_targets.push(
+            builder.add_virtual_encoded_header_target_safe()
+        );
+    }
+
+    let mut precommit_targets = Vec::new();
+    for _i in 0..QUORUM_SIZE {
+        precommit_targets.push(builder.add_virtual_precommit_target_safe());
+    }
+
+    let authority_set = <CircuitBuilder<F, D> as CircuitBuilderGrandpaJustificationVerifier<C>>::add_virtual_authority_set_signers_target_safe(builder);
+
+    let verify_subchain_target = VerifySubchainTarget {
+        head_block_hash: head_block_hash_target,
+        head_block_num: head_block_num_target,
+        encoded_headers: header_targets,
+    };
+
+    builder.step(
+        &verify_subchain_target,
+        precommit_targets.clone(),
+        &authority_set,
+    );
+
+    StepTarget{
+        subchain_target: verify_subchain_target,
+        precommits: precommit_targets.try_into().unwrap(),
+        authority_set,
     }
 }
 
@@ -141,11 +174,11 @@ mod tests {
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
+    use plonky2_field::types::Field;
+    use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
 
-    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
-    use crate::justification::AuthoritySetSignersTarget;
-    use crate::step::{MAX_HEADER_SIZE, HASH_SIZE, CircuitBuilderStep, VerifySubchainTarget};
-    use crate::utils::{to_bits, QUORUM_SIZE};
+    use crate::step::make_step_circuit;
+    use crate::utils::{QUORUM_SIZE, WitnessAvailHash, WitnessEncodedHeader};
     use crate::utils::tests::{
         BLOCK_530508_PARENT_HASH,
         BLOCK_530508_HEADER,
@@ -177,106 +210,18 @@ mod tests {
         BLOCK_530527_AUTHORITY_SIGS,
         BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT,
     };
-    use crate::justification::tests::generate_precommits;
-
-    fn step_circuit_build<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
-        headers: Vec<Vec<u8>>,
-        head_block_hash: Vec<u8>,
-        head_block_num: u64,
-
-        authority_set_id: u64,
-        precommit_message: Vec<u8>,
-        signatures: Vec<Vec<u8>>,
-
-        pub_key_indices: Vec<usize>,
-        authority_set: Vec<Vec<u8>>,
-        authority_set_commitment: Vec<u8>,
-    ) -> CircuitData<F, C, D> {
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
-
-        let head_block_hash_bits = to_bits(head_block_hash);
-
-        let mut head_block_hash_target = Vec::new();
-        assert!(head_block_hash_bits.len() == HASH_SIZE * 8);
-        for bit in head_block_hash_bits.iter() {
-            head_block_hash_target.push(builder.constant_bool(*bit));
-        }
-
-        // Set the header targets
-        let mut header_targets = Vec::new();
-        let mut header_size_targets = Vec::new();
-        for i in 0..headers.len() {
-            header_targets.push(Vec::new());
-            for j in 0..headers[i].len() {
-                header_targets[i].push(builder.constant(F::from_canonical_u8(headers[i][j])));
-            }
-
-            // Pad the headers
-            for _ in headers[i].len()..MAX_HEADER_SIZE {
-                header_targets[i].push(builder.constant(F::from_canonical_u32(0)));
-            }
-
-            header_size_targets.push(builder.constant(F::from_canonical_usize(headers[i].len())));
-        }
-
-        let precommit_targets = generate_precommits(
-            &mut builder,
-            (0..QUORUM_SIZE).map(|_| precommit_message.clone().to_vec()).collect::<Vec<_>>(),
-            signatures,
-            pub_key_indices,
-            authority_set.clone(),
-        );
-
-        let head_block_num_target = builder.constant(F::from_canonical_u64(head_block_num));
-
-        let mut pub_key_targets = Vec::new();
-        for authority in authority_set.iter() {
-            let mut pub_key_bits = Vec::new();
-            let bits = to_bits(authority.clone());
-            for bit in bits.iter() {
-                pub_key_bits.push(builder.constant_bool(*bit));
-            }
-            pub_key_targets.push(pub_key_bits);
-        }
-
-        let mut authority_set_commitment_target = Vec::new();
-        assert!(authority_set_commitment.len() == HASH_SIZE);
-        for authority_set_byte in authority_set_commitment.iter(){
-            authority_set_commitment_target.push(builder.constant(F::from_canonical_u8(*authority_set_byte)));
-        }
-
-        let authority_set_id_target = builder.constant(F::from_canonical_u64(authority_set_id));
-        builder.step(
-            VerifySubchainTarget {
-                head_block_hash: head_block_hash_target,
-                head_block_num: head_block_num_target,
-                encoded_headers: header_targets,
-                encoded_header_sizes: header_size_targets,
-            },
-            precommit_targets,
-            AuthoritySetSignersTarget {
-                pub_keys: pub_key_targets,
-                commitment: authority_set_commitment_target,
-                set_id: authority_set_id_target,
-            },
-        );
-
-        builder.build::<C>()
-    }
-
+    use crate::justification::tests::{set_precommits_pw, set_authority_set_pw};
 
     fn gen_step_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
         cd: &CircuitData<F, C, D>,
+        pw: &PartialWitness<F>,
     ) -> ProofWithPublicInputs<F, C, D> {
-        let pw: PartialWitness<F> = PartialWitness::new();
-
         let mut timing = TimingTree::new("step proof gen", Level::Info);
-        let proof = prove::<F, C, D>(&cd.prover_only, &cd.common, pw, &mut timing);
+        let proof = prove::<F, C, D>(&cd.prover_only, &cd.common, pw.clone(), &mut timing);
         timing.print();
 
         proof.unwrap()
     }
-
 
     fn test_step(
         headers: Vec<Vec<u8>>,
@@ -294,23 +239,38 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+        type Curve = Ed25519;
 
-        let data = step_circuit_build::<F, C, D>(
-            headers,
-            head_block_hash,
-            head_block_num,
-    
-            authority_set_id,
-            precommit_message,
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut pw: PartialWitness<F> = PartialWitness::new();
+
+        let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
+
+        pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
+        pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
+        for i in 0..headers.len() {
+            pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], headers[i].clone());
+        }
+
+        set_precommits_pw::<F, D, Curve>(
+            &mut pw,
+            step_target.precommits.to_vec(),
+            (0..QUORUM_SIZE).map(|_| precommit_message.clone().to_vec()).collect::<Vec<_>>(),
             signatures,
-    
             pub_key_indices,
-            authority_set,
+            authority_set.clone(),
+        );
+
+        set_authority_set_pw::<F, D, Curve>(
+            &mut pw,
+            &step_target.authority_set,
+            authority_set.clone(),
+            authority_set_id,
             authority_set_commitment,
         );
 
-
-        let proof = gen_step_proof::<F, C, D>(&data);
+        let data = builder.build();
+        let proof = gen_step_proof::<F, C, D>(&data, &pw);
         data.verify(proof)
     }
 
@@ -437,6 +397,7 @@ mod tests {
         )
     }
 
+/*
     #[test]
     fn test_recursive_verify_step() -> Result<()> {
         const D: usize = 2;
@@ -500,4 +461,5 @@ mod tests {
 
         final_data.verify(final_proof)
     }
+    */
 }

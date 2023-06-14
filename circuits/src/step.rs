@@ -524,21 +524,21 @@ mod tests {
 
         // Header 1 state root
         assert_eq!(
-            outer_proof.public_inputs[65..97].iter()
+            outer_proof.public_inputs[66..98].iter()
             .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
             [ 243, 56, 163, 79, 50, 190, 245, 166, 174, 154, 24, 226, 216, 77, 87, 86, 137, 243, 105, 31, 72, 212, 237, 21, 87, 167, 90, 84, 73, 174, 7, 149, ],
         );
 
         // Header 1 block hash
         assert_eq!(
-            outer_proof.public_inputs[97..129].iter()
+            outer_proof.public_inputs[98..130].iter()
             .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
             hex::decode(BLOCK_530508_BLOCK_HASH).unwrap(),
         );
 
         // Step circuit's digest
         assert_eq!(
-            outer_proof.public_inputs[1345..1349].iter()
+            outer_proof.public_inputs[1346..1350].iter()
             .map(|element| element.to_canonical_u64()).collect::<Vec<_>>(),
             [17122441374070351185, 18368451173317844989, 5752543660850962321, 1428786498560175815],
         );

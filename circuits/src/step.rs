@@ -40,7 +40,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 &subchain.encoded_headers[i],
             );
 
-            println!("len of decoded_header.state_root.0 is {:?}", decoded_header.state_root.0.len());
             self.register_public_inputs(&decoded_header.state_root.0);
 
             // Verify that the previous calcualted block hash is equal to the decoded parent hash

@@ -40,6 +40,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 &subchain.encoded_headers[i],
             );
 
+            println!("len of decoded_header.state_root.0 is {:?}", decoded_header.state_root.0.len());
             self.register_public_inputs(&decoded_header.state_root.0);
 
             // Verify that the previous calcualted block hash is equal to the decoded parent hash
@@ -69,7 +70,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             );
 
             // Input the encoded header bytes into the hasher
-            for j in 0 .. MAX_HEADER_SIZE {
+            for j in 0..MAX_HEADER_SIZE {
                 // Need to split the bytes into bits
                 let mut bits = self.split_le(subchain.encoded_headers[i].header_bytes[j], 8);
 

@@ -40,11 +40,13 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 &subchain.encoded_headers[i],
             );
 
+            self.register_public_inputs(&decoded_header.state_root.0);
+
             // Verify that the previous calcualted block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
                 let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);
 
-                // Needs to be in bit big endian order for the EDDSA verification circuit
+                // Needs to be in bit big endian order for the blake2b verification circuit
                 bits.reverse();
                 for k in 0..8 {
                     if i == 0 {
@@ -80,8 +82,14 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             self.connect(hash_circuit.message_len, subchain.encoded_headers[i].header_size);
 
-            calculated_hashes.push(hash_circuit.digest);
+            calculated_hashes.push(hash_circuit.digest.clone());
 
+            // Convert hash digest into bytes
+            for bits in hash_circuit.digest.chunks(8) {
+                // These bits are in big endian order
+                let byte = self.le_sum(bits.iter().rev());
+                self.register_public_input(byte);
+            }
 
             // Verify that the block numbers are sequential
             let one = self.one();

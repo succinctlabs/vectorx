@@ -163,6 +163,8 @@ pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use anyhow::Result;
     use log::Level;
     use plonky2::hash::hash_types::RichField;
@@ -478,16 +480,31 @@ mod tests {
 
         let outer_data = outer_builder.build::<PoseidonBN128GoldilocksConfig>();
 
-        let mut final_pw = PartialWitness::new();
-        final_pw.set_proof_with_pis_target(&outer_proof_target, &inner_proof);
-        final_pw.set_verifier_data_target(&outer_verifier_data, &inner_data.verifier_only);
+        let mut outer_pw = PartialWitness::new();
+        outer_pw.set_proof_with_pis_target(&outer_proof_target, &inner_proof);
+        outer_pw.set_verifier_data_target(&outer_verifier_data, &inner_data.verifier_only);
 
-        let final_proof = outer_data.prove(final_pw).unwrap();
+        let outer_proof = outer_data.prove(outer_pw).unwrap();
+        let ret = outer_data.verify(outer_proof.clone());
 
         for gate in outer_data.common.gates.iter() {
             println!("outer circuit: gate is {:?}", gate);
         }
 
-        outer_data.verify(final_proof)
+        let outer_common_circuit_data_serialized = serde_json::to_string(&outer_data.common).unwrap();
+        fs::write("step_recursive.common_circuit_data.json", outer_common_circuit_data_serialized)
+            .expect("Unable to write file");
+
+        let outer_verifier_only_circuit_data_serialized = serde_json::to_string(&outer_data.verifier_only).unwrap();
+        fs::write(
+            "step_recursive.verifier_only_circuit_data.json",
+            outer_verifier_only_circuit_data_serialized,
+        )
+        .expect("Unable to write file");
+
+        let outer_proof_serialized = serde_json::to_string(&outer_proof).unwrap();
+        fs::write("step_recursive.proof_with_public_inputs.json", outer_proof_serialized).expect("Unable to write file");
+
+        ret
     }
 }

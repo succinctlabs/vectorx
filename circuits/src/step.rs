@@ -184,7 +184,7 @@ mod tests {
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
-    use plonky2_field::types::Field;
+    use plonky2_field::types::{Field, PrimeField64};
     use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
 
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
@@ -219,7 +219,7 @@ mod tests {
         BLOCK_530527_PARENT_HASH,
         BLOCK_530527_PRECOMMIT_MESSAGE,
         BLOCK_530527_AUTHORITY_SIGS,
-        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT,
+        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530508_BLOCK_HASH,
     };
     use crate::justification::tests::{set_precommits_pw, set_authority_set_pw};
 
@@ -495,9 +495,59 @@ mod tests {
         let outer_proof = outer_data.prove(outer_pw).unwrap();
         let ret = outer_data.verify(outer_proof.clone());
 
+        // Verify the public inputs:
+        // Head block hash
+        assert_eq!(
+            outer_proof.public_inputs[0..32].iter()
+            .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530508_PARENT_HASH).unwrap(),
+        );
+
+        // Head block number
+        assert_eq!(
+            usize::try_from(outer_proof.public_inputs[33].to_canonical_u64()).unwrap(),
+            530507,
+        );
+
+        // Validator set commitment
+        assert_eq!(
+            outer_proof.public_inputs[33..65].iter()
+            .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+        );
+
+        // Validator set ID
+        assert_eq!(
+            usize::try_from(outer_proof.public_inputs[65].to_canonical_u64()).unwrap(),
+            496,
+        );
+
+        // Header 1 state root
+        assert_eq!(
+            outer_proof.public_inputs[65..97].iter()
+            .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
+            [ 243, 56, 163, 79, 50, 190, 245, 166, 174, 154, 24, 226, 216, 77, 87, 86, 137, 243, 105, 31, 72, 212, 237, 21, 87, 167, 90, 84, 73, 174, 7, 149, ],
+        );
+
+        // Header 1 block hash
+        assert_eq!(
+            outer_proof.public_inputs[97..129].iter()
+            .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
+            hex::decode(BLOCK_530508_BLOCK_HASH).unwrap(),
+        );
+
+        // Step circuit's digest
+        assert_eq!(
+            outer_proof.public_inputs[1345..1349].iter()
+            .map(|element| element.to_canonical_u64()).collect::<Vec<_>>(),
+            [17122441374070351185, 18368451173317844989, 5752543660850962321, 1428786498560175815],
+        );
+
         for gate in outer_data.common.gates.iter() {
             println!("outer circuit: gate is {:?}", gate);
         }
+
+        println!("Recursive circuit digest is {:?}", outer_data.verifier_only.circuit_digest);
 
         let outer_common_circuit_data_serialized = serde_json::to_string(&outer_data.common).unwrap();
         fs::write("step_recursive.common_circuit_data.json", outer_common_circuit_data_serialized)

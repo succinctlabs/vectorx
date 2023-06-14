@@ -505,7 +505,7 @@ mod tests {
 
         // Head block number
         assert_eq!(
-            usize::try_from(outer_proof.public_inputs[33].to_canonical_u64()).unwrap(),
+            usize::try_from(outer_proof.public_inputs[32].to_canonical_u64()).unwrap(),
             530507,
         );
 

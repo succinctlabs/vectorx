@@ -2,7 +2,7 @@ use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powe
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
-use crate::utils::{ CircuitBuilderUtils, HASH_SIZE };
+use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, HASH_SIZE, EncodedHeaderTarget };
 
 trait CircuitBuilderScaleDecoder {
     fn decode_compact_int(
@@ -70,32 +70,24 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder fo
         assert!(value_byte_length <= 64);
 
         let alpha = self.constant(F::from_canonical_u16(256));
-        let value = reduce_with_powers_circuit(self, &bytes, alpha);
-
-        value
+        reduce_with_powers_circuit(self, &bytes, alpha)
     }
 
 
 }
 
-
-pub struct EncodedHeaderTarget {
-    pub header_bytes: Vec<Target>,
-    pub header_size: Target,
-}
-
 pub struct HeaderTarget {
     pub block_number: Target,
-    pub parent_hash: Vec<Target>,    // Vector of 32 bytes
-    pub state_root: Vec<Target>,     // Vector of 32 bytes
-    // pub data_root: Vec<Target>,      // Vector of 32 bytes
+    pub parent_hash: AvailHashTarget,
+    pub state_root: AvailHashTarget,
+    // pub data_root: HashTarget,
 }
 
 
 pub trait CircuitBuilderHeaderDecoder {
     fn decode_header(
         &mut self,
-        header: EncodedHeaderTarget,
+        header: &EncodedHeaderTarget,
     ) -> HeaderTarget;
 }
 
@@ -103,7 +95,7 @@ pub trait CircuitBuilderHeaderDecoder {
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder for CircuitBuilder<F, D> {
     fn decode_header(
         &mut self,
-        header: EncodedHeaderTarget,
+        header: &EncodedHeaderTarget,
     ) -> HeaderTarget {
 
         // The first 32 bytes are the parent hash
@@ -114,17 +106,16 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
         const MAX_BLOCK_NUMBER_SIZE: usize = 5;
         let (block_number_target, compress_mode, _) = self.decode_compact_int(header.header_bytes[32..32+MAX_BLOCK_NUMBER_SIZE].to_vec());
 
-        let mut all_possible_state_roots = Vec::new();
-        all_possible_state_roots.push(header.header_bytes[33..33+HASH_SIZE].to_vec());
-        all_possible_state_roots.push(header.header_bytes[34..34+HASH_SIZE].to_vec());
-        all_possible_state_roots.push(header.header_bytes[36..36+HASH_SIZE].to_vec());
-        all_possible_state_roots.push(header.header_bytes[37..37+HASH_SIZE].to_vec());
+        let all_possible_state_roots = vec![
+            header.header_bytes[33..33+HASH_SIZE].to_vec(),
+            header.header_bytes[34..34+HASH_SIZE].to_vec(),
+            header.header_bytes[36..36+HASH_SIZE].to_vec(),
+            header.header_bytes[37..37+HASH_SIZE].to_vec(),
+        ];
 
-        let state_root_target = self.random_access_vec::<Target>(
+        let state_root_target = self.random_access_vec(
             compress_mode,
             &all_possible_state_roots,
-            |x| *x,
-            |x| *x,
         );
 
         // Can't get this to work yet.  Getting an error with the random_access gate
@@ -151,10 +142,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
         */
 
         HeaderTarget {
-            parent_hash: parent_hash_target,
+            parent_hash: AvailHashTarget(parent_hash_target.try_into().unwrap()),
             block_number: block_number_target,
-            state_root: state_root_target,
-            //data_root: data_root_target,
+            state_root: AvailHashTarget(state_root_target.try_into().unwrap()),
+            //data_root: HashTarget(data_root_target.try_into().unwrap()),
         }
     }
 }
@@ -201,10 +192,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
         let authority_set_id = self.decode_fixed_int(precommit.0[45..53].to_vec(), 8);
 
         PrecommitTarget {
-            block_hash: block_hash,
-            block_number: block_number,
-            justification_round: justification_round,
-            authority_set_id: authority_set_id,
+            block_hash,
+            block_number,
+            justification_round,
+            authority_set_id,
         }
     }
 }
@@ -212,22 +203,19 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::sync::Arc;
 
     use anyhow::Result;
-    use ff::PrimeField;
     use log::Level;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
     use plonky2::util::serialization::DefaultGateSerializer;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::types::Field;
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
-    use crate::utils::MAX_HEADER_SIZE;
+    use crate::utils::{MAX_HEADER_SIZE, AvailHashTarget, CircuitBuilderUtils};
     use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
@@ -246,8 +234,8 @@ mod tests {
 
         let mut encoded_bytes_target = Vec::new();
 
-        for i in 0..encoded_bytes.len() {
-            encoded_bytes_target.push(builder.constant(F::from_canonical_u8(encoded_bytes[i])));
+        for byte in encoded_bytes.iter() {
+            encoded_bytes_target.push(builder.constant(F::from_canonical_u8(*byte)));
         }
 
         let (decoded_int, compress_mode, length) = builder.decode_compact_int(encoded_bytes_target);
@@ -334,7 +322,7 @@ mod tests {
             header_bytes_target.push(builder.zero());
         }
 
-        let decoded_header = builder.decode_header(EncodedHeaderTarget{header_bytes: header_bytes_target, header_size});
+        let decoded_header = builder.decode_header(&EncodedHeaderTarget{header_bytes: header_bytes_target.try_into().unwrap(), header_size});
 
         let expected_block_number = builder.constant(F::from_canonical_u64(576728));
         builder.connect(decoded_header.block_number, expected_block_number);
@@ -342,14 +330,15 @@ mod tests {
         let expected_parent_hash = hex::decode(BLOCK_576728_PARENT_HASH).unwrap();
         for i in 0..expected_parent_hash.len() {
             let expected_parent_hash_byte = builder.constant(F::from_canonical_u8(expected_parent_hash[i]));
-            builder.connect(decoded_header.parent_hash[i], expected_parent_hash_byte);
+            builder.connect(decoded_header.parent_hash.0[i], expected_parent_hash_byte);
         }
 
         let expected_state_root = hex::decode(BLOCK_576728_STATE_ROOT).unwrap();
-        for i in 0..expected_state_root.len() {
-            let expected_state_root_byte = builder.constant(F::from_canonical_u8(expected_state_root[i]));
-            builder.connect(decoded_header.state_root[i], expected_state_root_byte);
-        }
+        let expected_state_root_target = AvailHashTarget(expected_state_root.iter().map(
+            |b| builder.constant(F::from_canonical_u8(*b))
+        ).collect::<Vec<_>>().try_into().unwrap());
+
+        builder.connect_hash(decoded_header.state_root, expected_state_root_target);
 
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;

@@ -95,10 +95,10 @@ contract LightClient is EventDecoder {
     /// @notice Maps from a block number to the data root.
     mapping(uint32 => bytes32) public dataRoots;
 
-    /// @notice Maps from a authority set id to the authorities' pub keys
+    /// @notice Maps from an authority set id to the authorities' pub keys
     mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authoritySets;
 
-    /// @notice Maps from a authority set id to the blake2b hash of the authorities' pub keys
+    /// @notice Maps from an authority set id to the blake2b hash of the authorities' pub keys
     mapping(uint64 => bytes32) public authoritySetCommitments;
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
@@ -164,9 +164,18 @@ contract LightClient is EventDecoder {
         }
 
         // TODO:  Need to implement
-        // zkLightClientStep(update.proof, head, headerRoots[head], authoritySets[activeAuthoritySetID]);
+        LightClientStepSnark(
+            update.proof,
+            head,
+            headerRoots[head],
+            activeAuthoritySetID,
+            authoritySetCommitments[activeAuthoritySetID],
+            update.headers,
+            update.proof
+        );
 
         // Note that the snark proof above verifies that the first header is correctly linked to the current head.
+        // Update the storage maps.
         Header memory header;
         for (uint16 i = 0; i < update.headers.length; i ++) {
             header = update.headers[i];

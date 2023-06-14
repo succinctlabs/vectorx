@@ -470,43 +470,24 @@ mod tests {
         println!("inner circuit digest is {:?}", inner_data.verifier_only.circuit_digest);
 
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
-        let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
-        let inner_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
-        outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &inner_data.common);
+        let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
+        let outer_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &inner_data.common);
+        outer_builder.register_public_inputs(&outer_proof_target.public_inputs);
+        outer_builder.register_public_inputs(&outer_verifier_data.circuit_digest.elements);
 
-
-        outer_builder.register_public_inputs(&inner_proof_target.public_inputs);
-
-        let outer_data = outer_builder.build::<C>();
-
-        let mut outer_pw = PartialWitness::new();
-        outer_pw.set_proof_with_pis_target(&inner_proof_target, &inner_proof);
-        outer_pw.set_verifier_data_target(&inner_verifier_data, &inner_data.verifier_only);
-
-        let outer_proof = outer_data.prove(outer_pw).unwrap();
-        outer_data.verify(outer_proof.clone()).unwrap();
-
-        for gate in outer_data.common.gates.iter() {
-            println!("outer_circuit: gate is {:?}", gate);
-        }
-
-        let mut final_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
-        let final_proof_target = final_builder.add_virtual_proof_with_pis(&outer_data.common);
-        let final_verifier_data = final_builder.add_virtual_verifier_data(outer_data.common.config.fri_config.cap_height);
-        final_builder.verify_proof::<C>(&final_proof_target, &final_verifier_data, &outer_data.common);
-
-        let final_data = final_builder.build::<PoseidonBN128GoldilocksConfig>();
+        let outer_data = outer_builder.build::<PoseidonBN128GoldilocksConfig>();
 
         let mut final_pw = PartialWitness::new();
-        final_pw.set_proof_with_pis_target(&final_proof_target, &outer_proof);
-        final_pw.set_verifier_data_target(&final_verifier_data, &outer_data.verifier_only);
+        final_pw.set_proof_with_pis_target(&outer_proof_target, &inner_proof);
+        final_pw.set_verifier_data_target(&outer_verifier_data, &inner_data.verifier_only);
 
-        let final_proof = final_data.prove(final_pw).unwrap();
+        let final_proof = outer_data.prove(final_pw).unwrap();
 
         for gate in outer_data.common.gates.iter() {
-            println!("final_circuit: gate is {:?}", gate);
+            println!("outer circuit: gate is {:?}", gate);
         }
 
-        final_data.verify(final_proof)
+        outer_data.verify(final_proof)
     }
 }

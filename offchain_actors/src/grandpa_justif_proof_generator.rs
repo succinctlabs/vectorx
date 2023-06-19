@@ -97,7 +97,7 @@ pub async fn main() -> anyhow::Result<()> {
     transport.config_mut().max_frame_length(usize::MAX);
     let client = ProofGeneratorClient::new(client::Config::default(), transport.await?).spawn();
 
-    let url: &str = "wss://testnet.avail.tools:443/ws";
+    let url: &str = "wss://kate.avail.tools:443/ws";
     
     let c = build_client(url).await.unwrap();
     let t = c.rpc();

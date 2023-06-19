@@ -1,16 +1,16 @@
 use std::ops::Deref;
 
-use avail_subxt::{api, build_client, primitives::Header};
+use avail_subxt::{api, build_client, primitives::Header, rpc::RpcParams};
 use codec::{Decode, Encode};
 use serde::de::Error;
 use serde::Deserialize;
 use serde::Serialize;
+use primitive_types::H256;
 
 use subxt::{
 	ext::{
-		sp_core::{bytes, Bytes, crypto::Pair, ed25519::{self, Public as EdPublic, Signature}, H256},
+		sp_core::{bytes, Bytes, crypto::Pair, ed25519::{self, Public as EdPublic, Signature}},
 	},
-    rpc::RpcParams,
 };
 
 // use anyhow::Result;
@@ -105,10 +105,10 @@ pub enum FinalityProofError {
 
 #[tokio::main]
 pub async fn main() {
-    let header_num = 530527;
-    let url: &str = "wss://testnet.avail.tools:443/ws";
+    let header_num = 34153;
+    let url: &str = "wss://kate.avail.tools:443/ws";
 
-    let c = build_client(url).await.unwrap();
+    let c = build_client(url, true).await.unwrap();
     let t = c.rpc().deref();
 
     let mut params = RpcParams::new();
@@ -125,7 +125,7 @@ pub async fn main() {
     }
 
     let set_id_key = api::storage().grandpa().current_set_id();
-    let set_id = c.storage().fetch(&set_id_key, Some(finality_proof.block)).await.unwrap().unwrap() - 1;
+    let set_id = c.storage().at(Some(finality_proof.block)).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap() - 1;
     println!("set_id {:?}", set_id);
 
     // Form a message which is signed in the justification

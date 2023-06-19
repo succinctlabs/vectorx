@@ -216,7 +216,7 @@ mod tests {
     use plonky2_field::types::Field;
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::utils::{MAX_HEADER_SIZE, AvailHashTarget, CircuitBuilderUtils};
-    use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
+    use crate::utils::tests::{BLOCK_34153_HEADER, BLOCK_34153_PARENT_HASH, BLOCK_34153_STATE_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
     fn test_compact_int(
@@ -312,28 +312,28 @@ mod tests {
         let pw = PartialWitness::new();
         let mut builder = CircuitBuilder::<F, D>::new(config.clone());
 
-        let mut header_bytes_target = BLOCK_576728_HEADER.iter().map(|b| {
+        let mut header_bytes_target = BLOCK_34153_HEADER.iter().map(|b| {
             builder.constant(F::from_canonical_u8(*b))
         }).collect::<Vec<_>>();
-        let header_size = builder.constant(F::from_canonical_usize(BLOCK_576728_HEADER.len()));
+        let header_size = builder.constant(F::from_canonical_usize(BLOCK_34153_HEADER.len()));
 
         // pad the header bytes
-        for _ in BLOCK_576728_HEADER.len()..MAX_HEADER_SIZE {
+        for _ in BLOCK_34153_HEADER.len()..MAX_HEADER_SIZE {
             header_bytes_target.push(builder.zero());
         }
 
         let decoded_header = builder.decode_header(&EncodedHeaderTarget{header_bytes: header_bytes_target.try_into().unwrap(), header_size});
 
-        let expected_block_number = builder.constant(F::from_canonical_u64(576728));
+        let expected_block_number = builder.constant(F::from_canonical_u64(34153));
         builder.connect(decoded_header.block_number, expected_block_number);
 
-        let expected_parent_hash = hex::decode(BLOCK_576728_PARENT_HASH).unwrap();
+        let expected_parent_hash = hex::decode(BLOCK_34153_PARENT_HASH).unwrap();
         for i in 0..expected_parent_hash.len() {
             let expected_parent_hash_byte = builder.constant(F::from_canonical_u8(expected_parent_hash[i]));
             builder.connect(decoded_header.parent_hash.0[i], expected_parent_hash_byte);
         }
 
-        let expected_state_root = hex::decode(BLOCK_576728_STATE_ROOT).unwrap();
+        let expected_state_root = hex::decode(BLOCK_34153_STATE_ROOT).unwrap();
         let expected_state_root_target = AvailHashTarget(expected_state_root.iter().map(
             |b| builder.constant(F::from_canonical_u8(*b))
         ).collect::<Vec<_>>().try_into().unwrap());

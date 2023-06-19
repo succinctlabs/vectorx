@@ -83,16 +83,17 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
         // Range check the indices.  They should be between 0 - (NUM_AUTHORITIES-1).
         // Doing a range check for a value that is not less than a power of 2 is a bit tricky.
-        // For NUM_AUTHORITIES==10, we need to check two constraints:
-        // 1) The value is less than 16.
-        // 2) If the 4th significant bit is set, then the 3rd and 2nd significant bits must be zero. (Allow for the values 8 and 9)
+        // For NUM_AUTHORITIES==7, we need to check two constraints:
+        // 1) The value is less than 8.
+        // 2) If the 3rd significant bit is set, then the sum of 1st and 2nd significant bits must be <=1. (Allow for the values 4, 5, 6)
         let zero = self.zero();
 
         // split_le does a range check
-        let bits = self.split_le(pub_key_idx, 4);
-        let third_second_bits = self.or(bits[2], bits[1]);
-        let check_third_second_bits = self.select(bits[3], third_second_bits.target, zero);
-        self.connect(check_third_second_bits, zero);
+        let bits = self.split_le(pub_key_idx, 3);
+        let first_second_bits_sum = self.add(bits[0].target, bits[1].target);
+        let first_second_bits_sum_bits = self.split_le(first_second_bits_sum, 2);
+        let check_first_second_bits_sum = self.select(bits[2], first_second_bits_sum_bits[1].target, zero);
+        self.connect(check_first_second_bits_sum, zero);
 
         PrecommitTarget {
             precommit_message: precommit_message.try_into().unwrap(),
@@ -141,7 +142,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         // Calculate the hash for the authority set
         // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
         let input_padding = (CHUNK_128_BYTES * 8) - ((NUM_AUTHORITIES * 256) % (CHUNK_128_BYTES * 8));
-        assert!(input_padding == 512);
+        assert!(input_padding == 256);
         let hash_circuit = make_blake2b_circuit(
             self,
             NUM_AUTHORITIES * 256 + input_padding,   // each EDDSA pub key in compressed for is 256 bits and padding to make it fit 128 byte chunks
@@ -268,7 +269,7 @@ pub (crate) mod tests {
     use plonky2_field::types::{Field, PrimeField};
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
-    use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};
+    use crate::utils::tests::{BLOCK_34153_PRECOMMIT_MESSAGE, BLOCK_34153_AUTHORITY_SIGS, BLOCK_34153_PUB_KEY_INDICES, BLOCK_34153_AUTHORITY_SET, BLOCK_34153_AUTHORITY_SET_ID, BLOCK_34153_BLOCK_HASH, BLOCK_34153_AUTHORITY_SET_COMMITMENT};
     use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES, PUB_KEY_SIZE};
 
     pub struct JustificationTarget<C: Curve> {
@@ -548,23 +549,23 @@ pub (crate) mod tests {
         set_precommits_pw::<F, D, Curve>(
             &mut pw,
             justification_target.precommit_targets,
-            (0..QUORUM_SIZE).map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
-            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            (0..QUORUM_SIZE).map(|_| BLOCK_34153_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
+            BLOCK_34153_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_34153_PUB_KEY_INDICES.to_vec(),
+            BLOCK_34153_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
         );
 
         set_authority_set_pw::<F, D, Curve>(
             &mut pw,
             &justification_target.authority_set_signers,
-            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_SET_ID,
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_34153_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_34153_AUTHORITY_SET_ID,
+            hex::decode(BLOCK_34153_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
-        let block_hash_bytes = hex::decode(BLOCK_530527_BLOCK_HASH).unwrap();
+        let block_hash_bytes = hex::decode(BLOCK_34153_BLOCK_HASH).unwrap();
         pw.set_avail_hash_target(&justification_target.finalized_block.hash, &(block_hash_bytes.try_into().unwrap()));
-        pw.set_target(justification_target.finalized_block.num, F::from_canonical_u32(530527u32));
+        pw.set_target(justification_target.finalized_block.num, F::from_canonical_u32(34153u32));
 
         let data = builder.build::<C>();
         let proof_gen_start_time = SystemTime::now();
@@ -588,12 +589,12 @@ pub (crate) mod tests {
         let mut msg = Vec::new();
 
         for i in 0..NUM_AUTHORITIES {
-            let mut pub_key_bytes = hex::decode(BLOCK_530527_AUTHORITY_SET[i]).unwrap();
+            let mut pub_key_bytes = hex::decode(BLOCK_34153_AUTHORITY_SET[i]).unwrap();
             msg.append(pub_key_bytes.as_mut());
         }
 
         let msg_bits = to_bits(msg.to_vec());
-        let expected_digest = BLOCK_530527_AUTHORITY_SET_COMMITMENT;
+        let expected_digest = BLOCK_34153_AUTHORITY_SET_COMMITMENT;
         let digest_bits = to_bits(hex::decode(expected_digest).unwrap());
 
         const D: usize = 2;
@@ -608,7 +609,7 @@ pub (crate) mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let targets = make_blake2b_circuit(
             &mut builder,
-            NUM_AUTHORITIES * 256 + 512,
+            NUM_AUTHORITIES * 256 + 256,
             32,
         );
         let mut pw = PartialWitness::new();
@@ -617,7 +618,7 @@ pub (crate) mod tests {
             pw.set_bool_target(targets.message[i], msg_bits[i]);
         }
 
-        for i in msg_bits.len()..msg_bits.len() + 512 {
+        for i in msg_bits.len()..msg_bits.len() + 256 {
             pw.set_bool_target(targets.message[i], false);
         }
 

@@ -5,6 +5,7 @@ import "solidity-merkle-trees/src/trie/Bytes.sol";
 import "solidity-merkle-trees/src/trie/Memory.sol";
 import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
 import { EventDecoder } from "src/EventDecoder.sol";
+import {StepVerifier} from "src/StepVerifier.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 
 
@@ -53,7 +54,7 @@ struct Step {
     //     d) Those headers have the submitted executionStateRoots and dataRoots.
     // 2) There exist a valid GRANDPA justification that finalized the last block in the headers field
     //     a) This GRANDPA justification has been signed by the validators within the authority set ID within the authoritySetIDProof field.
-    //Groth16Proof proof;
+    Groth16Proof proof;
 }
 
 
@@ -163,15 +164,9 @@ contract LightClient is EventDecoder {
             revert("Finalized block authority set proof is not correct");
         }
 
-        // TODO:  Need to implement
-        LightClientStepSnark(
+        verifyStepProof(
             update.proof,
-            head,
-            headerRoots[head],
-            activeAuthoritySetID,
-            authoritySetCommitments[activeAuthoritySetID],
-            update.headers,
-            update.proof
+            update.headers
         );
 
         // Note that the snark proof above verifies that the first header is correctly linked to the current head.
@@ -223,5 +218,50 @@ contract LightClient is EventDecoder {
 
         bytes32[NUM_AUTHORITIES] memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
         setAuthorities(update.newAuthoritySetIDProof.authoritySetID, newAuthorities);
+    }
+
+    function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {
+        uint256[1350] memory inputs;
+        uint16 inputIdx = 0;
+
+        // First input the head hash (uint8[32])
+        bytes32 headBytes = bytes32(headerHashes[head]);
+        for (uint8 i = 0; i < 32; i++) {
+            inputs[inputIdx] = uint256(headBytes[i]);
+            inputIdx++;
+        }
+
+        // Add the head num (uint64[1])
+        inputs[inputIdx] = uint256(head);
+        inputIdx++;
+
+        // Add the authority set commitment (uint8[32])
+        bytes32 authoritySetCommitmentBytes = bytes32(authoritySetCommitments[activeAuthoritySetID]);
+        for (uint8 i = 0; i < 32; i ++) {
+            inputs[inputIdx] = uint256(authoritySetCommitmentBytes[i]);
+            inputIdx++;
+        }
+
+        // Add the validator set id (uint8[1])
+        inputs[inputIdx] = uint256(activeAuthoritySetID);
+
+        // For 20 headers, add the following
+        // 1) header state root (uint8[32])
+        // 2) header block hash (uint8[32])
+        for (uint8 i = 0; i < 20; i++) {
+            bytes32 stateRootBytes = bytes32(headers[i].stateRoot);
+            for (uint8 j = 0; j < 32; j++) {
+                inputs[inputIdx] = stateRootBytes[j];
+                inputIdx++;
+            }
+
+            bytes32 headerHashBytes = bytes32(headers[i].headerHash);
+            for (uint8 j = 0; j < 32; j++) {
+                inputs[inputIdx] = headerHashBytes[j];
+                inputIdx++;
+            }
+        }
+
+        require(verifyProofStep(proof.a, proof.b, proof.c, inputs));
     }
 }

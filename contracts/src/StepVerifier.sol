@@ -232,11 +232,11 @@ contract StepVerifier {
      * @returns Whether the proof is valid given the hardcoded verifying key
      *          above and the public inputs
      */
-    function verifyStepProof(
+    function verifyProof(
         uint256[2] memory a,
         uint256[2][2] memory b,
         uint256[2] memory c,
-        uint256[1350] calldata input
+        uint256[1350] memory input
     ) public view returns (bool r) {
 
         Proof memory proof;

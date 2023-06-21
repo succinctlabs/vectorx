@@ -77,7 +77,7 @@ struct Rotate {
 /// @author Succinct Labs
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
-contract LightClient is EventDecoder {
+contract LightClient is EventDecoder, StepVerifier {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
 
@@ -139,6 +139,8 @@ contract LightClient is EventDecoder {
         doStep(update);
     }
 
+    event MerkleRoot(bytes32 root);
+
     /// @notice Updates the head of the light client with the provided list of headers.
     function doStep(Step memory update) internal {
         // First verify that the authority set is correct.
@@ -153,6 +155,8 @@ contract LightClient is EventDecoder {
         } else {
             authSetIDMerkleRoot = stateRoots[head];
         }
+
+        emit MerkleRoot(authSetIDMerkleRoot);
 
         bytes[] memory keys = new bytes[](1);
         keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
@@ -227,7 +231,7 @@ contract LightClient is EventDecoder {
         // First input the head hash (uint8[32])
         bytes32 headBytes = bytes32(headerHashes[head]);
         for (uint8 i = 0; i < 32; i++) {
-            inputs[inputIdx] = uint256(headBytes[i]);
+            inputs[inputIdx] = uint(uint8(headBytes[i]));
             inputIdx++;
         }
 
@@ -238,12 +242,12 @@ contract LightClient is EventDecoder {
         // Add the authority set commitment (uint8[32])
         bytes32 authoritySetCommitmentBytes = bytes32(authoritySetCommitments[activeAuthoritySetID]);
         for (uint8 i = 0; i < 32; i ++) {
-            inputs[inputIdx] = uint256(authoritySetCommitmentBytes[i]);
+            inputs[inputIdx] = uint(uint8(authoritySetCommitmentBytes[i]));
             inputIdx++;
         }
 
         // Add the validator set id (uint8[1])
-        inputs[inputIdx] = uint256(activeAuthoritySetID);
+        inputs[inputIdx] = uint(uint8(activeAuthoritySetID));
 
         // For 20 headers, add the following
         // 1) header state root (uint8[32])
@@ -251,17 +255,17 @@ contract LightClient is EventDecoder {
         for (uint8 i = 0; i < 20; i++) {
             bytes32 stateRootBytes = bytes32(headers[i].stateRoot);
             for (uint8 j = 0; j < 32; j++) {
-                inputs[inputIdx] = stateRootBytes[j];
+                inputs[inputIdx] = uint(uint8(stateRootBytes[j]));
                 inputIdx++;
             }
 
             bytes32 headerHashBytes = bytes32(headers[i].headerHash);
             for (uint8 j = 0; j < 32; j++) {
-                inputs[inputIdx] = headerHashBytes[j];
+                inputs[inputIdx] = uint(uint8(headerHashBytes[j]));
                 inputIdx++;
             }
         }
 
-        require(verifyProofStep(proof.a, proof.b, proof.c, inputs));
+        require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }
 }

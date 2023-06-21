@@ -15,9 +15,6 @@ import { LightClientFixture } from "test/LightClientFixture.sol";
 import { Strings } from "openzeppelin-contracts/utils/Strings.sol";
 
 contract LightClientTest is Test, LightClientFixture {
-    uint256 constant FIXTURE_BLOCK_START = 576727;
-    uint256 constant FIXTURE_BLOCK_END = 576727;
-
     Initial fixtureInitial;
     Step fixtureStep;
     Rotate fixtureRotate;

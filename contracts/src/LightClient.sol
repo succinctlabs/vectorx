@@ -139,8 +139,6 @@ contract LightClient is EventDecoder, StepVerifier {
         doStep(update);
     }
 
-    event MerkleRoot(bytes32 root);
-
     /// @notice Updates the head of the light client with the provided list of headers.
     function doStep(Step memory update) internal {
         // First verify that the authority set is correct.
@@ -156,15 +154,13 @@ contract LightClient is EventDecoder, StepVerifier {
             authSetIDMerkleRoot = stateRoots[head];
         }
 
-        emit MerkleRoot(authSetIDMerkleRoot);
-
         bytes[] memory keys = new bytes[](1);
         keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory proof_ret = MerklePatricia.VerifySubstrateProof(authSetIDMerkleRoot,
-                                                                     update.authoritySetIDProof.merkleProof,
-                                                                     keys)[0];
+        bytes memory proofRet = MerklePatricia.VerifySubstrateProof(authSetIDMerkleRoot,
+                                                                    update.authoritySetIDProof.merkleProof,
+                                                                    keys)[0];
 
-        if (ScaleCodec.decodeUint64(proof_ret) != update.authoritySetIDProof.authoritySetID) {
+        if (ScaleCodec.decodeUint64(proofRet) != update.authoritySetIDProof.authoritySetID) {
             revert("Finalized block authority set proof is not correct");
         }
 

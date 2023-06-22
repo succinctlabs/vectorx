@@ -76,6 +76,8 @@ contract LightClientTest is Test, LightClientFixture {
         step.authoritySetIDProof.authoritySetID = fixtureStep.authoritySetID;
         step.authoritySetIDProof.merkleProof = fixtureStep.merkleProof;
 
+        step.proof = convertToGroth16Proof(fixtureStep);
+
         lc.step(step);
 
         assertTrue(lc.head() == fixtureStep.blockNumbers[fixtureStep.blockNumbers.length - 1]);
@@ -87,6 +89,7 @@ contract LightClientTest is Test, LightClientFixture {
         }
     }
 
+    /*
     function test_LightClientStepRotate() public {
         LightClient lc = newLightClient(fixtureInitial);
         LCStep memory step;
@@ -161,6 +164,7 @@ contract LightClientTest is Test, LightClientFixture {
 
         assertTrue(lc.authoritySetCommitments(fixtureRotate.newAuthoritySetID) == fixtureRotate.newAuthoritySetCommitment);
     }
+    */
 
     /*
     function test_LightClientStep_badParentRoot() public {

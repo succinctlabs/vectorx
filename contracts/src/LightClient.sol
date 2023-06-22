@@ -244,6 +244,7 @@ contract LightClient is EventDecoder, StepVerifier {
 
         // Add the validator set id (uint8[1])
         inputs[inputIdx] = uint(uint8(activeAuthoritySetID));
+        inputIdx++;
 
         // For 20 headers, add the following
         // 1) header state root (uint8[32])
@@ -261,6 +262,16 @@ contract LightClient is EventDecoder, StepVerifier {
                 inputIdx++;
             }
         }
+
+        // Add in the original plonky2 step circuit digest
+        inputs[inputIdx] = 17122441374070351185;
+        inputIdx++;
+        inputs[inputIdx] = 18368451173317844989;
+        inputIdx++;
+        inputs[inputIdx] = 5752543660850962321;
+        inputIdx++;
+        inputs[inputIdx] = 1428786498560175815;
+        inputIdx++;
 
         require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }

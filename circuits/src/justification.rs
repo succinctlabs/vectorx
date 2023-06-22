@@ -144,7 +144,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         assert!(input_padding == 512);
         let hash_circuit = make_blake2b_circuit(
             self,
-            NUM_AUTHORITIES * 256 + input_padding,   // each EDDSA pub key in compressed for is 256 bits and padding to make it fit 128 byte chunks
+            NUM_AUTHORITIES * 256 + input_padding,   // each EDDSA pub key in compressed form is 256 bits and padding to make it fit 128 byte chunks
             HASH_SIZE,
         );
 

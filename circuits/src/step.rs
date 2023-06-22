@@ -42,7 +42,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             self.register_public_inputs(&decoded_header.state_root.0);
 
-            // Verify that the previous calcualted block hash is equal to the decoded parent hash
+            // Verify that the previous calculated block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
                 let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);
 
@@ -479,7 +479,7 @@ mod tests {
 
         println!("inner circuit digest is {:?}", inner_data.verifier_only.circuit_digest);
 
-        let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
         let outer_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
         outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &inner_data.common);
@@ -492,7 +492,11 @@ mod tests {
         outer_pw.set_proof_with_pis_target(&outer_proof_target, &inner_proof);
         outer_pw.set_verifier_data_target(&outer_verifier_data, &inner_data.verifier_only);
 
-        let outer_proof = outer_data.prove(outer_pw).unwrap();
+
+        let mut timing = TimingTree::new("step proof gen", Level::Info);
+        let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&outer_data.prover_only, &outer_data.common, outer_pw.clone(), &mut timing).unwrap();
+        timing.print();
+
         let ret = outer_data.verify(outer_proof.clone());
 
         // Verify the public inputs:

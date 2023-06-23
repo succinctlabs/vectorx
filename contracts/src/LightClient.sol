@@ -243,7 +243,7 @@ contract LightClient is EventDecoder, StepVerifier {
         }
 
         // Add the validator set id (uint8[1])
-        inputs[inputIdx] = uint(uint8(activeAuthoritySetID));
+        inputs[inputIdx] = activeAuthoritySetID;
         inputIdx++;
 
         // For 20 headers, add the following

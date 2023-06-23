@@ -47,9 +47,11 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         }
 
         // Input the head number into the hasher
-        let bits = self.split_le(subchain.head_block_num, 32);
-        for byte in &bits.iter().chunks(8) {
-            public_inputs_hash_input.append(&mut byte.copied().collect::<Vec<BoolTarget>>());
+        let head_block_num_bits = self.split_le(subchain.head_block_num, 32);
+        for byte in &head_block_num_bits.iter().chunks(8) {
+            let mut bits = byte.copied().collect::<Vec<BoolTarget>>();
+            bits.reverse();
+            public_inputs_hash_input.append(&mut bits);
         }
 
         // Input the validator commitment into the hasher
@@ -60,9 +62,11 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         }
 
         // Input the validator set id into the hasher
-        let bits = self.split_le(authority_set_signers.set_id, 64);
-        for byte in &bits.iter().chunks(8) {
-            public_inputs_hash_input.append(&mut byte.copied().collect::<Vec<BoolTarget>>());
+        let set_id_bits = self.split_le(authority_set_signers.set_id, 64);
+        for byte in &set_id_bits.iter().chunks(8) {
+            let mut bits = byte.copied().collect::<Vec<BoolTarget>>();
+            bits.reverse();
+            public_inputs_hash_input.append(&mut bits);
         }
 
         // We plan to store the the calculated blake2b hash (in bits) in calculated_hashes

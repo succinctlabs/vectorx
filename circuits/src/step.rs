@@ -77,8 +77,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             self.register_public_inputs(&decoded_header.state_root.0);
 
-            for i in 0..HASH_SIZE {
-                let mut bits = self.split_le(decoded_header.state_root.0[i], 8);
+            for j in 0..HASH_SIZE {
+                let mut bits = self.split_le(decoded_header.state_root.0[j], 8);
                 bits.reverse();
                 public_inputs_hash_input.append(&mut bits);
             }
@@ -176,7 +176,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
         }
 
-        let public_inputs_input_size = self.constant(F::from_canonical_usize(public_inputs_hash_input.len()));
+        let public_inputs_input_size = self.constant(F::from_canonical_usize(public_inputs_hash_input.len() / 8));
         self.connect(public_inputs_hash_circuit.message_len, public_inputs_input_size);
 
         // Verify that the public input hash matches

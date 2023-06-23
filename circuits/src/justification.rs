@@ -120,6 +120,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 
         let commitment = self.add_virtual_avail_hash_target_safe(true);
         let set_id = self.add_virtual_target();
+        // The set_id should be a u64
+        self.range_check(set_id, 64);
+
         self.register_public_input(set_id);
 
         AuthoritySetSignersTarget {

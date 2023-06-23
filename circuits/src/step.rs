@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use plonky2lib_succinct::ed25519::curve::curve_types::Curve;
 use plonky2lib_succinct::hash_functions::blake2b::make_blake2b_circuit;
 use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::{circuit_builder::CircuitBuilder}};
@@ -8,7 +9,7 @@ use crate::utils::{MAX_HEADER_SIZE, HASH_SIZE, MAX_NUM_HEADERS_PER_STEP};
 
 pub struct VerifySubchainTarget {
     pub head_block_hash: AvailHashTarget,   // The input is a vector of bits (in BE bit order)
-    pub head_block_num: Target,
+    pub head_block_num: Target,             // Should be a 32-bit unsigned integer
     pub encoded_headers: Vec<EncodedHeaderTarget>,
 }
 
@@ -18,6 +19,7 @@ pub trait CircuitBuilderStep<C: Curve> {
         subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget,
+        public_inputs_hash: &AvailHashTarget,
     );
 }
 
@@ -27,8 +29,41 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget,
+        public_inputs_hash: &AvailHashTarget,
     ) {
         assert!(subchain.encoded_headers.len() <= MAX_NUM_HEADERS_PER_STEP);
+
+        // The public inputs are 1356 bytes long (for 20 headers);
+        // Need to store each byte as BE bits
+        let mut public_inputs_hash_input = Vec::new();
+
+        // Input the head hash into the public inputs hasher
+        for i in 0..HASH_SIZE {
+            let mut bits = self.split_le(subchain.head_block_hash.0[i], 8);
+
+            // Needs to be in bit big endian order for the blake2b verification circuit
+            bits.reverse();
+            public_inputs_hash_input.append(&mut bits);
+        }
+
+        // Input the head number into the hasher
+        let bits = self.split_le(subchain.head_block_num, 32);
+        for byte in &bits.iter().chunks(8) {
+            public_inputs_hash_input.append(&mut byte.copied().collect::<Vec<BoolTarget>>());
+        }
+
+        // Input the validator commitment into the hasher
+        for i in 0..HASH_SIZE {
+            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+            bits.reverse();
+            public_inputs_hash_input.append(&mut bits);
+        }
+
+        // Input the validator set id into the hasher
+        let bits = self.split_le(authority_set_signers.set_id, 64);
+        for byte in &bits.iter().chunks(8) {
+            public_inputs_hash_input.append(&mut byte.copied().collect::<Vec<BoolTarget>>());
+        }
 
         // We plan to store the the calculated blake2b hash (in bits) in calculated_hashes
         let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();
@@ -42,7 +77,13 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             self.register_public_inputs(&decoded_header.state_root.0);
 
-            // Verify that the previous calcualted block hash is equal to the decoded parent hash
+            for i in 0..HASH_SIZE {
+                let mut bits = self.split_le(decoded_header.state_root.0[i], 8);
+                bits.reverse();
+                public_inputs_hash_input.append(&mut bits);
+            }
+
+            // Verify that the previous calculated block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
                 let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);
 
@@ -87,6 +128,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             // Convert hash digest into bytes
             for bits in hash_circuit.digest.chunks(8) {
                 // These bits are in big endian order
+                public_inputs_hash_input.append(&mut bits.to_vec());
                 let byte = self.le_sum(bits.iter().rev());
                 self.register_public_input(byte);
             }
@@ -121,6 +163,33 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 hash: AvailHashTarget(last_calculated_hash_bytes.try_into().unwrap()),
             },
         );
+
+        // The input digest is 1356 bytes (for 20 headers).  Need to pad that so that the result
+        // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes
+        let public_inputs_hash_circuit = make_blake2b_circuit(
+            self,
+            1408 * 8,
+            HASH_SIZE,
+        );
+
+        for (i, bit) in public_inputs_hash_input.iter().enumerate() {
+            self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
+        }
+
+        let public_inputs_input_size = self.constant(F::from_canonical_usize(public_inputs_hash_input.len()));
+        self.connect(public_inputs_hash_circuit.message_len, public_inputs_input_size);
+
+        // Verify that the public input hash matches
+        for i in 0 .. HASH_SIZE {
+            let mut bits = self.split_le(public_inputs_hash.0[i], 8);
+
+            // Needs to be in bit big endian order for the BLAKE2B circuit
+            bits.reverse();
+            for (j, bit) in bits.iter().enumerate().take(8) {
+                self.connect(public_inputs_hash_circuit.digest[i*8+j].target, bit.target);
+            }
+        }
+
     }
 }
 
@@ -128,12 +197,15 @@ pub struct StepTarget<C: Curve> {
     subchain_target: VerifySubchainTarget,
     precommits: [PrecommitTarget<C>; QUORUM_SIZE],
     authority_set: AuthoritySetSignersTarget,
+    public_inputs_hash: AvailHashTarget,
 }
 
 pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>(builder: &mut CircuitBuilder::<F, D>) -> StepTarget<C>{
     let head_block_hash_target = builder.add_virtual_avail_hash_target_safe(true);
 
     let head_block_num_target = builder.add_virtual_target();
+    // The head block number is a 32 bit number
+    builder.range_check(head_block_num_target, 32);
     builder.register_public_input(head_block_num_target);
 
     let mut header_targets = Vec::new();
@@ -156,16 +228,20 @@ pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>
         encoded_headers: header_targets,
     };
 
+    let public_inputs_hash = builder.add_virtual_avail_hash_target_safe(true);
+
     builder.step(
         &verify_subchain_target,
         precommit_targets.clone(),
         &authority_set,
+        &public_inputs_hash,
     );
 
     StepTarget{
         subchain_target: verify_subchain_target,
         precommits: precommit_targets.try_into().unwrap(),
         authority_set,
+        public_inputs_hash,
     }
 }
 
@@ -219,7 +295,7 @@ mod tests {
         BLOCK_530527_PARENT_HASH,
         BLOCK_530527_PRECOMMIT_MESSAGE,
         BLOCK_530527_AUTHORITY_SIGS,
-        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530508_BLOCK_HASH,
+        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530508_BLOCK_HASH, BLOCK_530527_PUBLIC_INPUTS_HASH,
     };
     use crate::justification::tests::{set_precommits_pw, set_authority_set_pw};
 
@@ -440,6 +516,8 @@ mod tests {
         let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
         let head_block_num = 530507;
 
+        let public_inputs_hash = hex::decode(BLOCK_530527_PUBLIC_INPUTS_HASH).unwrap();
+
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
         builder_logger.filter_level(log::LevelFilter::Trace);
@@ -455,6 +533,8 @@ mod tests {
         for (i, header) in headers.iter().enumerate() {
             pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
         }
+
+        pw.set_avail_hash_target(&step_target.public_inputs_hash, &(public_inputs_hash.try_into().unwrap()));
 
         set_precommits_pw::<F, D, Curve>(
             &mut pw,
@@ -536,7 +616,7 @@ mod tests {
             hex::decode(BLOCK_530508_BLOCK_HASH).unwrap(),
         );
 
-        /*  TODO:  It appears that the circuit digest changes after every different run, even if none of the code changes.  Need to find out way.
+        /*  TODO:  It appears that the circuit digest changes after every different run, even if none of the code changes.  Need to find out why.
         // Step circuit's digest
         assert_eq!(
             outer_proof.public_inputs[1346..1350].iter()

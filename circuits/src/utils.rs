@@ -445,4 +445,6 @@ pub (crate) mod tests {
         "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",    // Can be any valid pubkey
     ];
     pub const BLOCK_530527_AUTHORITY_SET_COMMITMENT: &str = "0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6";
+
+    pub const BLOCK_530527_PUBLIC_INPUTS_HASH: &str = "e9a1c86ce12af878fcf5953acf98233207ac109e3ab381b3306de42b399de41a";
 }

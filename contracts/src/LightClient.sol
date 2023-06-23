@@ -221,57 +221,37 @@ contract LightClient is EventDecoder, StepVerifier {
     }
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {
-        uint256[1350] memory inputs;
-        uint16 inputIdx = 0;
+        uint256[5] inputs;
 
-        // First input the head hash (uint8[32])
-        bytes32 headBytes = bytes32(headerHashes[head]);
-        for (uint8 i = 0; i < 32; i++) {
-            inputs[inputIdx] = uint(uint8(headBytes[i]));
-            inputIdx++;
-        }
-
-        // Add the head num (uint64[1])
-        inputs[inputIdx] = uint256(head);
-        inputIdx++;
-
-        // Add the authority set commitment (uint8[32])
-        bytes32 authoritySetCommitmentBytes = bytes32(authoritySetCommitments[activeAuthoritySetID]);
-        for (uint8 i = 0; i < 32; i ++) {
-            inputs[inputIdx] = uint(uint8(authoritySetCommitmentBytes[i]));
-            inputIdx++;
-        }
-
-        // Add the validator set id (uint8[1])
-        inputs[inputIdx] = activeAuthoritySetID;
-        inputIdx++;
+        bytes hashInput;
+        // Add the head num and hash authority set commitment, and validator set id
+        hashInput = bytes.concat(
+            bytes4(head),
+            headerHashes[head],
+            authoritySetCommitments[activeAuthoritySetID],
+            bytes8(activeAuthoritySetID)
+        );
 
         // For 20 headers, add the following
-        // 1) header state root (uint8[32])
-        // 2) header block hash (uint8[32])
+        // 1) header state root
+        // 2) header block hash
         for (uint8 i = 0; i < 20; i++) {
-            bytes32 stateRootBytes = bytes32(headers[i].stateRoot);
-            for (uint8 j = 0; j < 32; j++) {
-                inputs[inputIdx] = uint(uint8(stateRootBytes[j]));
-                inputIdx++;
-            }
-
-            bytes32 headerHashBytes = bytes32(headers[i].headerHash);
-            for (uint8 j = 0; j < 32; j++) {
-                inputs[inputIdx] = uint(uint8(headerHashBytes[j]));
-                inputIdx++;
-            }
+            hashInput = bytes.concat(
+                hashInput,
+                headers[i].stateRoot,
+                headers[i].headerHashes
+            );
         }
 
-        // Add in the original plonky2 step circuit digest
-        inputs[inputIdx] = 17122441374070351185;
-        inputIdx++;
-        inputs[inputIdx] = 18368451173317844989;
-        inputIdx++;
-        inputs[inputIdx] = 5752543660850962321;
-        inputIdx++;
-        inputs[inputIdx] = 1428786498560175815;
-        inputIdx++;
+        uint256 digest = uint256(Blake2b.blake2b(hashInput));
+        digest = digest & ((uint256(1) << 253) - 1);
+
+        inputs[0] = digest;
+        // Add in the plonky2 step circuit digest
+        inputs[1] = 17122441374070351185;
+        inputs[2] = 18368451173317844989;
+        inputs[3] = 5752543660850962321;
+        inputs[4] = 1428786498560175815;
 
         require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }

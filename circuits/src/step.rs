@@ -176,6 +176,12 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
         }
 
+        // Add the padding
+        let zero = self.zero();
+        for i in public_inputs_hash_input.len() .. 1408 * 8 {
+            self.connect(zero, public_inputs_hash_circuit.message[i].target);
+        }
+
         let public_inputs_input_size = self.constant(F::from_canonical_usize(public_inputs_hash_input.len() / 8));
         self.connect(public_inputs_hash_circuit.message_len, public_inputs_input_size);
 

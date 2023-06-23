@@ -145,9 +145,6 @@ pub trait CircuitBuilderUtils {
     ) -> Vec<Target>;
 }
 
-pub type ToTarget<T> = fn(&T) -> Target;
-pub type FromTarget<T> = fn(&Target) -> T;
-
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
     fn add_virtual_avail_hash_target_safe(&mut self, set_as_public: bool) -> AvailHashTarget {
         let mut hash_target = Vec::new();

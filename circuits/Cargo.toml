@@ -31,7 +31,3 @@ env_logger = { version = "0.9.0", default-features = false }
 #[dev-dependencies]
 #[patch."https://github.com/mir-protocol/plonky2.git"]
 #plonky2 = { path = "../../plonky2/plonky2" }
-
-[[bin]]
-name = "verify_block_encoding"
-path = "src/verify_block_encoding.rs"

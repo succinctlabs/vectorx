@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use plonky2lib_succinct::ed25519::curve::curve_types::Curve;
 use plonky2lib_succinct::hash_functions::blake2b::make_blake2b_circuit;
 use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::{circuit_builder::CircuitBuilder}};

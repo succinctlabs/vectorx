@@ -50,13 +50,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let mut head_block_num_bits = self.split_le(subchain.head_block_num, 32);
         head_block_num_bits.reverse();
         public_inputs_hash_input.append(&mut head_block_num_bits);
-        /*
-        for byte in &head_block_num_bits.iter().chunks(8) {
-            let mut bits = byte.copied().collect::<Vec<BoolTarget>>();
-            bits.reverse();
-            public_inputs_hash_input.append(&mut bits);
-        }
-        */
 
         // Input the validator commitment into the hasher
         for i in 0..HASH_SIZE {
@@ -69,13 +62,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let mut set_id_bits = self.split_le(authority_set_signers.set_id, 64);
         set_id_bits.reverse();
         public_inputs_hash_input.append(&mut set_id_bits);
-        /*
-        for byte in &set_id_bits.iter().chunks(8) {
-            let mut bits = byte.copied().collect::<Vec<BoolTarget>>();
-            bits.reverse();
-            public_inputs_hash_input.append(&mut bits);
-        }
-        */
 
         // We plan to store the the calculated blake2b hash (in bits) in calculated_hashes
         let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();
@@ -86,8 +72,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             let decoded_header = self.decode_header(
                 &subchain.encoded_headers[i],
             );
-
-            self.register_public_inputs(&decoded_header.state_root.0);
 
             for j in 0..HASH_SIZE {
                 let mut bits = self.split_le(decoded_header.state_root.0[j], 8);
@@ -141,8 +125,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             for bits in hash_circuit.digest.chunks(8) {
                 // These bits are in big endian order
                 public_inputs_hash_input.append(&mut bits.to_vec());
-                let byte = self.le_sum(bits.iter().rev());
-                self.register_public_input(byte);
             }
 
             // Verify that the block numbers are sequential
@@ -219,12 +201,11 @@ pub struct StepTarget<C: Curve> {
 }
 
 pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>(builder: &mut CircuitBuilder::<F, D>) -> StepTarget<C>{
-    let head_block_hash_target = builder.add_virtual_avail_hash_target_safe(true);
+    let head_block_hash_target = builder.add_virtual_avail_hash_target_safe(false);
 
     let head_block_num_target = builder.add_virtual_target();
     // The head block number is a 32 bit number
     builder.range_check(head_block_num_target, 32);
-    builder.register_public_input(head_block_num_target);
 
     let mut header_targets = Vec::new();
     for _i in 0..MAX_NUM_HEADERS_PER_STEP {
@@ -594,50 +575,20 @@ mod tests {
         let ret = outer_data.verify(outer_proof.clone());
 
         // Verify the public inputs:
-        // Head block hash
+
+        assert_eq!(outer_proof.public_inputs.len(), 36);
+
+        // Blake2b hash of the public inputs
         assert_eq!(
             outer_proof.public_inputs[0..32].iter()
             .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530508_PARENT_HASH).unwrap(),
-        );
-
-        // Head block number
-        assert_eq!(
-            usize::try_from(outer_proof.public_inputs[32].to_canonical_u64()).unwrap(),
-            530507,
-        );
-
-        // Validator set commitment
-        assert_eq!(
-            outer_proof.public_inputs[33..65].iter()
-            .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
-        );
-
-        // Validator set ID
-        assert_eq!(
-            usize::try_from(outer_proof.public_inputs[65].to_canonical_u64()).unwrap(),
-            496,
-        );
-
-        // Header 1 state root
-        assert_eq!(
-            outer_proof.public_inputs[66..98].iter()
-            .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
-            [ 243, 56, 163, 79, 50, 190, 245, 166, 174, 154, 24, 226, 216, 77, 87, 86, 137, 243, 105, 31, 72, 212, 237, 21, 87, 167, 90, 84, 73, 174, 7, 149, ],
-        );
-
-        // Header 1 block hash
-        assert_eq!(
-            outer_proof.public_inputs[98..130].iter()
-            .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530508_BLOCK_HASH).unwrap(),
+            hex::decode(BLOCK_530527_PUBLIC_INPUTS_HASH).unwrap(),
         );
 
         /*  TODO:  It appears that the circuit digest changes after every different run, even if none of the code changes.  Need to find out why.
         // Step circuit's digest
         assert_eq!(
-            outer_proof.public_inputs[1346..1350].iter()
+            outer_proof.public_inputs[32..36].iter()
             .map(|element| element.to_canonical_u64()).collect::<Vec<_>>(),
             [17122441374070351185, 18368451173317844989, 5752543660850962321, 1428786498560175815],
         );

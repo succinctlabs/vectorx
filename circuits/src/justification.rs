@@ -118,12 +118,10 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             pub_keys.push(PubKeyTarget(pub_key.try_into().unwrap()));
         }
 
-        let commitment = self.add_virtual_avail_hash_target_safe(true);
+        let commitment = self.add_virtual_avail_hash_target_safe(false);
         let set_id = self.add_virtual_target();
         // The set_id should be a u64
         self.range_check(set_id, 64);
-
-        self.register_public_input(set_id);
 
         AuthoritySetSignersTarget {
             pub_keys: pub_keys.try_into().unwrap(),
@@ -288,7 +286,7 @@ pub (crate) mod tests {
 
         let authority_set = <CircuitBuilder<F, D> as CircuitBuilderGrandpaJustificationVerifier<C>>::add_virtual_authority_set_signers_target_safe(builder);
 
-        let finalized_block_hash = builder.add_virtual_avail_hash_target_safe(true);
+        let finalized_block_hash = builder.add_virtual_avail_hash_target_safe(false);
         let finalized_block_num = builder.add_virtual_target();
 
         builder.verify_justification(

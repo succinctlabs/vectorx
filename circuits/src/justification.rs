@@ -269,7 +269,7 @@ pub (crate) mod tests {
     use plonky2_field::types::{Field, PrimeField};
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
-    use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};
+    use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT, convert_hash_to_chunks};
     use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES, PUB_KEY_SIZE};
 
     pub struct JustificationTarget<C: Curve> {
@@ -563,8 +563,8 @@ pub (crate) mod tests {
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
-        let block_hash_bytes = hex::decode(BLOCK_530527_BLOCK_HASH).unwrap();
-        pw.set_avail_hash_target(&justification_target.finalized_block.hash, &(block_hash_bytes.try_into().unwrap()));
+        let block_hash_bytes = convert_hash_to_chunks(BLOCK_530527_BLOCK_HASH);
+        pw.set_avail_hash_target(&justification_target.finalized_block.hash, &block_hash_bytes);
         pw.set_target(justification_target.finalized_block.num, F::from_canonical_u32(530527u32));
 
         let data = builder.build::<C>();

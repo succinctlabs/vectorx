@@ -293,7 +293,7 @@ mod tests {
         BLOCK_530527_PARENT_HASH,
         BLOCK_530527_PRECOMMIT_MESSAGE,
         BLOCK_530527_AUTHORITY_SIGS,
-        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530508_BLOCK_HASH, BLOCK_530527_PUBLIC_INPUTS_HASH,
+        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530527_PUBLIC_INPUTS_HASH, convert_hash_to_chunks,
     };
     use crate::justification::tests::{set_precommits_pw, set_authority_set_pw};
 
@@ -310,7 +310,7 @@ mod tests {
 
     fn test_step(
         headers: Vec<Vec<u8>>,
-        head_block_hash: Vec<u8>,
+        head_block_hash: &str,
         head_block_num: u64,
 
         authority_set_id: u64,
@@ -331,7 +331,7 @@ mod tests {
 
         let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
 
-        pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
+        pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &convert_hash_to_chunks(head_block_hash));
         pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
         for (i, header) in headers.iter().enumerate() {
             pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
@@ -362,10 +362,9 @@ mod tests {
     #[test]
     fn test_verify_headers_one() -> Result<()> {
         let headers = vec![BLOCK_530527_HEADER.to_vec()];
-        let head_block_hash = hex::decode(BLOCK_530527_PARENT_HASH).unwrap();
         test_step(
             headers,
-            head_block_hash,
+            BLOCK_530527_PARENT_HASH,
             530526,
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
@@ -379,10 +378,9 @@ mod tests {
     #[test]
     fn test_verify_headers_two() -> Result<()> {
         let headers = vec![BLOCK_530526_HEADER.to_vec(), BLOCK_530527_HEADER.to_vec()];
-        let head_block_hash = hex::decode(BLOCK_530526_PARENT_HASH).unwrap();
         test_step(
             headers,
-            head_block_hash,
+            BLOCK_530526_PARENT_HASH,
             530525,
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
@@ -402,10 +400,9 @@ mod tests {
             BLOCK_530526_HEADER.to_vec(),
             BLOCK_530527_HEADER.to_vec(),
         ];
-        let head_block_hash = hex::decode(BLOCK_530523_PARENT_HASH).unwrap();
         test_step(
             headers,
-            head_block_hash,
+            BLOCK_530523_PARENT_HASH,
             530522,
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
@@ -430,10 +427,9 @@ mod tests {
             BLOCK_530526_HEADER.to_vec(),
             BLOCK_530527_HEADER.to_vec(),
         ];
-        let head_block_hash = hex::decode(BLOCK_530518_PARENT_HASH).unwrap();
         test_step(
             headers,
-            head_block_hash,
+            BLOCK_530518_PARENT_HASH,
             530517,
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
@@ -468,10 +464,9 @@ mod tests {
             BLOCK_530526_HEADER.to_vec(),
             BLOCK_530527_HEADER.to_vec(),
         ];
-        let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
         test_step(
             headers,
-            head_block_hash,
+            BLOCK_530508_PARENT_HASH,
             530507,
             BLOCK_530527_AUTHORITY_SET_ID,
             BLOCK_530527_PRECOMMIT_MESSAGE.to_vec(),
@@ -511,10 +506,10 @@ mod tests {
             BLOCK_530526_HEADER.to_vec(),
             BLOCK_530527_HEADER.to_vec(),
         ];
-        let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
+        let head_block_hash = BLOCK_530508_PARENT_HASH;
         let head_block_num = 530507;
 
-        let public_inputs_hash = hex::decode(BLOCK_530527_PUBLIC_INPUTS_HASH).unwrap();
+        let public_inputs_hash = BLOCK_530527_PUBLIC_INPUTS_HASH;
 
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
@@ -526,13 +521,13 @@ mod tests {
 
         let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
 
-        pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
+        pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &convert_hash_to_chunks(head_block_hash));
         pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
         for (i, header) in headers.iter().enumerate() {
             pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
         }
 
-        pw.set_avail_hash_target(&step_target.public_inputs_hash, &(public_inputs_hash.try_into().unwrap()));
+        pw.set_avail_hash_target(&step_target.public_inputs_hash, &convert_hash_to_chunks(public_inputs_hash));
 
         set_precommits_pw::<F, D, Curve>(
             &mut pw,

@@ -9,6 +9,7 @@ pub const MAX_NUM_HEADERS_PER_STEP: usize = 20;
 //pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 10; // 1280 bytes.  Keep this for now.
 pub const HASH_SIZE: usize = 32;                         // in bytes
+pub const NUM_HASH_CHUNKS: usize = HASH_SIZE / 8;        // Each hash chunk is 4 bytes
 pub const PUB_KEY_SIZE: usize = 32;                      // in bytes
 
 
@@ -26,38 +27,38 @@ use plonky2::{
 use plonky2_field::{extension::Extendable, types::{PrimeField, PrimeField64}};
 
 #[derive(Clone)]
-pub struct AvailHashTarget(pub [Target; HASH_SIZE]);
+pub struct AvailHashTarget(pub [Target; NUM_HASH_CHUNKS]);    // hash split into u32 chunks
 
 pub trait WitnessAvailHash<F: PrimeField64>: Witness<F> {
-    fn get_avail_hash_target(&self, target: AvailHashTarget) -> [u8; HASH_SIZE];
-    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: &[u8; HASH_SIZE]);
+    fn get_avail_hash_target(&self, target: AvailHashTarget) -> [u32; NUM_HASH_CHUNKS];
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: &[u32; NUM_HASH_CHUNKS]);
 }
 
 impl<T: Witness<F>, F: PrimeField64> WitnessAvailHash<F> for T {
-    fn get_avail_hash_target(&self, target: AvailHashTarget) -> [u8; HASH_SIZE] {
+    fn get_avail_hash_target(&self, target: AvailHashTarget) -> [u32; NUM_HASH_CHUNKS] {
         target.0
         .iter()
-        .map(|t| u8::try_from(self.get_target(*t).to_canonical_u64()).unwrap())
-        .collect::<Vec<u8>>()
+        .map(|t| u32::try_from(self.get_target(*t).to_canonical_u64()).unwrap())
+        .collect::<Vec<u32>>()
         .try_into()
         .unwrap()
     }
 
-    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: &[u8; HASH_SIZE]) {
-        for i in 0..HASH_SIZE {
-            self.set_target(target.0[i], F::from_canonical_u8(value[i]));
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: &[u32; NUM_HASH_CHUNKS]) {
+        for i in 0..NUM_HASH_CHUNKS {
+            self.set_target(target.0[i], F::from_canonical_u32(value[i]));
         }
     }
 }
 
 pub trait GeneratedValuesAvailHash<F: PrimeField> {
-    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: [u8; HASH_SIZE]);
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: [u32; NUM_HASH_CHUNKS]);
 }
 
 impl<F: PrimeField> GeneratedValuesAvailHash<F> for GeneratedValues<F> {
-    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: [u8; HASH_SIZE]) {
-        for i in 0..HASH_SIZE {
-            self.set_target(target.0[i], F::from_canonical_u8(value[i]));
+    fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: [u32; NUM_HASH_CHUNKS]) {
+        for i in 0..NUM_HASH_CHUNKS {
+            self.set_target(target.0[i], F::from_canonical_u32(value[i]));
         }
     }
 }
@@ -148,12 +149,12 @@ pub trait CircuitBuilderUtils {
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
     fn add_virtual_avail_hash_target_safe(&mut self, set_as_public: bool) -> AvailHashTarget {
         let mut hash_target = Vec::new();
-        for _ in 0..HASH_SIZE {
+        for _ in 0..NUM_HASH_CHUNKS {
             let byte = self.add_virtual_target();
             if set_as_public {
                 self.register_public_input(byte);
             }
-            self.range_check(byte, 8);
+            self.range_check(byte, 32);
             hash_target.push(byte);
         }
 
@@ -181,7 +182,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         x: AvailHashTarget,
         y: AvailHashTarget
     ) {
-        for i in 0..HASH_SIZE {
+        for i in 0..NUM_HASH_CHUNKS {
             self.connect(x.0[i], y.0[i]);
         }
     }
@@ -286,7 +287,6 @@ impl<
     }    
 }
 
-
 // Will convert each byte into 8 bits (big endian)
 pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
     let mut res = Vec::new();
@@ -307,7 +307,19 @@ pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
 #[cfg(test)]
 #[allow(dead_code)]
 pub (crate) mod tests {
-    use super::{ENCODED_PRECOMMIT_LENGTH, QUORUM_SIZE, NUM_AUTHORITIES_PADDED};
+    use super::{ENCODED_PRECOMMIT_LENGTH, QUORUM_SIZE, NUM_AUTHORITIES_PADDED, NUM_HASH_CHUNKS};
+    pub fn convert_hash_to_chunks(hash: &str) -> [u32; NUM_HASH_CHUNKS] {
+        let block_hash_bytes = hex::decode(hash).unwrap();
+        let mut res = Vec::new();
+
+        for bytes in block_hash_bytes.chunks_exact(4) {
+            let chunk = u32::from_be_bytes(bytes.try_into().unwrap());
+            res.push(chunk);
+        }
+
+        res.try_into().unwrap()
+    }
+
 
     // Block 576728 contains a new authorities event
     pub const BLOCK_576728_BLOCK_HASH: &str = "b71429ef80257a25358e386e4ca1debe72c38ea69d833e23416a4225fabb1a78";

@@ -270,7 +270,7 @@ pub (crate) mod tests {
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
     use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT, convert_hash_to_chunks};
-    use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES, PUB_KEY_SIZE, NUM_HASH_CHUNKS};
+    use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE, QUORUM_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES, PUB_KEY_SIZE, NUM_HASH_CHUNKS};
 
     pub struct JustificationTarget<C: Curve> {
         precommit_targets: Vec<PrecommitTarget<C>>,

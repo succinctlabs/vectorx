@@ -157,7 +157,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
             state_root_chunks.push(reduce_with_powers_circuit(self, c.as_slice(), base));
         }
 
-
         HeaderTarget {
             parent_hash: AvailHashTarget(parent_chunks.try_into().unwrap()),
             block_number: block_number_target,

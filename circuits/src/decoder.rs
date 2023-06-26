@@ -142,7 +142,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
         let data_root_target = self.random_access_vec(data_root_idx, all_possible_data_roots);
         */
 
-        let base = self.constant(F::from_canonical_usize(32));
+        let base = self.constant(F::from_canonical_usize(8));
         let mut parent_chunks = Vec::new();
         for chunk in &parent_hash_target.iter().chunks(4){
             let mut c = chunk.copied().collect::<Vec<_>>();
@@ -200,7 +200,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
         let block_hash = precommit.0[1..33].to_vec();
 
         // Split it into 4 chunks of u32 elements
-        let base = self.constant(F::from_canonical_usize(32));
+        let base = self.constant(F::from_canonical_usize(8));
         let mut block_hash_chunks = Vec::new();
         for chunk in &block_hash.iter().chunks(4){
             let mut c = chunk.copied().collect::<Vec<_>>();

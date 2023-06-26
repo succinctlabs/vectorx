@@ -9,7 +9,7 @@ pub const MAX_NUM_HEADERS_PER_STEP: usize = 20;
 //pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 10; // 1280 bytes.  Keep this for now.
 pub const HASH_SIZE: usize = 32;                         // in bytes
-pub const NUM_HASH_CHUNKS: usize = HASH_SIZE / 8;        // Each hash chunk is 4 bytes
+pub const NUM_HASH_CHUNKS: usize = HASH_SIZE / 4;        // Each hash chunk is 4 bytes
 pub const PUB_KEY_SIZE: usize = 32;                      // in bytes
 
 

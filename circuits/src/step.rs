@@ -319,7 +319,7 @@ mod tests {
 
         pub_key_indices: Vec<usize>,
         authority_set: Vec<Vec<u8>>,
-        authority_set_commitment: Vec<u8>,
+        authority_set_commitment: &str,
     ) -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
@@ -371,7 +371,7 @@ mod tests {
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_530527_AUTHORITY_SET_COMMITMENT,
         )
     }
 
@@ -387,7 +387,7 @@ mod tests {
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_530527_AUTHORITY_SET_COMMITMENT,
         )
     }
 
@@ -409,7 +409,7 @@ mod tests {
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_530527_AUTHORITY_SET_COMMITMENT,
         )
     }
 
@@ -436,7 +436,7 @@ mod tests {
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_530527_AUTHORITY_SET_COMMITMENT,
         )
     }
 
@@ -473,7 +473,7 @@ mod tests {
             BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_530527_AUTHORITY_SET_COMMITMENT,
         )
     }
 
@@ -543,7 +543,7 @@ mod tests {
             &step_target.authority_set,
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_AUTHORITY_SET_ID,
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_530527_AUTHORITY_SET_COMMITMENT,
         );
 
         let inner_data = builder.build();

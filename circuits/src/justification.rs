@@ -10,7 +10,7 @@ use plonky2_ecdsa::gadgets::nonnative::CircuitBuilderNonNative;
 use plonky2_field::extension::Extendable;
 use plonky2_field::types::Field;
 use plonky2::iop::target::Target;
-use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE };
+use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE, NUM_HASH_CHUNKS };
 use crate::decoder::{ CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
 #[derive(Clone, Debug)]
@@ -172,8 +172,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         self.connect(hash_circuit.message_len, authority_set_hash_input_length);
 
         // Verify that the hash matches
-        for i in 0 .. HASH_SIZE {
-            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+        for i in 0 .. NUM_HASH_CHUNKS {
+            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 32);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
@@ -209,8 +209,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
             // as opposed to a decendent of that block.
             let decoded_precommit_msg = self.decode_precommit(EncodedPrecommitTarget(signed_precommits[i].precommit_message.to_vec()));
             self.connect(finalized_block.num, decoded_precommit_msg.block_number);
-            for j in 0..HASH_SIZE {
-                self.connect(finalized_block.hash.0[j], decoded_precommit_msg.block_hash[j]);
+            for j in 0..NUM_HASH_CHUNKS {
+                self.connect(finalized_block.hash.0[j], decoded_precommit_msg.block_hash.0[j]);
             }
             self.connect(authority_set_signers.set_id, decoded_precommit_msg.authority_set_id);
 

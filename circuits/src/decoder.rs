@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powers_circuit};
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -141,10 +142,26 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
         let data_root_target = self.random_access_vec(data_root_idx, all_possible_data_roots);
         */
 
+        let base = self.constant(F::from_canonical_usize(32));
+        let mut parent_chunks = Vec::new();
+        for chunk in &parent_hash_target.iter().chunks(4){
+            let mut c = chunk.copied().collect::<Vec<_>>();
+            c.reverse();
+            parent_chunks.push(reduce_with_powers_circuit(self, c.as_slice(), base));
+        }
+
+        let mut state_root_chunks = Vec::new();
+        for chunk in &state_root_target.iter().chunks(4){
+            let mut c = chunk.copied().collect::<Vec<_>>();
+            c.reverse();
+            state_root_chunks.push(reduce_with_powers_circuit(self, c.as_slice(), base));
+        }
+
+
         HeaderTarget {
-            parent_hash: AvailHashTarget(parent_hash_target.try_into().unwrap()),
+            parent_hash: AvailHashTarget(parent_chunks.try_into().unwrap()),
             block_number: block_number_target,
-            state_root: AvailHashTarget(state_root_target.try_into().unwrap()),
+            state_root: AvailHashTarget(state_root_chunks.try_into().unwrap()),
             //data_root: HashTarget(data_root_target.try_into().unwrap()),
         }
     }
@@ -155,7 +172,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
 pub struct EncodedPrecommitTarget(pub Vec<Target>);
 
 pub struct PrecommitTarget {
-    pub block_hash: Vec<Target>,   // Vector of 32 bytes
+    pub block_hash: AvailHashTarget,
     pub block_number: Target,
     pub justification_round: Target,
     pub authority_set_id: Target,
@@ -182,6 +199,15 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
         // The next 32 bytes is the block hash
         let block_hash = precommit.0[1..33].to_vec();
 
+        // Split it into 4 chunks of u32 elements
+        let base = self.constant(F::from_canonical_usize(32));
+        let mut block_hash_chunks = Vec::new();
+        for chunk in &block_hash.iter().chunks(4){
+            let mut c = chunk.copied().collect::<Vec<_>>();
+            c.reverse();
+            block_hash_chunks.push(reduce_with_powers_circuit(self, c.as_slice(), base));
+        }
+
         // The next 4 bytes is the block number
         let block_number = self.decode_fixed_int(precommit.0[33..37].to_vec(), 4);
 
@@ -192,7 +218,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
         let authority_set_id = self.decode_fixed_int(precommit.0[45..53].to_vec(), 8);
 
         PrecommitTarget {
-            block_hash,
+            block_hash: AvailHashTarget(block_hash_chunks.try_into().unwrap()),
             block_number,
             justification_round,
             authority_set_id,

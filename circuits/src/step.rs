@@ -2,7 +2,7 @@ use plonky2lib_succinct::ed25519::curve::curve_types::Curve;
 use plonky2lib_succinct::hash_functions::blake2b::make_blake2b_circuit;
 use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::{circuit_builder::CircuitBuilder}};
 use plonky2_field::extension::Extendable;
-use crate::{decoder::CircuitBuilderHeaderDecoder, utils::{QUORUM_SIZE, AvailHashTarget, EncodedHeaderTarget, CircuitBuilderUtils}};
+use crate::{decoder::CircuitBuilderHeaderDecoder, utils::{QUORUM_SIZE, AvailHashTarget, EncodedHeaderTarget, CircuitBuilderUtils, NUM_HASH_CHUNKS}};
 use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, AuthoritySetSignersTarget, FinalizedBlockTarget};
 use crate::utils::{MAX_HEADER_SIZE, HASH_SIZE, MAX_NUM_HEADERS_PER_STEP};
 
@@ -37,8 +37,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let mut public_inputs_hash_input = Vec::new();
 
         // Input the head hash into the public inputs hasher
-        for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(subchain.head_block_hash.0[i], 8);
+        for i in 0..NUM_HASH_CHUNKS {
+            let mut bits = self.split_le(subchain.head_block_hash.0[i], 32);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
@@ -51,8 +51,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         public_inputs_hash_input.append(&mut head_block_num_bits);
 
         // Input the validator commitment into the hasher
-        for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+        for i in 0..NUM_HASH_CHUNKS {
+            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 32);
             bits.reverse();
             public_inputs_hash_input.append(&mut bits);
         }
@@ -72,15 +72,15 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 &subchain.encoded_headers[i],
             );
 
-            for j in 0..HASH_SIZE {
-                let mut bits = self.split_le(decoded_header.state_root.0[j], 8);
+            for j in 0..NUM_HASH_CHUNKS {
+                let mut bits = self.split_le(decoded_header.state_root.0[j], 32);
                 bits.reverse();
                 public_inputs_hash_input.append(&mut bits);
             }
 
             // Verify that the previous calculated block hash is equal to the decoded parent hash
-            for j in 0 .. HASH_SIZE {
-                let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);
+            for j in 0 .. NUM_HASH_CHUNKS {
+                let mut bits = self.split_le(decoded_header.parent_hash.0[j], 32);
 
                 // Needs to be in bit big endian order for the blake2b verification circuit
                 bits.reverse();
@@ -141,10 +141,10 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         let last_calculated_hash = calculated_hashes.last().unwrap();
         let mut last_calculated_hash_bytes = Vec::new();
-        // Convert the last calculated hash into bytes
+        // Convert the last calculated hash into u32s
         // The bits in the calculated hash are in bit big endian format
-        for i in 0 .. HASH_SIZE {
-            last_calculated_hash_bytes.push(self.le_sum(last_calculated_hash[i*8..i*8+8].to_vec().iter().rev()));
+        for i in 0 .. MAX_HEADER_SIZE {
+            last_calculated_hash_bytes.push(self.le_sum(last_calculated_hash[i*32..i*32+32].to_vec().iter().rev()));
         }
 
         // Now verify the grandpa justification
@@ -179,8 +179,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         self.connect(public_inputs_hash_circuit.message_len, public_inputs_input_size);
 
         // Verify that the public input hash matches
-        for i in 0 .. HASH_SIZE {
-            let mut bits = self.split_le(public_inputs_hash.0[i], 8);
+        for i in 0 .. NUM_HASH_CHUNKS {
+            let mut bits = self.split_le(public_inputs_hash.0[i], 32);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();

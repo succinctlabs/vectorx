@@ -270,7 +270,7 @@ pub (crate) mod tests {
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
     use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT, convert_hash_to_chunks};
-    use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES, PUB_KEY_SIZE};
+    use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES, PUB_KEY_SIZE, NUM_HASH_CHUNKS};
 
     pub struct JustificationTarget<C: Curve> {
         precommit_targets: Vec<PrecommitTarget<C>>,
@@ -365,7 +365,7 @@ pub (crate) mod tests {
         authority_set_target: &AuthoritySetSignersTarget,
         pub_keys: Vec<Vec<u8>>,
         authority_set_id: u64,
-        authority_set_commitment: Vec<u8>,
+        authority_set_commitment: Vec<u32>,
     ) {
         assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
         assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES_PADDED);
@@ -385,8 +385,8 @@ pub (crate) mod tests {
 
         pw.set_target(authority_set_target.set_id, F::from_canonical_u64(authority_set_id));
 
-        for i in 0..HASH_SIZE {
-            pw.set_target(authority_set_target.commitment.0[i], F::from_canonical_u8(authority_set_commitment[i]));
+        for i in 0..NUM_HASH_CHUNKS {
+            pw.set_target(authority_set_target.commitment.0[i], F::from_canonical_u32(authority_set_commitment[i]));
         }
     }
 
@@ -560,7 +560,7 @@ pub (crate) mod tests {
             &justification_target.authority_set_signers,
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
             BLOCK_530527_AUTHORITY_SET_ID,
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            convert_hash_to_chunks(BLOCK_530527_AUTHORITY_SET_COMMITMENT).to_vec(),
         );
 
         let block_hash_bytes = convert_hash_to_chunks(BLOCK_530527_BLOCK_HASH);

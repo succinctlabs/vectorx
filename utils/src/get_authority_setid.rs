@@ -16,7 +16,7 @@ pub async fn main() {
     let c = build_client(url).await.unwrap();
 
     // The block hash for block 576727 (https://testnet.avail.tools/#/explorer/query/576728)
-    let block_hash_vec = hex::decode("91257bc931df2d9a91f32dae6ca607ae9e411b38ed8738738eafe7bb816d1464").unwrap();
+    let block_hash_vec = hex::decode("60ee3874d6f79ba54bb4f9b62972e905a0cc4288e442879717bd62035fccf489").unwrap();
 
     let mut block_hash_array: [u8; 32] = [0; 32];
     for i in 0..block_hash_vec.len() {

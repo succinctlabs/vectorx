@@ -5,6 +5,7 @@ import "solidity-merkle-trees/src/trie/Bytes.sol";
 import "solidity-merkle-trees/src/trie/Memory.sol";
 import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
 import { EventDecoder } from "src/EventDecoder.sol";
+import {StepVerifier} from "src/StepVerifier.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 
 
@@ -53,7 +54,7 @@ struct Step {
     //     d) Those headers have the submitted executionStateRoots and dataRoots.
     // 2) There exist a valid GRANDPA justification that finalized the last block in the headers field
     //     a) This GRANDPA justification has been signed by the validators within the authority set ID within the authoritySetIDProof field.
-    //Groth16Proof proof;
+    Groth16Proof proof;
 }
 
 
@@ -76,7 +77,7 @@ struct Rotate {
 /// @author Succinct Labs
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
-contract LightClient is EventDecoder {
+contract LightClient is EventDecoder, StepVerifier {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
 
@@ -95,10 +96,10 @@ contract LightClient is EventDecoder {
     /// @notice Maps from a block number to the data root.
     mapping(uint32 => bytes32) public dataRoots;
 
-    /// @notice Maps from a authority set id to the authorities' pub keys
+    /// @notice Maps from an authority set id to the authorities' pub keys
     mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authoritySets;
 
-    /// @notice Maps from a authority set id to the blake2b hash of the authorities' pub keys
+    /// @notice Maps from an authority set id to the blake2b hash of the authorities' pub keys
     mapping(uint64 => bytes32) public authoritySetCommitments;
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
@@ -155,18 +156,21 @@ contract LightClient is EventDecoder {
 
         bytes[] memory keys = new bytes[](1);
         keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory proof_ret = MerklePatricia.VerifySubstrateProof(authSetIDMerkleRoot,
-                                                                     update.authoritySetIDProof.merkleProof,
-                                                                     keys)[0];
+        bytes memory proofRet = MerklePatricia.VerifySubstrateProof(authSetIDMerkleRoot,
+                                                                    update.authoritySetIDProof.merkleProof,
+                                                                    keys)[0];
 
-        if (ScaleCodec.decodeUint64(proof_ret) != update.authoritySetIDProof.authoritySetID) {
+        if (ScaleCodec.decodeUint64(proofRet) != update.authoritySetIDProof.authoritySetID) {
             revert("Finalized block authority set proof is not correct");
         }
 
-        // TODO:  Need to implement
-        // zkLightClientStep(update.proof, head, headerRoots[head], authoritySets[activeAuthoritySetID]);
+        verifyStepProof(
+            update.proof,
+            update.headers
+        );
 
         // Note that the snark proof above verifies that the first header is correctly linked to the current head.
+        // Update the storage maps.
         Header memory header;
         for (uint16 i = 0; i < update.headers.length; i ++) {
             header = update.headers[i];
@@ -214,5 +218,43 @@ contract LightClient is EventDecoder {
 
         bytes32[NUM_AUTHORITIES] memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
         setAuthorities(update.newAuthoritySetIDProof.authoritySetID, newAuthorities);
+    }
+
+    function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {
+        uint256[36] memory inputs;
+
+        bytes memory hashInput;
+        // Add the head num and hash authority set commitment, and validator set id
+        hashInput = bytes.concat(
+            headerHashes[head],
+            bytes4(head),
+            authoritySetCommitments[activeAuthoritySetID],
+            bytes8(activeAuthoritySetID)
+        );
+
+        // For 20 headers, add the following
+        // 1) header state root
+        // 2) header block hash
+        for (uint8 i = 0; i < 20; i++) {
+            hashInput = bytes.concat(
+                hashInput,
+                headers[i].stateRoot,
+                headers[i].headerHash
+            );
+        }
+
+        bytes memory digest = Blake2b.blake2b(hashInput, 32);
+
+        for (uint8 i = 0; i < 32; i++) {
+            inputs[i] = uint256(uint8(digest[i]));
+        }
+
+        // Add in the plonky2 step circuit digest
+        inputs[32] = 1895208834164555013;
+        inputs[33] = 2560654618150967567;
+        inputs[34] = 13397720476573028645;
+        inputs[35] = 9207079182691300970;
+
+        require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }
 }

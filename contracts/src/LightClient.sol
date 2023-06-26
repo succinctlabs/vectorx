@@ -226,8 +226,8 @@ contract LightClient is EventDecoder, StepVerifier {
         bytes memory hashInput;
         // Add the head num and hash authority set commitment, and validator set id
         hashInput = bytes.concat(
-            bytes4(head),
             headerHashes[head],
+            bytes4(head),
             authoritySetCommitments[activeAuthoritySetID],
             bytes8(activeAuthoritySetID)
         );

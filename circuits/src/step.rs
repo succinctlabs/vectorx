@@ -143,7 +143,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let mut last_calculated_hash_bytes = Vec::new();
         // Convert the last calculated hash into u32s
         // The bits in the calculated hash are in bit big endian format
-        for i in 0 .. MAX_HEADER_SIZE {
+        for i in 0 .. NUM_HASH_CHUNKS {
             last_calculated_hash_bytes.push(self.le_sum(last_calculated_hash[i*32..i*32+32].to_vec().iter().rev()));
         }
 

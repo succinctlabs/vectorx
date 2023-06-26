@@ -221,9 +221,9 @@ contract LightClient is EventDecoder, StepVerifier {
     }
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {
-        uint256[5] inputs;
+        uint256[36] memory inputs;
 
-        bytes hashInput;
+        bytes memory hashInput;
         // Add the head num and hash authority set commitment, and validator set id
         hashInput = bytes.concat(
             bytes4(head),
@@ -239,19 +239,21 @@ contract LightClient is EventDecoder, StepVerifier {
             hashInput = bytes.concat(
                 hashInput,
                 headers[i].stateRoot,
-                headers[i].headerHashes
+                headers[i].headerHash
             );
         }
 
-        uint256 digest = uint256(Blake2b.blake2b(hashInput));
-        digest = digest & ((uint256(1) << 253) - 1);
+        bytes memory digest = Blake2b.blake2b(hashInput, 32);
 
-        inputs[0] = digest;
+        for (uint8 i = 0; i < 32; i++) {
+            inputs[i] = uint256(uint8(digest[i]));
+        }
+
         // Add in the plonky2 step circuit digest
-        inputs[1] = 17122441374070351185;
-        inputs[2] = 18368451173317844989;
-        inputs[3] = 5752543660850962321;
-        inputs[4] = 1428786498560175815;
+        inputs[32] = 1895208834164555013;
+        inputs[33] = 2560654618150967567;
+        inputs[34] = 13397720476573028645;
+        inputs[35] = 9207079182691300970;
 
         require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }

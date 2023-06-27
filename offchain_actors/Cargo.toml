@@ -26,7 +26,7 @@ subxt = "0.24"
 succinct_avail_proof_generators = { path = "../circuits" }
 plonky2 = "0.1.3"
 plonky2_field = "0.1.0"
-plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git", branch="kevjue/cleanup_plonky2lib" }
+plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git"}
 
 
 ### Binaries

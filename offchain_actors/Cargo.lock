@@ -651,19 +651,6 @@ dependencies = [
 [[package]]
 name = "curve25519-dalek"
 version = "4.0.0-rc.2"
-source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/cleanup_plonky2lib#858fe8c50d2ca3d7744f7847e7cb3fd73bfb62f7"
-dependencies = [
- "cfg-if",
- "fiat-crypto",
- "packed_simd_2",
- "platforms",
- "subtle",
- "zeroize",
-]
-
-[[package]]
-name = "curve25519-dalek"
-version = "4.0.0-rc.2"
 source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#f0a662be8d5adfa82923cf0122085186e25f817a"
 dependencies = [
  "cfg-if",
@@ -2751,21 +2738,6 @@ dependencies = [
 [[package]]
 name = "plonky2_ecdsa"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "deafe734e22d96f69df86df24e4533818b4172df745e8108dadceb7364eeaaef"
-dependencies = [
- "anyhow",
- "itertools",
- "num",
- "plonky2 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "plonky2_maybe_rayon",
- "plonky2_u32 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde",
-]
-
-[[package]]
-name = "plonky2_ecdsa"
-version = "0.1.0"
 source = "git+ssh://git@github.com/succinctlabs/plonky2-ecdsa?branch=kevjue/serialization#9ff01044532ea53c85a991258a9e63dffc06413c"
 dependencies = [
  "anyhow",
@@ -2773,7 +2745,7 @@ dependencies = [
  "num",
  "plonky2 0.1.3 (git+https://github.com/mir-protocol/plonky2.git)",
  "plonky2_maybe_rayon",
- "plonky2_u32 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize)",
+ "plonky2_u32",
  "serde",
 ]
 
@@ -2805,18 +2777,6 @@ dependencies = [
 [[package]]
 name = "plonky2_u32"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0b4bfce2e95b9eb97a40d0d737b4e4711a0eba02175e085944497108140688f"
-dependencies = [
- "anyhow",
- "itertools",
- "num",
- "plonky2 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "plonky2_u32"
-version = "0.1.0"
 source = "git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize#06727934c33ae6b09ea5a1f8868901f10279848d"
 dependencies = [
  "anyhow",
@@ -2834,41 +2794,19 @@ checksum = "3a7f1a85a8cb948af5e47da488bd78c6d18d3d8cb25b490676f3b9f68bc5b5c8"
 [[package]]
 name = "plonky2lib_succinct"
 version = "0.1.0"
-source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/cleanup_plonky2lib#858fe8c50d2ca3d7744f7847e7cb3fd73bfb62f7"
-dependencies = [
- "anyhow",
- "curve25519-dalek 4.0.0-rc.2 (git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/cleanup_plonky2lib)",
- "hex",
- "hex-literal",
- "itertools",
- "num",
- "plonky2 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "plonky2_ecdsa 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "plonky2_field",
- "plonky2_u32 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "plonky2_util",
- "rand 0.8.5",
- "regex",
- "serde",
- "sha2 0.10.6",
-]
-
-[[package]]
-name = "plonky2lib_succinct"
-version = "0.1.0"
 source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#f0a662be8d5adfa82923cf0122085186e25f817a"
 dependencies = [
  "anyhow",
- "curve25519-dalek 4.0.0-rc.2 (git+ssh://git@github.com/succinctlabs/plonky2lib.git)",
+ "curve25519-dalek 4.0.0-rc.2",
  "hex",
  "hex-literal",
  "itertools",
  "log",
  "num",
  "plonky2 0.1.3 (git+https://github.com/mir-protocol/plonky2.git)",
- "plonky2_ecdsa 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-ecdsa?branch=kevjue/serialization)",
+ "plonky2_ecdsa",
  "plonky2_field",
- "plonky2_u32 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize)",
+ "plonky2_u32",
  "plonky2_util",
  "rand 0.8.5",
  "regex",
@@ -4571,7 +4509,7 @@ dependencies = [
  "parity-scale-codec",
  "plonky2 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "plonky2_field",
- "plonky2lib_succinct 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2lib.git?branch=kevjue/cleanup_plonky2lib)",
+ "plonky2lib_succinct",
  "serde",
  "sp-state-machine 0.12.0",
  "subxt 0.24.0",
@@ -4597,10 +4535,10 @@ dependencies = [
  "num",
  "parity-scale-codec",
  "plonky2 0.1.3 (git+https://github.com/mir-protocol/plonky2.git)",
- "plonky2_ecdsa 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-ecdsa?branch=kevjue/serialization)",
+ "plonky2_ecdsa",
  "plonky2_field",
- "plonky2_u32 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize)",
- "plonky2lib_succinct 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2lib.git)",
+ "plonky2_u32",
+ "plonky2lib_succinct",
  "rand 0.4.6",
  "serde",
  "serde_json",

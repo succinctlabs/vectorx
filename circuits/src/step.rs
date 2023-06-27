@@ -252,10 +252,11 @@ mod tests {
     use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
+    use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, ProverCircuitData, VerifierCircuitData};
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
+    use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
     use plonky2_field::types::{Field, PrimeField64};
@@ -597,6 +598,9 @@ mod tests {
         );
         */
 
+
+        // Json serialize the outer circuit data and it's generated proof.
+        // This will be used for input into the Gnark plonky2 prover.
         for gate in outer_data.common.gates.iter() {
             println!("outer circuit: gate is {:?}", gate);
         }
@@ -616,6 +620,64 @@ mod tests {
 
         let outer_proof_serialized = serde_json::to_string(&outer_proof).unwrap();
         fs::write("step_recursive.proof_with_public_inputs.json", outer_proof_serialized).expect("Unable to write file");
+
+
+        let gate_serializer = DefaultGateSerializer;
+        let generator_serialier = DefaultGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
+
+        let step_common_data = inner_data.common;
+        let step_prover_data = inner_data.prover_only;
+        let step_verifier_data = inner_data.verifier_only;
+        let step_prover_data = ProverCircuitData {
+            prover_only: step_prover_data,
+            common: step_common_data.clone(),
+        };
+        let step_prover_data_bytes = step_prover_data.to_bytes(&gate_serializer, &generator_serialier)
+            .map_err(|_| anyhow::Error::msg("Inner prover data serialization failed."))?;
+        fs::write(
+            "step.inner_prover.bytes",
+            step_prover_data_bytes,
+        ).expect("Unable to write to step.inner_prover.bytes");
+
+
+        let step_verifier_data = VerifierCircuitData {
+            verifier_only: step_verifier_data,
+            common: step_common_data,
+        };
+        let step_verifier_data_bytes = step_verifier_data.to_bytes(&gate_serializer)
+            .map_err(|_| anyhow::Error::msg("Inner verifier data serialization failed."))?;
+        fs::write(
+            "step.inner_verifier.bytes",
+            step_verifier_data_bytes,
+        ).expect("Unable to write to step.inner_verifier.bytes");
+
+
+        // Byte serialize the outer circuit data.
+        // This will be used by off chain actors.
+        let recursive_common_data = outer_data.common;
+        let recursive_prover_data = outer_data.prover_only;
+        let recursive_verifier_data = outer_data.verifier_only;
+        let recursive_prover_data = ProverCircuitData {
+            prover_only: recursive_prover_data,
+            common: recursive_common_data.clone(),
+        };
+        let recursive_prover_data_bytes = recursive_prover_data.to_bytes(&gate_serializer, &generator_serialier)
+            .map_err(|_| anyhow::Error::msg("Outer prover data serialization failed."))?;
+        fs::write(
+            "recursive.inner_prover.bytes",
+            recursive_prover_data_bytes,
+        ).expect("Unable to write to srecursive.inner_prover.bytes");
+
+        let recursive_verifier_data = VerifierCircuitData {
+            verifier_only: recursive_verifier_data,
+            common: recursive_common_data,
+        };
+        let recursive_verifier_data_bytes = recursive_verifier_data.to_bytes(&gate_serializer)
+            .map_err(|_| anyhow::Error::msg("Outer verifier data serialization failed."))?;
+        fs::write(
+            "recursive.inner_verifier.bytes",
+            recursive_verifier_data_bytes,
+        ).expect("Unable to write to recursive.inner_verifier.bytes");
 
         ret
     }

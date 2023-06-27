@@ -256,7 +256,6 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
-    use plonky2::util::serialization::{DefaultGateSerializer, DefaultGeneratorSerializer};
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
     use plonky2_field::types::{Field, PrimeField64};
@@ -265,6 +264,7 @@ mod tests {
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::step::make_step_circuit;
     use crate::utils::{QUORUM_SIZE, WitnessAvailHash, WitnessEncodedHeader};
+    use crate::utils::default::{ AvailGateSerializer, AvailGeneratorSerializer};
     use crate::utils::tests::{
         BLOCK_530508_PARENT_HASH,
         BLOCK_530508_HEADER,
@@ -294,7 +294,7 @@ mod tests {
         BLOCK_530527_PARENT_HASH,
         BLOCK_530527_PRECOMMIT_MESSAGE,
         BLOCK_530527_AUTHORITY_SIGS,
-        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530508_BLOCK_HASH, BLOCK_530527_PUBLIC_INPUTS_HASH,
+        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530527_PUBLIC_INPUTS_HASH,
     };
     use crate::justification::tests::{set_precommits_pw, set_authority_set_pw};
 
@@ -622,8 +622,10 @@ mod tests {
         fs::write("step_recursive.proof_with_public_inputs.json", outer_proof_serialized).expect("Unable to write file");
 
 
-        let gate_serializer = DefaultGateSerializer;
-        let generator_serialier = DefaultGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
+        // Byte serialize the step circuit data.
+        // This wil lbe used by off chain actors.
+        let gate_serializer = AvailGateSerializer;
+        let generator_serialier = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
 
         let step_common_data = inner_data.common;
         let step_prover_data = inner_data.prover_only;
@@ -652,7 +654,7 @@ mod tests {
         ).expect("Unable to write to step.inner_verifier.bytes");
 
 
-        // Byte serialize the outer circuit data.
+        // Byte serialize the recursive circuit data.
         // This will be used by off chain actors.
         let recursive_common_data = outer_data.common;
         let recursive_prover_data = outer_data.prover_only;

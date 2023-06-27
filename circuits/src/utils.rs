@@ -21,7 +21,7 @@ use plonky2::{
         witness::{PartitionWitness, Witness, WitnessWrite}
     },
     hash::hash_types::RichField,
-    plonk::circuit_builder::CircuitBuilder, util::serialization::{Buffer, IoResult, Read, Write}
+    plonk::{circuit_builder::CircuitBuilder}, util::serialization::{Buffer, IoResult, Read, Write}
 };
 use plonky2_field::{extension::Extendable, types::{PrimeField, PrimeField64}};
 
@@ -286,6 +286,115 @@ impl<
     }    
 }
 
+
+pub mod default {
+    use std::marker::PhantomData;
+
+    use plonky2::plonk::config::{GenericConfig, AlgebraicHasher};
+    use plonky2::recursion::dummy_circuit::DummyProofGenerator;
+    use plonky2::{impl_gate_serializer, get_gate_tag_impl, read_gate_impl, impl_generator_serializer, get_generator_tag_impl, read_generator_impl};
+    use plonky2_field::extension::Extendable;
+
+    use plonky2::gates::arithmetic_base::ArithmeticGate;
+    use plonky2::gates::arithmetic_extension::ArithmeticExtensionGate;
+    use plonky2::gates::base_sum::BaseSumGate;
+    use plonky2::gates::constant::ConstantGate;
+    use plonky2::gates::coset_interpolation::CosetInterpolationGate;
+    use plonky2::gates::exponentiation::ExponentiationGate;
+    use plonky2::gates::multiplication_extension::MulExtensionGate;
+    use plonky2::gates::noop::NoopGate;
+    use plonky2::gates::poseidon::PoseidonGate;
+    use plonky2::gates::poseidon_mds::PoseidonMdsGate;
+    use plonky2::gates::public_input::PublicInputGate;
+    use plonky2::gates::random_access::RandomAccessGate;
+    use plonky2::gates::reducing::ReducingGate;
+    use plonky2::gates::reducing_extension::ReducingExtensionGate;
+    use plonky2::hash::hash_types::RichField;
+    use plonky2::util::serialization::{GateSerializer, WitnessGeneratorSerializer};
+    use plonky2lib_succinct::hash_functions::bit_operations::{XOR3Gate, XOR3Generator};
+
+    use plonky2::gadgets::arithmetic::EqualityGenerator;
+    use plonky2::gadgets::arithmetic_extension::QuotientGeneratorExtension;
+    use plonky2::gadgets::range_check::LowHighGenerator;
+    use plonky2::gadgets::split_base::BaseSumGenerator;
+    use plonky2::gadgets::split_join::{SplitGenerator, WireSplitGenerator};
+    use plonky2::gates::arithmetic_base::ArithmeticBaseGenerator;
+    use plonky2::gates::arithmetic_extension::ArithmeticExtensionGenerator;
+    use plonky2::gates::base_sum::BaseSplitGenerator;
+    use plonky2::gates::coset_interpolation::InterpolationGenerator;
+    use plonky2::gates::exponentiation::ExponentiationGenerator;
+    use plonky2::gates::multiplication_extension::MulExtensionGenerator;
+    use plonky2::gates::poseidon::PoseidonGenerator;
+    use plonky2::gates::poseidon_mds::PoseidonMdsGenerator;
+    use plonky2::gates::random_access::RandomAccessGenerator;
+    use plonky2::gates::reducing::ReducingGenerator;
+    use plonky2::gates::reducing_extension::ReducingGenerator as ReducingExtensionGenerator;
+    use plonky2::iop::generator::{
+        ConstantGenerator, CopyGenerator, NonzeroTestGenerator, RandomValueGenerator,
+    };
+
+
+    pub struct AvailGateSerializer;
+    impl<F: RichField + Extendable<D>, const D: usize> GateSerializer<F, D> for AvailGateSerializer {
+        impl_gate_serializer! {
+            DefaultGateSerializer,
+            ArithmeticGate,
+            ArithmeticExtensionGate<D>,
+            BaseSumGate<2>,
+            ConstantGate,
+            CosetInterpolationGate<F, D>,
+            ExponentiationGate<F, D>,
+            MulExtensionGate<D>,
+            NoopGate,
+            PoseidonMdsGate<F, D>,
+            PoseidonGate<F, D>,
+            PublicInputGate,
+            RandomAccessGate<F, D>,
+            ReducingExtensionGate<D>,
+            ReducingGate<D>,
+            XOR3Gate
+        }
+    }
+
+    pub struct AvailGeneratorSerializer<C: GenericConfig<D>, const D: usize> {
+        pub _phantom: PhantomData<C>,
+    }
+
+    impl<F, C, const D: usize> WitnessGeneratorSerializer<F, D> for AvailGeneratorSerializer<C, D>
+    where
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F> + 'static,
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        impl_generator_serializer! {
+            DefaultGeneratorSerializer,
+            DummyProofGenerator<F, C, D>,
+            ArithmeticBaseGenerator<F, D>,
+            ArithmeticExtensionGenerator<F, D>,
+            BaseSplitGenerator<2>,
+            BaseSumGenerator<2>,
+            ConstantGenerator<F>,
+            CopyGenerator,
+            EqualityGenerator,
+            ExponentiationGenerator<F, D>,
+            InterpolationGenerator<F, D>,
+            LowHighGenerator,
+            MulExtensionGenerator<F, D>,
+            NonzeroTestGenerator,
+            PoseidonGenerator<F, D>,
+            PoseidonMdsGenerator<D>,
+            QuotientGeneratorExtension<D>,
+            RandomAccessGenerator<F, D>,
+            RandomValueGenerator,
+            ReducingGenerator<D>,
+            ReducingExtensionGenerator<D>,
+            SplitGenerator,
+            WireSplitGenerator,
+            XOR3Generator<F, D>
+        }
+    }
+
+}
 
 // Will convert each byte into 8 bits (big endian)
 pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {

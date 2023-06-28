@@ -253,11 +253,10 @@ mod tests {
     use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, ProverCircuitData, VerifierCircuitData};
+    use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
-    use plonky2::plonk::verifier::verify;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
     use plonky2_field::types::{Field, PrimeField64};
@@ -631,7 +630,7 @@ mod tests {
         // Byte serialize the step circuit data.
         // This wil lbe used by off chain actors.
         let gate_serializer = AvailGateSerializer;
-        let generator_serialier = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
+        let generator_serializer = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
 
         let step_bytes = inner_data.to_bytes(&gate_serializer, &generator_serializer).unwrap();
         fs::write(
@@ -693,17 +692,11 @@ mod tests {
         let gate_serializer = AvailGateSerializer;
         let generator_serializer = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
 
-        let step_prover_bytes = fs::read(
-            "step.inner_prover.bytes"
-        ).expect("Unable to read from step.inner_prover.bytes");
+        let step_bytes = fs::read(
+            "step.bin"
+        ).expect("Unable to read from step.bin");
 
-        let step_prover = ProverCircuitData::<F, C, D>::from_bytes(&step_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
-
-        let step_verifier_bytes = fs::read(
-            "step.inner_verifier.bytes"
-        ).expect("Unable to read from step.inner_verifier.bytes");
-
-        let step_verifier = VerifierCircuitData::<F, C, D>::from_bytes(step_verifier_bytes, &gate_serializer).unwrap();
+        let step_data = CircuitData::<F, C, D>::from_bytes(&step_bytes, &gate_serializer, &generator_serializer).unwrap();
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
@@ -735,42 +728,29 @@ mod tests {
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
-        let mut timing = TimingTree::new("step proof gen", Level::Info);
-        let inner_proof = prove::<F, C, D>(&step_prover.prover_only, &step_prover.common, pw.clone(), &mut timing).unwrap();
-        timing.print();
-
-        verify::<F, C, D>(&step_verifier.verifier_only, &step_verifier.common, &pw, &inner_proof).unwrap();
+        let step_proof = gen_step_proof::<F, C, D>(&step_data, &pw);
+        step_data.verify(step_proof.clone()).unwrap();
 
 
+        let recursive_bytes = fs::read(
+            "recursive.bin"
+        ).expect("Unable to read from recursive.bin");
 
-        let recursive_prover_bytes = fs::read(
-            "recursive.inner_prover.bytes"
-        ).expect("Unable to read from recursive.inner_prover.bytes");
-
-        let recursive_prover = ProverCircuitData::<F, PoseidonBN128GoldilocksConfig, D>::from_bytes(&recursive_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
-
-        let recursive_verifier_bytes = fs::read(
-            "recursive.inner_verifier.bytes"
-        ).expect("Unable to read from recursive.inner_verifier.bytes");
-
-        let recursive_verifier = VerifierCircuitData::<F, PoseidonBN128GoldilocksConfig, D>::from_bytes(recursive_verifier_bytes, &gate_serializer).unwrap();
+        let recursive_data = CircuitData::<F, PoseidonBN128GoldilocksConfig, D>::from_bytes(&recursive_bytes, &gate_serializer, &generator_serializer).unwrap();
 
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
-        let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&step_prover.common);
-        let outer_verifier_data = outer_builder.add_virtual_verifier_data(step_prover.common.config.fri_config.cap_height);
-        outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &step_prover.common);
+        let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&step_data.common);
+        let outer_verifier_data = outer_builder.add_virtual_verifier_data(step_data.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &step_data.common);
         outer_builder.register_public_inputs(&outer_proof_target.public_inputs);
         outer_builder.register_public_inputs(&outer_verifier_data.circuit_digest.elements);
 
         let mut outer_pw = PartialWitness::new();
-        outer_pw.set_proof_with_pis_target(&outer_proof_target, &inner_proof);
-        outer_pw.set_verifier_data_target(&outer_verifier_data, &step_verifier.verifier_only);
+        outer_pw.set_proof_with_pis_target(&outer_proof_target, &step_proof);
+        outer_pw.set_verifier_data_target(&outer_verifier_data, &step_data.verifier_only);
 
-        let mut recursive_timing = TimingTree::new("recursive proof gen", Level::Info);
-        let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&recursive_prover.prover_only, &recursive_prover.common, outer_pw.clone(), &mut recursive_timing).unwrap();
-        recursive_timing.print();
-
-        verify::<F, PoseidonBN128GoldilocksConfig, D>(&recursive_verifier.verifier_only, &recursive_verifier.common, &outer_pw, &outer_proof)
+        let recursive_proof = gen_step_proof::<F, PoseidonBN128GoldilocksConfig, D>(&recursive_data, &outer_pw);
+        recursive_data.verify(recursive_proof.clone())
 
     }
 

@@ -613,8 +613,6 @@ mod tests {
             println!("outer circuit: gate is {:?}", gate);
         }
 
-        println!("Recursive circuit digest is {:?}", outer_data.verifier_only.circuit_digest);
-
         let outer_common_circuit_data_serialized = serde_json::to_string(&outer_data.common).unwrap();
         fs::write("step_recursive.common_circuit_data.json", outer_common_circuit_data_serialized)
             .expect("Unable to write file");
@@ -635,59 +633,20 @@ mod tests {
         let gate_serializer = AvailGateSerializer;
         let generator_serialier = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
 
-        let step_common_data = inner_data.common;
-        let step_prover_data = inner_data.prover_only;
-        let step_verifier_data = inner_data.verifier_only;
-        let step_prover_data = ProverCircuitData {
-            prover_only: step_prover_data,
-            common: step_common_data.clone(),
-        };
-        let step_prover_data_bytes = step_prover_data.to_bytes(&gate_serializer, &generator_serialier)
-            .map_err(|_| anyhow::Error::msg("Inner prover data serialization failed."))?;
+        let step_bytes = inner_data.to_bytes(&gate_serializer, &generator_serializer).unwrap();
         fs::write(
-            "step.inner_prover.bytes",
-            step_prover_data_bytes,
-        ).expect("Unable to write to step.inner_prover.bytes");
-
-
-        let step_verifier_data = VerifierCircuitData {
-            verifier_only: step_verifier_data,
-            common: step_common_data,
-        };
-        let step_verifier_data_bytes = step_verifier_data.to_bytes(&gate_serializer)
-            .map_err(|_| anyhow::Error::msg("Inner verifier data serialization failed."))?;
-        fs::write(
-            "step.inner_verifier.bytes",
-            step_verifier_data_bytes,
-        ).expect("Unable to write to step.inner_verifier.bytes");
+            "step.bin",
+            step_bytes,
+        ).expect("Unable to write to step.bin");
 
 
         // Byte serialize the recursive circuit data.
         // This will be used by off chain actors.
-        let recursive_common_data = outer_data.common;
-        let recursive_prover_data = outer_data.prover_only;
-        let recursive_verifier_data = outer_data.verifier_only;
-        let recursive_prover_data = ProverCircuitData {
-            prover_only: recursive_prover_data,
-            common: recursive_common_data.clone(),
-        };
-        let recursive_prover_data_bytes = recursive_prover_data.to_bytes(&gate_serializer, &generator_serialier)
-            .map_err(|_| anyhow::Error::msg("Outer prover data serialization failed."))?;
+        let recursive_bytes = outer_data.to_bytes(&gate_serializer, &generator_serializer).unwrap();
         fs::write(
-            "recursive.inner_prover.bytes",
-            recursive_prover_data_bytes,
-        ).expect("Unable to write to srecursive.inner_prover.bytes");
-
-        let recursive_verifier_data = VerifierCircuitData {
-            verifier_only: recursive_verifier_data,
-            common: recursive_common_data,
-        };
-        let recursive_verifier_data_bytes = recursive_verifier_data.to_bytes(&gate_serializer)
-            .map_err(|_| anyhow::Error::msg("Outer verifier data serialization failed."))?;
-        fs::write(
-            "recursive.inner_verifier.bytes",
-            recursive_verifier_data_bytes,
-        ).expect("Unable to write to recursive.inner_verifier.bytes");
+            "recursive.bin",
+            recursive_bytes,
+        ).expect("Unable to write to recursive.bin");
 
         ret
     }

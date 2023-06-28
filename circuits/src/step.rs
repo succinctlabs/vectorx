@@ -6,6 +6,7 @@ use crate::{decoder::CircuitBuilderHeaderDecoder, utils::{QUORUM_SIZE, AvailHash
 use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, AuthoritySetSignersTarget, FinalizedBlockTarget};
 use crate::utils::{MAX_HEADER_SIZE, HASH_SIZE, MAX_NUM_HEADERS_PER_STEP};
 
+#[derive(Clone)]
 pub struct VerifySubchainTarget {
     pub head_block_hash: AvailHashTarget,   // The input is a vector of bits (in BE bit order)
     pub head_block_num: Target,             // Should be a 32-bit unsigned integer
@@ -192,11 +193,12 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
     }
 }
 
+#[derive(Clone)]
 pub struct StepTarget<C: Curve> {
-    subchain_target: VerifySubchainTarget,
-    precommits: [PrecommitTarget<C>; QUORUM_SIZE],
-    authority_set: AuthoritySetSignersTarget,
-    public_inputs_hash: AvailHashTarget,
+    pub subchain_target: VerifySubchainTarget,
+    pub precommits: [PrecommitTarget<C>; QUORUM_SIZE],
+    pub authority_set: AuthoritySetSignersTarget,
+    pub public_inputs_hash: AvailHashTarget,
 }
 
 pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>(builder: &mut CircuitBuilder::<F, D>) -> StepTarget<C>{
@@ -261,6 +263,7 @@ mod tests {
     use plonky2_field::types::{Field, PrimeField64};
     use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
 
+    use crate::justification::{set_precommits_pw, set_authority_set_pw};
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::step::make_step_circuit;
     use crate::utils::{QUORUM_SIZE, WitnessAvailHash, WitnessEncodedHeader};
@@ -295,7 +298,6 @@ mod tests {
         BLOCK_530527_AUTHORITY_SIGS,
         BLOCK_530527_AUTHORITY_SET, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET_COMMITMENT, BLOCK_530508_BLOCK_HASH, BLOCK_530527_PUBLIC_INPUTS_HASH,
     };
-    use crate::justification::tests::{set_precommits_pw, set_authority_set_pw};
 
     fn gen_step_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
         cd: &CircuitData<F, C, D>,

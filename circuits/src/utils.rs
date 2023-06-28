@@ -62,7 +62,7 @@ impl<F: PrimeField> GeneratedValuesAvailHash<F> for GeneratedValues<F> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct EncodedHeaderTarget {
     pub header_bytes: [Target; MAX_HEADER_SIZE],
     pub header_size: Target,

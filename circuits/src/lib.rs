@@ -4,7 +4,7 @@ pub mod justification;
 pub mod poseidon_bn128;
 mod poseidon_bn128_constants;
 pub mod step;
-mod utils;
+pub mod utils;
 
 extern crate rand;
 extern crate ff;

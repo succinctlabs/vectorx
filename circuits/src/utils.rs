@@ -234,7 +234,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct FloorDivGenerator<
     F: RichField + Extendable<D>,
     const D: usize
@@ -311,7 +311,13 @@ pub mod default {
     use plonky2::gates::reducing_extension::ReducingExtensionGate;
     use plonky2::hash::hash_types::RichField;
     use plonky2::util::serialization::{GateSerializer, WitnessGeneratorSerializer};
+    use plonky2_u32::gates::add_many_u32::U32AddManyGate;
+    use plonky2_u32::gates::arithmetic_u32::U32ArithmeticGate;
+    use plonky2_u32::gates::comparison::ComparisonGate;
+    use plonky2_u32::gates::range_check_u32::U32RangeCheckGate;
+    use plonky2_u32::gates::subtraction_u32::U32SubtractionGate;
     use plonky2lib_succinct::hash_functions::bit_operations::{XOR3Gate, XOR3Generator};
+
 
     use plonky2::gadgets::arithmetic::EqualityGenerator;
     use plonky2::gadgets::arithmetic_extension::QuotientGeneratorExtension;
@@ -332,7 +338,21 @@ pub mod default {
     use plonky2::iop::generator::{
         ConstantGenerator, CopyGenerator, NonzeroTestGenerator, RandomValueGenerator,
     };
+    use plonky2_ecdsa::gadgets::biguint::BigUintDivRemGenerator;
+    use plonky2_ecdsa::gadgets::nonnative::NonNativeAdditionGenerator;
+    use plonky2_ecdsa::gadgets::nonnative::NonNativeInverseGenerator;
+    use plonky2_ecdsa::gadgets::nonnative::NonNativeMultipleAddsGenerator;
+    use plonky2_ecdsa::gadgets::nonnative::NonNativeMultiplicationGenerator;
+    use plonky2_ecdsa::gadgets::nonnative::NonNativeSubtractionGenerator;
+    use plonky2_u32::gates::add_many_u32::U32AddManyGenerator;
+    use plonky2_u32::gates::arithmetic_u32::U32ArithmeticGenerator;
+    use plonky2_u32::gates::comparison::ComparisonGenerator;
+    use plonky2_u32::gates::range_check_u32::U32RangeCheckGenerator;
+    use plonky2_u32::gates::subtraction_u32::U32SubtractionGenerator;
+    use plonky2lib_succinct::ed25519::gadgets::curve::CurvePointDecompressionGenerator;
+    use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
 
+    use super::FloorDivGenerator;
 
     pub struct AvailGateSerializer;
     impl<F: RichField + Extendable<D>, const D: usize> GateSerializer<F, D> for AvailGateSerializer {
@@ -342,6 +362,7 @@ pub mod default {
             ArithmeticExtensionGate<D>,
             BaseSumGate<2>,
             BaseSumGate<4>,
+            ComparisonGate<F, D>,
             ConstantGate,
             CosetInterpolationGate<F, D>,
             ExponentiationGate<F, D>,
@@ -353,6 +374,10 @@ pub mod default {
             RandomAccessGate<F, D>,
             ReducingExtensionGate<D>,
             ReducingGate<D>,
+            U32AddManyGate<F, D>,
+            U32ArithmeticGate<F, D>,
+            U32RangeCheckGate<F, D>,
+            U32SubtractionGate<F, D>,
             XOR3Gate
         }
     }
@@ -375,13 +400,22 @@ pub mod default {
             BaseSplitGenerator<2>,
             BaseSumGenerator<2>,
             BaseSumGenerator<4>,
+            BigUintDivRemGenerator<F, D>,
+            ComparisonGenerator<F, D>,
             ConstantGenerator<F>,
             CopyGenerator,
+            CurvePointDecompressionGenerator<F, D, Ed25519>,
             EqualityGenerator,
             ExponentiationGenerator<F, D>,
+            FloorDivGenerator<F, D>,
             InterpolationGenerator<F, D>,
             LowHighGenerator,
             MulExtensionGenerator<F, D>,
+            NonNativeAdditionGenerator<F, D, <Ed25519 as plonky2lib_succinct::ed25519::curve::curve_types::Curve>::BaseField>,
+            NonNativeInverseGenerator<F, D, <Ed25519 as plonky2lib_succinct::ed25519::curve::curve_types::Curve>::BaseField>,
+            NonNativeMultipleAddsGenerator<F, D, <Ed25519 as plonky2lib_succinct::ed25519::curve::curve_types::Curve>::BaseField>,
+            NonNativeMultiplicationGenerator<F, D, <Ed25519 as plonky2lib_succinct::ed25519::curve::curve_types::Curve>::BaseField>,
+            NonNativeSubtractionGenerator<F, D, <Ed25519 as plonky2lib_succinct::ed25519::curve::curve_types::Curve>::BaseField>,
             NonzeroTestGenerator,
             PoseidonGenerator<F, D>,
             PoseidonMdsGenerator<D>,
@@ -392,6 +426,10 @@ pub mod default {
             ReducingExtensionGenerator<D>,
             SplitGenerator,
             WireSplitGenerator,
+            U32AddManyGenerator<F, D>,
+            U32ArithmeticGenerator<F, D>,
+            U32RangeCheckGenerator<F, D>,
+            U32SubtractionGenerator<F, D>,
             XOR3Generator<F, D>
         }
     }

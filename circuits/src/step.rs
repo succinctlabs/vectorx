@@ -248,6 +248,7 @@ mod tests {
     use std::fs;
 
     use anyhow::Result;
+    use itertools::Itertools;
     use log::Level;
     use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
@@ -557,6 +558,12 @@ mod tests {
         inner_data.verify(inner_proof.clone()).unwrap();
 
         println!("inner circuit digest is {:?}", inner_data.verifier_only.circuit_digest);
+        for gate in inner_data.common.gates.iter() {
+            println!("inner circuit: gate is {:?}", gate);
+        }
+
+        let gen_names = inner_data.prover_only.generators.iter().map(|x| format!("{:?}", x)).sorted().dedup().collect::<Vec<_>>().join("\n");
+        println!("inner circuit: generators are \n{}", gen_names);
 
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);

@@ -565,7 +565,7 @@ dependencies = [
 [[package]]
 name = "curve25519-dalek"
 version = "4.0.0-rc.2"
-source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#af10d4ee7ca24ce38c1595d4ec9fc5f08a1eb170"
+source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#a582db7440a031c7eebed629a62955e8d9e94a65"
 dependencies = [
  "cfg-if",
  "fiat-crypto",
@@ -2239,7 +2239,7 @@ dependencies = [
 [[package]]
 name = "plonky2_ecdsa"
 version = "0.1.0"
-source = "git+ssh://git@github.com/succinctlabs/plonky2-ecdsa?branch=kevjue/serialization#028e81cce2f499487280287cbde8e04e6c2adb4c"
+source = "git+ssh://git@github.com/succinctlabs/plonky2-ecdsa?branch=kevjue/serialization#7b810c402c479a065449212733b54060dd3ec74a"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2278,7 +2278,7 @@ dependencies = [
 [[package]]
 name = "plonky2_u32"
 version = "0.1.0"
-source = "git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize#dde8b31d227501debbecbd5595116c986f3cf381"
+source = "git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize#9e8462cd85d9490ffd550b231f383386ad2c92b8"
 dependencies = [
  "anyhow",
  "itertools",
@@ -2295,7 +2295,7 @@ checksum = "3a7f1a85a8cb948af5e47da488bd78c6d18d3d8cb25b490676f3b9f68bc5b5c8"
 [[package]]
 name = "plonky2lib_succinct"
 version = "0.1.0"
-source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#af10d4ee7ca24ce38c1595d4ec9fc5f08a1eb170"
+source = "git+ssh://git@github.com/succinctlabs/plonky2lib.git#a582db7440a031c7eebed629a62955e8d9e94a65"
 dependencies = [
  "anyhow",
  "curve25519-dalek 4.0.0-rc.2",
@@ -3719,11 +3719,12 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.28.2"
+version = "1.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94d7b1cfd2aa4011f2de74c2c4c63665e27a71006b0a192dcd2710272e73dfa2"
+checksum = "374442f06ee49c3a28a8fc9f01a2596fed7559c6b99b31279c3261778e77d84f"
 dependencies = [
  "autocfg",
+ "backtrace",
  "bytes",
  "libc",
  "mio",

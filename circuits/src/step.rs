@@ -731,7 +731,7 @@ mod tests {
         builder_logger.try_init()?;
 
         let gate_serializer = AvailGateSerializer;
-        let generator_serialier = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
+        let generator_serializer = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
 
         let step_prover_bytes = fs::read(
             "step.inner_prover.bytes"
@@ -745,7 +745,10 @@ mod tests {
 
         let step_verifier = VerifierCircuitData::<F, D>::from_bytes(&step_verifier_bytes, &gate_serializer).unwrap();
 
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
+
+        let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
 
         pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
         pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
@@ -791,6 +794,13 @@ mod tests {
         ).expect("Unable to read from recursive.inner_verifier.bytes");
 
         let recursive_verifier = VerifierCircuitData::<F, D>::from_bytes(&recursive_verifier_bytes, &gate_serializer).unwrap();
+
+        let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+        let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
+        let outer_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &inner_data.common);
+        outer_builder.register_public_inputs(&outer_proof_target.public_inputs);
+        outer_builder.register_public_inputs(&outer_verifier_data.circuit_digest.elements);
 
         let mut outer_pw = PartialWitness::new();
         outer_pw.set_proof_with_pis_target(&outer_proof_target, &inner_proof);

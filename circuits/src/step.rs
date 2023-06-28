@@ -737,13 +737,13 @@ mod tests {
             "step.inner_prover.bytes"
         ).expect("Unable to read from step.inner_prover.bytes");
 
-        let step_prover = ProverCircuitData::<F, D>::from_bytes(&step_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
+        let step_prover = ProverCircuitData::<F, D, C>::from_bytes(&step_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
 
         let step_verifier_bytes = fs::read(
             "step.inner_verifier.bytes"
         ).expect("Unable to read from step.inner_verifier.bytes");
 
-        let step_verifier = VerifierCircuitData::<F, D>::from_bytes(&step_verifier_bytes, &gate_serializer).unwrap();
+        let step_verifier = VerifierCircuitData::<F, D, C>::from_bytes(&step_verifier_bytes, &gate_serializer).unwrap();
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
@@ -776,10 +776,10 @@ mod tests {
         );
 
         let mut timing = TimingTree::new("step proof gen", Level::Info);
-        let inner_proof = prove::<F, C, D>(&step_prover.prover_only, &step_prover.common.common, pw.clone(), &mut timing);
+        let inner_proof = prove::<F, C, D>(&step_prover.prover_only, &step_prover.common.common, pw.clone(), &mut timing).unwrap();
         timing.print();
 
-        verify::<F, C, D>(&step_verifier.verifier_only, &step_verifier.common, &pw, &proof).unwrap();
+        verify::<F, C, D>(&step_verifier.verifier_only, &step_verifier.common, &pw, &inner_proof).unwrap();
 
 
 
@@ -787,13 +787,13 @@ mod tests {
             "recursive.inner_prover.bytes"
         ).expect("Unable to read from recursive.inner_prover.bytes");
 
-        let recursive_prover = ProverCircuitData::<F, D>::from_bytes(&recursive_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
+        let recursive_prover = ProverCircuitData::<F, D, C>::from_bytes(&recursive_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
 
         let recursive_verifier_bytes = fs::read(
             "recursive.inner_verifier.bytes"
         ).expect("Unable to read from recursive.inner_verifier.bytes");
 
-        let recursive_verifier = VerifierCircuitData::<F, D>::from_bytes(&recursive_verifier_bytes, &gate_serializer).unwrap();
+        let recursive_verifier = VerifierCircuitData::<F, D, C>::from_bytes(&recursive_verifier_bytes, &gate_serializer).unwrap();
 
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);

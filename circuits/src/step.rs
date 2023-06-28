@@ -737,13 +737,13 @@ mod tests {
             "step.inner_prover.bytes"
         ).expect("Unable to read from step.inner_prover.bytes");
 
-        let step_prover = ProverCircuitData::<F, D, C>::from_bytes(&step_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
+        let step_prover = ProverCircuitData::<F, C, D>::from_bytes(&step_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
 
         let step_verifier_bytes = fs::read(
             "step.inner_verifier.bytes"
         ).expect("Unable to read from step.inner_verifier.bytes");
 
-        let step_verifier = VerifierCircuitData::<F, D, C>::from_bytes(&step_verifier_bytes, &gate_serializer).unwrap();
+        let step_verifier = VerifierCircuitData::<F, C, D>::from_bytes(&step_verifier_bytes, &gate_serializer).unwrap();
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
@@ -787,7 +787,7 @@ mod tests {
             "recursive.inner_prover.bytes"
         ).expect("Unable to read from recursive.inner_prover.bytes");
 
-        let recursive_prover = ProverCircuitData::<F, D, C>::from_bytes(&recursive_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
+        let recursive_prover = ProverCircuitData::<F, C, D>::from_bytes(&recursive_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
 
         let recursive_verifier_bytes = fs::read(
             "recursive.inner_verifier.bytes"
@@ -796,9 +796,9 @@ mod tests {
         let recursive_verifier = VerifierCircuitData::<F, D, C>::from_bytes(&recursive_verifier_bytes, &gate_serializer).unwrap();
 
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
-        let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&inner_data.common);
-        let outer_verifier_data = outer_builder.add_virtual_verifier_data(inner_data.common.config.fri_config.cap_height);
-        outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &inner_data.common);
+        let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&step_prover.common);
+        let outer_verifier_data = outer_builder.add_virtual_verifier_data(step_prover.common.config.fri_config.cap_height);
+        outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &step_prover.common);
         outer_builder.register_public_inputs(&outer_proof_target.public_inputs);
         outer_builder.register_public_inputs(&outer_verifier_data.circuit_digest.elements);
 

@@ -690,4 +690,118 @@ mod tests {
 
         ret
     }
+
+    #[test]
+    fn test_deserialization() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Curve = Ed25519;
+
+        let headers = vec![
+            BLOCK_530508_HEADER.to_vec(),
+            BLOCK_530509_HEADER.to_vec(),
+            BLOCK_530510_HEADER.to_vec(),
+            BLOCK_530511_HEADER.to_vec(),
+            BLOCK_530512_HEADER.to_vec(),
+            BLOCK_530513_HEADER.to_vec(),
+            BLOCK_530514_HEADER.to_vec(),
+            BLOCK_530515_HEADER.to_vec(),
+            BLOCK_530516_HEADER.to_vec(),
+            BLOCK_530517_HEADER.to_vec(),
+            BLOCK_530518_HEADER.to_vec(),
+            BLOCK_530519_HEADER.to_vec(),
+            BLOCK_530520_HEADER.to_vec(),
+            BLOCK_530521_HEADER.to_vec(),
+            BLOCK_530522_HEADER.to_vec(),
+            BLOCK_530523_HEADER.to_vec(),
+            BLOCK_530524_HEADER.to_vec(),
+            BLOCK_530525_HEADER.to_vec(),
+            BLOCK_530526_HEADER.to_vec(),
+            BLOCK_530527_HEADER.to_vec(),
+        ];
+        let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
+        let head_block_num = 530507;
+
+        let public_inputs_hash = hex::decode(BLOCK_530527_PUBLIC_INPUTS_HASH).unwrap();
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let gate_serializer = AvailGateSerializer;
+        let generator_serialier = AvailGeneratorSerializer { _phantom: std::marker::PhantomData::<C> };
+
+        let step_prover_bytes = fs::read(
+            "step.inner_prover.bytes"
+        ).expect("Unable to read from step.inner_prover.bytes");
+
+        let step_prover = ProverCircuitData::<F, D>::from_bytes(&step_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
+
+        let step_verifier_bytes = fs::read(
+            "step.inner_verifier.bytes"
+        ).expect("Unable to read from step.inner_verifier.bytes");
+
+        let step_verifier = VerifierCircuitData::<F, D>::from_bytes(&step_verifier_bytes, &gate_serializer).unwrap();
+
+        let mut pw: PartialWitness<F> = PartialWitness::new();
+
+        pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
+        pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
+        for (i, header) in headers.iter().enumerate() {
+            pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
+        }
+
+        pw.set_avail_hash_target(&step_target.public_inputs_hash, &(public_inputs_hash.try_into().unwrap()));
+
+        set_precommits_pw::<F, D, Curve>(
+            &mut pw,
+            step_target.precommits.to_vec(),
+            (0..QUORUM_SIZE).map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+        );
+
+        set_authority_set_pw::<F, D, Curve>(
+            &mut pw,
+            &step_target.authority_set,
+            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SET_ID,
+            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+        );
+
+        let mut timing = TimingTree::new("step proof gen", Level::Info);
+        let inner_proof = prove::<F, C, D>(&step_prover.prover_only, &step_prover.common.common, pw.clone(), &mut timing);
+        timing.print();
+
+        verify::<F, C, D>(&step_verifier.verifier_only, &step_verifier.common, &pw, &proof).unwrap();
+
+
+
+        let recursive_prover_bytes = fs::read(
+            "recursive.inner_prover.bytes"
+        ).expect("Unable to read from recursive.inner_prover.bytes");
+
+        let recursive_prover = ProverCircuitData::<F, D>::from_bytes(&recursive_prover_bytes, &gate_serializer, &generator_serializer).unwrap();
+
+        let recursive_verifier_bytes = fs::read(
+            "recursive.inner_verifier.bytes"
+        ).expect("Unable to read from recursive.inner_verifier.bytes");
+
+        let recursive_verifier = VerifierCircuitData::<F, D>::from_bytes(&recursive_verifier_bytes, &gate_serializer).unwrap();
+
+        let mut outer_pw = PartialWitness::new();
+        outer_pw.set_proof_with_pis_target(&outer_proof_target, &inner_proof);
+        outer_pw.set_verifier_data_target(&outer_verifier_data, &step_verifier.verifier_only);
+
+        let mut recursive_timing = TimingTree::new("recursive proof gen", Level::Info);
+        let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&recursive_prover.prover_only, &recursive_prover.common, outer_pw.clone(), &mut recursive_timing).unwrap();
+        recursive_timing.print();
+
+        verify::<F, C, D>(&recursive_verifier.verifier_only, &recursive_verifier.common, &outer_pw, &outer_proof)
+
+    }
+
 }

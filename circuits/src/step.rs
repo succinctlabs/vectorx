@@ -257,6 +257,7 @@ mod tests {
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
+    use plonky2::plonk::verifier::verify;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
     use plonky2_field::types::{Field, PrimeField64};
@@ -793,7 +794,7 @@ mod tests {
             "recursive.inner_verifier.bytes"
         ).expect("Unable to read from recursive.inner_verifier.bytes");
 
-        let recursive_verifier = VerifierCircuitData::<F, PoseidonBN128GoldilocksConfig, D>::from_bytes(&recursive_verifier_bytes, &gate_serializer).unwrap();
+        let recursive_verifier = VerifierCircuitData::<F, PoseidonBN128GoldilocksConfig, D>::from_bytes(recursive_verifier_bytes, &gate_serializer).unwrap();
 
         let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
         let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&step_prover.common);

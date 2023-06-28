@@ -697,11 +697,13 @@ mod tests {
         ).expect("Unable to read from step.bin");
 
         let step_data = CircuitData::<F, C, D>::from_bytes(&step_bytes, &gate_serializer, &generator_serializer).unwrap();
+        println!("deserialized step circuit");
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
 
         let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
+        println!("generated step target");
 
         pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
         pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
@@ -709,7 +711,11 @@ mod tests {
             pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
         }
 
+        println!("set avail head hash, number, and encoded header targets");
+
         pw.set_avail_hash_target(&step_target.public_inputs_hash, &(public_inputs_hash.try_into().unwrap()));
+
+        println!("set public inputs hash target");
 
         set_precommits_pw::<F, D, Curve>(
             &mut pw,
@@ -720,6 +726,8 @@ mod tests {
             BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
         );
 
+        println!("set precommits targets");
+
         set_authority_set_pw::<F, D, Curve>(
             &mut pw,
             &step_target.authority_set,
@@ -728,7 +736,11 @@ mod tests {
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
+        println!("set authority targets");
+
         let step_proof = gen_step_proof::<F, C, D>(&step_data, &pw);
+
+        println!("generated step proof");
         step_data.verify(step_proof.clone()).unwrap();
 
 

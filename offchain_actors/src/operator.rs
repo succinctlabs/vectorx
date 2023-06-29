@@ -1,4 +1,5 @@
 
+use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr};
 use std::time::{SystemTime, Duration};
 
@@ -13,14 +14,17 @@ use plonky2_field::types::Field;
 use serde::de::Error;
 use serde::Deserialize;
 
-use subxt::{
-	ext::{
-		sp_core::{blake2_256, bytes, crypto::Pair, ed25519::{self, Public as EdPublic, Signature}, H256},
-	},
-    rpc::RpcParams,
+use sp_core::{
+	blake2_256, bytes,
+	ed25519::{self, Public as EdPublic, Signature},
+	Pair, H256,
 };
+use subxt::rpc::RpcParams;
+
 use tarpc::{client, context};
 use tarpc::tokio_serde::formats::Json;
+
+use futures::{select, StreamExt, pin_mut};
 
 
 #[derive(Deserialize, Debug)]
@@ -91,31 +95,152 @@ pub const CHUNK_128_BYTES: usize = 128;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
+    /*
     let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52357);
 
     let mut transport = tarpc::serde_transport::tcp::connect(server_addr, Json::default);
     transport.config_mut().max_frame_length(usize::MAX);
-    let client = ProofGeneratorClient::new(client::Config::default(), transport.await?).spawn();
 
-    let url: &str = "wss://testnet.avail.tools:443/ws";
+    let client = ProofGeneratorClient::new(client::Config::default(), transport.await?).spawn();
+    */
+
+    let url: &str = "wss://kate.avail.tools:443/ws";
     
-    let c = build_client(url).await.unwrap();
+    let c = build_client(url, true).await.unwrap();
+
     let t = c.rpc();
-    let sub: Result<subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
+
+    
+    let justification_sub: subxt::rpc::Subscription<GrandpaJustification> = t
         .subscribe(
             "grandpa_subscribeJustifications",
             RpcParams::new(),
             "grandpa_unsubscribeJustifications",
         )
-        .await;
+        .await
+        .unwrap();
 
-    let mut sub = sub.unwrap();
 
-    // How often we want to generate a proof of grandpa justification
-    const FINALIZATION_PERIOD: usize = 20;
+    let header_sub: subxt::rpc::Subscription<Header> = t
+        .subscribe(
+            "chain_subscribeFinalizedHeads",
+            RpcParams::new(),
+            "chain_unsubscribeFinalizedHeads",
+        )
+        .await
+        .unwrap();
 
+    let t1 = header_sub.fuse();
+    let t2 = justification_sub.fuse();
+
+    pin_mut!(t1, t2);
+
+    let mut last_processed_block_num: Option<u32> = None;
+    let mut headers = HashMap::new();
+    let mut justification_to_process = None;
+
+    'main_loop: loop {
+        select! {
+            // Currently assuming that all the headers received will be sequential
+            header = t1.next() => {
+                let unwrapped_header = header.unwrap().unwrap();
+
+                if last_processed_block_num.is_none() {
+                    last_processed_block_num = Some(unwrapped_header.number);
+                }
+
+                println!("Downloaded a header for block number: {:?}", unwrapped_header.number);
+                headers.insert(unwrapped_header.number, unwrapped_header);
+            }
+
+            justification = t2.next() => {
+                // Wait until we get at least one header
+                if last_processed_block_num.is_none() {
+                    continue;
+                }
+
+                let unwrapped_just = justification.unwrap().unwrap();
+
+                println!("Downloaded a justification for block number: {:?}", unwrapped_just.commit.target_number);
+                if unwrapped_just.commit.target_number >= last_processed_block_num.unwrap() + 5 {
+                    justification_to_process = Some(unwrapped_just);
+                }
+            }
+        }
+
+        if justification_to_process.is_some() {
+            let unwrapped_just = justification_to_process.clone().unwrap();
+
+            let just_block_num = unwrapped_just.commit.target_number;
+
+            // Check to see if we downloaded the header yet
+            if !headers.contains_key(&just_block_num) {
+                println!("Don't have header for block number: {:?}", just_block_num);
+                continue 'main_loop;
+            }
+
+            // Check that all the precommit's target number is the same as the precommits' target number
+            for precommit in unwrapped_just.commit.precommits.iter() {
+                if just_block_num != precommit.precommit.target_number {
+                    println!(
+                        "Justification has precommits that are not the same number as the commit. Commit's number: {:?}, Precommit's number: {:?}",
+                        just_block_num,
+                        precommit.precommit.target_number
+                    );
+                    justification_to_process = None;
+                    continue 'main_loop;
+                }
+            }
+
+            let set_id_key = api::storage().grandpa().current_set_id();
+
+            // Need to get the set id at the previous block
+            let previous_hash: H256 = headers.get(&(just_block_num)).unwrap().parent_hash;
+            let set_id = c.storage().at(Some(previous_hash)).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap();    
+
+            // Form a message which is signed in the justification
+            let signed_message = Encode::encode(&(
+                &SignerMessage::PrecommitMessage(unwrapped_just.commit.precommits[0].clone().precommit),
+                &unwrapped_just.round,
+                &set_id,
+            ));
+
+            // Verify all the signatures of the justification and extract the public keys
+            for precommit in unwrapped_just.commit.precommits.iter() {
+                let is_ok = <ed25519::Pair as Pair>::verify_weak(
+                    &precommit.clone().signature.0[..],
+                    signed_message.as_slice(),
+                    precommit.clone().id,
+                );
+                if !is_ok {
+                    println!("Invalid signature in justification");
+                    justification_to_process = None;
+                    continue 'main_loop;
+                }
+            }
+
+            let mut header_batch = Vec::new();
+            if headers.contains_key(&unwrapped_just.commit.target_number) {
+                for i in last_processed_block_num.unwrap()..unwrapped_just.commit.target_number {
+                    header_batch.push(headers.get(&i).unwrap().clone());
+                    headers.remove(&i);
+                }
+            }
+
+            println!(
+                "Going to process a batch of headers of size: {:?}, block numbers: {:?} and justification with number {:?}",
+                header_batch.len(),
+                header_batch.iter().map(|h| h.number).collect::<Vec<u32>>(),
+                unwrapped_just.commit.target_number,
+            );
+            // process(header_batch, justification_to_process.unwrap().clone());
+            justification_to_process = None;
+        }
+    }
+
+    /*
     // Wait for headers
-    while let Some(Ok(justification)) = sub.next().await {
+    while let Some(Ok(justification)) = justification_sub.next().await {
         // Get the header corresponding to the new justification
         let header = c
             .rpc()
@@ -210,7 +335,5 @@ pub async fn main() -> anyhow::Result<()> {
 
             println!("\n\n\n");
         }
-    }
-
-    Ok(())
+        */
 }

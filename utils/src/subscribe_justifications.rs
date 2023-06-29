@@ -4,15 +4,10 @@ use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
 use serde::de::Error;
 use serde::Deserialize;
-use subxt::{
-    ext::{
-        sp_core::{
-            blake2_256, bytes,
-            crypto::Pair,
-            ed25519::{self, Public as EdPublic, Signature},
-            H256,
-        }
-    },
+use sp_core::{
+	blake2_256, bytes,
+	ed25519::{self, Public as EdPublic, Signature},
+	Pair, H256,
 };
 use subxt::rpc::RpcParams;
 // use anyhow::Result;
@@ -83,11 +78,11 @@ pub enum SignerMessage {
 
 #[tokio::main]
 pub async fn main() {
-    let url: &str = "wss://testnet.avail.tools:443/ws";
+    let url: &str = "wss://kate.avail.tools:443/ws";
 
-    let c = build_client(url).await.unwrap();
+    let c = build_client(url, true).await.unwrap();
     let t = c.rpc().deref();
-    let sub: Result<subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
+    let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
         .subscribe(
             "grandpa_subscribeJustifications",
             RpcParams::new(),
@@ -115,7 +110,7 @@ pub async fn main() {
 
         // Get current authority set ID
         let set_id_key = api::storage().grandpa().current_set_id();
-        let set_id = c.storage().fetch(&set_id_key, None).await.unwrap().unwrap();
+        let set_id = c.storage().at(None).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap();
 
         // Form a message which is signed in the justification
         let signed_message = Encode::encode(&(

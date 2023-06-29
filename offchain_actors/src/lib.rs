@@ -51,7 +51,7 @@ pub fn generate_step_proof(
 
     headers: Vec<Vec<u8>>,
     head_block_hash: Vec<u8>,
-    head_block_num: u64,
+    head_block_num: u32,
 
     authority_set_id: u64,
     precommit_message: Vec<u8>,
@@ -65,7 +65,7 @@ pub fn generate_step_proof(
     let mut pw: PartialWitness<F> = PartialWitness::new();
 
     pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
-    pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
+    pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u32(head_block_num));
     for (i, header) in headers.iter().enumerate() {
         pw.set_encoded_header_target(&step_target.subchain_target.encoded_headers[i], header.clone());
     }
@@ -107,7 +107,7 @@ pub trait ProofGenerator {
     async fn generate_step_proof_rpc(
         headers: Vec<Vec<u8>>,
         head_block_hash: Vec<u8>,
-        head_block_num: u64,
+        head_block_num: u32,
 
         authority_set_id: u64,
         precommit_message: Vec<u8>,

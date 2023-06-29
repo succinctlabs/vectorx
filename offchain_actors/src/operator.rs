@@ -1,39 +1,38 @@
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv6Addr};
-use std::sync::Arc;
 use std::time::{SystemTime, Duration};
 
-use avail_subxt::AvailConfig;
+use avail_subxt::{
+    api,
+    AvailConfig,
+    build_client,
+    primitives::Header
+};
 use base58::FromBase58;
-use futures::future::Fuse;
-use plonky2::gates::public_input;
-use service::{ProofGeneratorClient, to_bits};
-use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
-use pallet_grandpa::{VersionedAuthorityList, AuthorityList, AuthorityId};
-use plonky2lib_succinct::ed25519::curve::eddsa::{EDDSASignature, verify_message, EDDSAPublicKey};
-use plonky2lib_succinct::ed25519::field::ed25519_scalar::Ed25519Scalar;
-use plonky2lib_succinct::ed25519::gadgets::curve::decompress_point;
-use num::BigUint;
-use plonky2_field::types::Field;
-use serde::de::Error;
-use serde::Deserialize;
-
+use futures::{select, StreamExt, pin_mut};
+use pallet_grandpa::{VersionedAuthorityList, AuthorityList};
+use serde::{
+    de::Error,
+    Deserialize
+};
+use service::ProofGeneratorClient;
 use sp_core::{
 	bytes,
 	ed25519::{self, Public as EdPublic, Signature},
-	Pair, H256,
+    H256,
+	Pair,
 };
-use subxt::config::{Hasher, Header as SPHeader};
-use subxt::OnlineClient;
-use subxt::rpc::{RpcParams, Subscription};
-
-use tarpc::{client, context};
-use tarpc::tokio_serde::formats::Json;
-
-use futures::{select, StreamExt, pin_mut};
-
+use subxt::{
+    config::{Hasher, Header as SPHeader},
+    OnlineClient,
+    rpc::{RpcParams, Subscription},
+};
+use tarpc::{
+    client, context,
+    tokio_serde::formats::Json
+};
 
 #[derive(Deserialize, Debug)]
 pub struct SubscriptionMessageResult {
@@ -119,6 +118,7 @@ async fn get_authority_set(c: &OnlineClient<AvailConfig>, block_hash: H256) -> (
 }
 
 async fn submit_proof_gen_request(
+    plonky2_pg_client: &ProofGeneratorClient,
     head_block_num: u32,
     head_block_hash: H256,
     headers: Vec<Header>,
@@ -139,56 +139,74 @@ async fn submit_proof_gen_request(
         &authority_set_id,
     ));
 
+    // Get the first 7 signatures and pub_keys.
+    // This is to test against the step circuit that is only compatible with 10 authorities.
     let signatures = justification.
-        commit.
-        precommits.
+        commit.precommits.
         iter().
-        map(|x| x.clone().signature.0).collect::<Vec<_>>();
+        map(|x| x.clone().signature.0.to_vec()).
+        take(7).
+        collect::<Vec<_>>();
 
+    let mut public_keys = justification.
+        commit.precommits.
+        into_iter().
+        map(|x| x.clone().id.0.to_vec()).
+        take(7).
+        collect::<Vec<_>>();
 
-    let public_keys = justification.
-        commit.
-        precommits.
-        iter().
-        map(|x| x.clone().id.0).collect::<Vec<_>>();
+    // Add 3 additional pub keys to make it 10
+    // START HACK
+    let public_keys_set: HashSet<Vec<u8>> = HashSet::from_iter(public_keys.iter().map(|x| x.to_vec()));
+    let authority_hashset = HashSet::from_iter(authority_set.into_iter());
+    let diff = authority_hashset.difference(&public_keys_set).collect::<Vec<_>>();
+    let mut add_three = diff.into_iter().take(3).cloned().collect::<Vec<_>>();
+    public_keys.append(&mut add_three);
 
+    let pub_key_indices = vec![0, 1, 2, 3, 4, 5, 6];
+    let authority_set = public_keys;
+    let hash_input = authority_set.clone().into_iter().flatten().collect::<Vec<_>>();
+    let authority_set_commitment = avail_subxt::config::substrate::BlakeTwo256::hash(&hash_input);
+    // END HACK
+
+    /*
     // Find the pub_key_indices
     let pub_key_indices = public_keys.iter()
         .map(|x| authority_set.iter().position(|y| y == x)
         .unwrap()).collect::<Vec<_>>();
-
-    let mut context = context::current();
-    context.deadline = SystemTime::now() + Duration::from_secs(600);
-
-    // Convert signatures to Vec<Vec<u8>>
-    let sigs = signatures.iter().map(|x| x.to_vec()).collect::<Vec<_>>();
+    */
 
     println!("headers: {:?}", encoded_headers);
     println!("head_block_hash: {:?}", head_block_hash);
     println!("head_block_num: {:?}", head_block_num);
     println!("authority_set_id: {:?}", authority_set_id);
     println!("precommit_message: {:?}", precommit_message);
-    println!("signatures: {:?}", sigs);
+    println!("signatures: {:?}", signatures);
     println!("pub_key_indices: {:?}", pub_key_indices);
     println!("authority_set: {:?}", authority_set);
     println!("authority_set_commitment: {:?}", authority_set_commitment);
 
-    /*
 
-    let res = client.generate_grandpa_justif_proof(
-        context, 
-        block_hash, 
-        encoded_header.clone(),
-        encoded_message.clone(),
-        sigs.clone(),
-        sig_owners.clone(),
+    let mut context = context::current();
+    context.deadline = SystemTime::now() + Duration::from_secs(600);
+
+    let res = plonky2_pg_client.generate_step_proof_rpc(
+        context,
+        encoded_headers,
+        head_block_hash.0.to_vec(),
+        head_block_num,
+        authority_set_id,
+        precommit_message,
+        signatures,
+        pub_key_indices,
+        authority_set,
+        authority_set_commitment.0.to_vec(),
     ).await;
         
     match res {
-        Ok(_) => println!("Retrieved grandpa justification verification proof for block: number - {:?}; hash - {:?}", header.number, block_hash),
+        Ok(_) => println!("Retrieved step verification proof for block: number - {:?}; hash - {:?}", justification.commit.target_number, justification.commit.target_hash),
         Err(e) => println!("{:?}", anyhow::Error::from(e)),
     }
-    */
 
     println!("\n\n\n");
 }
@@ -198,6 +216,7 @@ async fn main_loop(
     header_sub : Subscription<Header>,
     justification_sub : Subscription<GrandpaJustification>,
     c: OnlineClient<AvailConfig>,
+    plonky2_pg_client: ProofGeneratorClient,
 ) {
     let fused_header_sub = header_sub.fuse();
     let fused_justification_sub = justification_sub.fuse();
@@ -311,6 +330,7 @@ async fn main_loop(
             );
 
             submit_proof_gen_request(
+                &plonky2_pg_client,
                 last_processed_block_num.unwrap(),
                 last_processed_block_hash.unwrap(),
                 header_batch,
@@ -329,14 +349,12 @@ async fn main_loop(
 
 #[tokio::main]
 pub async fn main() {
-    /*
-    let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52357);
+    let plonky2_pg_server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52357);
 
-    let mut transport = tarpc::serde_transport::tcp::connect(server_addr, Json::default);
+    let mut transport = tarpc::serde_transport::tcp::connect(plonky2_pg_server_addr, Json::default);
     transport.config_mut().max_frame_length(usize::MAX);
 
-    let client = ProofGeneratorClient::new(client::Config::default(), transport.await?).spawn();
-    */
+    let plonky2_pg_client = ProofGeneratorClient::new(client::Config::default(), transport.await.unwrap()).spawn();
 
     let url: &str = "wss://kate.avail.tools:443/ws";
     
@@ -363,5 +381,5 @@ pub async fn main() {
         .await
         .unwrap();
 
-    main_loop(header_sub, justification_sub, c).await;
+    main_loop(header_sub, justification_sub, c, plonky2_pg_client).await;
 }

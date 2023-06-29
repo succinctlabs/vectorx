@@ -23,7 +23,7 @@ impl ProofGenerator for ProofGeneratorServer {
         self, _: context::Context,
         headers: Vec<Vec<u8>>,
         head_block_hash: Vec<u8>,
-        head_block_num: u64,
+        head_block_num: u32,
 
         authority_set_id: u64,
         precommit_message: Vec<u8>,

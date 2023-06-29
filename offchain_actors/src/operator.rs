@@ -152,9 +152,6 @@ async fn submit_proof_gen_request(
         iter().
         map(|x| x.clone().id.0).collect::<Vec<_>>();
 
-    println!("public_keys: {:?}", public_keys);
-    println!("authority_set: {:?}", authority_set);
-
     // Find the pub_key_indices
     let pub_key_indices = public_keys.iter()
         .map(|x| authority_set.iter().position(|y| y == x)
@@ -165,21 +162,6 @@ async fn submit_proof_gen_request(
 
     // Convert signatures to Vec<Vec<u8>>
     let sigs = signatures.iter().map(|x| x.to_vec()).collect::<Vec<_>>();
-
-
-    /*
-    headers: Vec<Vec<u8>>,
-    head_block_hash: Vec<u8>,
-    head_block_num: u64,
-
-    authority_set_id: u64,
-    precommit_message: Vec<u8>,
-    signatures: Vec<Vec<u8>>,
-
-    pub_key_indices: Vec<usize>,
-    authority_set: Vec<Vec<u8>>,
-    authority_set_commitment: Vec<u8>,
-    */
 
     println!("headers: {:?}", encoded_headers);
     println!("head_block_hash: {:?}", head_block_hash);

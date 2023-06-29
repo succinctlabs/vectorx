@@ -160,14 +160,8 @@ async fn submit_proof_gen_request(
     let public_keys_set: HashSet<Vec<u8>> = HashSet::from_iter(public_keys.iter().map(|x| x.to_vec()));
     let authority_hashset = HashSet::from_iter(authority_set.into_iter());
     let diff = authority_hashset.difference(&public_keys_set).collect::<Vec<_>>();
-    let mut add_three = diff.into_iter().take(3).cloned().collect::<Vec<_>>();
-    public_keys.append(&mut add_three);
-    public_keys.push(add_three[0].clone());
-    public_keys.push(add_three[0].clone());
-    public_keys.push(add_three[0].clone());
-    public_keys.push(add_three[0].clone());
-    public_keys.push(add_three[0].clone());
-    public_keys.push(add_three[0].clone());
+    let mut add_nine = diff.into_iter().take(9).cloned().collect::<Vec<_>>();
+    public_keys.append(&mut add_nine);
 
     let pub_key_indices = vec![0, 1, 2, 3, 4, 5, 6];
     let authority_set = public_keys;

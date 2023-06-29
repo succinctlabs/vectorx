@@ -279,7 +279,7 @@ pub async fn main() {
 
     let url: &str = "wss://kate.avail.tools:443/ws";
     
-    let c = build_client(url, true).await.unwrap();
+    let c = build_client(url, false).await.unwrap();
     let t = c.rpc();
 
     // TODO:  Will need to sync the chain first

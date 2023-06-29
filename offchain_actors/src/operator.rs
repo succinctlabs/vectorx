@@ -169,6 +169,18 @@ async fn submit_proof_gen_request(
     let authority_set_commitment = avail_subxt::config::substrate::BlakeTwo256::hash(&hash_input);
     // END HACK
 
+    // Calculate public_inputs_hash
+    let mut public_inputs_hash = Vec::new();
+    public_inputs_hash.extend(&head_block_hash.0);
+    public_inputs_hash.extend(head_block_num.to_be_bytes());
+    public_inputs_hash.extend(authority_set_commitment.0);
+    public_inputs_hash.extend(authority_set_id.to_be_bytes());
+    public_inputs_hash.extend(headers.iter().flat_map(|x| x.state_root.0).collect::<Vec<_>>());
+    public_inputs_hash.extend(headers.iter().flat_map(|x: &Header| x.hash().0).collect::<Vec<_>>());
+    assert!(public_inputs_hash.len() == 396);
+
+    let public_inputs_hash = avail_subxt::config::substrate::BlakeTwo256::hash(&public_inputs_hash);
+
     /*
     // Find the pub_key_indices
     let pub_key_indices = public_keys.iter()
@@ -185,7 +197,7 @@ async fn submit_proof_gen_request(
     println!("pub_key_indices: {:?}", pub_key_indices);
     println!("authority_set: {:?}", authority_set);
     println!("authority_set_commitment: {:?}", authority_set_commitment);
-
+    println!("public_inputs_hash: {:?}", public_inputs_hash);
 
     let mut context = context::current();
     context.deadline = SystemTime::now() + Duration::from_secs(600);

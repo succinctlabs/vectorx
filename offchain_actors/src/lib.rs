@@ -1,5 +1,6 @@
+use log::Level;
 use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
-use plonky2::{plonk::{circuit_data::{CircuitData, CircuitConfig}, config::{PoseidonGoldilocksConfig, GenericConfig}, circuit_builder::CircuitBuilder}, iop::witness::WitnessWrite};
+use plonky2::{plonk::{circuit_data::{CircuitData, CircuitConfig}, config::{PoseidonGoldilocksConfig, GenericConfig}, circuit_builder::CircuitBuilder, prover::prove}, iop::witness::WitnessWrite, util::timing::TimingTree};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use plonky2::iop::witness::PartialWitness;
 use plonky2_field::goldilocks_field::GoldilocksField;
@@ -87,7 +88,15 @@ pub fn generate_step_proof(
         authority_set_commitment,
     );
 
-    let proof = step_circuit.as_ref().unwrap().prove(pw);
+    let unwrapped_circuit = step_circuit.as_ref().unwrap();
+
+    let mut timing = TimingTree::new("step proof gen", Level::Info);
+    let proof = prove::<F, C, D>(
+        &unwrapped_circuit.prover_only,
+        &unwrapped_circuit.common,
+        pw,
+        &mut timing);
+    timing.print();
 
     match proof {
         Ok(v) => return Some(v),

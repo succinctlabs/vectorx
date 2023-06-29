@@ -83,6 +83,11 @@ struct Flags {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()>  {
+    let mut builder_logger = env_logger::Builder::from_default_env();
+    builder_logger.format_timestamp(None);
+    builder_logger.filter_level(log::LevelFilter::Trace);
+    builder_logger.try_init()?;
+
     let (step_circuit, step_targets) = create_step_circuit();
     unsafe {
         STEP_CIRCUIT = Some(step_circuit);

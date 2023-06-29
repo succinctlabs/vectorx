@@ -123,7 +123,6 @@ async fn submit_proof_gen_request(
         iter().
         map(|x| x.clone().signature.0).collect::<Vec<_>>();
 
-
     let encoded_headers = headers.iter().map(|header| header.encode()).collect::<Vec<_>>();
 
     let mut context = context::current();
@@ -155,7 +154,6 @@ async fn main_loop(
     justification_sub : Subscription<GrandpaJustification>,
     c: OnlineClient<AvailConfig>,
 ) {
-
     let fused_header_sub = header_sub.fuse();
     let fused_justification_sub = justification_sub.fuse();
 
@@ -224,7 +222,7 @@ async fn main_loop(
 
             // Need to get the set id at the previous block
             let previous_hash: H256 = headers.get(&(just_block_num)).unwrap().parent_hash;
-            let set_id = c.storage().at(Some(previous_hash)).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap();    
+            let set_id = c.storage().at(Some(previous_hash)).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap();
 
             // Form a message which is signed in the justification
             let signed_message = Encode::encode(&(
@@ -283,6 +281,8 @@ pub async fn main() {
     
     let c = build_client(url, true).await.unwrap();
     let t = c.rpc();
+
+    // TODO:  Will need to sync the chain first
 
     let header_sub: subxt::rpc::Subscription<Header> = t
     .subscribe(

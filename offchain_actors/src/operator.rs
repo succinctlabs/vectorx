@@ -5,11 +5,13 @@ use std::sync::Arc;
 use std::time::{SystemTime, Duration};
 
 use avail_subxt::AvailConfig;
+use base58::FromBase58;
 use futures::future::Fuse;
 use plonky2::gates::public_input;
 use service::{ProofGeneratorClient, to_bits};
 use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
+use pallet_grandpa::{VersionedAuthorityList, AuthorityList, AuthorityId};
 use plonky2lib_succinct::ed25519::curve::eddsa::{EDDSASignature, verify_message, EDDSAPublicKey};
 use plonky2lib_succinct::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2lib_succinct::ed25519::gadgets::curve::decompress_point;
@@ -19,10 +21,11 @@ use serde::de::Error;
 use serde::Deserialize;
 
 use sp_core::{
-	blake2_256, bytes,
+	bytes,
 	ed25519::{self, Public as EdPublic, Signature},
 	Pair, H256,
 };
+use subxt::config::{Hasher, Header as SPHeader};
 use subxt::OnlineClient;
 use subxt::rpc::{RpcParams, Subscription};
 
@@ -96,13 +99,38 @@ pub enum SignerMessage {
     PrecommitMessage(Precommit),
 }
 
-/*
+async fn get_authority_set(c: &OnlineClient<AvailConfig>, block_hash: H256) -> (Vec<Vec<u8>>, Vec<u8>) {
+    let grandpa_authorities_bytes = c.storage().at(Some(block_hash)).await.unwrap().fetch_raw(b":grandpa_authorities").await.unwrap().unwrap();
+    let grandpa_authorities = VersionedAuthorityList::decode(&mut grandpa_authorities_bytes.as_slice()).unwrap();
+    let authority_list:AuthorityList = grandpa_authorities.into();
+
+    let decoded_authority_set = authority_list.iter()
+        .map(|authority|
+            {
+                let auth_bytes = authority.0.to_string().from_base58().unwrap();
+                auth_bytes.as_slice()[1..33].to_vec()
+            }
+        )
+        .collect::<Vec<_>>();
+    let hash_input = decoded_authority_set.clone().into_iter().flatten().collect::<Vec<_>>();
+    let authority_set_commitment = avail_subxt::config::substrate::BlakeTwo256::hash(&hash_input);
+
+    (decoded_authority_set, authority_set_commitment.as_bytes().to_vec())
+}
+
 async fn submit_proof_gen_request(
+    head_block_num: u32,
+    head_block_hash: H256,
     headers: Vec<Header>,
     justification: GrandpaJustification,
     authority_set_id: u64,
+    authority_set: Vec<Vec<u8>>,
+    authority_set_commitment: Vec<u8>,
 ) {
     println!("Generate justification for block number: {:?}", justification.commit.target_number);
+
+    // First scale encode the headers
+    let encoded_headers = headers.iter().map(|x| x.encode()).collect::<Vec<_>>();
 
     // Form a message which is signed in the justification
     let precommit_message = Encode::encode(&(
@@ -111,25 +139,59 @@ async fn submit_proof_gen_request(
         &authority_set_id,
     ));
 
-    let public_keys = justification.
-        commit.
-        precommits.
-        iter().
-        map(|x| x.clone().id.0).collect::<Vec<_>>();
-
     let signatures = justification.
         commit.
         precommits.
         iter().
         map(|x| x.clone().signature.0).collect::<Vec<_>>();
 
-    let encoded_headers = headers.iter().map(|header| header.encode()).collect::<Vec<_>>();
+
+    let public_keys = justification.
+        commit.
+        precommits.
+        iter().
+        map(|x| x.clone().id.0).collect::<Vec<_>>();
+
+    println!("public_keys: {:?}", public_keys);
+    println!("authority_set: {:?}", authority_set);
+
+    // Find the pub_key_indices
+    let pub_key_indices = public_keys.iter()
+        .map(|x| authority_set.iter().position(|y| y == x)
+        .unwrap()).collect::<Vec<_>>();
 
     let mut context = context::current();
     context.deadline = SystemTime::now() + Duration::from_secs(600);
 
     // Convert signatures to Vec<Vec<u8>>
     let sigs = signatures.iter().map(|x| x.to_vec()).collect::<Vec<_>>();
+
+
+    /*
+    headers: Vec<Vec<u8>>,
+    head_block_hash: Vec<u8>,
+    head_block_num: u64,
+
+    authority_set_id: u64,
+    precommit_message: Vec<u8>,
+    signatures: Vec<Vec<u8>>,
+
+    pub_key_indices: Vec<usize>,
+    authority_set: Vec<Vec<u8>>,
+    authority_set_commitment: Vec<u8>,
+    */
+
+    println!("headers: {:?}", encoded_headers);
+    println!("head_block_hash: {:?}", head_block_hash);
+    println!("head_block_num: {:?}", head_block_num);
+    println!("authority_set_id: {:?}", authority_set_id);
+    println!("precommit_message: {:?}", precommit_message);
+    println!("signatures: {:?}", sigs);
+    println!("pub_key_indices: {:?}", pub_key_indices);
+    println!("authority_set: {:?}", authority_set);
+    println!("authority_set_commitment: {:?}", authority_set_commitment);
+
+    /*
 
     let res = client.generate_grandpa_justif_proof(
         context, 
@@ -144,10 +206,11 @@ async fn submit_proof_gen_request(
         Ok(_) => println!("Retrieved grandpa justification verification proof for block: number - {:?}; hash - {:?}", header.number, block_hash),
         Err(e) => println!("{:?}", anyhow::Error::from(e)),
     }
+    */
 
     println!("\n\n\n");
 }
-*/
+
 
 async fn main_loop(
     header_sub : Subscription<Header>,
@@ -160,6 +223,7 @@ async fn main_loop(
     pin_mut!(fused_header_sub, fused_justification_sub);
 
     let mut last_processed_block_num: Option<u32> = None;
+    let mut last_processed_block_hash: Option<H256> = None;
     let mut headers = HashMap::new();
 
     // If this is not none, then the main loop will submit a proof generation request
@@ -173,10 +237,13 @@ async fn main_loop(
 
                 if last_processed_block_num.is_none() {
                     last_processed_block_num = Some(unwrapped_header.number);
+                    last_processed_block_hash = Some(unwrapped_header.hash());
                 }
 
                 println!("Downloaded a header for block number: {:?}", unwrapped_header.number);
                 headers.insert(unwrapped_header.number, unwrapped_header);
+
+                // TODO: Handle rotations if there is a new grandpa authority set event in the downloaded header
             }
 
             justification = fused_justification_sub.next() => {
@@ -223,6 +290,7 @@ async fn main_loop(
             // Need to get the set id at the previous block
             let previous_hash: H256 = headers.get(&(just_block_num)).unwrap().parent_hash;
             let set_id = c.storage().at(Some(previous_hash)).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap();
+            let (authority_set, authority_set_commitment) = get_authority_set(&c, previous_hash).await;
 
             // Form a message which is signed in the justification
             let signed_message = Encode::encode(&(
@@ -259,8 +327,19 @@ async fn main_loop(
                 header_batch.iter().map(|h| h.number).collect::<Vec<u32>>(),
                 unwrapped_just.commit.target_number,
             );
-            // process(header_batch, justification_to_process.unwrap().clone());
+
+            submit_proof_gen_request(
+                last_processed_block_num.unwrap(),
+                last_processed_block_hash.unwrap(),
+                header_batch,
+                justification_to_process.unwrap(),
+                set_id,
+                authority_set,
+                authority_set_commitment,
+            ).await;
+
             last_processed_block_num = Some(unwrapped_just.commit.target_number);
+            last_processed_block_hash = Some(unwrapped_just.commit.target_hash);
             justification_to_process = None;
         }
     }

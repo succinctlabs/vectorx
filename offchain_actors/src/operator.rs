@@ -1,8 +1,12 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv6Addr};
+use std::sync::Arc;
 use std::time::{SystemTime, Duration};
 
+use avail_subxt::AvailConfig;
+use futures::future::Fuse;
+use plonky2::gates::public_input;
 use service::{ProofGeneratorClient, to_bits};
 use avail_subxt::{api, build_client, primitives::Header};
 use codec::{Decode, Encode};
@@ -19,7 +23,8 @@ use sp_core::{
 	ed25519::{self, Public as EdPublic, Signature},
 	Pair, H256,
 };
-use subxt::rpc::RpcParams;
+use subxt::OnlineClient;
+use subxt::rpc::{RpcParams, Subscription};
 
 use tarpc::{client, context};
 use tarpc::tokio_serde::formats::Json;
@@ -91,58 +96,81 @@ pub enum SignerMessage {
     PrecommitMessage(Precommit),
 }
 
-pub const CHUNK_128_BYTES: usize = 128;
+/*
+async fn submit_proof_gen_request(
+    headers: Vec<Header>,
+    justification: GrandpaJustification,
+    authority_set_id: u64,
+) {
+    println!("Generate justification for block number: {:?}", justification.commit.target_number);
 
-#[tokio::main]
-pub async fn main() -> anyhow::Result<()> {
-    /*
-    let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52357);
+    // Form a message which is signed in the justification
+    let precommit_message = Encode::encode(&(
+        &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
+        &justification.round,
+        &authority_set_id,
+    ));
 
-    let mut transport = tarpc::serde_transport::tcp::connect(server_addr, Json::default);
-    transport.config_mut().max_frame_length(usize::MAX);
+    let public_keys = justification.
+        commit.
+        precommits.
+        iter().
+        map(|x| x.clone().id.0).collect::<Vec<_>>();
 
-    let client = ProofGeneratorClient::new(client::Config::default(), transport.await?).spawn();
-    */
-
-    let url: &str = "wss://kate.avail.tools:443/ws";
-    
-    let c = build_client(url, true).await.unwrap();
-
-    let t = c.rpc();
-
-    
-    let justification_sub: subxt::rpc::Subscription<GrandpaJustification> = t
-        .subscribe(
-            "grandpa_subscribeJustifications",
-            RpcParams::new(),
-            "grandpa_unsubscribeJustifications",
-        )
-        .await
-        .unwrap();
+    let signatures = justification.
+        commit.
+        precommits.
+        iter().
+        map(|x| x.clone().signature.0).collect::<Vec<_>>();
 
 
-    let header_sub: subxt::rpc::Subscription<Header> = t
-        .subscribe(
-            "chain_subscribeFinalizedHeads",
-            RpcParams::new(),
-            "chain_unsubscribeFinalizedHeads",
-        )
-        .await
-        .unwrap();
+    let encoded_headers = headers.iter().map(|header| header.encode()).collect::<Vec<_>>();
 
-    let t1 = header_sub.fuse();
-    let t2 = justification_sub.fuse();
+    let mut context = context::current();
+    context.deadline = SystemTime::now() + Duration::from_secs(600);
 
-    pin_mut!(t1, t2);
+    // Convert signatures to Vec<Vec<u8>>
+    let sigs = signatures.iter().map(|x| x.to_vec()).collect::<Vec<_>>();
+
+    let res = client.generate_grandpa_justif_proof(
+        context, 
+        block_hash, 
+        encoded_header.clone(),
+        encoded_message.clone(),
+        sigs.clone(),
+        sig_owners.clone(),
+    ).await;
+        
+    match res {
+        Ok(_) => println!("Retrieved grandpa justification verification proof for block: number - {:?}; hash - {:?}", header.number, block_hash),
+        Err(e) => println!("{:?}", anyhow::Error::from(e)),
+    }
+
+    println!("\n\n\n");
+}
+*/
+
+async fn main_loop(
+    header_sub : Subscription<Header>,
+    justification_sub : Subscription<GrandpaJustification>,
+    c: OnlineClient<AvailConfig>,
+) {
+
+    let fused_header_sub = header_sub.fuse();
+    let fused_justification_sub = justification_sub.fuse();
+
+    pin_mut!(fused_header_sub, fused_justification_sub);
 
     let mut last_processed_block_num: Option<u32> = None;
     let mut headers = HashMap::new();
+
+    // If this is not none, then the main loop will submit a proof generation request
     let mut justification_to_process = None;
 
     'main_loop: loop {
         select! {
             // Currently assuming that all the headers received will be sequential
-            header = t1.next() => {
+            header = fused_header_sub.next() => {
                 let unwrapped_header = header.unwrap().unwrap();
 
                 if last_processed_block_num.is_none() {
@@ -153,7 +181,7 @@ pub async fn main() -> anyhow::Result<()> {
                 headers.insert(unwrapped_header.number, unwrapped_header);
             }
 
-            justification = t2.next() => {
+            justification = fused_justification_sub.next() => {
                 // Wait until we get at least one header
                 if last_processed_block_num.is_none() {
                     continue;
@@ -161,8 +189,8 @@ pub async fn main() -> anyhow::Result<()> {
 
                 let unwrapped_just = justification.unwrap().unwrap();
 
-                println!("Downloaded a justification for block number: {:?}", unwrapped_just.commit.target_number);
-                if unwrapped_just.commit.target_number >= last_processed_block_num.unwrap() + 5 {
+                if justification_to_process.is_none() && unwrapped_just.commit.target_number >= last_processed_block_num.unwrap() + 5 {
+                    println!("Saving justification for block number: {:?}", unwrapped_just.commit.target_number);
                     justification_to_process = Some(unwrapped_just);
                 }
             }
@@ -221,7 +249,7 @@ pub async fn main() -> anyhow::Result<()> {
 
             let mut header_batch = Vec::new();
             if headers.contains_key(&unwrapped_just.commit.target_number) {
-                for i in last_processed_block_num.unwrap()..unwrapped_just.commit.target_number {
+                for i in last_processed_block_num.unwrap()+1..unwrapped_just.commit.target_number+1 {
                     header_batch.push(headers.get(&i).unwrap().clone());
                     headers.remove(&i);
                 }
@@ -234,106 +262,45 @@ pub async fn main() -> anyhow::Result<()> {
                 unwrapped_just.commit.target_number,
             );
             // process(header_batch, justification_to_process.unwrap().clone());
+            last_processed_block_num = Some(unwrapped_just.commit.target_number);
             justification_to_process = None;
         }
     }
+}
 
+#[tokio::main]
+pub async fn main() {
     /*
-    // Wait for headers
-    while let Some(Ok(justification)) = justification_sub.next().await {
-        // Get the header corresponding to the new justification
-        let header = c
-            .rpc()
-            .header(Some(justification.commit.target_hash))
-            .await
-            .unwrap()
-            .unwrap();
+    let server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52357);
 
-        println!("Got justification for header with number: {:?}", header.number);
+    let mut transport = tarpc::serde_transport::tcp::connect(server_addr, Json::default);
+    transport.config_mut().max_frame_length(usize::MAX);
 
-        if header.number % (FINALIZATION_PERIOD as u32) == 0 {
-            let block_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
-            println!("Generate justification for header with number: {:?} and hash: {:?}", header.number, block_hash);
+    let client = ProofGeneratorClient::new(client::Config::default(), transport.await?).spawn();
+    */
 
-            // Get current authority set ID
-            let set_id_key = api::storage().grandpa().current_set_id();
-            let set_id = c.storage().fetch(&set_id_key, None).await.unwrap().unwrap();
+    let url: &str = "wss://kate.avail.tools:443/ws";
+    
+    let c = build_client(url, true).await.unwrap();
+    let t = c.rpc();
 
-            // Form a message which is signed in the justification
-            let encoded_message = Encode::encode(&(
-                &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
-                &justification.round,
-                &set_id,
-            ));
+    let header_sub: subxt::rpc::Subscription<Header> = t
+    .subscribe(
+        "chain_subscribeFinalizedHeads",
+        RpcParams::new(),
+        "chain_unsubscribeFinalizedHeads",
+    )
+    .await
+    .unwrap();
 
-            let signatures = justification.
-            commit.
-            precommits.
-            iter().
-            map(|x| x.clone().signature.0).collect::<Vec<_>>();
+    let justification_sub: subxt::rpc::Subscription<GrandpaJustification> = t
+        .subscribe(
+            "grandpa_subscribeJustifications",
+            RpcParams::new(),
+            "grandpa_unsubscribeJustifications",
+        )
+        .await
+        .unwrap();
 
-            let sig_owners = justification
-            .commit
-            .precommits
-            .iter()
-            .map(|precommit| {
-                let is_ok = <ed25519::Pair as Pair>::verify_weak(
-                    &precommit.clone().signature.0[..],
-                    encoded_message.as_slice(),
-                    &precommit.clone().id,
-                );
-                assert!(is_ok, "Not signed by this signature!");
-                assert!(precommit.signature.0.len() == 64);
-                assert!(precommit.id.0.len() == 32);
-                precommit.clone().id.0
-            })
-            .collect::<Vec<_>>();
-
-            // retrieve the signatures
-            let encoded_messsage_bits = to_bits(encoded_message.clone());
-
-            for i in 0..signatures.len() {
-                let sig_r = decompress_point(&signatures[i][0..32]);
-                assert!(sig_r.is_valid());
-        
-                let sig_s_biguint = BigUint::from_bytes_le(&signatures[i][32..64]);
-                let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
-                let sig = EDDSASignature { r: sig_r, s: sig_s };
-        
-                let pub_key = decompress_point(&sig_owners[i][0..32]);
-                assert!(pub_key.is_valid());
-        
-                assert!(verify_message(
-                    &encoded_messsage_bits,
-                    &sig,
-                    &EDDSAPublicKey(pub_key)
-                ));
-            }
-
-            let encoded_header = header.encode();
-
-
-            let mut context = context::current();
-            context.deadline = SystemTime::now() + Duration::from_secs(600);
-
-            // Convert signatures to Vec<Vec<u8>>
-            let sigs = signatures.iter().map(|x| x.to_vec()).collect::<Vec<_>>();
-
-            let res = client.generate_grandpa_justif_proof(
-                context, 
-                block_hash, 
-                encoded_header.clone(),
-                encoded_message.clone(),
-                sigs.clone(),
-                sig_owners.clone(),
-            ).await;
-        
-            match res {
-                Ok(_) => println!("Retrieved grandpa justification verification proof for block: number - {:?}; hash - {:?}", header.number, block_hash),
-                Err(e) => println!("{:?}", anyhow::Error::from(e)),
-            }
-
-            println!("\n\n\n");
-        }
-        */
+    main_loop(header_sub, justification_sub, c).await;
 }

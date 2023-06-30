@@ -1,7 +1,7 @@
 use crate::decoder::{CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget};
 use crate::utils::{
     to_bits, AvailHashTarget, CircuitBuilderUtils, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE,
-    NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE, QUORUM_SIZE, WitnessAvailHash,
+    NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE, QUORUM_SIZE,
 };
 use num::BigUint;
 use plonky2::hash::hash_types::RichField;
@@ -435,7 +435,7 @@ pub(crate) mod tests {
         BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_PUB_KEY_INDICES,
     };
     use crate::utils::{
-        to_bits, CircuitBuilderUtils, MAX_HEADER_SIZE, NUM_AUTHORITIES,
+        to_bits, CircuitBuilderUtils, WitnessAvailHash, MAX_HEADER_SIZE, NUM_AUTHORITIES,
         QUORUM_SIZE,
     };
 

@@ -62,6 +62,7 @@ pub fn generate_step_proof(
     authority_set: Vec<Vec<u8>>,
     authority_set_commitment: Vec<u8>,
 
+    public_inputs_hash: Vec<u8>,
 ) -> Option<ProofWithPublicInputs<F, C, D>> {
     let mut pw: PartialWitness<F> = PartialWitness::new();
 
@@ -87,6 +88,8 @@ pub fn generate_step_proof(
         authority_set_id,
         authority_set_commitment,
     );
+
+    pw.set_avail_hash_target(&step_target.public_inputs_hash, &(public_inputs_hash.try_into().unwrap()));
 
     let unwrapped_circuit = step_circuit.as_ref().unwrap();
 
@@ -125,5 +128,7 @@ pub trait ProofGenerator {
         pub_key_indices: Vec<usize>,
         authority_set: Vec<Vec<u8>>,
         authority_set_commitment: Vec<u8>,
+
+        public_inputs_hash: Vec<u8>,
     ) -> ProofWithPublicInputs<F, C, D>;
 }

@@ -32,6 +32,8 @@ impl ProofGenerator for ProofGeneratorServer {
         pub_key_indices: Vec<usize>,
         authority_set: Vec<Vec<u8>>,
         authority_set_commitment: Vec<u8>,
+
+        public_inputs_hash: Vec<u8>,
     ) -> ProofWithPublicInputs<F, C, D> {
         println!("Got a step_proof request with head_block_hash: {:?}",  head_block_hash);
 
@@ -50,6 +52,7 @@ impl ProofGenerator for ProofGeneratorServer {
                 pub_key_indices,
                 authority_set,
                 authority_set_commitment,
+                public_inputs_hash,
             );
             let proof_gen_end_time = SystemTime::now();
             let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    

@@ -215,6 +215,7 @@ async fn submit_proof_gen_request(
         pub_key_indices,
         authority_set,
         authority_set_commitment.0.to_vec(),
+        public_inputs_hash.0.to_vec(),
     ).await;
         
     match res {

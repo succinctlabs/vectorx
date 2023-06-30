@@ -160,13 +160,17 @@ async fn submit_proof_gen_request(
     let public_keys_set: HashSet<Vec<u8>> = HashSet::from_iter(public_keys.iter().map(|x| x.to_vec()));
     let authority_hashset = HashSet::from_iter(authority_set.into_iter());
     let diff = authority_hashset.difference(&public_keys_set).collect::<Vec<_>>();
-    let mut add_nine = diff.into_iter().take(9).cloned().collect::<Vec<_>>();
-    public_keys.append(&mut add_nine);
+    let mut add_three = diff.iter().take(3).cloned().cloned().collect::<Vec<_>>();
+    public_keys.append(&mut add_three);
+
+    let hash_input = public_keys.clone().into_iter().flatten().collect::<Vec<_>>();
+    let authority_set_commitment = avail_subxt::config::substrate::BlakeTwo256::hash(&hash_input);
+
+    let mut add_six = diff.iter().take(6).cloned().cloned().collect::<Vec<_>>();
+    public_keys.append(&mut add_six);
 
     let pub_key_indices = vec![0, 1, 2, 3, 4, 5, 6];
     let authority_set = public_keys;
-    let hash_input = authority_set.clone().into_iter().flatten().collect::<Vec<_>>();
-    let authority_set_commitment = avail_subxt::config::substrate::BlakeTwo256::hash(&hash_input);
     // END HACK
 
     // Calculate public_inputs_hash

@@ -187,10 +187,15 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
         let authority_set_hash_input_length = self.constant(F::from_canonical_usize(NUM_AUTHORITIES * 32));
         self.connect(hash_circuit.message_len, authority_set_hash_input_length);
 
-        /*
+        let expected_hash = hex::decode("54edd773a22a391f931147ce792c23391ccd20f894914b35a47974f9e867cb4b").unwrap()
+        .iter()
+        .map(|x| self.constant(F::from_canonical_usize((*x).into())))
+        .collect::<Vec<_>>();
+
         // Verify that the hash matches
         for i in 0 .. HASH_SIZE {
-            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+            // let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+            let mut bits = self.split_le(expected_hash[i], 8);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
@@ -198,7 +203,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
                 self.connect(hash_circuit.digest[i*8+j].target, bits[j].target);
             }
         }
-        */
 
         // TODO:  Need to check for dupes of the pub_key_idx field
 

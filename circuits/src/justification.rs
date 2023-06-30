@@ -179,7 +179,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve>
         .collect::<Vec<_>>();
 
         for i in 0..auth_set_bytes.len() {
-            let mut bits = self.split_le(authority_set_signers.pub_keys[i].0[j], 8);
+            let mut bits = self.split_le(auth_set_bytes[i], 8);
             bits.reverse();
             for k in 0..8 {
                 self.connect(
@@ -435,7 +435,7 @@ pub(crate) mod tests {
         BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_PUB_KEY_INDICES,
     };
     use crate::utils::{
-        to_bits, CircuitBuilderUtils, WitnessAvailHash, MAX_HEADER_SIZE, NUM_AUTHORITIES,
+        to_bits, CircuitBuilderUtils, MAX_HEADER_SIZE, NUM_AUTHORITIES,
         QUORUM_SIZE,
     };
 

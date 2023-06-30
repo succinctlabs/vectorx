@@ -79,14 +79,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 public_inputs_hash_input.append(&mut bits);
             }
 
-            let header_state_roots = vec![
-                "7e725e17a2824747374272517d14cd1107348713a2afc7708cf9761f64caa75b",
-                "f26477aaf1f897dd07991c889630a25777aff7153f8da7cb1c203143ef453283",
-                "8c1821b27dc70b11b5352712c4e524c8f70a9f0d90400521f62757c451b6c157",
-                "8358f7cc9ffd58e91f3d9e050a564a41fe7e52857f09eb317578ab22668e4320",
-                "b24df025ad5e9f95a4f8b3b9cbdd49839ad8ee21e89b3529f7ace6be0197c06e",
-            ];
-
             // Verify that the previous calculated block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
                 let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);

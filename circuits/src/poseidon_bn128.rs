@@ -1,7 +1,6 @@
-use crate::Fr;
 use crate::poseidon_bn128_constants::{C_CONSTANTS, M_MATRIX, P_MATRIX, S_CONSTANTS};
+use crate::Fr;
 use ff::Field;
-
 
 pub const RATE: usize = 3;
 pub const WIDTH: usize = 4;
@@ -15,15 +14,15 @@ pub type PoseidonState = [Fr; WIDTH];
 // https://github.com/iden3/go-iden3-crypto/blob/e5cf066b8be3da9a3df9544c65818df189fdbebe/poseidon/poseidon.go
 pub fn permution(state: &mut PoseidonState) {
     ark(state, 0);
-	full_rounds(state, true);
-	partial_rounds(state);
-	full_rounds(state, false);
+    full_rounds(state, true);
+    partial_rounds(state);
+    full_rounds(state, false);
 }
 
 fn ark(state: &mut PoseidonState, it: usize) {
     for i in 0..WIDTH {
-		state[i].add_assign(&C_CONSTANTS[it + i]);
-	}
+        state[i].add_assign(&C_CONSTANTS[it + i]);
+    }
 }
 
 fn exp5(mut x: Fr) -> Fr {
@@ -37,71 +36,73 @@ fn exp5(mut x: Fr) -> Fr {
 
 fn exp5_state(state: &mut PoseidonState) {
     for i in 0..WIDTH {
-		state[i] = exp5(state[i]);
-	}
+        state[i] = exp5(state[i]);
+    }
 }
 
 fn full_rounds(state: &mut PoseidonState, first: bool) {
-    for i in 0..FULL_ROUNDS/2-1 {
-		exp5_state(state);
-		if first {
-			ark(state, (i+1)*WIDTH);
-		} else {
-			ark(state, (FULL_ROUNDS/2+1)*WIDTH+PARTIAL_ROUNDS+i*WIDTH);
-		}
-		mix(state, &M_MATRIX);
+    for i in 0..FULL_ROUNDS / 2 - 1 {
+        exp5_state(state);
+        if first {
+            ark(state, (i + 1) * WIDTH);
+        } else {
+            ark(
+                state,
+                (FULL_ROUNDS / 2 + 1) * WIDTH + PARTIAL_ROUNDS + i * WIDTH,
+            );
+        }
+        mix(state, &M_MATRIX);
     }
 
     exp5_state(state);
-	if first {
-		ark(state, (FULL_ROUNDS/2)*WIDTH);
-		mix(state, &P_MATRIX);
-	} else {
-		mix(state, &M_MATRIX);
-	}
+    if first {
+        ark(state, (FULL_ROUNDS / 2) * WIDTH);
+        mix(state, &P_MATRIX);
+    } else {
+        mix(state, &M_MATRIX);
+    }
 }
 
 fn partial_rounds(state: &mut PoseidonState) {
     for i in 0..PARTIAL_ROUNDS {
-		state[0] = exp5(state[0]);
-		state[0].add_assign(&C_CONSTANTS[(FULL_ROUNDS/2+1)*WIDTH+i]);
+        state[0] = exp5(state[0]);
+        state[0].add_assign(&C_CONSTANTS[(FULL_ROUNDS / 2 + 1) * WIDTH + i]);
 
-		let mut mul;
+        let mut mul;
         let mut new_state0 = Fr::zero();
-		for j in 0 ..WIDTH {
+        for j in 0..WIDTH {
             mul = Fr::zero();
-            mul.add_assign(&S_CONSTANTS[(WIDTH*2-1)*i+j]);  
+            mul.add_assign(&S_CONSTANTS[(WIDTH * 2 - 1) * i + j]);
             mul.mul_assign(&state[j]);
-			new_state0.add_assign(&mul);
-		}
+            new_state0.add_assign(&mul);
+        }
 
-		for k in 1..WIDTH {
+        for k in 1..WIDTH {
             mul = Fr::zero();
             mul.add_assign(&state[0]);
-            mul.mul_assign(&S_CONSTANTS[(WIDTH*2-1)*i+WIDTH+k-1]);
+            mul.mul_assign(&S_CONSTANTS[(WIDTH * 2 - 1) * i + WIDTH + k - 1]);
             state[k].add_assign(&mul);
-		}
+        }
 
         state[0] = new_state0;
-	}
+    }
 }
 
 fn mix(state: &mut PoseidonState, constant_matrix: &[Vec<Fr>]) {
     let mut result: PoseidonState = [Fr::zero(); WIDTH];
 
     let mut mul;
-	for i in 0..WIDTH {
-		for j in 0..WIDTH {
+    for i in 0..WIDTH {
+        for j in 0..WIDTH {
             mul = Fr::zero();
             mul.add_assign(&constant_matrix[j][i]);
             mul.mul_assign(&state[j]);
             result[i].add_assign(&mul);
-		}
-	}
+        }
+    }
 
     state[..WIDTH].copy_from_slice(&result[..WIDTH]);
 }
-
 
 #[cfg(test)]
 mod permutation_tests {
@@ -121,7 +122,10 @@ mod permutation_tests {
         // 4. random elements of BN128.
         // Expected output calculated from this poseidon implementation:  https://github.com/iden3/go-iden3-crypto/blob/master/poseidon/poseidon.go#L65
 
-        let max_value: Fr = Fr::from_str("21888242871839275222246405745257275088548364400416034343698204186575808495616").unwrap();
+        let max_value: Fr = Fr::from_str(
+            "21888242871839275222246405745257275088548364400416034343698204186575808495616",
+        )
+        .unwrap();
 
         let test_vectors: Vec<([Fr; 4], [Fr; 4])> = vec![
             (
@@ -185,76 +189,76 @@ mod permutation_tests {
 
 #[cfg(test)]
 mod merkle_tree_tests {
-	use anyhow::Result;
-	use plonky2::field::extension::Extendable;
-	use plonky2::hash::hash_types::RichField;
-	use plonky2::hash::merkle_proofs::verify_merkle_proof_to_cap;
-	use plonky2::hash::merkle_tree::MerkleTree;
-	use plonky2::plonk::config::GenericConfig;
+    use anyhow::Result;
+    use plonky2::field::extension::Extendable;
+    use plonky2::hash::hash_types::RichField;
+    use plonky2::hash::merkle_proofs::verify_merkle_proof_to_cap;
+    use plonky2::hash::merkle_tree::MerkleTree;
+    use plonky2::plonk::config::GenericConfig;
 
-	use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
+    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
 
-	fn random_data<F: RichField>(n: usize, k: usize) -> Vec<Vec<F>> {
-		(0..n).map(|_| F::rand_vec(k)).collect()
-	}
+    fn random_data<F: RichField>(n: usize, k: usize) -> Vec<Vec<F>> {
+        (0..n).map(|_| F::rand_vec(k)).collect()
+    }
 
-	fn verify_all_leaves<
-		F: RichField + Extendable<D>,
-		C: GenericConfig<D, F = F>,
-		const D: usize,
-	>(
-		leaves: Vec<Vec<F>>,
-		cap_height: usize,
-	) -> Result<()> {
-		let tree = MerkleTree::<F, C::Hasher>::new(leaves.clone(), cap_height);
-		for (i, leaf) in leaves.into_iter().enumerate() {
-			let proof = tree.prove(i);
-			verify_merkle_proof_to_cap(leaf, i, &tree.cap, &proof)?;
-		}
-		Ok(())
-	}
+    fn verify_all_leaves<
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >(
+        leaves: Vec<Vec<F>>,
+        cap_height: usize,
+    ) -> Result<()> {
+        let tree = MerkleTree::<F, C::Hasher>::new(leaves.clone(), cap_height);
+        for (i, leaf) in leaves.into_iter().enumerate() {
+            let proof = tree.prove(i);
+            verify_merkle_proof_to_cap(leaf, i, &tree.cap, &proof)?;
+        }
+        Ok(())
+    }
 
-	#[test]
-	#[should_panic]
-	fn test_cap_height_too_big() {
-		const D: usize = 2;
-		type C = PoseidonBN128GoldilocksConfig;
-		type F = <C as GenericConfig<D>>::F;
+    #[test]
+    #[should_panic]
+    fn test_cap_height_too_big() {
+        const D: usize = 2;
+        type C = PoseidonBN128GoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
 
-		let log_n = 8;
-		let cap_height = log_n + 1; // Should panic if `cap_height > len_n`.
+        let log_n = 8;
+        let cap_height = log_n + 1; // Should panic if `cap_height > len_n`.
 
-		let leaves = random_data::<F>(1 << log_n, 7);
-		let _ = MerkleTree::<F, <C as GenericConfig<D>>::Hasher>::new(leaves, cap_height);
-	}
+        let leaves = random_data::<F>(1 << log_n, 7);
+        let _ = MerkleTree::<F, <C as GenericConfig<D>>::Hasher>::new(leaves, cap_height);
+    }
 
-	#[test]
-	fn test_cap_height_eq_log2_len() -> Result<()> {
-		const D: usize = 2;
-		type C = PoseidonBN128GoldilocksConfig;
-		type F = <C as GenericConfig<D>>::F;
+    #[test]
+    fn test_cap_height_eq_log2_len() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonBN128GoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
 
-		let log_n = 8;
-		let n = 1 << log_n;
-		let leaves = random_data::<F>(n, 7);
+        let log_n = 8;
+        let n = 1 << log_n;
+        let leaves = random_data::<F>(n, 7);
 
-		verify_all_leaves::<F, C, D>(leaves, log_n)?;
+        verify_all_leaves::<F, C, D>(leaves, log_n)?;
 
-		Ok(())
-	}
+        Ok(())
+    }
 
-	#[test]
-	fn test_merkle_trees() -> Result<()> {
-		const D: usize = 2;
-		type C = PoseidonBN128GoldilocksConfig;
-		type F = <C as GenericConfig<D>>::F;
+    #[test]
+    fn test_merkle_trees() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonBN128GoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
 
-		let log_n = 8;
-		let n = 1 << log_n;
-		let leaves = random_data::<F>(n, 7);
+        let log_n = 8;
+        let n = 1 << log_n;
+        let leaves = random_data::<F>(n, 7);
 
-		verify_all_leaves::<F, C, D>(leaves, 1)?;
+        verify_all_leaves::<F, C, D>(leaves, 1)?;
 
-		Ok(())
-	}
+        Ok(())
+    }
 }

@@ -716,7 +716,7 @@ mod tests {
             	[100, 130, 224, 145, 23, 222, 96, 138, 109, 208, 202, 214, 88, 59, 192, 68, 32, 12, 121, 48, 132, 72, 227, 42, 43, 195, 169, 127, 221, 176, 188, 72].to_vec(),
             ].to_vec(),
             94,
-            hex::decode("54edd773a22a391f931147ce792c23391ccd20f894914b35a47974f9e867cb4b").unwrap(),
+            hex::decode("8e6866fa26ff254cdb0c2d7adf78b551a108770400317886aeb22f90556edeb9").unwrap(),
         );
 
         let inner_data = builder.build();

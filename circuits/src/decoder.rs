@@ -214,8 +214,9 @@ mod tests {
     use plonky2::util::serialization::DefaultGateSerializer;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::types::Field;
+    use plonky2lib_succinct::hash_functions::blake2b::make_blake2b_circuit;
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
-    use crate::utils::{MAX_HEADER_SIZE, AvailHashTarget, CircuitBuilderUtils};
+    use crate::utils::{MAX_HEADER_SIZE, AvailHashTarget, CircuitBuilderUtils, HASH_SIZE};
     use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
@@ -424,5 +425,122 @@ mod tests {
         Ok(())
 
 
+    }
+
+    #[test]
+    fn test_operator_decode_test_case() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let config = CircuitConfig::standard_recursion_config();
+        let pw = PartialWitness::new();
+        let mut builder = CircuitBuilder::<F, D>::new(config.clone());
+
+        let test_header = [167, 234, 10, 89, 188, 85, 75, 118, 29, 8, 78, 168, 217, 39, 212, 213, 225, 154, 124, 81, 31, 192, 42, 102, 206, 139, 77, 0, 115, 152, 129, 225, 66, 35, 6, 0, 178, 77, 240, 37, 173, 94, 159, 149, 164, 248, 179, 185, 203, 221, 73, 131, 154, 216, 238, 33, 232, 155, 53, 41, 247, 172, 230, 190, 1, 151, 192, 110, 110, 248, 213, 1, 97, 196, 222, 147, 6, 140, 47, 232, 216, 80, 110, 88, 243, 135, 187, 16, 147, 229, 47, 36, 139, 47, 80, 255, 101, 144, 70, 53, 8, 6, 66, 65, 66, 69, 181, 1, 3, 26, 0, 0, 0, 19, 231, 7, 5, 0, 0, 0, 0, 250, 51, 3, 12, 136, 121, 100, 77, 103, 74, 51, 15, 10, 24, 77, 55, 152, 4, 59, 227, 246, 155, 107, 186, 50, 79, 72, 134, 47, 14, 199, 66, 103, 12, 255, 225, 138, 108, 175, 246, 176, 241, 187, 38, 47, 27, 235, 78, 158, 215, 113, 141, 179, 8, 196, 163, 119, 78, 102, 233, 32, 46, 110, 13, 138, 243, 56, 63, 75, 8, 247, 92, 200, 39, 113, 34, 155, 1, 106, 143, 153, 18, 95, 241, 162, 65, 200, 6, 27, 31, 102, 94, 66, 172, 216, 4, 5, 66, 65, 66, 69, 1, 1, 226, 60, 5, 243, 97, 252, 63, 163, 203, 198, 91, 169, 221, 77, 125, 17, 212, 140, 122, 28, 246, 102, 181, 107, 159, 176, 219, 232, 249, 207, 120, 114, 59, 73, 121, 218, 199, 121, 67, 74, 215, 54, 31, 203, 86, 20, 10, 157, 158, 204, 126, 136, 209, 27, 254, 175, 10, 117, 60, 191, 23, 84, 182, 135, 0, 4, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 129, 1, 149, 144, 69, 78, 245, 222, 126, 35, 80, 67, 248, 81, 44, 175, 104, 26, 174, 5, 242, 143, 213, 95, 10, 118, 7, 124, 234, 215, 137, 167, 208, 101, 212, 73, 15, 159, 106, 210, 176, 195, 45, 42, 202, 73, 232, 141, 4, 246, 149, 144, 69, 78, 245, 222, 126, 35, 80, 67, 248, 81, 44, 175, 104, 26, 174, 5, 242, 143, 213, 95, 10, 118, 7, 124, 234, 215, 137, 167, 208, 101, 212, 73, 15, 159, 106, 210, 176, 195, 45, 42, 202, 73, 232, 141, 4, 246, 60, 0].to_vec();
+
+        let mut header_bytes_target = test_header.iter().map(|b| {
+            builder.constant(F::from_canonical_u8(*b))
+        }).collect::<Vec<_>>();
+        let header_size = builder.constant(F::from_canonical_usize(test_header.len()));
+
+        // pad the header bytes
+        for _ in test_header.len()..MAX_HEADER_SIZE {
+            header_bytes_target.push(builder.zero());
+        }
+
+        let decoded_header = builder.decode_header(&EncodedHeaderTarget{header_bytes: header_bytes_target.try_into().unwrap(), header_size});
+
+        let expected_block_number = builder.constant(F::from_canonical_u64(100560));
+        builder.connect(decoded_header.block_number, expected_block_number);
+
+        let expected_parent_hash = hex::decode("a7ea0a59bc554b761d084ea8d927d4d5e19a7c511fc02a66ce8b4d00739881e1").unwrap();
+        for i in 0..expected_parent_hash.len() {
+            let expected_parent_hash_byte = builder.constant(F::from_canonical_u8(expected_parent_hash[i]));
+            builder.connect(decoded_header.parent_hash.0[i], expected_parent_hash_byte);
+        }
+
+        let expected_state_root = hex::decode("b24df025ad5e9f95a4f8b3b9cbdd49839ad8ee21e89b3529f7ace6be0197c06e").unwrap();
+        let expected_state_root_target = AvailHashTarget(expected_state_root.iter().map(
+            |b| builder.constant(F::from_canonical_u8(*b))
+        ).collect::<Vec<_>>().try_into().unwrap());
+
+        builder.connect_hash(decoded_header.state_root, expected_state_root_target);
+
+        let data = builder.build::<C>();
+        let proof = data.prove(pw)?;
+
+        data.verify(proof.clone())
+    }
+
+    #[test]
+    fn test_operator_public_inputs_hash() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let config = CircuitConfig::standard_recursion_config();
+        let pw = PartialWitness::new();
+        let mut builder = CircuitBuilder::<F, D>::new(config.clone());
+
+        let public_inputs_hash_circuit = make_blake2b_circuit(
+            &mut builder,
+            512 * 8,
+            HASH_SIZE,
+        );
+
+        let public_inputs_bytes = [54, 115, 158, 107, 120, 233, 121, 250, 121, 187, 210, 98, 170, 57, 7, 75, 254, 120, 126, 248, 152, 207, 92, 73, 73, 95, 107, 230, 34, 1, 57, 35, 0, 1, 136, 203, 84, 237, 215, 115, 162, 42, 57, 31, 147, 17, 71, 206, 121, 44, 35, 57, 28, 205, 32, 248, 148, 145, 75, 53, 164, 121, 116, 249, 232, 103, 203, 75, 0, 0, 0, 0, 0, 0, 0, 94, 126, 114, 94, 23, 162, 130, 71, 71, 55, 66, 114, 81, 125, 20, 205, 17, 7, 52, 135, 19, 162, 175, 199, 112, 140, 249, 118, 31, 100, 202, 167, 91, 242, 100, 119, 170, 241, 248, 151, 221, 7, 153, 28, 136, 150, 48, 162, 87, 119, 175, 247, 21, 63, 141, 167, 203, 28, 32, 49, 67, 239, 69, 50, 131, 140, 24, 33, 178, 125, 199, 11, 17, 181, 53, 39, 18, 196, 229, 36, 200, 247, 10, 159, 13, 144, 64, 5, 33, 246, 39, 87, 196, 81, 182, 193, 87, 131, 88, 247, 204, 159, 253, 88, 233, 31, 61, 158, 5, 10, 86, 74, 65, 254, 126, 82, 133, 127, 9, 235, 49, 117, 120, 171, 34, 102, 142, 67, 32, 178, 77, 240, 37, 173, 94, 159, 149, 164, 248, 179, 185, 203, 221, 73, 131, 154, 216, 238, 33, 232, 155, 53, 41, 247, 172, 230, 190, 1, 151, 192, 110, 110, 200, 76, 124, 73, 75, 0, 3, 21, 170, 7, 121, 42, 201, 131, 173, 74, 209, 53, 202, 155, 147, 36, 135, 194, 245, 139, 117, 216, 8, 184, 170, 64, 195, 182, 92, 199, 22, 38, 83, 132, 193, 225, 54, 249, 233, 118, 114, 20, 57, 227, 75, 162, 44, 131, 53, 55, 25, 193, 236, 56, 187, 248, 134, 112, 124, 39, 106, 46, 165, 89, 190, 159, 103, 121, 212, 218, 235, 206, 55, 174, 151, 242, 70, 197, 163, 141, 125, 167, 75, 29, 20, 132, 243, 125, 78, 167, 234, 10, 89, 188, 85, 75, 118, 29, 8, 78, 168, 217, 39, 212, 213, 225, 154, 124, 81, 31, 192, 42, 102, 206, 139, 77, 0, 115, 152, 129, 225, 221, 226, 250, 11, 92, 6, 148, 162, 108, 157, 22, 56, 188, 154, 11, 226, 175, 133, 94, 113, 173, 18, 197, 114, 50, 88, 224, 126, 221, 137, 28, 193].to_vec();
+        let public_inputs_hash_input = public_inputs_bytes.iter()
+        .flat_map(|byte| {
+            let constant_target = builder.constant(F::from_canonical_u8(*byte));
+            let mut bits = builder.split_le(constant_target, 8);
+            bits.reverse();
+            bits
+        })
+        .collect::<Vec<_>>();
+
+        for (i, bit) in public_inputs_hash_input.iter().enumerate() {
+            builder.connect(bit.target, public_inputs_hash_circuit.message[i].target);
+        }
+
+        // Add the padding
+        let zero = builder.zero();
+        for i in public_inputs_hash_input.len() .. 512 * 8 {
+            builder.connect(zero, public_inputs_hash_circuit.message[i].target);
+        }
+
+        let public_inputs_input_size = builder.constant(F::from_canonical_usize(public_inputs_hash_input.len() / 8));
+        builder.connect(public_inputs_hash_circuit.message_len, public_inputs_input_size);
+
+        let expected_hash = hex::decode("067210f68b96b9ed9a005680f336a4ce136fe20ada1956f02823d74466bb0325").unwrap()
+        .iter()
+        .map(|byte| builder.constant(F::from_canonical_u8(*byte)))
+        .collect::<Vec<_>>();
+
+        // Verify that the public input hash matches
+        for i in 0 .. HASH_SIZE {
+            let mut bits = builder.split_le(expected_hash[i], 8);
+
+            // Needs to be in bit big endian order for the BLAKE2B circuit
+            bits.reverse();
+            for (j, bit) in bits.iter().enumerate().take(8) {
+                builder.connect(public_inputs_hash_circuit.digest[i*8+j].target, bit.target);
+            }
+        }
+
+        let data = builder.build::<C>();
+        let proof = data.prove(pw)?;
+
+        data.verify(proof.clone())
     }
 }

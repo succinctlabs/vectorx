@@ -395,3 +395,44 @@ pub async fn main() {
 
     main_loop(header_sub, justification_sub, c, plonky2_pg_client).await;
 }
+
+#[cfg(test)]
+mod tests {
+    use subxt::config::Hasher;
+
+    #[test]
+    fn calculate_public_inputs_hash() {
+        let head_block_hash = hex::decode("36739e6b78e979fa79bbd262aa39074bfe787ef898cf5c49495f6be622013923").unwrap();
+        let head_block_num:u32 = 100555;
+        let authority_set_commitment = hex::decode("54edd773a22a391f931147ce792c23391ccd20f894914b35a47974f9e867cb4b").unwrap();
+        let authority_set_id:u64 = 94;
+        let header_state_roots = [
+            hex::decode("7e725e17a2824747374272517d14cd1107348713a2afc7708cf9761f64caa75b").unwrap(),
+            hex::decode("f26477aaf1f897dd07991c889630a25777aff7153f8da7cb1c203143ef453283").unwrap(),
+            hex::decode("8c1821b27dc70b11b5352712c4e524c8f70a9f0d90400521f62757c451b6c157").unwrap(),
+            hex::decode("8358f7cc9ffd58e91f3d9e050a564a41fe7e52857f09eb317578ab22668e4320").unwrap(),
+            hex::decode("b24df025ad5e9f95a4f8b3b9cbdd49839ad8ee21e89b3529f7ace6be0197c06e").unwrap(),
+        ].to_vec();
+        let header_hashes = [
+            hex::decode("6ec84c7c494b000315aa07792ac983ad4ad135ca9b932487c2f58b75d808b8aa").unwrap(),
+            hex::decode("40c3b65cc716265384c1e136f9e976721439e34ba22c83353719c1ec38bbf886").unwrap(),
+            hex::decode("707c276a2ea559be9f6779d4daebce37ae97f246c5a38d7da74b1d1484f37d4e").unwrap(),
+            hex::decode("a7ea0a59bc554b761d084ea8d927d4d5e19a7c511fc02a66ce8b4d00739881e1").unwrap(),
+            hex::decode("dde2fa0b5c0694a26c9d1638bc9a0be2af855e71ad12c5723258e07edd891cc1").unwrap(),
+        ].to_vec();
+
+        let mut public_inputs_hash = Vec::new();
+        public_inputs_hash.extend(head_block_hash);
+        public_inputs_hash.extend(head_block_num.to_be_bytes());
+        public_inputs_hash.extend(authority_set_commitment);
+        public_inputs_hash.extend(authority_set_id.to_be_bytes());
+        public_inputs_hash.extend(header_state_roots.iter().flatten());
+        public_inputs_hash.extend(header_hashes.iter().flatten());
+
+        let hash = avail_subxt::config::substrate::BlakeTwo256::hash(&public_inputs_hash);
+
+        println!("public_inputs_hash: {:?}", public_inputs_hash);
+        println!("hash: {:?}", hash);
+    }
+
+}

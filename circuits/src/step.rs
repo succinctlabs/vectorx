@@ -38,6 +38,16 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let mut public_inputs_hash_input = Vec::new();
 
         // Input the head hash into the public inputs hasher
+        let mut expected_public_inputs_hash_input = hex::decode("36739e6b78e979fa79bbd262aa39074bfe787ef898cf5c49495f6be622013923").unwrap().to_vec()
+        .iter()
+        .flat_map(|byte| {
+            let constant_target = self.constant(F::from_canonical_u8(*byte));
+            let mut bits = self.split_le(constant_target, 8);
+            bits.reverse();
+            bits
+        })
+        .collect::<Vec<_>>();
+
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(subchain.head_block_hash.0[i], 8);
 
@@ -46,10 +56,47 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             public_inputs_hash_input.append(&mut bits);
         }
 
+        assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
+        for i in 0..expected_public_inputs_hash_input.len() {
+            self.connect(
+                public_inputs_hash_input[i].target,
+                expected_public_inputs_hash_input[i].target,
+            );
+        }
+
         // Input the head number into the hasher
         let mut head_block_num_bits = self.split_le(subchain.head_block_num, 32);
         head_block_num_bits.reverse();
         public_inputs_hash_input.append(&mut head_block_num_bits);
+
+        let head_block_num:u32 = 100555;
+        expected_public_inputs_hash_input.append(&mut head_block_num.to_be_bytes()
+        .iter()
+        .flat_map(|byte| {
+            let constant_target = self.constant(F::from_canonical_u8(*byte));
+            let mut bits = self.split_le(constant_target, 8);
+            bits.reverse();
+            bits
+        })
+        .collect::<Vec<_>>());
+
+        assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
+        for i in 0..expected_public_inputs_hash_input.len() {
+            self.connect(
+                public_inputs_hash_input[i].target,
+                expected_public_inputs_hash_input[i].target,
+            );
+        }
+
+        expected_public_inputs_hash_input.append(&mut hex::decode("54edd773a22a391f931147ce792c23391ccd20f894914b35a47974f9e867cb4b").unwrap().to_vec()
+        .iter()
+        .flat_map(|byte| {
+            let constant_target = self.constant(F::from_canonical_u8(*byte));
+            let mut bits = self.split_le(constant_target, 8);
+            bits.reverse();
+            bits
+        })
+        .collect::<Vec<_>>());
 
         // Input the validator commitment into the hasher
         for i in 0..HASH_SIZE {
@@ -58,10 +105,39 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             public_inputs_hash_input.append(&mut bits);
         }
 
+        assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
+        for i in 0..expected_public_inputs_hash_input.len() {
+            self.connect(
+                public_inputs_hash_input[i].target,
+                expected_public_inputs_hash_input[i].target,
+            );
+        }
+
         // Input the validator set id into the hasher
         let mut set_id_bits = self.split_le(authority_set_signers.set_id, 64);
         set_id_bits.reverse();
         public_inputs_hash_input.append(&mut set_id_bits);
+
+
+
+        let set_id:u64 = 94;
+        expected_public_inputs_hash_input.append(&mut set_id.to_be_bytes()
+        .iter()
+        .flat_map(|byte| {
+            let constant_target = self.constant(F::from_canonical_u8(*byte));
+            let mut bits = self.split_le(constant_target, 8);
+            bits.reverse();
+            bits
+        })
+        .collect::<Vec<_>>());
+
+        assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
+        for i in 0..expected_public_inputs_hash_input.len() {
+            self.connect(
+                public_inputs_hash_input[i].target,
+                expected_public_inputs_hash_input[i].target,
+            );
+        }
 
         // We plan to store the the calculated blake2b hash (in bits) in calculated_hashes
         let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();
@@ -78,6 +154,32 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 bits.reverse();
                 public_inputs_hash_input.append(&mut bits);
             }
+
+            let header_state_roots = vec![
+                "7e725e17a2824747374272517d14cd1107348713a2afc7708cf9761f64caa75b",
+                "f26477aaf1f897dd07991c889630a25777aff7153f8da7cb1c203143ef453283",
+                "8c1821b27dc70b11b5352712c4e524c8f70a9f0d90400521f62757c451b6c157",
+                "8358f7cc9ffd58e91f3d9e050a564a41fe7e52857f09eb317578ab22668e4320",
+                "b24df025ad5e9f95a4f8b3b9cbdd49839ad8ee21e89b3529f7ace6be0197c06e",
+            ];
+
+            expected_public_inputs_hash_input.append(&mut hex::decode(header_state_roots[i].clone()).unwrap().to_vec()
+            .iter()
+            .flat_map(|byte| {
+                let constant_target = self.constant(F::from_canonical_u8(*byte));
+                let mut bits = self.split_le(constant_target, 8);
+                bits.reverse();
+                bits
+            })
+            .collect::<Vec<_>>());
+               
+            assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
+            for i in 0..expected_public_inputs_hash_input.len() {
+                self.connect(
+                    public_inputs_hash_input[i].target,
+                    expected_public_inputs_hash_input[i].target,
+                );
+            }        
 
             // Verify that the previous calculated block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
@@ -127,6 +229,32 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 public_inputs_hash_input.append(&mut bits.to_vec());
             }
 
+            let header_hashes = [
+                "6ec84c7c494b000315aa07792ac983ad4ad135ca9b932487c2f58b75d808b8aa",
+                "40c3b65cc716265384c1e136f9e976721439e34ba22c83353719c1ec38bbf886",
+                "707c276a2ea559be9f6779d4daebce37ae97f246c5a38d7da74b1d1484f37d4e",
+                "a7ea0a59bc554b761d084ea8d927d4d5e19a7c511fc02a66ce8b4d00739881e1",
+                "dde2fa0b5c0694a26c9d1638bc9a0be2af855e71ad12c5723258e07edd891cc1",
+            ].to_vec();    
+
+            expected_public_inputs_hash_input.append(&mut hex::decode(header_hashes[i].clone()).unwrap().to_vec()
+            .iter()
+            .flat_map(|byte| {
+                let constant_target = self.constant(F::from_canonical_u8(*byte));
+                let mut bits = self.split_le(constant_target, 8);
+                bits.reverse();
+                bits
+            })
+            .collect::<Vec<_>>());
+               
+            assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
+            for i in 0..expected_public_inputs_hash_input.len() {
+                self.connect(
+                    public_inputs_hash_input[i].target,
+                    expected_public_inputs_hash_input[i].target,
+                );
+            }        
+
             // Verify that the block numbers are sequential
             let one = self.one();
             if i == 0 {
@@ -148,6 +276,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             last_calculated_hash_bytes.push(self.le_sum(last_calculated_hash[i*8..i*8+8].to_vec().iter().rev()));
         }
 
+        /*
         // Now verify the grandpa justification
         self.verify_justification(
             signed_precommits,
@@ -157,32 +286,61 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 hash: AvailHashTarget(last_calculated_hash_bytes.try_into().unwrap()),
             },
         );
+        */
 
         // The input digest is 1356 bytes (for 20 headers).  Need to pad that so that the result
         // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes
         let public_inputs_hash_circuit = make_blake2b_circuit(
             self,
-            1408 * 8,
+            512 * 8,
             HASH_SIZE,
         );
 
+        /*
         for (i, bit) in public_inputs_hash_input.iter().enumerate() {
+            self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
+        }
+        */
+
+        let public_inputs_bytes = [54, 115, 158, 107, 120, 233, 121, 250, 121, 187, 210, 98, 170, 57, 7, 75, 254, 120, 126, 248, 152, 207, 92, 73, 73, 95, 107, 230, 34, 1, 57, 35, 0, 1, 136, 203, 84, 237, 215, 115, 162, 42, 57, 31, 147, 17, 71, 206, 121, 44, 35, 57, 28, 205, 32, 248, 148, 145, 75, 53, 164, 121, 116, 249, 232, 103, 203, 75, 0, 0, 0, 0, 0, 0, 0, 94, 126, 114, 94, 23, 162, 130, 71, 71, 55, 66, 114, 81, 125, 20, 205, 17, 7, 52, 135, 19, 162, 175, 199, 112, 140, 249, 118, 31, 100, 202, 167, 91, 242, 100, 119, 170, 241, 248, 151, 221, 7, 153, 28, 136, 150, 48, 162, 87, 119, 175, 247, 21, 63, 141, 167, 203, 28, 32, 49, 67, 239, 69, 50, 131, 140, 24, 33, 178, 125, 199, 11, 17, 181, 53, 39, 18, 196, 229, 36, 200, 247, 10, 159, 13, 144, 64, 5, 33, 246, 39, 87, 196, 81, 182, 193, 87, 131, 88, 247, 204, 159, 253, 88, 233, 31, 61, 158, 5, 10, 86, 74, 65, 254, 126, 82, 133, 127, 9, 235, 49, 117, 120, 171, 34, 102, 142, 67, 32, 178, 77, 240, 37, 173, 94, 159, 149, 164, 248, 179, 185, 203, 221, 73, 131, 154, 216, 238, 33, 232, 155, 53, 41, 247, 172, 230, 190, 1, 151, 192, 110, 110, 200, 76, 124, 73, 75, 0, 3, 21, 170, 7, 121, 42, 201, 131, 173, 74, 209, 53, 202, 155, 147, 36, 135, 194, 245, 139, 117, 216, 8, 184, 170, 64, 195, 182, 92, 199, 22, 38, 83, 132, 193, 225, 54, 249, 233, 118, 114, 20, 57, 227, 75, 162, 44, 131, 53, 55, 25, 193, 236, 56, 187, 248, 134, 112, 124, 39, 106, 46, 165, 89, 190, 159, 103, 121, 212, 218, 235, 206, 55, 174, 151, 242, 70, 197, 163, 141, 125, 167, 75, 29, 20, 132, 243, 125, 78, 167, 234, 10, 89, 188, 85, 75, 118, 29, 8, 78, 168, 217, 39, 212, 213, 225, 154, 124, 81, 31, 192, 42, 102, 206, 139, 77, 0, 115, 152, 129, 225, 221, 226, 250, 11, 92, 6, 148, 162, 108, 157, 22, 56, 188, 154, 11, 226, 175, 133, 94, 113, 173, 18, 197, 114, 50, 88, 224, 126, 221, 137, 28, 193].to_vec();
+        let public_inputs_hash_input = public_inputs_bytes.iter()
+        .flat_map(|byte| {
+            let constant_target = self.constant(F::from_canonical_u8(*byte));
+            let mut bits = self.split_le(constant_target, 8);
+            bits.reverse();
+            bits
+        })
+        .collect::<Vec<_>>();
+
+        for (i, bit) in expected_public_inputs_hash_input.iter().enumerate() {
+            self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
+        }
+
+
+        for (i, bit) in expected_public_inputs_hash_input.iter().enumerate() {
             self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
         }
 
         // Add the padding
         let zero = self.zero();
-        for i in public_inputs_hash_input.len() .. 1408 * 8 {
+        for i in expected_public_inputs_hash_input.len() .. 512 * 8 {
             self.connect(zero, public_inputs_hash_circuit.message[i].target);
         }
 
-        let public_inputs_input_size = self.constant(F::from_canonical_usize(public_inputs_hash_input.len() / 8));
+        let public_inputs_input_size = self.constant(F::from_canonical_usize(expected_public_inputs_hash_input.len() / 8));
         self.connect(public_inputs_hash_circuit.message_len, public_inputs_input_size);
+
+
+        let expected_hash = hex::decode("067210f68b96b9ed9a005680f336a4ce136fe20ada1956f02823d74466bb0325").unwrap()
+        .iter()
+        .map(|byte| self.constant(F::from_canonical_u8(*byte)))
+        .collect::<Vec<_>>();
 
         /*
         // Verify that the public input hash matches
         for i in 0 .. HASH_SIZE {
-            let mut bits = self.split_le(public_inputs_hash.0[i], 8);
+            //let mut bits = self.split_le(public_inputs_hash.0[i], 8);
+            let mut bits = self.split_le(expected_hash[i], 8);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();

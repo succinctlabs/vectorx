@@ -175,8 +175,10 @@ async fn submit_proof_gen_request(
     public_inputs_hash.extend(head_block_num.to_be_bytes());
     public_inputs_hash.extend(authority_set_commitment.0);
     public_inputs_hash.extend(authority_set_id.to_be_bytes());
-    public_inputs_hash.extend(headers.iter().flat_map(|x| x.state_root.0).collect::<Vec<_>>());
-    public_inputs_hash.extend(headers.iter().flat_map(|x: &Header| x.hash().0).collect::<Vec<_>>());
+    for header in headers.iter() {
+        public_inputs_hash.extend(header.state_root.0);
+        public_inputs_hash.extend(header.hash().0);
+    }
     assert!(public_inputs_hash.len() == 396);
 
     let public_inputs_hash = avail_subxt::config::substrate::BlakeTwo256::hash(&public_inputs_hash);
@@ -426,8 +428,10 @@ mod tests {
         public_inputs_hash.extend(head_block_num.to_be_bytes());
         public_inputs_hash.extend(authority_set_commitment);
         public_inputs_hash.extend(authority_set_id.to_be_bytes());
-        public_inputs_hash.extend(header_state_roots.iter().flatten());
-        public_inputs_hash.extend(header_hashes.iter().flatten());
+        for i in 0..header_state_roots.len() {
+            public_inputs_hash.extend(header_state_roots[i].clone());
+            public_inputs_hash.extend(header_hashes[i].clone());
+        }
 
         let hash = avail_subxt::config::substrate::BlakeTwo256::hash(&public_inputs_hash);
 

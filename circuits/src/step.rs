@@ -174,12 +174,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             .collect::<Vec<_>>());
                
             assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
-            for i in 0..expected_public_inputs_hash_input.len() {
-                self.connect(
-                    public_inputs_hash_input[i].target,
-                    expected_public_inputs_hash_input[i].target,
-                );
-            }        
 
             // Verify that the previous calculated block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
@@ -246,14 +240,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 bits
             })
             .collect::<Vec<_>>());
-               
-            assert!(public_inputs_hash_input.len() == expected_public_inputs_hash_input.len());
-            for i in 0..expected_public_inputs_hash_input.len() {
-                self.connect(
-                    public_inputs_hash_input[i].target,
-                    expected_public_inputs_hash_input[i].target,
-                );
-            }        
 
             // Verify that the block numbers are sequential
             let one = self.one();
@@ -296,28 +282,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             HASH_SIZE,
         );
 
-        /*
         for (i, bit) in public_inputs_hash_input.iter().enumerate() {
-            self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
-        }
-        */
-
-        let public_inputs_bytes = [54, 115, 158, 107, 120, 233, 121, 250, 121, 187, 210, 98, 170, 57, 7, 75, 254, 120, 126, 248, 152, 207, 92, 73, 73, 95, 107, 230, 34, 1, 57, 35, 0, 1, 136, 203, 84, 237, 215, 115, 162, 42, 57, 31, 147, 17, 71, 206, 121, 44, 35, 57, 28, 205, 32, 248, 148, 145, 75, 53, 164, 121, 116, 249, 232, 103, 203, 75, 0, 0, 0, 0, 0, 0, 0, 94, 126, 114, 94, 23, 162, 130, 71, 71, 55, 66, 114, 81, 125, 20, 205, 17, 7, 52, 135, 19, 162, 175, 199, 112, 140, 249, 118, 31, 100, 202, 167, 91, 242, 100, 119, 170, 241, 248, 151, 221, 7, 153, 28, 136, 150, 48, 162, 87, 119, 175, 247, 21, 63, 141, 167, 203, 28, 32, 49, 67, 239, 69, 50, 131, 140, 24, 33, 178, 125, 199, 11, 17, 181, 53, 39, 18, 196, 229, 36, 200, 247, 10, 159, 13, 144, 64, 5, 33, 246, 39, 87, 196, 81, 182, 193, 87, 131, 88, 247, 204, 159, 253, 88, 233, 31, 61, 158, 5, 10, 86, 74, 65, 254, 126, 82, 133, 127, 9, 235, 49, 117, 120, 171, 34, 102, 142, 67, 32, 178, 77, 240, 37, 173, 94, 159, 149, 164, 248, 179, 185, 203, 221, 73, 131, 154, 216, 238, 33, 232, 155, 53, 41, 247, 172, 230, 190, 1, 151, 192, 110, 110, 200, 76, 124, 73, 75, 0, 3, 21, 170, 7, 121, 42, 201, 131, 173, 74, 209, 53, 202, 155, 147, 36, 135, 194, 245, 139, 117, 216, 8, 184, 170, 64, 195, 182, 92, 199, 22, 38, 83, 132, 193, 225, 54, 249, 233, 118, 114, 20, 57, 227, 75, 162, 44, 131, 53, 55, 25, 193, 236, 56, 187, 248, 134, 112, 124, 39, 106, 46, 165, 89, 190, 159, 103, 121, 212, 218, 235, 206, 55, 174, 151, 242, 70, 197, 163, 141, 125, 167, 75, 29, 20, 132, 243, 125, 78, 167, 234, 10, 89, 188, 85, 75, 118, 29, 8, 78, 168, 217, 39, 212, 213, 225, 154, 124, 81, 31, 192, 42, 102, 206, 139, 77, 0, 115, 152, 129, 225, 221, 226, 250, 11, 92, 6, 148, 162, 108, 157, 22, 56, 188, 154, 11, 226, 175, 133, 94, 113, 173, 18, 197, 114, 50, 88, 224, 126, 221, 137, 28, 193].to_vec();
-        let public_inputs_hash_input = public_inputs_bytes.iter()
-        .flat_map(|byte| {
-            let constant_target = self.constant(F::from_canonical_u8(*byte));
-            let mut bits = self.split_le(constant_target, 8);
-            bits.reverse();
-            bits
-        })
-        .collect::<Vec<_>>();
-
-        for (i, bit) in expected_public_inputs_hash_input.iter().enumerate() {
-            self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
-        }
-
-
-        for (i, bit) in expected_public_inputs_hash_input.iter().enumerate() {
             self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
         }
 
@@ -330,17 +295,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let public_inputs_input_size = self.constant(F::from_canonical_usize(expected_public_inputs_hash_input.len() / 8));
         self.connect(public_inputs_hash_circuit.message_len, public_inputs_input_size);
 
-
-        let expected_hash = hex::decode("067210f68b96b9ed9a005680f336a4ce136fe20ada1956f02823d74466bb0325").unwrap()
-        .iter()
-        .map(|byte| self.constant(F::from_canonical_u8(*byte)))
-        .collect::<Vec<_>>();
-
-        /*
         // Verify that the public input hash matches
         for i in 0 .. HASH_SIZE {
-            //let mut bits = self.split_le(public_inputs_hash.0[i], 8);
-            let mut bits = self.split_le(expected_hash[i], 8);
+            let mut bits = self.split_le(public_inputs_hash.0[i], 8);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
@@ -348,7 +305,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 self.connect(public_inputs_hash_circuit.digest[i*8+j].target, bit.target);
             }
         }
-        */
 
     }
 }
@@ -800,7 +756,7 @@ mod tests {
         let head_block_hash = hex::decode("36739e6b78e979fa79bbd262aa39074bfe787ef898cf5c49495f6be622013923").unwrap();
         let head_block_num = 100555;
 
-        let public_inputs_hash = hex::decode("067210f68b96b9ed9a005680f336a4ce136fe20ada1956f02823d74466bb0325").unwrap();
+        let public_inputs_hash = hex::decode("955ea4da0455d7128a46513a69231698994b366c8215beb7aed562b166dcc656").unwrap();
 
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
@@ -913,7 +869,7 @@ mod tests {
         assert_eq!(
             outer_proof.public_inputs[0..32].iter()
             .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
-            hex::decode("067210f68b96b9ed9a005680f336a4ce136fe20ada1956f02823d74466bb0325").unwrap(),
+            hex::decode("955ea4da0455d7128a46513a69231698994b366c8215beb7aed562b166dcc656").unwrap(),
         );
 
         /*  TODO:  It appears that the circuit digest changes after every different run, even if none of the code changes.  Need to find out why.

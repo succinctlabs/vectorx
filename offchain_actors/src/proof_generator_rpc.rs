@@ -2,7 +2,7 @@ use std::{net::{IpAddr, Ipv6Addr, SocketAddr}, time::SystemTime};
 use clap::Parser;
 
 use futures::{future, prelude::*};
-use plonky2::plonk::{circuit_data::CircuitData, proof::ProofWithPublicInputs};
+use plonky2::{plonk::{circuit_data::CircuitData, proof::ProofWithPublicInputs}};
 use tarpc::{
     context,
     server::{self, incoming::Incoming, Channel},

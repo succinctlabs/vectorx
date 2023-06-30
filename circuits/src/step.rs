@@ -156,7 +156,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             last_calculated_hash_bytes.push(self.le_sum(last_calculated_hash[i*8..i*8+8].to_vec().iter().rev()));
         }
 
-        /*
         // Now verify the grandpa justification
         self.verify_justification(
             signed_precommits,
@@ -166,7 +165,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 hash: AvailHashTarget(last_calculated_hash_bytes.try_into().unwrap()),
             },
         );
-        */
 
         // The input digest is 1356 bytes (for 20 headers).  Need to pad that so that the result
         // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes

@@ -175,7 +175,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve>
         let auth_set_bytes = [2, 248, 6, 149, 240, 164, 162, 48, 130, 70, 200, 129, 52, 178, 222, 117, 158, 52, 125, 82, 113, 137, 116, 45, 212, 46, 152, 114, 75, 213, 169, 188, 9, 32, 5, 166, 247, 165, 138, 152, 223, 95, 155, 141, 24, 107, 152, 119, 241, 43, 96, 58, 160, 108, 125, 235, 240, 246, 16, 213, 164, 159, 158, 215, 10, 151, 143, 214, 89, 198, 148, 72, 39, 62, 53, 85, 78, 33, 186, 195, 84, 88, 254, 43, 25, 159, 139, 143, 184, 26, 100, 136, 238, 153, 199, 52, 38, 43, 94, 9, 91, 48, 154, 242, 176, 234, 225, 197, 84, 224, 59, 108, 196, 165, 160, 223, 32, 123, 102, 43, 50, 150, 35, 242, 127, 220, 232, 208, 41, 16, 221, 236, 124, 81, 178, 234, 180, 217, 104, 49, 168, 185, 232, 74, 66, 206, 189, 173, 174, 98, 189, 234, 38, 202, 123, 12, 100, 14, 138, 33, 55, 188, 151, 23, 201, 155, 231, 101, 245, 89, 141, 25, 147, 251, 91, 194, 253, 95, 182, 140, 189, 129, 121, 91, 92, 3, 71, 47, 13, 192, 36, 161, 68, 132, 228, 52, 110, 176, 184, 148, 241, 72, 35, 77, 217, 236, 115, 106, 45, 55, 196, 40, 174, 25, 27, 131, 89, 237, 155, 3, 176, 246, 1, 125, 248, 108, 114, 39, 126, 210, 14, 254, 21, 186, 177, 171, 207, 52, 101, 110, 125, 35, 54, 228, 33, 51, 250, 153, 51, 30, 135, 75, 84, 88, 178, 143, 152, 68, 130, 180, 141, 53, 108, 232, 226, 153, 38, 139, 16, 12, 97, 169, 186, 95, 150, 167, 87, 207, 152, 21, 6, 131, 163, 232, 170, 133, 72, 74, 77, 48, 168, 172, 184, 141, 43, 194, 177, 174, 70, 165, 231, 96, 206, 66, 51, 192, 187, 156, 3, 165, 116, 34, 0, 157, 108, 44, 208, 179, 54, 122]
         .to_vec()
         .iter()
-        .map(|x| self.constant(F::from_canonical_usize(*x)))
+        .map(|x| self.constant(F::from_canonical_u8(*x)))
         .collect::<Vec<_>>();
 
         for i in 0..auth_set_bytes.len() {
@@ -200,9 +200,17 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve>
             self.constant(F::from_canonical_usize(NUM_AUTHORITIES * 32));
         self.connect(hash_circuit.message_len, authority_set_hash_input_length);
 
+        let expected_hash =
+        hex::decode("8e6866fa26ff254cdb0c2d7adf78b551a108770400317886aeb22f90556edeb9")
+            .unwrap()
+            .iter()
+            .map(|byte| self.constant(F::from_canonical_u8(*byte)))
+            .collect::<Vec<_>>();
+
         // Verify that the hash matches
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+            //let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+            let mut bits = self.split_le(expected_hash[i], 8);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();

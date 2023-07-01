@@ -79,14 +79,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 public_inputs_hash_input.append(&mut bits);
             }
 
-            let header_state_roots = vec![
-                "7e725e17a2824747374272517d14cd1107348713a2afc7708cf9761f64caa75b",
-                "f26477aaf1f897dd07991c889630a25777aff7153f8da7cb1c203143ef453283",
-                "8c1821b27dc70b11b5352712c4e524c8f70a9f0d90400521f62757c451b6c157",
-                "8358f7cc9ffd58e91f3d9e050a564a41fe7e52857f09eb317578ab22668e4320",
-                "b24df025ad5e9f95a4f8b3b9cbdd49839ad8ee21e89b3529f7ace6be0197c06e",
-            ];
-
             // Verify that the previous calculated block hash is equal to the decoded parent hash
             for j in 0 .. HASH_SIZE {
                 let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);
@@ -156,7 +148,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             last_calculated_hash_bytes.push(self.le_sum(last_calculated_hash[i*8..i*8+8].to_vec().iter().rev()));
         }
 
-        /*
         // Now verify the grandpa justification
         self.verify_justification(
             signed_precommits,
@@ -166,7 +157,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 hash: AvailHashTarget(last_calculated_hash_bytes.try_into().unwrap()),
             },
         );
-        */
 
         // The input digest is 1356 bytes (for 20 headers).  Need to pad that so that the result
         // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes
@@ -199,7 +189,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 self.connect(public_inputs_hash_circuit.digest[i*8+j].target, bit.target);
             }
         }
-
     }
 }
 
@@ -650,7 +639,7 @@ mod tests {
         let head_block_hash = hex::decode("36739e6b78e979fa79bbd262aa39074bfe787ef898cf5c49495f6be622013923").unwrap();
         let head_block_num = 100555;
 
-        let public_inputs_hash = hex::decode("955ea4da0455d7128a46513a69231698994b366c8215beb7aed562b166dcc656").unwrap();
+        let public_inputs_hash = hex::decode("d28e3a69ea8b7a4994f1fc1db914cc2d91e84275fd5c0f573dd2756d5c6df18b").unwrap();
 
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
@@ -726,7 +715,7 @@ mod tests {
             	[100, 130, 224, 145, 23, 222, 96, 138, 109, 208, 202, 214, 88, 59, 192, 68, 32, 12, 121, 48, 132, 72, 227, 42, 43, 195, 169, 127, 221, 176, 188, 72].to_vec(),
             ].to_vec(),
             94,
-            hex::decode("54edd773a22a391f931147ce792c23391ccd20f894914b35a47974f9e867cb4b").unwrap(),
+            hex::decode("8e6866fa26ff254cdb0c2d7adf78b551a108770400317886aeb22f90556edeb9").unwrap(),
         );
 
         let inner_data = builder.build();
@@ -763,7 +752,7 @@ mod tests {
         assert_eq!(
             outer_proof.public_inputs[0..32].iter()
             .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
-            hex::decode("955ea4da0455d7128a46513a69231698994b366c8215beb7aed562b166dcc656").unwrap(),
+            hex::decode("d28e3a69ea8b7a4994f1fc1db914cc2d91e84275fd5c0f573dd2756d5c6df18b").unwrap(),
         );
 
         /*  TODO:  It appears that the circuit digest changes after every different run, even if none of the code changes.  Need to find out why.

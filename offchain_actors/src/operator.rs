@@ -407,7 +407,7 @@ mod tests {
     fn calculate_public_inputs_hash() {
         let head_block_hash = hex::decode("36739e6b78e979fa79bbd262aa39074bfe787ef898cf5c49495f6be622013923").unwrap();
         let head_block_num:u32 = 100555;
-        let authority_set_commitment = hex::decode("54edd773a22a391f931147ce792c23391ccd20f894914b35a47974f9e867cb4b").unwrap();
+        let authority_set_commitment = hex::decode("8e6866fa26ff254cdb0c2d7adf78b551a108770400317886aeb22f90556edeb9").unwrap();
         let authority_set_id:u64 = 94;
         let header_state_roots = [
             hex::decode("7e725e17a2824747374272517d14cd1107348713a2afc7708cf9761f64caa75b").unwrap(),

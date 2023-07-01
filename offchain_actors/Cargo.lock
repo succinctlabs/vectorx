@@ -5181,6 +5181,7 @@ dependencies = [
  "plonky2_field",
  "plonky2lib_succinct",
  "serde",
+ "serde_json",
  "sp-core 16.0.0",
  "sp-state-machine 0.12.0",
  "subxt",

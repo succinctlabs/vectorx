@@ -1,6 +1,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::net::{IpAddr, Ipv6Addr};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -15,6 +16,8 @@ use avail_subxt::{
 use base58::FromBase58;
 use codec::{Decode, Encode, Output};
 use futures::{select, StreamExt, pin_mut};
+use num::BigInt;
+use num::bigint::Sign;
 use pallet_grandpa::{VersionedAuthorityList, AuthorityList};
 use serde::{
     de::Error,
@@ -244,6 +247,34 @@ async fn submit_proof_gen_request(
 
             // Send message
             stream.write(proof_serialized.as_bytes());
+
+            // Read the returned generated groth16 proof.  Should be 256 bytes long.  There should also be a EOF charater.
+            let mut proof_bytes = Vec::new();
+            let bytes_read = stream.read_to_end(&mut proof_bytes).unwrap();
+            assert!(bytes_read == 257);
+
+            let fp_size = 32;
+            let a_0 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[0 .. fp_size]);
+            let a_1 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size .. fp_size*2]);
+            let b_0_0 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*2 .. fp_size*3]);
+            let b_0_1 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*3 .. fp_size*4]);
+            let b_1_0 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*4 .. fp_size*5]);
+            let b_1_1 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*5 .. fp_size*6]);
+            let c_0 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*6 .. fp_size*7]);
+            let c_1 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*7 .. fp_size*8]);
+
+            println!("a[0] is {:?}", a_0.to_string());
+            println!("a[1] is {:?}", a_1.to_string());
+
+            println!("b[0][0] is {:?}", b_0_0.to_string());
+            println!("b[0][1] is {:?}", b_0_1.to_string());
+            println!("b[1][0] is {:?}", b_1_0.to_string());
+            println!("b[1][1] is {:?}", b_1_1.to_string());
+
+            println!("c[0] is {:?}", c_0.to_string());
+            println!("c[1] is {:?}", c_1.to_string());
+
+            println!("Received proof from server: {:?}", proof);
         },
         Err(e) => println!("{:?}", anyhow::Error::from(e)),
     }

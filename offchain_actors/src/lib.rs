@@ -105,7 +105,7 @@ pub fn generate_step_proof(
         &unwrapped_circuit.prover_only,
         &unwrapped_circuit.common,
         pw,
-        &mut timing);
+        &mut timing).unwrap();
     timing.print();
 
     // TODO:  Should build the recursive circuit on startup
@@ -119,35 +119,17 @@ pub fn generate_step_proof(
     let outer_data = outer_builder.build::<PoseidonBN128GoldilocksConfig>();
 
     let mut outer_pw = PartialWitness::new();
-    outer_pw.set_proof_with_pis_target(&outer_proof_target, &step_proof.unwrap());
+    outer_pw.set_proof_with_pis_target(&outer_proof_target, &step_proof);
     outer_pw.set_verifier_data_target(&outer_verifier_data, &unwrapped_circuit.verifier_only);
 
 
     let mut timing = TimingTree::new("recursive proof gen", Level::Info);
-    let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&outer_data.prover_only, &outer_data.common, outer_pw.clone(), &mut timing);
+    let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&outer_data.prover_only, &outer_data.common, outer_pw.clone(), &mut timing).unwrap();
     timing.print();
 
-    let mut ret = None;
-    match outer_proof {
-        Ok(proof) => {
-            println!("Generated recursive proof");
-            let verify_res = outer_data.verify(proof.clone());
-            match verify_res {
-                Ok(()) => {
-                    println!("Verified recursive proof");
-                    ret = Some(proof);
-                }
-
-                Err(e) => println!("error verifying proof: {e:?}"),
-            }
-        }
-        Err(e) => println!("error parsing header: {e:?}"),
-    };
-
-    ret
+    outer_data.verify(outer_proof.clone()).unwrap();
+    Some(outer_proof)
 }
-
-
 
 
 

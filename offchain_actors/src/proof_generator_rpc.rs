@@ -34,7 +34,7 @@ impl ProofGenerator for ProofGeneratorServer {
         authority_set_commitment: Vec<u8>,
 
         public_inputs_hash: Vec<u8>,
-    ) -> ProofWithPublicInputs<F, C, D> {
+    ) -> ProofWithPublicInputs<F, RecC, D> {
         println!("Got a step_proof request with head_block_hash: {:?}",  head_block_hash);
 
         unsafe {

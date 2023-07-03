@@ -13,7 +13,7 @@ pub type C = PoseidonGoldilocksConfig;
 pub type F = <C as GenericConfig<D>>::F;
 pub type Curve = Ed25519;
 
-pub type REC_C = PoseidonBN128GoldilocksConfig;
+pub type RecC = PoseidonBN128GoldilocksConfig;
 
 
 pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
@@ -65,7 +65,7 @@ pub fn generate_step_proof(
     authority_set_commitment: Vec<u8>,
 
     public_inputs_hash: Vec<u8>,
-) -> Option<ProofWithPublicInputs<F, REC_C, D>> {
+) -> Option<ProofWithPublicInputs<F, RecC, D>> {
     let mut pw: PartialWitness<F> = PartialWitness::new();
 
     pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));

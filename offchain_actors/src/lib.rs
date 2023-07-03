@@ -6,12 +6,14 @@ use plonky2::iop::witness::PartialWitness;
 use plonky2_field::goldilocks_field::GoldilocksField;
 use plonky2_field::types::Field;
 
-use succinct_avail_proof_generators::{step::{make_step_circuit, StepTarget}, justification::{set_precommits_pw, set_authority_set_pw}, utils::{WitnessAvailHash, WitnessEncodedHeader, QUORUM_SIZE}};
+use succinct_avail_proof_generators::{step::{make_step_circuit, StepTarget}, justification::{set_precommits_pw, set_authority_set_pw}, utils::{WitnessAvailHash, WitnessEncodedHeader, QUORUM_SIZE}, plonky2_config::PoseidonBN128GoldilocksConfig};
 
 pub const D: usize = 2;
 pub type C = PoseidonGoldilocksConfig;
 pub type F = <C as GenericConfig<D>>::F;
 pub type Curve = Ed25519;
+
+pub type REC_C = PoseidonBN128GoldilocksConfig;
 
 
 pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
@@ -63,7 +65,7 @@ pub fn generate_step_proof(
     authority_set_commitment: Vec<u8>,
 
     public_inputs_hash: Vec<u8>,
-) -> Option<ProofWithPublicInputs<F, C, D>> {
+) -> Option<ProofWithPublicInputs<F, REC_C, D>> {
     let mut pw: PartialWitness<F> = PartialWitness::new();
 
     pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
@@ -101,7 +103,26 @@ pub fn generate_step_proof(
         &mut timing);
     timing.print();
 
-    match proof {
+    // TODO:  Should build the recursive circuit on startup
+    let mut outer_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_recursion_config());
+    let outer_proof_target = outer_builder.add_virtual_proof_with_pis(&unwrapped_circuit.common);
+    let outer_verifier_data = outer_builder.add_virtual_verifier_data(unwrapped_circuit.common.config.fri_config.cap_height);
+    outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &unwrapped_circuit.common);
+    outer_builder.register_public_inputs(&outer_proof_target.public_inputs);
+    outer_builder.register_public_inputs(&outer_verifier_data.circuit_digest.elements);
+
+    let outer_data = outer_builder.build::<PoseidonBN128GoldilocksConfig>();
+
+    let mut outer_pw = PartialWitness::new();
+    outer_pw.set_proof_with_pis_target(&outer_proof_target, &proof.unwrap());
+    outer_pw.set_verifier_data_target(&outer_verifier_data, &unwrapped_circuit.verifier_only);
+
+
+    let mut timing = TimingTree::new("step proof gen", Level::Info);
+    let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&outer_data.prover_only, &outer_data.common, outer_pw.clone(), &mut timing);
+    timing.print();
+
+    match outer_proof {
         Ok(v) => return Some(v),
         Err(e) => println!("error parsing header: {e:?}"),
     };

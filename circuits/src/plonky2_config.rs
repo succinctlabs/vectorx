@@ -112,6 +112,7 @@ impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
     where
         D: Deserializer<'de>,
     {
+        println!("called deserialize");
         let deserialized_str = deserializer.deserialize_str(StrVisitor);
         println!("deserialized_str: {:?}", deserialized_str);
         match deserialized_str {

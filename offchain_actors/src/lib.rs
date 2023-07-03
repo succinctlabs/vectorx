@@ -127,6 +127,7 @@ pub fn generate_step_proof(
     let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&outer_data.prover_only, &outer_data.common, outer_pw.clone(), &mut timing);
     timing.print();
 
+    let mut ret = None;
     match outer_proof {
         Ok(proof) => {
             println!("Generated recursive proof");
@@ -134,7 +135,7 @@ pub fn generate_step_proof(
             match verify_res {
                 Ok(()) => {
                     println!("Verified recursive proof");
-                    return Some(proof)
+                    ret = Some(proof);
                 }
 
                 Err(e) => println!("error verifying proof: {e:?}"),
@@ -143,7 +144,7 @@ pub fn generate_step_proof(
         Err(e) => println!("error parsing header: {e:?}"),
     };
 
-    None
+    ret
 }
 
 

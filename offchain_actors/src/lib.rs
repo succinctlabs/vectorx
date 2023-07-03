@@ -101,7 +101,7 @@ pub fn generate_step_proof(
     let unwrapped_circuit = step_circuit.as_ref().unwrap();
 
     let mut timing = TimingTree::new("step proof gen", Level::Info);
-    let proof = prove::<F, C, D>(
+    let step_proof = prove::<F, C, D>(
         &unwrapped_circuit.prover_only,
         &unwrapped_circuit.common,
         pw,
@@ -119,7 +119,7 @@ pub fn generate_step_proof(
     let outer_data = outer_builder.build::<PoseidonBN128GoldilocksConfig>();
 
     let mut outer_pw = PartialWitness::new();
-    outer_pw.set_proof_with_pis_target(&outer_proof_target, &proof.unwrap());
+    outer_pw.set_proof_with_pis_target(&outer_proof_target, &step_proof.unwrap());
     outer_pw.set_verifier_data_target(&outer_verifier_data, &unwrapped_circuit.verifier_only);
 
 
@@ -128,13 +128,13 @@ pub fn generate_step_proof(
     timing.print();
 
     match outer_proof {
-        Ok(v) => {
+        Ok(proof) => {
             println!("Generated recursive proof");
-            let verify_res = outer_data.verify(v.clone());
+            let verify_res = outer_data.verify(proof.clone());
             match verify_res {
                 Ok(()) => {
                     println!("Verified recursive proof");
-                    return Some(v)
+                    return Some(proof)
                 }
 
                 Err(e) => println!("error verifying proof: {e:?}"),

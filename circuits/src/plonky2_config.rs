@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{io::BufReader, marker::PhantomData, string, error::Error};
+use std::{io::BufReader, marker::PhantomData, error::Error};
 
 use num::BigUint;
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
@@ -101,6 +101,7 @@ impl<'a> Visitor<'a> for StrVisitor {
     where
         E: Error,
     {
+        println!("called visit_borrowed_str");
         Ok(v) // so easy
     }
 }
@@ -112,6 +113,7 @@ impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
         D: Deserializer<'de>,
     {
         let deserialized_str = deserializer.deserialize_str(StrVisitor);
+        println!("deserialized_str: {:?}", deserialized_str);
         match deserialized_str {
             Ok(deserialized_str) => {
                 let big_int = BigUint::parse_bytes(deserialized_str.as_bytes(), 10);

@@ -88,21 +88,20 @@ impl<F: RichField> Serialize for PoseidonBN128HashOut<F> {
     }
 }
 
-struct StrVisitor;
+struct StringVisitor;
 
-impl<'a> Visitor<'a> for StrVisitor {
-    type Value = &'a str;
+impl<'a> Visitor<'a> for StringVisitor {
+    type Value = String;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a borrowed string")
+        formatter.write_str("a string with integer value within BN128 scalar field")
     }
 
-    fn visit_borrowed_str<E>(self, v: &'a str) -> Result<Self::Value, E>
+    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        println!("called visit_borrowed_str");
-        Ok(v) // so easy
+        Ok(v)
     }
 }
 

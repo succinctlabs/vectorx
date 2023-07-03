@@ -1,4 +1,4 @@
-use std::{net::{IpAddr, Ipv6Addr, SocketAddr}, time::SystemTime};
+use std::{net::{IpAddr, Ipv6Addr, SocketAddr}};
 use clap::Parser;
 
 use futures::{future, prelude::*};

@@ -6,7 +6,12 @@ use plonky2::iop::witness::PartialWitness;
 use plonky2_field::goldilocks_field::GoldilocksField;
 use plonky2_field::types::Field;
 
-use succinct_avail_proof_generators::{step::{make_step_circuit, StepTarget}, justification::{set_precommits_pw, set_authority_set_pw}, utils::{WitnessAvailHash, WitnessEncodedHeader, QUORUM_SIZE}, plonky2_config::PoseidonBN128GoldilocksConfig};
+use succinct_avail_proof_generators::{
+    step::{make_step_circuit, StepTarget},
+    justification::{set_precommits_pw, set_authority_set_pw},
+    utils::{WitnessAvailHash, WitnessEncodedHeader, QUORUM_SIZE},
+    plonky2_config::PoseidonBN128GoldilocksConfig
+};
 
 pub const D: usize = 2;
 pub type C = PoseidonGoldilocksConfig;
@@ -118,14 +123,22 @@ pub fn generate_step_proof(
     outer_pw.set_verifier_data_target(&outer_verifier_data, &unwrapped_circuit.verifier_only);
 
 
-    let mut timing = TimingTree::new("step proof gen", Level::Info);
+    let mut timing = TimingTree::new("recursive proof gen", Level::Info);
     let outer_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&outer_data.prover_only, &outer_data.common, outer_pw.clone(), &mut timing);
     timing.print();
 
     match outer_proof {
         Ok(v) => {
-            outer_data.verify(v.clone()).unwrap();
-            return Some(v)
+            println!("Generated recursive proof");
+            let verify_res = outer_data.verify(v.clone());
+            match verify_res {
+                Ok(()) => {
+                    println!("Verified recursive proof");
+                    return Some(v)
+                }
+
+                Err(e) => println!("error verifying proof: {e:?}"),
+            }
         }
         Err(e) => println!("error parsing header: {e:?}"),
     };

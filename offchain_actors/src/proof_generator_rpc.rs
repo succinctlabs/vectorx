@@ -38,7 +38,6 @@ impl ProofGenerator for ProofGeneratorServer {
         println!("Got a step_proof request with head_block_hash: {:?}",  head_block_hash);
 
         unsafe {
-            let proof_gen_start_time = SystemTime::now();
             let step_target = STEP_TARGETS.clone().unwrap();
             let proof = generate_step_proof(
                 &STEP_CIRCUIT,

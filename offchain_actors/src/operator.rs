@@ -210,7 +210,7 @@ async fn submit_proof_gen_request(
     println!("public_inputs_hash: {:?}", public_inputs_hash);
 
     let mut context = context::current();
-    context.deadline = SystemTime::now() + Duration::from_secs(600);
+    context.deadline = SystemTime::now() + Duration::from_secs(1200);
 
     let res = plonky2_pg_client.generate_step_proof_rpc(
         context,

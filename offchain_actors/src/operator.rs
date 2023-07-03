@@ -1,6 +1,8 @@
 
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv6Addr};
+use std::os::unix::net::UnixStream;
+use std::path::Path;
 use std::time::{SystemTime, Duration};
 
 use avail_subxt::{
@@ -10,7 +12,7 @@ use avail_subxt::{
     primitives::Header
 };
 use base58::FromBase58;
-use codec::{Decode, Encode};
+use codec::{Decode, Encode, Output};
 use futures::{select, StreamExt, pin_mut};
 use pallet_grandpa::{VersionedAuthorityList, AuthorityList};
 use serde::{
@@ -224,7 +226,22 @@ async fn submit_proof_gen_request(
     ).await;
         
     match res {
-        Ok(_) => println!("Retrieved step verification proof for block: number - {:?}; hash - {:?}", justification.commit.target_number, justification.commit.target_hash),
+        Ok(proof) => {
+            println!("Retrieved step verification proof for block: number - {:?}; hash - {:?}", justification.commit.target_number, justification.commit.target_hash);
+            let proof_serialized = serde_json::to_string(&proof).unwrap();
+
+            static SOCKET_PATH: &str = "/tmp/echo.sock";
+
+            let socket = Path::new(SOCKET_PATH);
+
+            let mut stream = match UnixStream::connect(&socket) {
+                Err(_) => panic!("server is not running"),
+                Ok(stream) => stream,
+            };
+
+            // Send message
+            stream.write(proof_serialized.as_bytes());
+        },
         Err(e) => println!("{:?}", anyhow::Error::from(e)),
     }
 

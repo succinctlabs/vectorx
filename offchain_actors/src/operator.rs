@@ -1,5 +1,6 @@
 
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::net::{IpAddr, Ipv6Addr};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -230,11 +231,13 @@ async fn submit_proof_gen_request(
             println!("Retrieved step verification proof for block: number - {:?}; hash - {:?}", justification.commit.target_number, justification.commit.target_hash);
             let proof_serialized = serde_json::to_string(&proof).unwrap();
 
+            fs::write("operater.proof_with_public_inputs.json", proof_serialized.clone()).expect("Unable to write file");
+
             static SOCKET_PATH: &str = "/tmp/echo.sock";
 
             let socket = Path::new(SOCKET_PATH);
 
-            let mut stream = match UnixStream::connect(&socket) {
+            let mut stream = match UnixStream::connect(socket) {
                 Err(_) => panic!("server is not running"),
                 Ok(stream) => stream,
             };

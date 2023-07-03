@@ -97,11 +97,11 @@ impl<'a> Visitor<'a> for StringVisitor {
         formatter.write_str("a string with integer value within BN128 scalar field")
     }
 
-    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
     where
         E: Error,
     {
-        Ok(v)
+        Ok(v.to_string())
     }
 }
 
@@ -111,9 +111,7 @@ impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
     where
         D: Deserializer<'de>,
     {
-        println!("called deserialize");
-        let deserialized_str = deserializer.deserialize_str(StrVisitor);
-        println!("deserialized_str: {:?}", deserialized_str);
+        let deserialized_str = deserializer.deserialize_str(StringVisitor);
         match deserialized_str {
             Ok(deserialized_str) => {
                 let big_int = BigUint::parse_bytes(deserialized_str.as_bytes(), 10);
@@ -133,7 +131,7 @@ impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
                             _phantom: PhantomData,
                         })
                     },
-                    None => Err(de::Error::invalid_value(Unexpected::Str(deserialized_str), &"a string with integer value within BN128 scalar field")),
+                    None => Err(de::Error::invalid_value(Unexpected::Str(&deserialized_str), &"a string with integer value within BN128 scalar field")),
                 }
             },
             Err(err) => Err(err),

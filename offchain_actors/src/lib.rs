@@ -123,7 +123,10 @@ pub fn generate_step_proof(
     timing.print();
 
     match outer_proof {
-        Ok(v) => return Some(v),
+        Ok(v) => {
+            outer_data.verify(v.clone()).unwrap();
+            return Some(v)
+        }
         Err(e) => println!("error parsing header: {e:?}"),
     };
 
@@ -151,5 +154,5 @@ pub trait ProofGenerator {
         authority_set_commitment: Vec<u8>,
 
         public_inputs_hash: Vec<u8>,
-    ) -> ProofWithPublicInputs<F, C, D>;
+    ) -> ProofWithPublicInputs<F, RecC, D>;
 }

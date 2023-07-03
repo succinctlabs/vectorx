@@ -8,7 +8,7 @@ use tarpc::{
     server::{self, incoming::Incoming, Channel},
     tokio_serde::formats::Json,
 };
-use service::{Curve, C, F, D, ProofGenerator, create_step_circuit, generate_step_proof};
+use service::{Curve, C, F, D, ProofGenerator, create_step_circuit, generate_step_proof, RecC};
 use succinct_avail_proof_generators::step::StepTarget;
 
 static mut STEP_CIRCUIT: Option<CircuitData<F, C, D>> = None;
@@ -54,20 +54,6 @@ impl ProofGenerator for ProofGeneratorServer {
                 authority_set_commitment,
                 public_inputs_hash,
             );
-            let proof_gen_end_time = SystemTime::now();
-            let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();    
-            if proof.is_some() {
-                println!("proof generated - time: {:?}", proof_gen_duration);
-                let verification_res = STEP_CIRCUIT.as_ref().unwrap().verify(proof.clone().unwrap());
-                if verification_res.is_ok() {
-                    println!("proof verification succeeded");
-                } else {
-                    println!("proof verification failed");
-                }
-            } else {
-                println!("failed to generate proof");
-            }
-
             println!("\n\n\n");
 
             proof.unwrap()

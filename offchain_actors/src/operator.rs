@@ -234,8 +234,6 @@ async fn submit_proof_gen_request(
             println!("Retrieved step verification proof for block: number - {:?}; hash - {:?}", justification.commit.target_number, justification.commit.target_hash);
             let proof_serialized = serde_json::to_string(&proof).unwrap();
 
-            fs::write("operater.proof_with_public_inputs.json", proof_serialized.clone()).expect("Unable to write file");
-
             static SOCKET_PATH: &str = "/tmp/echo.sock";
 
             let socket = Path::new(SOCKET_PATH);
@@ -247,10 +245,12 @@ async fn submit_proof_gen_request(
 
             // Send message
             stream.write(proof_serialized.as_bytes());
+            println!("Sent proof to gnark prover");
 
             // Read the returned generated groth16 proof.  Should be 256 bytes long.  There should also be a EOF charater.
             let mut proof_bytes = Vec::new();
             let bytes_read = stream.read_to_end(&mut proof_bytes).unwrap();
+            println!("Received proof from gnark prover: {:?}", proof_bytes);
             assert!(bytes_read == 257);
 
             let fp_size = 32;

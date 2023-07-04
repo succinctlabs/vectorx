@@ -239,15 +239,15 @@ async fn submit_proof_gen_request(
             let mut stream = UnixStream::connect(socket).unwrap();
 
             stream.write(proof_serialized.as_bytes());
+            stream.write(hex::decode("1e").unwrap().as_slice());
             println!("Sent proof to gnark prover");
             // Write the character "Record Separater" to indicate the end of the proof
-            stream.write(hex::decode("1e").unwrap().as_slice());
 
 
             let mut proof_bytes = Vec::new();
             let bytes_read = stream.read_to_end(&mut proof_bytes).unwrap();
             println!("Received proof from gnark prover: {:?}", proof_bytes);
-            assert!(bytes_read == 257);
+            assert!(bytes_read == 256);
 
             // Read the returned generated groth16 proof.  Should be 256 bytes long.  There should also be a EOF charater.
             let fp_size = 32;

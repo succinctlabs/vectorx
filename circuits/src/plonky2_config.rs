@@ -4,7 +4,7 @@ use std::{io::BufReader, marker::PhantomData, error::Error};
 use num::BigUint;
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
 use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension, types::Field};
-use serde::{Serialize, Deserialize, Serializer, Deserializer, de::{Visitor, self, Unexpected}};
+use serde::{Serialize, Deserialize, Serializer, Deserializer, de::Visitor};
 
 use ff::{PrimeField, PrimeFieldRepr, Field as ff_Field};
 

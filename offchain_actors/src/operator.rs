@@ -1,8 +1,6 @@
-
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::io::Read;
-use std::net::{IpAddr, Ipv6Addr};
+use std::net::{IpAddr, Ipv6Addr, Shutdown};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::{SystemTime, Duration};
@@ -238,21 +236,28 @@ async fn submit_proof_gen_request(
 
             let socket = Path::new(SOCKET_PATH);
 
-            let mut stream = match UnixStream::connect(socket) {
-                Err(_) => panic!("server is not running"),
-                Ok(stream) => stream,
+            if let Ok(mut write_stream) = UnixStream::connect(socket) {
+                // Send message
+                write_stream.write(proof_serialized.as_bytes());
+                println!("Sent proof to gnark prover");
+
+                // Shutdown Write so that an EOF is sent to the server.
+                write_stream.shutdown(Shutdown::Write).unwrap();
+            } else {
+                panic!("server is not running");
             };
 
-            // Send message
-            stream.write(proof_serialized.as_bytes());
-            println!("Sent proof to gnark prover");
+            let mut proof_bytes = Vec::new();
+            if let Ok(mut read_stream) = UnixStream::connect(socket) {
+                let bytes_read = read_stream.read_to_end(&mut proof_bytes).unwrap();
+                println!("Received proof from gnark prover: {:?}", proof_bytes);
+                assert!(bytes_read == 257);
+                read_stream.shutdown(Shutdown::Read).unwrap();
+            } else {
+                panic!("server is not running");
+            };
 
             // Read the returned generated groth16 proof.  Should be 256 bytes long.  There should also be a EOF charater.
-            let mut proof_bytes = Vec::new();
-            let bytes_read = stream.read_to_end(&mut proof_bytes).unwrap();
-            println!("Received proof from gnark prover: {:?}", proof_bytes);
-            assert!(bytes_read == 257);
-
             let fp_size = 32;
             let a_0 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[0 .. fp_size]);
             let a_1 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size .. fp_size*2]);

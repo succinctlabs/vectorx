@@ -236,26 +236,18 @@ async fn submit_proof_gen_request(
 
             let socket = Path::new(SOCKET_PATH);
 
-            if let Ok(mut write_stream) = UnixStream::connect(socket) {
-                // Send message
-                write_stream.write(proof_serialized.as_bytes());
-                println!("Sent proof to gnark prover");
+            let mut stream = UnixStream::connect(socket).unwrap();
 
-                // Shutdown Write so that an EOF is sent to the server.
-                write_stream.shutdown(Shutdown::Write).unwrap();
-            } else {
-                panic!("server is not running");
-            };
+            stream.write(proof_serialized.as_bytes());
+            println!("Sent proof to gnark prover");
+            // Write the character "Record Separater" to indicate the end of the proof
+            stream.write(hex::decode("1e").unwrap().as_slice());
+
 
             let mut proof_bytes = Vec::new();
-            if let Ok(mut read_stream) = UnixStream::connect(socket) {
-                let bytes_read = read_stream.read_to_end(&mut proof_bytes).unwrap();
-                println!("Received proof from gnark prover: {:?}", proof_bytes);
-                assert!(bytes_read == 257);
-                read_stream.shutdown(Shutdown::Read).unwrap();
-            } else {
-                panic!("server is not running");
-            };
+            let bytes_read = stream.read_to_end(&mut proof_bytes).unwrap();
+            println!("Received proof from gnark prover: {:?}", proof_bytes);
+            assert!(bytes_read == 257);
 
             // Read the returned generated groth16 proof.  Should be 256 bytes long.  There should also be a EOF charater.
             let fp_size = 32;

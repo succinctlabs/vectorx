@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
-use std::net::{IpAddr, Ipv6Addr, Shutdown};
+use std::net::{IpAddr, Ipv6Addr};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{SystemTime, Duration};
 
 use avail_subxt::{
@@ -13,6 +14,9 @@ use avail_subxt::{
 };
 use base58::FromBase58;
 use codec::{Decode, Encode, Output};
+use ethers::prelude::abigen;
+use ethers::providers::Provider;
+use ethers::types::Address;
 use futures::{select, StreamExt, pin_mut};
 use num::BigInt;
 use num::bigint::Sign;
@@ -21,7 +25,7 @@ use serde::{
     de::Error,
     Deserialize
 };
-use service::ProofGeneratorClient;
+use service::{ProofGeneratorClient, F};
 use sp_core::{
 	bytes,
 	ed25519::{self, Public as EdPublic, Signature},
@@ -121,6 +125,31 @@ async fn get_authority_set(c: &OnlineClient<AvailConfig>, block_hash: H256) -> (
     (decoded_authority_set, authority_set_commitment.as_bytes().to_vec())
 }
 
+abigen!(
+    LightClient,
+    "../contracts/out/LightClient.sol/LightClient.json",
+);
+
+async fn submit_step_txn(
+    /*a: [BigInt; 2],
+    b_0: [BigInt; 2],
+    b_1: [BigInt; 2],
+    c: [BigInt; 2],
+    public_inputs: Vec<F>,*/
+) {
+    const RPC_URL: &str = "http://127.0.0.1:8545";
+    const LC_ADDRESS: &str = "0x5fbdb2315678afecb367f032d93f642f64180aa3";
+    let provider = Provider::try_from(RPC_URL).unwrap();
+    let client = Arc::new(provider);
+
+    let address: Address = LC_ADDRESS.parse().unwrap();
+    let contract = LightClient::new(address, client);
+
+    if let Ok(head) = contract.head().call().await {
+        println!("Head is {head:?}");
+    }
+}
+
 async fn submit_proof_gen_request(
     plonky2_pg_client: &ProofGeneratorClient,
     head_block_num: u32,
@@ -210,6 +239,10 @@ async fn submit_proof_gen_request(
     println!("authority_set_commitment: {:?}", authority_set_commitment);
     println!("public_inputs_hash: {:?}", public_inputs_hash);
 
+    submit_step_txn().await;
+
+    /*
+
     let mut context = context::current();
     context.deadline = SystemTime::now() + Duration::from_secs(1200);
 
@@ -246,7 +279,6 @@ async fn submit_proof_gen_request(
 
             let mut proof_bytes = Vec::new();
             let bytes_read = stream.read_to_end(&mut proof_bytes).unwrap();
-            println!("Received proof from gnark prover: {:?}", proof_bytes);
             assert!(bytes_read == 256);
 
             // Read the returned generated groth16 proof.  Should be 256 bytes long.  There should also be a EOF charater.
@@ -272,9 +304,17 @@ async fn submit_proof_gen_request(
             println!("c[1] is {:?}", c_1.to_string());
 
             println!("Received proof from server: {:?}", proof);
+
+            let a = [a_0, a_1];
+            let b_0 = [b_0_0, b_0_1];
+            let b_1 = [b_1_0, b_1_1];
+            let c = [c_0, c_1];
+
+            submit_step_txn(a, b_0, b_1, c, proof.public_inputs).await;
         },
         Err(e) => println!("{:?}", anyhow::Error::from(e)),
     }
+    */
 
     println!("\n\n\n");
 }

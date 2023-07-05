@@ -165,15 +165,15 @@ async fn submit_step_txn(
     let address: Address = LC_ADDRESS.parse().unwrap();
     let contract = LightClient::new(address, client.into());
 
-    if let Ok(head) = contract.step(
+    let a = contract.step(
         Step {
             headers,
             authority_set_id_proof: authority_set_id,
             proof
         }
-    ).send().await {
-        println!("Head is {head:?}");
-    }
+    ).send().await.unwrap().await.unwrap();
+
+    println!("Called step() at tx hash: {:?}", a);
 }
 
 fn to_u64_limbs(x: &BigInt) -> [u64; 4] {
@@ -337,8 +337,6 @@ async fn submit_proof_gen_request(
 
             println!("c[0] is {:?}", c_0.to_string());
             println!("c[1] is {:?}", c_1.to_string());
-
-            println!("Received proof from server: {:?}", proof);
 
             Some(Groth16Proof {
                 a: [

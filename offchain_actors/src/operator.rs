@@ -3,20 +3,21 @@ use std::io::Read;
 use std::net::{IpAddr, Ipv6Addr};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
-use std::sync::Arc;
 use std::time::{SystemTime, Duration};
 
 use avail_subxt::{
     api,
     AvailConfig,
     build_client,
-    primitives::Header
+    primitives::Header as AvailHeader,
 };
 use base58::FromBase58;
 use codec::{Decode, Encode, Output};
-use ethers::prelude::abigen;
+use ethers::prelude::{abigen, SignerMiddleware};
 use ethers::providers::Provider;
+use ethers::signers::{LocalWallet};
 use ethers::types::Address;
+use ethers_core::types::Bytes;
 use futures::{select, StreamExt, pin_mut};
 use num::BigInt;
 use num::bigint::Sign;
@@ -25,13 +26,15 @@ use serde::{
     de::Error,
     Deserialize
 };
-use service::{ProofGeneratorClient, F};
+use service::ProofGeneratorClient;
+use sp_core::twox_128;
 use sp_core::{
 	bytes,
 	ed25519::{self, Public as EdPublic, Signature},
     H256,
 	Pair,
 };
+use subxt::storage::StorageKey;
 use subxt::{
     config::{Hasher, Header as SPHeader},
     OnlineClient,
@@ -83,7 +86,7 @@ pub struct Commit {
 pub struct GrandpaJustification {
     pub round: u64,
     pub commit: Commit,
-    pub votes_ancestries: Vec<Header>,
+    pub votes_ancestries: Vec<AvailHeader>,
 }
 
 impl<'de> Deserialize<'de> for GrandpaJustification {
@@ -106,7 +109,22 @@ pub enum SignerMessage {
     PrecommitMessage(Precommit),
 }
 
-async fn get_authority_set(c: &OnlineClient<AvailConfig>, block_hash: H256) -> (Vec<Vec<u8>>, Vec<u8>) {
+async fn get_authority_set(c: &OnlineClient<AvailConfig>, block_hash: H256) -> (u64, Vec<Vec<u8>>, Vec<Vec<u8>>, Vec<u8>) {
+    // Construct the storage key for the current set id
+    let mut epoch_index_storage_key = twox_128(b"Grandpa").to_vec();
+    epoch_index_storage_key.extend(twox_128(b"CurrentSetId").to_vec());
+    let sk = StorageKey(epoch_index_storage_key);
+    let keys = [sk.0.as_slice()];
+    let data = c.rpc().storage(keys[0], Some(block_hash)).await.unwrap().unwrap();
+    let auth_set_id = u64::from_be_bytes(data.0.as_slice().try_into().unwrap());
+
+    // Get the MP for that current set id
+    let auth_set_id_proof = c.rpc().read_proof(keys, Some(block_hash)).await.unwrap();
+    let mut proof_bytes = Vec::new();
+    for i in 0..auth_set_id_proof.proof.len() {
+        proof_bytes.push(auth_set_id_proof.proof[i].0.clone());
+    }
+
     let grandpa_authorities_bytes = c.storage().at(Some(block_hash)).await.unwrap().fetch_raw(b":grandpa_authorities").await.unwrap().unwrap();
     let grandpa_authorities = VersionedAuthorityList::decode(&mut grandpa_authorities_bytes.as_slice()).unwrap();
     let authority_list:AuthorityList = grandpa_authorities.into();
@@ -122,7 +140,7 @@ async fn get_authority_set(c: &OnlineClient<AvailConfig>, block_hash: H256) -> (
     let hash_input = decoded_authority_set.clone().into_iter().flatten().collect::<Vec<_>>();
     let authority_set_commitment = avail_subxt::config::substrate::BlakeTwo256::hash(&hash_input);
 
-    (decoded_authority_set, authority_set_commitment.as_bytes().to_vec())
+    (auth_set_id, proof_bytes, decoded_authority_set, authority_set_commitment.as_bytes().to_vec())
 }
 
 abigen!(
@@ -131,35 +149,56 @@ abigen!(
 );
 
 async fn submit_step_txn(
-    /*a: [BigInt; 2],
-    b_0: [BigInt; 2],
-    b_1: [BigInt; 2],
-    c: [BigInt; 2],
-    public_inputs: Vec<F>,*/
+    headers: Vec<Header>,
+    authority_set_id: AuthoritySetIDProof,
+    proof: Groth16Proof,
 ) {
-    const RPC_URL: &str = "http://127.0.0.1:8545";
+    const RPC_URL: &str = "http://127.0.0.1:8546";
     const LC_ADDRESS: &str = "0x5fbdb2315678afecb367f032d93f642f64180aa3";
+
+    let wallet: LocalWallet = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+        .parse::<LocalWallet>().unwrap();
+
     let provider = Provider::try_from(RPC_URL).unwrap();
-    let client = Arc::new(provider);
+    let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
     let address: Address = LC_ADDRESS.parse().unwrap();
-    let contract = LightClient::new(address, client);
+    let contract = LightClient::new(address, client.into());
 
-    if let Ok(head) = contract.head().call().await {
+    if let Ok(head) = contract.step(
+        Step {
+            headers,
+            authority_set_id_proof: authority_set_id,
+            proof
+        }
+    ).send().await {
         println!("Head is {head:?}");
     }
+}
+
+fn to_u64_limbs(x: &BigInt) -> [u64; 4] {
+    let (sign, digits) = x.to_u64_digits();
+    assert!(sign == Sign::Plus);
+    assert!(digits.len() <= 4);
+
+    let mut limbs = [0u64; 4];
+    for (i, d) in digits.iter().enumerate() {
+        limbs[i] = *d;
+    }
+
+    limbs
 }
 
 async fn submit_proof_gen_request(
     plonky2_pg_client: &ProofGeneratorClient,
     head_block_num: u32,
     head_block_hash: H256,
-    headers: Vec<Header>,
+    headers: &Vec<AvailHeader>,
     justification: GrandpaJustification,
     authority_set_id: u64,
     authority_set: Vec<Vec<u8>>,
     authority_set_commitment: Vec<u8>,
-) {
+) -> Option<Groth16Proof> {        
     println!("Generate justification for block number: {:?}", justification.commit.target_number);
 
     // First scale encode the headers
@@ -239,10 +278,6 @@ async fn submit_proof_gen_request(
     println!("authority_set_commitment: {:?}", authority_set_commitment);
     println!("public_inputs_hash: {:?}", public_inputs_hash);
 
-    submit_step_txn().await;
-
-    /*
-
     let mut context = context::current();
     context.deadline = SystemTime::now() + Duration::from_secs(1200);
 
@@ -305,23 +340,38 @@ async fn submit_proof_gen_request(
 
             println!("Received proof from server: {:?}", proof);
 
-            let a = [a_0, a_1];
-            let b_0 = [b_0_0, b_0_1];
-            let b_1 = [b_1_0, b_1_1];
-            let c = [c_0, c_1];
-
-            submit_step_txn(a, b_0, b_1, c, proof.public_inputs).await;
+            Some(Groth16Proof {
+                a: [
+                    ethers_core::types::U256(to_u64_limbs(&a_0)),
+                    ethers_core::types::U256(to_u64_limbs(&a_1)),
+                ],
+                b: [
+                    [
+                        ethers_core::types::U256(to_u64_limbs(&b_0_0)),
+                        ethers_core::types::U256(to_u64_limbs(&b_0_1)),
+                    ],
+                    [
+                        ethers_core::types::U256(to_u64_limbs(&b_1_0)),
+                        ethers_core::types::U256(to_u64_limbs(&b_1_1)),
+                    ],
+                   ],
+                c: [
+                    ethers_core::types::U256(to_u64_limbs(&c_0)),
+                    ethers_core::types::U256(to_u64_limbs(&c_1)),
+                   ],
+            })
         },
-        Err(e) => println!("{:?}", anyhow::Error::from(e)),
+        Err(e) => {
+            println!("{:?}", anyhow::Error::from(e));
+            None
+        }
     }
-    */
 
-    println!("\n\n\n");
 }
 
 
 async fn main_loop(
-    header_sub : Subscription<Header>,
+    header_sub : Subscription<AvailHeader>,
     justification_sub : Subscription<GrandpaJustification>,
     c: OnlineClient<AvailConfig>,
     plonky2_pg_client: ProofGeneratorClient,
@@ -399,7 +449,7 @@ async fn main_loop(
             // Need to get the set id at the previous block
             let previous_hash: H256 = headers.get(&(just_block_num)).unwrap().parent_hash;
             let set_id = c.storage().at(Some(previous_hash)).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap();
-            let (authority_set, authority_set_commitment) = get_authority_set(&c, previous_hash).await;
+            let (auth_set_id, auth_set_id_proof, authority_set, authority_set_commitment) = get_authority_set(&c, previous_hash).await;
 
             // Form a message which is signed in the justification
             let signed_message = Encode::encode(&(
@@ -437,15 +487,34 @@ async fn main_loop(
                 unwrapped_just.commit.target_number,
             );
 
-            submit_proof_gen_request(
+            let proof = submit_proof_gen_request(
                 &plonky2_pg_client,
                 last_processed_block_num.unwrap(),
                 last_processed_block_hash.unwrap(),
-                header_batch,
+                &header_batch,
                 justification_to_process.unwrap(),
                 set_id,
                 authority_set,
                 authority_set_commitment,
+            ).await;
+
+            let headers_md = header_batch.iter()
+                .map(|h|
+                    Header {
+                        block_number: h.number,
+                        header_hash: h.hash().0,
+                        state_root: h.state_root.0,
+                        data_root: h.data_root().0,
+                    })
+                .collect::<Vec<_>>();
+
+            submit_step_txn(
+                headers_md,
+                AuthoritySetIDProof {
+                    authority_set_id: auth_set_id,
+                    merkle_proof: auth_set_id_proof.into_iter().map(Bytes::from).collect::<Vec<_>>(),
+                },
+                proof.unwrap(),
             ).await;
 
             last_processed_block_num = Some(unwrapped_just.commit.target_number);
@@ -471,7 +540,7 @@ pub async fn main() {
 
     // TODO:  Will need to sync the chain first
 
-    let header_sub: subxt::rpc::Subscription<Header> = t
+    let header_sub: subxt::rpc::Subscription<AvailHeader> = t
     .subscribe(
         "chain_subscribeFinalizedHeads",
         RpcParams::new(),

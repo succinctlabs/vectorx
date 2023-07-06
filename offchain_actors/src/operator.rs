@@ -19,7 +19,6 @@ use ethers::signers::{LocalWallet};
 use ethers::types::Address;
 use ethers_core::types::Bytes;
 use futures::{select, StreamExt, pin_mut};
-use hex::ToHex;
 use num::BigInt;
 use num::bigint::Sign;
 use pallet_grandpa::{VersionedAuthorityList, AuthorityList};
@@ -117,7 +116,7 @@ async fn get_authority_set(c: &OnlineClient<AvailConfig>, block_hash: H256) -> (
     let sk = StorageKey(epoch_index_storage_key);
     let keys = [sk.0.as_slice()];
     let data = c.rpc().storage(keys[0], Some(block_hash)).await.unwrap().unwrap();
-    let auth_set_id = u64::from_be_bytes(data.0.as_slice().try_into().unwrap());
+    let auth_set_id = u64::from_le_bytes(data.0.as_slice().try_into().unwrap());
 
     // Get the MP for that current set id
     let auth_set_id_proof = c.rpc().read_proof(keys, Some(block_hash)).await.unwrap();

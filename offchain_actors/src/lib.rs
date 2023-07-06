@@ -116,7 +116,7 @@ pub fn generate_step_proof(
     let outer_verifier_data = outer_builder.add_virtual_verifier_data(unwrapped_circuit.common.config.fri_config.cap_height);
     outer_builder.verify_proof::<C>(&outer_proof_target, &outer_verifier_data, &unwrapped_circuit.common);
     outer_builder.register_public_inputs(&outer_proof_target.public_inputs);
-    //outer_builder.register_public_inputs(&outer_verifier_data.circuit_digest.elements);
+    outer_builder.register_public_inputs(&outer_verifier_data.circuit_digest.elements);
 
     let outer_data = outer_builder.build::<PoseidonBN128GoldilocksConfig>();
 

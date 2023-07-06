@@ -236,7 +236,7 @@ contract StepVerifier {
         uint256[2] memory a,
         uint256[2][2] memory b,
         uint256[2] memory c,
-        uint256[36] memory input
+        uint256[32] memory input
     ) public view returns (bool r) {
 
         Proof memory proof;
@@ -408,6 +408,7 @@ contract StepVerifier {
         mul_input[1] = uint256(12633626570060742850094541876547026504848613206784939052064532742263726469974); // vk.K[32].Y
         mul_input[2] = input[31];
         accumulate(mul_input, q, add_input, vk_x); // vk_x += vk.K[32] * input[31]
+        /*
         mul_input[0] = uint256(21860411913159779884223359910788935168421866288170907837208167889668509946865); // vk.K[33].X
         mul_input[1] = uint256(1223937381811023846815945905528732032460401418010055897079302078272460677009); // vk.K[33].Y
         mul_input[2] = input[32];
@@ -424,6 +425,7 @@ contract StepVerifier {
         mul_input[1] = uint256(15049053490273871787821877854329626856017398996182451223938306970706032373127); // vk.K[36].Y
         mul_input[2] = input[35];
         accumulate(mul_input, q, add_input, vk_x); // vk_x += vk.K[36] * input[35]
+        */
 
         return Pairing.pairing(
             Pairing.negate(proof.A),

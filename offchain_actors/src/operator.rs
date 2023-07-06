@@ -276,15 +276,17 @@ async fn submit_proof_gen_request(
 
     // Calculate public_inputs_hash
     let mut public_inputs_hash = Vec::new();
+    /*
     public_inputs_hash.extend(&head_block_hash.0);
     public_inputs_hash.extend(head_block_num.to_be_bytes());
     public_inputs_hash.extend(authority_set_commitment.0);
     public_inputs_hash.extend(authority_set_id.to_be_bytes());
+    */
     for header in headers.iter() {
         public_inputs_hash.extend(header.state_root.0);
         public_inputs_hash.extend(header.hash().0);
     }
-    assert!(public_inputs_hash.len() == 396);
+    assert!(public_inputs_hash.len() == 320);
 
     let public_inputs_hash = avail_subxt::config::substrate::BlakeTwo256::hash(&public_inputs_hash);
 

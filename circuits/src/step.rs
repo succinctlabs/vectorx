@@ -641,7 +641,7 @@ mod tests {
         let head_block_hash = hex::decode("36739e6b78e979fa79bbd262aa39074bfe787ef898cf5c49495f6be622013923").unwrap();
         let head_block_num = 100555;
 
-        let public_inputs_hash = hex::decode("d28e3a69ea8b7a4994f1fc1db914cc2d91e84275fd5c0f573dd2756d5c6df18b").unwrap();
+        let public_inputs_hash = hex::decode("89cf29ce5b994234fcfdc50385324a82feff373fd7895c3bd6440b510c952e8a").unwrap();
 
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
@@ -754,7 +754,7 @@ mod tests {
         assert_eq!(
             outer_proof.public_inputs[0..32].iter()
             .map(|element| u8::try_from(element.to_canonical_u64()).unwrap()).collect::<Vec<_>>(),
-            hex::decode("d28e3a69ea8b7a4994f1fc1db914cc2d91e84275fd5c0f573dd2756d5c6df18b").unwrap(),
+            hex::decode("89cf29ce5b994234fcfdc50385324a82feff373fd7895c3bd6440b510c952e8a").unwrap(),
         );
 
         /*  TODO:  It appears that the circuit digest changes after every different run, even if none of the code changes.  Need to find out why.

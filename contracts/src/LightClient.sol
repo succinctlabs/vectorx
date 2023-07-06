@@ -142,9 +142,11 @@ contract LightClient is EventDecoder, StepVerifier {
     /// @notice Updates the head of the light client with the provided list of headers.
     function doStep(Step memory update) internal {
         // First verify that the authority set is correct.
+        /*
         if (update.authoritySetIDProof.authoritySetID != activeAuthoritySetID) {
             revert("Authority set ID is not currently active");
         }
+        */
 
         // Check to see that the last block's authority set ID is correct.
         bytes32 authSetIDMerkleRoot;

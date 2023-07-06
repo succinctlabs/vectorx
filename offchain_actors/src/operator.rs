@@ -19,6 +19,7 @@ use ethers::signers::{LocalWallet};
 use ethers::types::Address;
 use ethers_core::types::Bytes;
 use futures::{select, StreamExt, pin_mut};
+use hex::ToHex;
 use num::BigInt;
 use num::bigint::Sign;
 use pallet_grandpa::{VersionedAuthorityList, AuthorityList};
@@ -164,6 +165,34 @@ async fn submit_step_txn(
 
     let address: Address = LC_ADDRESS.parse().unwrap();
     let contract = LightClient::new(address, client.into());
+
+    let mut header_data = Vec::new();
+    for header in headers.iter() {
+        let header_hash_hex = hex::encode(header.header_hash.as_slice());
+        let state_root_hex = hex::encode(header.state_root.as_slice());
+        let data_root_hex = hex::encode(header.data_root.as_slice());
+        header_data.push(format!("{:?},{:?},{:?},{:?}", header.block_number, header_hash_hex, state_root_hex, data_root_hex));
+    }
+
+    let all_headers_str = header_data.join(",");
+    let authority_set_str = format!(
+        "({:?},{:?})",
+        authority_set_id.authority_set_id,
+        authority_set_id.merkle_proof.iter().map(|x| hex::encode(x.0.to_vec().as_slice())).collect::<Vec<_>>().join(","));
+    let proof_str = format!(
+        "([{:?},{:?}],[[{:?},{:?}],[{:?},{:?}]],[{:?},{:?}])",
+        proof.a[0].to_string(),
+        proof.a[1].to_string(),
+        proof.b[0][0].to_string(),
+        proof.b[0][1].to_string(),
+        proof.b[1][0].to_string(),
+        proof.b[1][1].to_string(),
+        proof.c[0].to_string(),
+        proof.c[1].to_string(),
+    );
+
+    let cast_cmd = format!("cast send 0xe7f1725e7734ce288f8367e1bb143e90bb3f0512 \"step((uint32, bytes32, bytes32, bytes32)[],(uint64, bytes[]),(uint256[2],uint256[2][2],uint256[2])\" ([{:?}],{:?},{:?})", all_headers_str, authority_set_str, proof_str);
+    println!("cast_cmd: {:?}", cast_cmd);
 
     let a = contract.step(
         Step {
@@ -557,47 +586,4 @@ pub async fn main() {
         .unwrap();
 
     main_loop(header_sub, justification_sub, c, plonky2_pg_client).await;
-}
-
-#[cfg(test)]
-mod tests {
-    use subxt::config::Hasher;
-
-    #[test]
-    fn calculate_public_inputs_hash() {
-        let head_block_hash = hex::decode("36739e6b78e979fa79bbd262aa39074bfe787ef898cf5c49495f6be622013923").unwrap();
-        let head_block_num:u32 = 100555;
-        let authority_set_commitment = hex::decode("8e6866fa26ff254cdb0c2d7adf78b551a108770400317886aeb22f90556edeb9").unwrap();
-        let authority_set_id:u64 = 94;
-        let header_state_roots = [
-            hex::decode("7e725e17a2824747374272517d14cd1107348713a2afc7708cf9761f64caa75b").unwrap(),
-            hex::decode("f26477aaf1f897dd07991c889630a25777aff7153f8da7cb1c203143ef453283").unwrap(),
-            hex::decode("8c1821b27dc70b11b5352712c4e524c8f70a9f0d90400521f62757c451b6c157").unwrap(),
-            hex::decode("8358f7cc9ffd58e91f3d9e050a564a41fe7e52857f09eb317578ab22668e4320").unwrap(),
-            hex::decode("b24df025ad5e9f95a4f8b3b9cbdd49839ad8ee21e89b3529f7ace6be0197c06e").unwrap(),
-        ].to_vec();
-        let header_hashes = [
-            hex::decode("6ec84c7c494b000315aa07792ac983ad4ad135ca9b932487c2f58b75d808b8aa").unwrap(),
-            hex::decode("40c3b65cc716265384c1e136f9e976721439e34ba22c83353719c1ec38bbf886").unwrap(),
-            hex::decode("707c276a2ea559be9f6779d4daebce37ae97f246c5a38d7da74b1d1484f37d4e").unwrap(),
-            hex::decode("a7ea0a59bc554b761d084ea8d927d4d5e19a7c511fc02a66ce8b4d00739881e1").unwrap(),
-            hex::decode("dde2fa0b5c0694a26c9d1638bc9a0be2af855e71ad12c5723258e07edd891cc1").unwrap(),
-        ].to_vec();
-
-        let mut public_inputs_hash = Vec::new();
-        public_inputs_hash.extend(head_block_hash);
-        public_inputs_hash.extend(head_block_num.to_be_bytes());
-        public_inputs_hash.extend(authority_set_commitment);
-        public_inputs_hash.extend(authority_set_id.to_be_bytes());
-        for i in 0..header_state_roots.len() {
-            public_inputs_hash.extend(header_state_roots[i].clone());
-            public_inputs_hash.extend(header_hashes[i].clone());
-        }
-
-        let hash = avail_subxt::config::substrate::BlakeTwo256::hash(&public_inputs_hash);
-
-        println!("public_inputs_hash: {:?}", public_inputs_hash);
-        println!("hash: {:?}", hash);
-    }
-
 }

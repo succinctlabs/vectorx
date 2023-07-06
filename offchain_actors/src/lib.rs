@@ -49,6 +49,8 @@ pub fn create_step_circuit() -> (CircuitData<GoldilocksField, C, D>, StepTarget<
     let grandpa_justif_targets = make_step_circuit::<GoldilocksField, D, Curve>(&mut builder);
     let grandpa_justif_circuit = builder.build::<C>();
 
+    println!("inner step circuit digest is {:?}", grandpa_justif_circuit.verifier_only.circuit_digest);
+
     (grandpa_justif_circuit, grandpa_justif_targets)
 }
 

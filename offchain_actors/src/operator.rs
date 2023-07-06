@@ -34,6 +34,7 @@ use sp_core::{
     H256,
 	Pair,
 };
+use structopt::StructOpt;
 use subxt::storage::StorageKey;
 use subxt::{
     config::{Hasher, Header as SPHeader},
@@ -149,12 +150,12 @@ abigen!(
 );
 
 async fn submit_step_txn(
+    lc_address: Address,
     headers: Vec<Header>,
     authority_set_id: AuthoritySetIDProof,
     proof: Groth16Proof,
 ) {
     const RPC_URL: &str = "http://127.0.0.1:8546";
-    const LC_ADDRESS: &str = "0x5fbdb2315678afecb367f032d93f642f64180aa3";
 
     let wallet: LocalWallet = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
         .parse::<LocalWallet>().unwrap();
@@ -162,8 +163,7 @@ async fn submit_step_txn(
     let provider = Provider::try_from(RPC_URL).unwrap();
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
-    let address: Address = LC_ADDRESS.parse().unwrap();
-    let contract = LightClient::new(address, client.into());
+    let contract = LightClient::new(lc_address, client.into());
 
     let mut header_data = Vec::new();
     for header in headers.iter() {
@@ -398,12 +398,12 @@ async fn submit_proof_gen_request(
 
 }
 
-
 async fn main_loop(
     header_sub : Subscription<AvailHeader>,
     justification_sub : Subscription<GrandpaJustification>,
     c: OnlineClient<AvailConfig>,
     plonky2_pg_client: ProofGeneratorClient,
+    lc_address: Address,
 ) {
     let fused_header_sub = header_sub.fuse();
     let fused_justification_sub = justification_sub.fuse();
@@ -538,6 +538,7 @@ async fn main_loop(
                 .collect::<Vec<_>>();
 
             submit_step_txn(
+                lc_address,
                 headers_md,
                 AuthoritySetIDProof {
                     authority_set_id: auth_set_id,
@@ -553,8 +554,18 @@ async fn main_loop(
     }
 }
 
+#[derive(Debug, StructOpt)]
+#[structopt(name = "Operator", about = "Operator for Succinct Lab's Avail Light Client")]
+struct Opt {
+    // The address of the Light Client
+    #[structopt(long = "light-client-address")]
+    lc_address: Address,
+}
+
 #[tokio::main]
 pub async fn main() {
+    let opt = Opt::from_args();
+
     let plonky2_pg_server_addr = (IpAddr::V6(Ipv6Addr::LOCALHOST), 52357);
 
     let mut transport = tarpc::serde_transport::tcp::connect(plonky2_pg_server_addr, Json::default);
@@ -587,5 +598,5 @@ pub async fn main() {
         .await
         .unwrap();
 
-    main_loop(header_sub, justification_sub, c, plonky2_pg_client).await;
+    main_loop(header_sub, justification_sub, c, plonky2_pg_client, opt.lc_address).await;
 }

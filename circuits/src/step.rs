@@ -37,6 +37,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         // Need to store each byte as BE bits
         let mut public_inputs_hash_input = Vec::new();
 
+        /*
         // Input the head hash into the public inputs hasher
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(subchain.head_block_hash.0[i], 8);
@@ -62,6 +63,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let mut set_id_bits = self.split_le(authority_set_signers.set_id, 64);
         set_id_bits.reverse();
         public_inputs_hash_input.append(&mut set_id_bits);
+        */
 
         // We plan to store the the calculated blake2b hash (in bits) in calculated_hashes
         let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();

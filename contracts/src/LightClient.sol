@@ -225,17 +225,19 @@ contract LightClient is EventDecoder, StepVerifier {
 
         bytes memory hashInput;
         // Add the head num and hash authority set commitment, and validator set id
-        hashInput = bytes.concat(
+        /* hashInput = bytes.concat(
             headerHashes[head],
             bytes4(head),
             authoritySetCommitments[activeAuthoritySetID],
             bytes8(activeAuthoritySetID)
-        );
+        );*/
+
+        hashInput = bytes.concat();
 
         // For 20 headers, add the following
         // 1) header state root
         // 2) header block hash
-        for (uint8 i = 0; i < 20; i++) {
+        for (uint8 i = 0; i < 5; i++) {
             hashInput = bytes.concat(
                 hashInput,
                 headers[i].stateRoot,
@@ -250,10 +252,12 @@ contract LightClient is EventDecoder, StepVerifier {
         }
 
         // Add in the plonky2 step circuit digest
+        /*
         inputs[32] = 1895208834164555013;
         inputs[33] = 2560654618150967567;
         inputs[34] = 13397720476573028645;
         inputs[35] = 9207079182691300970;
+        */
 
         require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }

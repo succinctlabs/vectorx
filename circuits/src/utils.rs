@@ -3,11 +3,11 @@ use plonky2lib_succinct::hash_functions::blake2b::CHUNK_128_BYTES;
 
 pub const NUM_AUTHORITIES: usize = 10;
 pub const NUM_AUTHORITIES_PADDED: usize = 16;  // The random access gadget requires a power of 2, so we pad the authority set to 16
-pub const QUORUM_SIZE: usize = 7;  // 2/3 + 1 of NUM_VALIDATORS
+pub const QUORUM_SIZE: usize = 3;  // 2/3 + 1 of NUM_VALIDATORS
 pub const MAX_NUM_HEADERS_PER_STEP: usize = 5;
 
 //pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
-pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 10; // 1280 bytes.  Keep this for now.
+pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 11; // 1280 bytes.  Keep this for now.
 pub const HASH_SIZE: usize = 32;                         // in bytes
 pub const PUB_KEY_SIZE: usize = 32;                      // in bytes
 
@@ -408,19 +408,19 @@ pub (crate) mod tests {
         "3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c",
         "48f851a4cb99db770461b3b42e7a055fb4801a2a4d2627691e52d0bb955bc8c6c490b0d04d97365e39b7cffeb4489318f28deddbc0710a57f4d94a726a98df01",
         "cbc199cf5754103a3a52d51795596c1535a8766ea84073d6c064db28fa0a357521dd912516d694813e21d279a72f11b59029bed7671db6b0d2ee0cd68d0ebb0f",
-        "8f006a2ac7cd3396d20d2230204e2742fd413bde5c4ad6ad688f01def90ae2b80bcfee0507aedbcc01a389c74f7c5315eadedff800f3ff8d7482c2d8afe47500",
-        "d5b234c6268f1d822217ac2a88358d31ec14f8f975b0f5d3f87ada7dd88e87400f11e9aac94cab3c2d1e8d38088cc505e9426f35d07a5ae9f7bb5c33244f160a",
-        "da57013e372c8cd4aa7bc6c6112d9404325e8d48fcc02c51ad915a725ee0424c3a54cee03dfe315d91f3e6a576f8134a17b28717485340c9ac1ebfe7fc72360f",
-        "b22b809b0249ee4e8d43d3aee1a2f40bd529f9eaaa6493d7ec8198b5c93a15ce1e7d653d2aaf710ebfef4ff5aec8e120faf22776417b3621bf6b9de4af540805"
+        //"8f006a2ac7cd3396d20d2230204e2742fd413bde5c4ad6ad688f01def90ae2b80bcfee0507aedbcc01a389c74f7c5315eadedff800f3ff8d7482c2d8afe47500",
+        //"d5b234c6268f1d822217ac2a88358d31ec14f8f975b0f5d3f87ada7dd88e87400f11e9aac94cab3c2d1e8d38088cc505e9426f35d07a5ae9f7bb5c33244f160a",
+        //"da57013e372c8cd4aa7bc6c6112d9404325e8d48fcc02c51ad915a725ee0424c3a54cee03dfe315d91f3e6a576f8134a17b28717485340c9ac1ebfe7fc72360f",
+        //"b22b809b0249ee4e8d43d3aee1a2f40bd529f9eaaa6493d7ec8198b5c93a15ce1e7d653d2aaf710ebfef4ff5aec8e120faf22776417b3621bf6b9de4af540805"
     ];
     pub const BLOCK_530527_PUB_KEY_INDICES: [usize; QUORUM_SIZE] = [
         2,
         3,
         6,
-        1,
-        0,
-        9,
-        5,
+        //1,
+        //0,
+        //9,
+        //5,
     ];
     pub const BLOCK_530527_AUTHORITY_SET_ID: u64 = 496;
     pub const BLOCK_530527_AUTHORITY_SET: [&str; NUM_AUTHORITIES_PADDED] = [

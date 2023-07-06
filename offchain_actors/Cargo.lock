@@ -6421,6 +6421,7 @@ dependencies = [
  "serde_json",
  "sp-core 16.0.0",
  "sp-state-machine 0.12.0",
+ "structopt",
  "subxt",
  "succinct_avail_proof_generators",
  "tarpc",

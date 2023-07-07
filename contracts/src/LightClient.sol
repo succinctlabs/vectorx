@@ -126,7 +126,7 @@ contract LightClient is EventDecoder, StepVerifier {
 
     /// @notice Updates the step circuit digest.
     function setStepCircuitDigest(uint256[4] memory _stepCircuitDigest) external {
-        step_circuit_digest = _stepCircuitDigest;
+        stepCircuitDigest = _stepCircuitDigest;
     }
 
     function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {

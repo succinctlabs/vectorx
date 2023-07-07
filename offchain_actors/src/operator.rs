@@ -150,21 +150,21 @@ abigen!(
 );
 
 async fn submit_step_txn(
-    lc_address: Address,
     headers: Vec<Header>,
     authority_set_id: AuthoritySetIDProof,
     proof: Groth16Proof,
+    cl_opts: &Opt,
 ) {
     const RPC_URL: &str = "http://127.0.0.1:8546";
 
-    let wallet: LocalWallet = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+    let wallet: LocalWallet = cl_opts.private_key
         .parse::<LocalWallet>().unwrap();
-    let wallet = wallet.with_chain_id(31337u64);
+    let wallet = wallet.with_chain_id(cl_opts.chain_id);
 
     let provider = Provider::try_from(RPC_URL).unwrap();
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
-    let contract = LightClient::new(lc_address, client.into());
+    let contract = LightClient::new(cl_opts.lc_address, client.into());
 
     let mut header_data = Vec::new();
     for header in headers.iter() {
@@ -174,6 +174,8 @@ async fn submit_step_txn(
         header_data.push(format!("({},{},{},{})", header.block_number, header_hash_hex, state_root_hex, data_root_hex));
     }
 
+    // Uncomment below code block to output a debug command line
+    /*
     let all_headers_str = header_data.join(",");
     let authority_set_str = format!(
         "({},[{}])",
@@ -190,10 +192,10 @@ async fn submit_step_txn(
         proof.c[0].to_string(),
         proof.c[1].to_string(),
     );
-
     println!("cast send {:?} \"step(((uint32, bytes32, bytes32, bytes32)[],(uint64, bytes[]),(uint256[2],uint256[2][2],uint256[2])))\" \"([{}],{},{})\"", lc_address, all_headers_str, authority_set_str, proof_str);
+    */
 
-    let a = contract.step(
+    let txn_receipt = contract.step(
         Step {
             headers,
             authority_set_id_proof: authority_set_id,
@@ -201,7 +203,7 @@ async fn submit_step_txn(
         }
     ).send().await.unwrap().await.unwrap();
 
-    println!("Called step() at tx hash: {:?}", a);
+    println!("Sent LightClient.step() txn with tx hash: {:?}", txn_receipt.unwrap().transaction_hash);
 }
 
 fn to_u64_limbs(x: &BigInt) -> [u64; 4] {
@@ -297,6 +299,7 @@ async fn submit_proof_gen_request(
         .unwrap()).collect::<Vec<_>>();
     */
 
+    /*
     println!("head_block_hash: {:?}", head_block_hash);
     println!("head_block_num: {:?}", head_block_num);
     println!("authority_set_id: {:?}", authority_set_id);
@@ -304,6 +307,7 @@ async fn submit_proof_gen_request(
     println!("pub_key_indices: {:?}", pub_key_indices);
     println!("authority_set_commitment: {:?}", authority_set_commitment);
     println!("public_inputs_hash: {:?}", public_inputs_hash);
+    */
 
     let mut context = context::current();
     context.deadline = SystemTime::now() + Duration::from_secs(1200);
@@ -399,7 +403,7 @@ async fn main_loop(
     justification_sub : Subscription<GrandpaJustification>,
     c: OnlineClient<AvailConfig>,
     plonky2_pg_client: ProofGeneratorClient,
-    lc_address: Address,
+    cl_opts: &Opt,
 ) {
     let fused_header_sub = header_sub.fuse();
     let fused_justification_sub = justification_sub.fuse();
@@ -452,7 +456,6 @@ async fn main_loop(
 
             // Check to see if we downloaded the header yet
             if !headers.contains_key(&just_block_num) {
-                println!("Don't have header for block number: {:?}", just_block_num);
                 continue 'main_loop;
             }
 
@@ -534,13 +537,13 @@ async fn main_loop(
                 .collect::<Vec<_>>();
 
             submit_step_txn(
-                lc_address,
                 headers_md,
                 AuthoritySetIDProof {
                     authority_set_id: auth_set_id,
                     merkle_proof: auth_set_id_proof.into_iter().map(Bytes::from).collect::<Vec<_>>(),
                 },
                 proof.unwrap(),
+                cl_opts,
             ).await;
 
             last_processed_block_num = Some(unwrapped_just.commit.target_number);
@@ -556,6 +559,12 @@ struct Opt {
     // The address of the Light Client
     #[structopt(long = "light-client-address")]
     lc_address: Address,
+
+    #[structopt(long = "private-key" )]
+    private_key: String,
+
+    #[structopt(long = "chain-id" )]
+    chain_id: u64,
 }
 
 #[tokio::main]
@@ -594,5 +603,5 @@ pub async fn main() {
         .await
         .unwrap();
 
-    main_loop(header_sub, justification_sub, c, plonky2_pg_client, opt.lc_address).await;
+    main_loop(header_sub, justification_sub, c, plonky2_pg_client, &opt).await;
 }

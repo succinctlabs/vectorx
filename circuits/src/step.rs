@@ -164,7 +164,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes
         let public_inputs_hash_circuit = make_blake2b_circuit(
             self,
-            512 * 8,
+            896 * 8,
             HASH_SIZE,
         );
 

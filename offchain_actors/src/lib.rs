@@ -120,6 +120,8 @@ pub fn generate_step_proof(
 
     let outer_data = outer_builder.build::<PoseidonBN128GoldilocksConfig>();
 
+    println!("outer step circuit digest is {:?}", outer_data.prover_only.circuit_digest);
+
     let mut outer_pw = PartialWitness::new();
     outer_pw.set_proof_with_pis_target(&outer_proof_target, &step_proof);
     outer_pw.set_verifier_data_target(&outer_verifier_data, &unwrapped_circuit.verifier_only);

@@ -102,6 +102,9 @@ contract LightClient is EventDecoder, StepVerifier {
     /// @notice Maps from an authority set id to the blake2b hash of the authorities' pub keys
     mapping(uint64 => bytes32) public authoritySetCommitments;
 
+    /// @notice The plonky2 step circuit digest
+    uint256[4] public stepCircuitDigest;
+
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event AuthoritySetUpdate(uint64 indexed authoritySetID);
 
@@ -119,6 +122,11 @@ contract LightClient is EventDecoder, StepVerifier {
         emit HeadUpdate(head, startCheckpointHeader.headerHash);
 
         setAuthorities(startCheckpointAuthoritySetID, startCheckpointAuthorities);
+    }
+
+    /// @notice Updates the step circuit digest.
+    function setStepCircuitDigest(uint256[4] memory _stepCircuitDigest) external {
+        step_circuit_digest = _stepCircuitDigest;
     }
 
     function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
@@ -254,10 +262,10 @@ contract LightClient is EventDecoder, StepVerifier {
         }
 
         // Add in the plonky2 step circuit digest
-        inputs[32] = 5061962568044407551;
-        inputs[33] = 16321327257692377400;
-        inputs[34] = 9770012161405955084;
-        inputs[35] = 8915792498906619700;
+        inputs[32] = _stepCircuitDigest[0];
+        inputs[33] = _stepCircuitDigest[1];
+        inputs[34] = _stepCircuitDigest[2];
+        inputs[35] = _stepCircuitDigest[3];
 
         require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }

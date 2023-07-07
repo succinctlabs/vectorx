@@ -170,16 +170,16 @@ async fn submit_step_txn(
         let header_hash_hex = hex::encode(header.header_hash.as_slice());
         let state_root_hex = hex::encode(header.state_root.as_slice());
         let data_root_hex = hex::encode(header.data_root.as_slice());
-        header_data.push(format!("{:?},{:?},{:?},{:?}", header.block_number, header_hash_hex, state_root_hex, data_root_hex));
+        header_data.push(format!("{},{},{},{}", header.block_number, header_hash_hex, state_root_hex, data_root_hex));
     }
 
     let all_headers_str = header_data.join(",");
     let authority_set_str = format!(
-        "({:?},[{:?}])",
+        "({},[{}])",
         authority_set_id.authority_set_id,
         authority_set_id.merkle_proof.iter().map(|x| hex::encode(x.0.to_vec().as_slice())).collect::<Vec<_>>().join(","));
     let proof_str = format!(
-        "([{:?},{:?}],[[{:?},{:?}],[{:?},{:?}]],[{:?},{:?}])",
+        "([{},{}],[[{},{}],[{},{}]],[{},{}])",
         proof.a[0].to_string(),
         proof.a[1].to_string(),
         proof.b[0][0].to_string(),
@@ -190,7 +190,7 @@ async fn submit_step_txn(
         proof.c[1].to_string(),
     );
 
-    println!("cast send {:?} \"step(((uint32, bytes32, bytes32, bytes32)[],(uint64, bytes[]),(uint256[2],uint256[2][2],uint256[2])))\" ([{:?}],{:?},{:?})", lc_address, all_headers_str, authority_set_str, proof_str);
+    println!("cast send {} \"step(((uint32, bytes32, bytes32, bytes32)[],(uint64, bytes[]),(uint256[2],uint256[2][2],uint256[2])))\" \"([{}],{},{})\"", lc_address, all_headers_str, authority_set_str, proof_str);
 
     let a = contract.step(
         Step {

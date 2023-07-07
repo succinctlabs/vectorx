@@ -262,10 +262,10 @@ contract LightClient is EventDecoder, StepVerifier {
         }
 
         // Add in the plonky2 step circuit digest
-        inputs[32] = _stepCircuitDigest[0];
-        inputs[33] = _stepCircuitDigest[1];
-        inputs[34] = _stepCircuitDigest[2];
-        inputs[35] = _stepCircuitDigest[3];
+        inputs[32] = stepCircuitDigest[0];
+        inputs[33] = stepCircuitDigest[1];
+        inputs[34] = stepCircuitDigest[2];
+        inputs[35] = stepCircuitDigest[3];
 
         require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }

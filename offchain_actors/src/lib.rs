@@ -1,3 +1,5 @@
+use std::fs;
+
 use log::Level;
 use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
 use plonky2::{plonk::{circuit_data::{CircuitData, CircuitConfig}, config::{PoseidonGoldilocksConfig, GenericConfig}, circuit_builder::CircuitBuilder, prover::prove}, iop::witness::WitnessWrite, util::timing::TimingTree};
@@ -46,12 +48,12 @@ pub fn create_step_circuit() -> (CircuitData<GoldilocksField, C, D>, StepTarget<
     println!("Compiling the step circuit...");
 
     let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
-    let grandpa_justif_targets = make_step_circuit::<GoldilocksField, D, Curve>(&mut builder);
-    let grandpa_justif_circuit = builder.build::<C>();
+    let step_targets = make_step_circuit::<GoldilocksField, D, Curve>(&mut builder);
+    let step_circuit = builder.build::<C>();
 
-    println!("inner step circuit digest is {:?}", grandpa_justif_circuit.verifier_only.circuit_digest);
+    println!("inner step circuit digest is {:?}", step_circuit.verifier_only.circuit_digest);
 
-    (grandpa_justif_circuit, grandpa_justif_targets)
+    (step_circuit, step_targets)
 }
 
 
@@ -132,6 +134,21 @@ pub fn generate_step_proof(
     timing.print();
 
     outer_data.verify(outer_proof.clone()).unwrap();
+
+    let outer_common_circuit_data_serialized = serde_json::to_string(&outer_data.common).unwrap();
+    fs::write("step_recursive.common_circuit_data.json", outer_common_circuit_data_serialized)
+        .expect("Unable to write file");
+
+    let outer_verifier_only_circuit_data_serialized = serde_json::to_string(&outer_data.verifier_only).unwrap();
+    fs::write(
+        "step_recursive.verifier_only_circuit_data.json",
+        outer_verifier_only_circuit_data_serialized,
+    )
+    .expect("Unable to write file");
+
+    let outer_proof_serialized = serde_json::to_string(&outer_proof).unwrap();
+    fs::write("step_recursive.proof_with_public_inputs.json", outer_proof_serialized).expect("Unable to write file");
+
     Some(outer_proof)
 }
 

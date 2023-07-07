@@ -229,8 +229,6 @@ async fn submit_proof_gen_request(
     authority_set: Vec<Vec<u8>>,
     authority_set_commitment: Vec<u8>,
 ) -> Option<Groth16Proof> {        
-    println!("Generate justification for block number: {:?}", justification.commit.target_number);
-
     // First scale encode the headers
     let encoded_headers = headers.iter().map(|x| x.encode()).collect::<Vec<_>>();
 
@@ -339,7 +337,7 @@ async fn submit_proof_gen_request(
 
             stream.write(proof_serialized.as_bytes());
             stream.write(hex::decode("1e").unwrap().as_slice());
-            println!("Sent proof to gnark prover");
+            println!("Going to generate recursive groth16 proof");
             // Write the character "Record Separater" to indicate the end of the proof
 
 
@@ -358,16 +356,17 @@ async fn submit_proof_gen_request(
             let c_0 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*6 .. fp_size*7]);
             let c_1 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*7 .. fp_size*8]);
 
-            println!("a[0] is {:?}", a_0.to_string());
-            println!("a[1] is {:?}", a_1.to_string());
+            println!("Received groth16 proof:");
+            println!("  a[0] is {:?}", a_0.to_string());
+            println!("  a[1] is {:?}", a_1.to_string());
 
-            println!("b[0][0] is {:?}", b_0_0.to_string());
-            println!("b[0][1] is {:?}", b_0_1.to_string());
-            println!("b[1][0] is {:?}", b_1_0.to_string());
-            println!("b[1][1] is {:?}", b_1_1.to_string());
+            println!("  b[0][0] is {:?}", b_0_0.to_string());
+            println!("  b[0][1] is {:?}", b_0_1.to_string());
+            println!("  b[1][0] is {:?}", b_1_0.to_string());
+            println!("  b[1][1] is {:?}", b_1_1.to_string());
 
-            println!("c[0] is {:?}", c_0.to_string());
-            println!("c[1] is {:?}", c_1.to_string());
+            println!("  c[0] is {:?}", c_0.to_string());
+            println!("  c[1] is {:?}", c_1.to_string());
 
             Some(Groth16Proof {
                 a: [
@@ -509,7 +508,7 @@ async fn main_loop(
             }
 
             println!(
-                "Going to process a batch of headers of size: {:?}, block numbers: {:?} and justification with number {:?}",
+                "Going to generate a proof for a batch of headers of size: {:?}, block numbers: {:?} and justification with number {:?}",
                 header_batch.len(),
                 header_batch.iter().map(|h| h.number).collect::<Vec<u32>>(),
                 unwrapped_just.commit.target_number,

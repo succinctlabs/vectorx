@@ -15,7 +15,7 @@ use base58::FromBase58;
 use codec::{Decode, Encode, Output};
 use ethers::prelude::{abigen, SignerMiddleware};
 use ethers::providers::Provider;
-use ethers::signers::{LocalWallet};
+use ethers::signers::{LocalWallet, Signer};
 use ethers::types::Address;
 use ethers_core::types::Bytes;
 use futures::{select, StreamExt, pin_mut};
@@ -159,6 +159,7 @@ async fn submit_step_txn(
 
     let wallet: LocalWallet = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
         .parse::<LocalWallet>().unwrap();
+    let wallet = wallet.with_chain_id(31337u64);
 
     let provider = Provider::try_from(RPC_URL).unwrap();
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
@@ -364,7 +365,6 @@ async fn submit_proof_gen_request(
             println!("c[0] is {:?}", c_0.to_string());
             println!("c[1] is {:?}", c_1.to_string());
 
-            // Note that the b coordinates are switched
             Some(Groth16Proof {
                 a: [
                     ethers_core::types::U256(to_u64_limbs(&a_0)),
@@ -372,12 +372,12 @@ async fn submit_proof_gen_request(
                 ],
                 b: [
                     [
+                        ethers_core::types::U256(to_u64_limbs(&b_0_0)),
                         ethers_core::types::U256(to_u64_limbs(&b_0_1)),
-                        ethers_core::types::U256(to_u64_limbs(&b_0_0))
                     ],
                     [
-                        ethers_core::types::U256(to_u64_limbs(&b_1_1)),
                         ethers_core::types::U256(to_u64_limbs(&b_1_0)),
+                        ethers_core::types::U256(to_u64_limbs(&b_1_1)),
                     ],
                    ],
                 c: [

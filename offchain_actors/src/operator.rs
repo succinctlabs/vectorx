@@ -157,8 +157,6 @@ async fn submit_step_txn(
 ) {
     const RPC_URL: &str = "http://127.0.0.1:8546";
 
-    println!("private key is {}", cl_opts.private_key);
-
     let wallet: LocalWallet = cl_opts.private_key
         .parse::<LocalWallet>().unwrap();
     let wallet = wallet.with_chain_id(cl_opts.chain_id);

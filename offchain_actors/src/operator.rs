@@ -441,7 +441,7 @@ async fn main_loop(
 
                 let unwrapped_just = justification.unwrap().unwrap();
 
-                if justification_to_process.is_none() && unwrapped_just.commit.target_number >= last_processed_block_num.unwrap() + 5 {
+                if justification_to_process.is_none() && unwrapped_just.commit.target_number >= last_processed_block_num.unwrap() + 7 {
                     println!("Saving justification for block number: {:?}", unwrapped_just.commit.target_number);
                     justification_to_process = Some(unwrapped_just);
                 }

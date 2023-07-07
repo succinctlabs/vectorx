@@ -157,6 +157,8 @@ async fn submit_step_txn(
 ) {
     const RPC_URL: &str = "http://127.0.0.1:8546";
 
+    println!("private key is {}", cl_opts.private_key);
+
     let wallet: LocalWallet = cl_opts.private_key
         .parse::<LocalWallet>().unwrap();
     let wallet = wallet.with_chain_id(cl_opts.chain_id);
@@ -326,8 +328,8 @@ async fn submit_proof_gen_request(
         
     match res {
         Ok(proof) => {
-            println!("Retrieved step verification proof for block: number - {:?}; hash - {:?}", justification.commit.target_number, justification.commit.target_hash);
             let proof_serialized = serde_json::to_string(&proof).unwrap();
+            println!("Retrieved plonky2 step proof for subchain ending at block number {}.  Proof size is {}", justification.commit.target_number, proof_serialized.len());
 
             static SOCKET_PATH: &str = "/tmp/echo.sock";
 
@@ -357,16 +359,16 @@ async fn submit_proof_gen_request(
             let c_1 = BigInt::from_bytes_be(Sign::Plus, &proof_bytes[fp_size*7 .. fp_size*8]);
 
             println!("Received groth16 proof:");
-            println!("  a[0] is {:?}", a_0.to_string());
-            println!("  a[1] is {:?}", a_1.to_string());
+            println!("  a[0] is {}", a_0.to_string());
+            println!("  a[1] is {}", a_1.to_string());
 
-            println!("  b[0][0] is {:?}", b_0_0.to_string());
-            println!("  b[0][1] is {:?}", b_0_1.to_string());
-            println!("  b[1][0] is {:?}", b_1_0.to_string());
-            println!("  b[1][1] is {:?}", b_1_1.to_string());
+            println!("  b[0][0] is {}", b_0_0.to_string());
+            println!("  b[0][1] is {}", b_0_1.to_string());
+            println!("  b[1][0] is {}", b_1_0.to_string());
+            println!("  b[1][1] is {}", b_1_1.to_string());
 
-            println!("  c[0] is {:?}", c_0.to_string());
-            println!("  c[1] is {:?}", c_1.to_string());
+            println!("  c[0] is {}", c_0.to_string());
+            println!("  c[1] is {}", c_1.to_string());
 
             Some(Groth16Proof {
                 a: [

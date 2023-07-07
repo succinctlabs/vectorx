@@ -368,7 +368,6 @@ async fn submit_proof_gen_request(
             println!("c[0] is {:?}", c_0.to_string());
             println!("c[1] is {:?}", c_1.to_string());
 
-            // Note that the b coordinates are switched.
             Some(Groth16Proof {
                 a: [
                     ethers_core::types::U256(to_u64_limbs(&a_0)),
@@ -376,12 +375,12 @@ async fn submit_proof_gen_request(
                 ],
                 b: [
                     [
-                        ethers_core::types::U256(to_u64_limbs(&b_0_1)),
                         ethers_core::types::U256(to_u64_limbs(&b_0_0)),
+                        ethers_core::types::U256(to_u64_limbs(&b_0_1)),
                     ],
                     [
-                        ethers_core::types::U256(to_u64_limbs(&b_1_1)),
                         ethers_core::types::U256(to_u64_limbs(&b_1_0)),
+                        ethers_core::types::U256(to_u64_limbs(&b_1_1)),
                     ],
                    ],
                 c: [

@@ -155,13 +155,11 @@ async fn submit_step_txn(
     proof: Groth16Proof,
     cl_opts: &Opt,
 ) {
-    const RPC_URL: &str = "http://127.0.0.1:8546";
-
     let wallet: LocalWallet = cl_opts.private_key
         .parse::<LocalWallet>().unwrap();
     let wallet = wallet.with_chain_id(cl_opts.chain_id);
 
-    let provider = Provider::try_from(RPC_URL).unwrap();
+    let provider = Provider::try_from(&cl_opts.eth_rpc_url).unwrap();
     let client = SignerMiddleware::new(provider.clone(), wallet.clone());
 
     let contract = LightClient::new(cl_opts.lc_address, client.into());
@@ -286,7 +284,6 @@ async fn submit_proof_gen_request(
         public_inputs_hash.extend(header.state_root.0);
         public_inputs_hash.extend(header.hash().0);
     }
-    assert!(public_inputs_hash.len() == 320);
 
     let public_inputs_hash = avail_subxt::config::substrate::BlakeTwo256::hash(&public_inputs_hash);
 
@@ -564,6 +561,9 @@ struct Opt {
 
     #[structopt(long = "chain-id" )]
     chain_id: u64,
+
+    #[structopt(long = "eth-rpc-url" )]
+    eth_rpc_url: String,
 }
 
 #[tokio::main]

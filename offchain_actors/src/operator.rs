@@ -175,7 +175,7 @@ async fn submit_step_txn(
 
     let all_headers_str = header_data.join(",");
     let authority_set_str = format!(
-        "({:?},{:?})",
+        "({:?},[{:?}])",
         authority_set_id.authority_set_id,
         authority_set_id.merkle_proof.iter().map(|x| hex::encode(x.0.to_vec().as_slice())).collect::<Vec<_>>().join(","));
     let proof_str = format!(
@@ -190,8 +190,7 @@ async fn submit_step_txn(
         proof.c[1].to_string(),
     );
 
-    let cast_cmd = format!("cast send 0xe7f1725e7734ce288f8367e1bb143e90bb3f0512 \"step((uint32, bytes32, bytes32, bytes32)[],(uint64, bytes[]),(uint256[2],uint256[2][2],uint256[2])\" ([{:?}],{:?},{:?})", all_headers_str, authority_set_str, proof_str);
-    println!("cast_cmd: {:?}", cast_cmd);
+    println!("cast send {:?} \"step(((uint32, bytes32, bytes32, bytes32)[],(uint64, bytes[]),(uint256[2],uint256[2][2],uint256[2])))\" ([{:?}],{:?},{:?})", lc_address, all_headers_str, authority_set_str, proof_str);
 
     let a = contract.step(
         Step {
@@ -297,14 +296,11 @@ async fn submit_proof_gen_request(
         .unwrap()).collect::<Vec<_>>();
     */
 
-    println!("headers: {:?}", encoded_headers);
     println!("head_block_hash: {:?}", head_block_hash);
     println!("head_block_num: {:?}", head_block_num);
     println!("authority_set_id: {:?}", authority_set_id);
-    println!("precommit_message: {:?}", precommit_message);
     println!("signatures: {:?}", signatures);
     println!("pub_key_indices: {:?}", pub_key_indices);
-    println!("authority_set: {:?}", authority_set);
     println!("authority_set_commitment: {:?}", authority_set_commitment);
     println!("public_inputs_hash: {:?}", public_inputs_hash);
 
@@ -368,6 +364,7 @@ async fn submit_proof_gen_request(
             println!("c[0] is {:?}", c_0.to_string());
             println!("c[1] is {:?}", c_1.to_string());
 
+            // Note that the b coordinates are switched
             Some(Groth16Proof {
                 a: [
                     ethers_core::types::U256(to_u64_limbs(&a_0)),
@@ -375,12 +372,12 @@ async fn submit_proof_gen_request(
                 ],
                 b: [
                     [
-                        ethers_core::types::U256(to_u64_limbs(&b_0_0)),
                         ethers_core::types::U256(to_u64_limbs(&b_0_1)),
+                        ethers_core::types::U256(to_u64_limbs(&b_0_0))
                     ],
                     [
-                        ethers_core::types::U256(to_u64_limbs(&b_1_0)),
                         ethers_core::types::U256(to_u64_limbs(&b_1_1)),
+                        ethers_core::types::U256(to_u64_limbs(&b_1_0)),
                     ],
                    ],
                 c: [

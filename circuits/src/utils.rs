@@ -6,8 +6,7 @@ pub const NUM_AUTHORITIES_PADDED: usize = 16;  // The random access gadget requi
 pub const QUORUM_SIZE: usize = 1;  // 2/3 + 1 of NUM_VALIDATORS
 pub const MAX_NUM_HEADERS_PER_STEP: usize = 13;
 
-//pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
-pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 12; // 1536 bytes.  Keep this for now.
+pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 pub const HASH_SIZE: usize = 32;                         // in bytes
 pub const PUB_KEY_SIZE: usize = 32;                      // in bytes
 

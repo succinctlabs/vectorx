@@ -41,6 +41,7 @@ use subxt::{
     OnlineClient,
     rpc::{RpcParams, Subscription},
 };
+use succinct_avail_proof_generators::utils::{MAX_HEADER_SIZE, MAX_NUM_HEADERS_PER_STEP};
 use tarpc::{
     client, context,
     tokio_serde::formats::Json
@@ -425,6 +426,18 @@ async fn main_loop(
                 }
 
                 println!("Downloaded a header for block number: {} and size {}", unwrapped_header.number, unwrapped_header.encoded_size());
+
+                // If we encounter a header that is too big, will assume that it's processed separately and restart the header batch.
+                // TODO:  Need to deal with very large headers.  Probably is from a new authority set event.  Worst case, can create seperate 
+                // circuit for this specific case.
+                if unwrapped_header.encoded_size() > MAX_HEADER_SIZE {
+                    println!("Header is too big, restarting header batch");
+                    headers.clear();
+                    last_processed_block_num = Some(unwrapped_header.number);
+                    last_processed_block_hash = Some(unwrapped_header.hash());
+                    justification_to_process = None;
+                }
+
                 headers.insert(unwrapped_header.number, unwrapped_header);
 
                 // TODO: Handle rotations if there is a new grandpa authority set event in the downloaded header
@@ -438,7 +451,7 @@ async fn main_loop(
 
                 let unwrapped_just = justification.unwrap().unwrap();
 
-                if justification_to_process.is_none() && unwrapped_just.commit.target_number >= last_processed_block_num.unwrap() + 11 {
+                if justification_to_process.is_none() && unwrapped_just.commit.target_number >= last_processed_block_num.unwrap() + MAX_NUM_HEADERS_PER_STEP {
                     println!("Saving justification for block number: {:?}", unwrapped_just.commit.target_number);
                     justification_to_process = Some(unwrapped_just);
                 }

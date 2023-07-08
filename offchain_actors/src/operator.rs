@@ -424,7 +424,7 @@ async fn main_loop(
                     last_processed_block_hash = Some(unwrapped_header.hash());
                 }
 
-                println!("Downloaded a header for block number: {:?}", unwrapped_header.number);
+                println!("Downloaded a header for block number: {} and size {}", unwrapped_header.number, unwrapped_header.encoded_size());
                 headers.insert(unwrapped_header.number, unwrapped_header);
 
                 // TODO: Handle rotations if there is a new grandpa authority set event in the downloaded header

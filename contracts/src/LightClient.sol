@@ -247,7 +247,7 @@ contract LightClient is EventDecoder, StepVerifier {
         // For 20 headers, add the following
         // 1) header state root
         // 2) header block hash
-        for (uint8 i = 0; i < 5; i++) {
+        for (uint8 i = 0; i < 13; i++) {
             hashInput = bytes.concat(
                 hashInput,
                 headers[i].stateRoot,

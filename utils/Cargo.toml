@@ -1,5 +1,5 @@
 [package]
-name = "succinct_avail_offchain_actors"
+name = "succinct_avail_utils"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,17 +9,21 @@ edition = "2021"
 [dependencies]
 enum_extract = "0.1.1"
 hex = "0.4.3"
+primitive-types = "0.12.1"
 serde = {version = "1", features= ["derive"]}
 serde_json = "1.0.86"
 thiserror = "1.0"
 tokio = { version = "1.2.0", features = ["full"] }
 
 # Avail/Substrate dependencies
-avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "1f9ba05"}
+avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "b68af9607e3d0db972eb54b1ccea70223584cfe9"}
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
 itertools = "0.8"
+pallet-grandpa = "21.0.0"
+scale-info = { version = "2.7.0", default-features = false, features = ["bit-vec", "std"] }
+sp-core = { version = "16.0.0", default-features = false }
 sp-state-machine = "0.12.0"
-subxt = "0.24"
+subxt = "0.27"
 
 
 ### Binaries
@@ -47,3 +51,7 @@ path = "src/subscribe_justifications.rs"
 [[bin]]
 name = "gen_avail_event_types"
 path = "src/gen_avail_event_types.rs"
+
+[[bin]]
+name = "get_current_authority_set"
+path = "src/get_current_authority_set.rs"

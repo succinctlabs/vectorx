@@ -1,9 +1,10 @@
-use std::{io::BufReader, marker::PhantomData};
+use core::fmt;
+use std::{io::BufReader, marker::PhantomData, error::Error};
 
 use num::BigUint;
 use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
 use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension, types::Field};
-use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::{Serialize, Deserialize, Serializer, Deserializer, de::Visitor};
 
 use ff::{PrimeField, PrimeFieldRepr, Field as ff_Field};
 
@@ -88,11 +89,43 @@ impl<F: RichField> Serialize for PoseidonBN128HashOut<F> {
 }
 
 impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        todo!()
+        struct PoseidonBN128HashOutVisitor;
+
+        impl<'a> Visitor<'a> for PoseidonBN128HashOutVisitor {
+            type Value = String;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string with integer value within BN128 scalar field")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
+                Ok(v.to_string())
+            }
+        }
+
+        let deserialized_str = deserializer.deserialize_str(PoseidonBN128HashOutVisitor).unwrap();
+        let big_int = BigUint::parse_bytes(deserialized_str.as_bytes(), 10).unwrap();
+
+        let mut bytes = big_int.to_bytes_le();
+        for _i in bytes.len()..32 {
+            bytes.push(0);
+        }
+
+        let mut fr_repr: FrRepr = Default::default();
+        fr_repr.read_le(bytes.as_slice()).unwrap();
+        let fr = Fr::from_repr(fr_repr).unwrap();
+
+        Ok(Self {
+            value: fr,
+            _phantom: PhantomData,
+        })
     }
 }
 

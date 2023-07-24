@@ -77,6 +77,7 @@ struct Rotate {
 /// @author Succinct Labs
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
+//contract LightClient is EventDecoder, StepVerifier {
 contract LightClient is EventDecoder, StepVerifier {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
@@ -102,6 +103,9 @@ contract LightClient is EventDecoder, StepVerifier {
     /// @notice Maps from an authority set id to the blake2b hash of the authorities' pub keys
     mapping(uint64 => bytes32) public authoritySetCommitments;
 
+    /// @notice The plonky2 step circuit digest
+    uint256[4] public stepCircuitDigest;
+
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event AuthoritySetUpdate(uint64 indexed authoritySetID);
 
@@ -119,6 +123,11 @@ contract LightClient is EventDecoder, StepVerifier {
         emit HeadUpdate(head, startCheckpointHeader.headerHash);
 
         setAuthorities(startCheckpointAuthoritySetID, startCheckpointAuthorities);
+    }
+
+    /// @notice Updates the step circuit digest.
+    function setStepCircuitDigest(uint256[4] memory _stepCircuitDigest) external {
+        stepCircuitDigest = _stepCircuitDigest;
     }
 
     function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
@@ -232,6 +241,8 @@ contract LightClient is EventDecoder, StepVerifier {
             bytes8(activeAuthoritySetID)
         );
 
+        hashInput = bytes.concat();
+
         // For 20 headers, add the following
         // 1) header state root
         // 2) header block hash
@@ -250,10 +261,10 @@ contract LightClient is EventDecoder, StepVerifier {
         }
 
         // Add in the plonky2 step circuit digest
-        inputs[32] = 1895208834164555013;
-        inputs[33] = 2560654618150967567;
-        inputs[34] = 13397720476573028645;
-        inputs[35] = 9207079182691300970;
+        inputs[32] = stepCircuitDigest[0];
+        inputs[33] = stepCircuitDigest[1];
+        inputs[34] = stepCircuitDigest[2];
+        inputs[35] = stepCircuitDigest[3];
 
         require(verifyProof(proof.a, proof.b, proof.c, inputs));
     }

@@ -1,22 +1,17 @@
-use avail_subxt::build_client;
+use avail_subxt::{build_client, api::runtime_types::sp_runtime::traits::BlakeTwo256};
 use avail_subxt::primitives::Header;
+use primitive_types::H256;
+use sp_core::{twox_128, storage::StorageKey};
 use sp_state_machine::{read_proof_check, StorageProof};
 
-use subxt::{
-	ext::{
-		sp_core::{storage::StorageKey, twox_128, H256},
-		sp_runtime::traits::BlakeTwo256,
-	},
-};
 
 #[tokio::main]
 pub async fn main() {
-    let url: &str = "wss://testnet.avail.tools:443/ws";
+    let url: &str = "wss://kate.avail.tools:443/ws";
 
-    let c = build_client(url).await.unwrap();
+    let c = build_client(url, false).await.unwrap();
 
-    // The block hash for block 576727 (https://testnet.avail.tools/#/explorer/query/576728)
-    let block_hash_vec = hex::decode("60ee3874d6f79ba54bb4f9b62972e905a0cc4288e442879717bd62035fccf489").unwrap();
+    let block_hash_vec = hex::decode("4db46d17c09899817fc128b81b09c09775cc4b729111295697059e63a9fb8115").unwrap();
 
     let mut block_hash_array: [u8; 32] = [0; 32];
     for i in 0..block_hash_vec.len() {
@@ -52,12 +47,16 @@ pub async fn main() {
     }
     let sp = StorageProof::new(sp_vec);
 
-    println!("sp is {:?}\n\n\n", sp);
+    for entry in sp.iter_nodes() {
+        println!("entry is {:?}", hex::encode(entry));
+    }
 
+    /*
     // Can also check proof here:  https://github.com/polytope-labs/solidity-merkle-trees/blob/main/src/MerklePatricia.sol#L31
-    let proof_check_res = read_proof_check::<BlakeTwo256, _>(header.state_root, sp, keys).unwrap();
-
-    println!("state root is {:?}\n\n\n", header.state_root.as_bytes());
+    let proof_check_res = read_proof_check::<BlakeTwo256, _>(header.state_root, sp, keys).unwrap()
 
     println!("proof_check_res is {:?}\n\n\n", proof_check_res);
+    */
+
+    println!("state root is {:?}\n\n\n", hex::encode(header.state_root.as_bytes()));
 }

@@ -8,25 +8,34 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+base58 = { version = "0.2.0" }
 clap = { version = "3.0.0-rc.9", features = ["derive"] }
 futures = "0.3"
 hex = "0.4.3"
+env_logger = { version = "0.9.0", default-features = false }
+ethers = { version = "2.0", features = ["rustls"] }
+ethers-core = { version = "2.0.7" }
+log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = [ "rand" ] }
 serde = { version = "1", features= ["derive"] }
+serde_json = "1.0.86"
+structopt = "0.3.26"
 tarpc = { version = "0.33", features = ["full"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 
 # Avail/Substrate dependencies
-avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "1f9ba05"}
+avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "b68af9607e3d0db972eb54b1ccea70223584cfe9"}
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
+pallet-grandpa = "21.0.0"
+sp-core = { version = "16.0.0", default-features = false }
 sp-state-machine = "0.12.0"
-subxt = "0.24"
+subxt = "0.27"
 
 # Avail circuits
 succinct_avail_proof_generators = { path = "../circuits" }
-plonky2 = "0.1.3"
+plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2_field = "0.1.0"
-plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git", branch="kevjue/cleanup_plonky2lib" }
+plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git" }
 
 
 ### Binaries
@@ -36,12 +45,8 @@ name = "service"
 path = "src/lib.rs"
 
 [[bin]]
-name = "header_proof_generator"
-path = "src/header_proof_generator.rs"
-
-[[bin]]
-name = "grandpa_justif_proof_generator"
-path = "src/grandpa_justif_proof_generator.rs"
+name = "operator"
+path = "src/operator.rs"
 
 [[bin]]
 name = "proof_generator_rpc"

@@ -1,6 +1,10 @@
-use plonky2_ecdsa::gadgets::biguint::CircuitBuilderBiguint;
+use num::BigUint;
+use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+use plonky2_ecdsa::gadgets::biguint::{CircuitBuilderBiguint, WitnessBigUint};
 use plonky2lib_succinct::ed25519::curve::curve_types::Curve;
-use plonky2lib_succinct::ed25519::gadgets::curve::CircuitBuilderCurve;
+use plonky2lib_succinct::ed25519::curve::eddsa::{EDDSASignature, EDDSAPublicKey, verify_message};
+use plonky2lib_succinct::ed25519::field::ed25519_scalar::Ed25519Scalar;
+use plonky2lib_succinct::ed25519::gadgets::curve::{CircuitBuilderCurve, decompress_point};
 use plonky2lib_succinct::ed25519::gadgets::eddsa::verify_message_circuit;
 use plonky2lib_succinct::ed25519::gadgets::eddsa::{EDDSASignatureTarget};
 use plonky2lib_succinct::hash_functions::blake2b::{make_blake2b_circuit, CHUNK_128_BYTES};
@@ -8,9 +12,9 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_ecdsa::gadgets::nonnative::CircuitBuilderNonNative;
 use plonky2_field::extension::Extendable;
-use plonky2_field::types::Field;
+use plonky2_field::types::{Field, PrimeField};
 use plonky2::iop::target::Target;
-use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE };
+use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, QUORUM_SIZE, HASH_SIZE, ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE, to_bits };
 use crate::decoder::{ CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
 #[derive(Clone, Debug)]
@@ -241,6 +245,88 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderGrand
 }
 
 
+pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
+    pw: &mut PartialWitness<F>,
+    precommit_targets: Vec<PrecommitTarget<C>>,
+    precommit_messages: Vec<Vec<u8>>,
+    signatures: Vec<Vec<u8>>,
+    pub_key_indices: Vec<usize>,
+    pub_keys: Vec<Vec<u8>>,
+) {
+    assert!(precommit_targets.len() == QUORUM_SIZE);
+    assert!(precommit_messages.len() == QUORUM_SIZE);
+    assert!(signatures.len() == QUORUM_SIZE);
+    assert!(pub_key_indices.len() == QUORUM_SIZE);
+    assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
+
+    // Set the precommit partial witness values
+    for i in 0..precommit_messages.len() {
+        let sig_r = decompress_point(&signatures[i][0..32]);
+        assert!(sig_r.is_valid());
+
+        let pub_key = &pub_keys[pub_key_indices[i]];
+
+        let sig_s_biguint = BigUint::from_bytes_le(&signatures[i][32..64]);
+        let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
+        let sig = EDDSASignature { r: sig_r, s: sig_s };
+
+        let pub_key_point = decompress_point(&pub_key[..]);
+        assert!(pub_key_point.is_valid());
+
+        let precommit_message_bits = to_bits(precommit_messages[i].clone());
+
+        assert!(verify_message(
+            &precommit_message_bits,
+            &sig,
+            &EDDSAPublicKey(pub_key_point)
+        ));
+
+        let precommit_target = &precommit_targets[i];
+        pw.set_biguint_target(&precommit_target.signature.r.x.value, &sig.r.x.to_canonical_biguint());
+        pw.set_biguint_target(&precommit_target.signature.r.y.value, &sig.r.y.to_canonical_biguint());
+        pw.set_biguint_target(&precommit_target.signature.s.value, &sig_s.to_canonical_biguint());
+
+        pw.set_target(precommit_target.pub_key_idx, F::from_canonical_usize(pub_key_indices[i]));
+
+        assert!(precommit_messages[i].len() == ENCODED_PRECOMMIT_LENGTH);
+        assert!(precommit_messages[i].len() == precommit_target.precommit_message.len());
+
+        precommit_messages[i].iter()
+        .zip(precommit_target.precommit_message.iter())
+        .for_each(|(msg_byte, msg_byte_target)| pw.set_target(*msg_byte_target, F::from_canonical_u8(*msg_byte)));
+    }
+}
+
+pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
+    pw: &mut PartialWitness<F>,
+    authority_set_target: &AuthoritySetSignersTarget,
+    pub_keys: Vec<Vec<u8>>,
+    authority_set_id: u64,
+    authority_set_commitment: Vec<u8>,
+) {
+    assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
+    assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES_PADDED);
+
+    // Set the authority set partial witness values
+    for i in 0..pub_keys.len() {
+        let authority_set_signers_target = &authority_set_target.pub_keys[i];
+        let pub_key = &pub_keys[i];
+
+        assert!(pub_key.len() == PUB_KEY_SIZE);
+        assert!(pub_key.len() == authority_set_signers_target.0.len());
+
+        pub_key.iter()
+        .zip(authority_set_signers_target.0.iter())
+        .for_each(|(pub_key_byte, pub_key_byte_target)| pw.set_target(*pub_key_byte_target, F::from_canonical_u8(*pub_key_byte)));
+    }
+
+    pw.set_target(authority_set_target.set_id, F::from_canonical_u64(authority_set_id));
+
+    for i in 0..HASH_SIZE {
+        pw.set_target(authority_set_target.commitment.0[i], F::from_canonical_u8(authority_set_commitment[i]));
+    }
+}
+
 #[cfg(test)]
 pub (crate) mod tests {
     use std::time::SystemTime;
@@ -268,9 +354,9 @@ pub (crate) mod tests {
     use plonky2_field::extension::Extendable;
     use plonky2_field::types::{Field, PrimeField};
 
-    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget};
+    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget, set_precommits_pw, set_authority_set_pw};
     use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};
-    use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE, QUORUM_SIZE, HASH_SIZE, NUM_AUTHORITIES_PADDED, NUM_AUTHORITIES, PUB_KEY_SIZE};
+    use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, MAX_HEADER_SIZE, QUORUM_SIZE, NUM_AUTHORITIES};
 
     pub struct JustificationTarget<C: Curve> {
         precommit_targets: Vec<PrecommitTarget<C>>,
@@ -307,90 +393,6 @@ pub (crate) mod tests {
             }
         }
     }
-
-    pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
-        pw: &mut PartialWitness<F>,
-        precommit_targets: Vec<PrecommitTarget<C>>,
-        precommit_messages: Vec<Vec<u8>>,
-        signatures: Vec<Vec<u8>>,
-        pub_key_indices: Vec<usize>,
-        pub_keys: Vec<Vec<u8>>,
-    ) {
-        assert!(precommit_targets.len() == QUORUM_SIZE);
-        assert!(precommit_messages.len() == QUORUM_SIZE);
-        assert!(signatures.len() == QUORUM_SIZE);
-        assert!(pub_key_indices.len() == QUORUM_SIZE);
-        assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
-
-        // Set the precommit partial witness values
-        for i in 0..precommit_messages.len() {
-            let sig_r = decompress_point(&signatures[i][0..32]);
-            assert!(sig_r.is_valid());
-
-            let pub_key = &pub_keys[pub_key_indices[i]];
-
-            let sig_s_biguint = BigUint::from_bytes_le(&signatures[i][32..64]);
-            let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
-            let sig = EDDSASignature { r: sig_r, s: sig_s };
-
-            let pub_key_point = decompress_point(&pub_key[..]);
-            assert!(pub_key_point.is_valid());
-
-            let precommit_message_bits = to_bits(precommit_messages[i].clone());
-
-            assert!(verify_message(
-                &precommit_message_bits,
-                &sig,
-                &EDDSAPublicKey(pub_key_point)
-            ));
-
-            let precommit_target = &precommit_targets[i];
-            pw.set_biguint_target(&precommit_target.signature.r.x.value, &sig.r.x.to_canonical_biguint());
-            pw.set_biguint_target(&precommit_target.signature.r.y.value, &sig.r.y.to_canonical_biguint());
-            pw.set_biguint_target(&precommit_target.signature.s.value, &sig_s.to_canonical_biguint());
-
-            pw.set_target(precommit_target.pub_key_idx, F::from_canonical_usize(pub_key_indices[i]));
-
-            assert!(precommit_messages[i].len() == ENCODED_PRECOMMIT_LENGTH);
-            assert!(precommit_messages[i].len() == precommit_target.precommit_message.len());
-
-            precommit_messages[i].iter()
-            .zip(precommit_target.precommit_message.iter())
-            .for_each(|(msg_byte, msg_byte_target)| pw.set_target(*msg_byte_target, F::from_canonical_u8(*msg_byte)));
-        }
-    }
-
-    pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
-        pw: &mut PartialWitness<F>,
-        authority_set_target: &AuthoritySetSignersTarget,
-        pub_keys: Vec<Vec<u8>>,
-        authority_set_id: u64,
-        authority_set_commitment: Vec<u8>,
-    ) {
-        assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
-        assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES_PADDED);
-
-        // Set the authority set partial witness values
-        for i in 0..pub_keys.len() {
-            let authority_set_signers_target = &authority_set_target.pub_keys[i];
-            let pub_key = &pub_keys[i];
-
-            assert!(pub_key.len() == PUB_KEY_SIZE);
-            assert!(pub_key.len() == authority_set_signers_target.0.len());
-
-            pub_key.iter()
-            .zip(authority_set_signers_target.0.iter())
-            .for_each(|(pub_key_byte, pub_key_byte_target)| pw.set_target(*pub_key_byte_target, F::from_canonical_u8(*pub_key_byte)));
-        }
-
-        pw.set_target(authority_set_target.set_id, F::from_canonical_u64(authority_set_id));
-
-        for i in 0..HASH_SIZE {
-            pw.set_target(authority_set_target.commitment.0[i], F::from_canonical_u8(authority_set_commitment[i]));
-        }
-    }
-
-
 
     #[test]
     fn test_avail_eddsa_circuit() -> Result<()> {

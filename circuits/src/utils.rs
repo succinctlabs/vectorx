@@ -6,8 +6,7 @@ pub const NUM_AUTHORITIES_PADDED: usize = 16;  // The random access gadget requi
 pub const QUORUM_SIZE: usize = 7;  // 2/3 + 1 of NUM_VALIDATORS
 pub const MAX_NUM_HEADERS_PER_STEP: usize = 20;
 
-//pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
-pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 10; // 1280 bytes.  Keep this for now.
+pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 pub const HASH_SIZE: usize = 32;                         // in bytes
 pub const PUB_KEY_SIZE: usize = 32;                      // in bytes
 
@@ -25,7 +24,7 @@ use plonky2::{
 };
 use plonky2_field::{extension::Extendable, types::{PrimeField, PrimeField64}};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct AvailHashTarget(pub [Target; HASH_SIZE]);
 
 pub trait WitnessAvailHash<F: PrimeField64>: Witness<F> {
@@ -62,7 +61,7 @@ impl<F: PrimeField> GeneratedValuesAvailHash<F> for GeneratedValues<F> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EncodedHeaderTarget {
     pub header_bytes: [Target; MAX_HEADER_SIZE],
     pub header_size: Target,

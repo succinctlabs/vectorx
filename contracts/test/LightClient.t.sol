@@ -27,7 +27,7 @@ contract LightClientTest is Test, LightClientFixture {
         bytes memory initialParsed = vm.parseJson(vm.readFile(initialFilename));
         fixtureInitial = abi.decode(initialParsed, (Initial));
 
-        string memory stepFilename = string.concat(root, "/test/LightClient/fixtures/step_hack.json");
+        string memory stepFilename = string.concat(root, "/test/LightClient/fixtures/step.json");
         bytes memory stepParsed = vm.parseJson(vm.readFile(stepFilename));
         fixtureStep = abi.decode(stepParsed, (Step));
 

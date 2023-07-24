@@ -4,7 +4,7 @@ import "solidity-merkle-trees/src/MerklePatricia.sol";
 import "solidity-merkle-trees/src/trie/Bytes.sol";
 import "solidity-merkle-trees/src/trie/Memory.sol";
 import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
-//import { EventDecoder } from "src/EventDecoder.sol";
+import { EventDecoder } from "src/EventDecoder.sol";
 import {StepVerifier} from "src/StepVerifier.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 
@@ -78,7 +78,7 @@ struct Rotate {
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
 //contract LightClient is EventDecoder, StepVerifier {
-contract LightClient is StepVerifier {
+contract LightClient is EventDecoder, StepVerifier {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
 
@@ -151,11 +151,9 @@ contract LightClient is StepVerifier {
     /// @notice Updates the head of the light client with the provided list of headers.
     function doStep(Step memory update) internal {
         // First verify that the authority set is correct.
-        /*
         if (update.authoritySetIDProof.authoritySetID != activeAuthoritySetID) {
             revert("Authority set ID is not currently active");
         }
-        */
 
         // Check to see that the last block's authority set ID is correct.
         bytes32 authSetIDMerkleRoot;
@@ -196,7 +194,6 @@ contract LightClient is StepVerifier {
         emit HeadUpdate(lastHeader.blockNumber, lastHeader.headerHash);
     }
 
-    /*
     /// @notice Rotates the authority set and will optionally execute a step.
     function rotate(Rotate memory update) external {
         // First call step
@@ -231,26 +228,25 @@ contract LightClient is StepVerifier {
         bytes32[NUM_AUTHORITIES] memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
         setAuthorities(update.newAuthoritySetIDProof.authoritySetID, newAuthorities);
     }
-    */
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {
         uint256[36] memory inputs;
 
         bytes memory hashInput;
         // Add the head num and hash authority set commitment, and validator set id
-        /* hashInput = bytes.concat(
+        hashInput = bytes.concat(
             headerHashes[head],
             bytes4(head),
             authoritySetCommitments[activeAuthoritySetID],
             bytes8(activeAuthoritySetID)
-        );*/
+        );
 
         hashInput = bytes.concat();
 
         // For 20 headers, add the following
         // 1) header state root
         // 2) header block hash
-        for (uint8 i = 0; i < 11; i++) {
+        for (uint8 i = 0; i < 20; i++) {
             hashInput = bytes.concat(
                 hashInput,
                 headers[i].stateRoot,

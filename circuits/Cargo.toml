@@ -18,7 +18,7 @@ lazy_static = "1.4.0"
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2_ecdsa = { git = "ssh://git@github.com/succinctlabs/plonky2-ecdsa", branch="kevjue/serialization" }
 plonky2_field = "0.1.0"
-plonky2_u32 = { git = "ssh://git@github.com/succinctlabs/plonky2-u32", branch="kevjue/serialize" }
+plonky2_u32 = { git = "https://github.com/mir-protocol/plonky2-u32.git" }
 plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git" }
 num = { version = "0.4", features = [ "rand" ] }
 anyhow = "1.0.68"
@@ -28,6 +28,9 @@ log = { version = "0.4.14", default-features = false }
 env_logger = { version = "0.9.0", default-features = false }
 
 
-#[dev-dependencies]
-#[patch."https://github.com/mir-protocol/plonky2.git"]
-#plonky2 = { path = "../../plonky2/plonky2" }
+[dev-dependencies]
+[patch."https://github.com/mir-protocol/plonky2.git"]
+plonky2 = { path = "../../plonky2/plonky2" }
+
+[patch."https://github.com/mir-protocol/plonky2-u32.git"]
+plonky2_u32 = { path = "../../plonky2-u32" }

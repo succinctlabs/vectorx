@@ -3964,7 +3964,7 @@ dependencies = [
  "num",
  "plonky2",
  "plonky2_maybe_rayon",
- "plonky2_u32",
+ "plonky2_u32 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize)",
  "serde",
 ]
 
@@ -4005,6 +4005,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "plonky2_u32"
+version = "0.1.0"
+source = "git+https://github.com/mir-protocol/plonky2-u32.git#945ff60f6eff1028a2c71d64ad4d8b30fe62e159"
+dependencies = [
+ "anyhow",
+ "itertools",
+ "num",
+ "plonky2",
+]
+
+[[package]]
 name = "plonky2_util"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4025,7 +4036,7 @@ dependencies = [
  "plonky2",
  "plonky2_ecdsa",
  "plonky2_field",
- "plonky2_u32",
+ "plonky2_u32 0.1.0 (git+ssh://git@github.com/succinctlabs/plonky2-u32?branch=kevjue/serialize)",
  "plonky2_util",
  "rand 0.8.5",
  "regex",
@@ -6447,7 +6458,7 @@ dependencies = [
  "plonky2",
  "plonky2_ecdsa",
  "plonky2_field",
- "plonky2_u32",
+ "plonky2_u32 0.1.0 (git+https://github.com/mir-protocol/plonky2-u32.git)",
  "plonky2lib_succinct",
  "rand 0.4.6",
  "serde",

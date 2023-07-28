@@ -1,4 +1,4 @@
-use plonky2lib_succinct::ed25519::curve::curve_types::Curve;
+use plonky2lib_succinct::{ed25519::curve::curve_types::Curve, hash_functions::blake2b::CHUNK_128_BYTES};
 use plonky2lib_succinct::hash_functions::blake2b::make_blake2b_circuit;
 use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::{circuit_builder::CircuitBuilder}};
 use plonky2_field::extension::Extendable;
@@ -11,6 +11,100 @@ pub struct VerifySubchainTarget {
     pub head_block_hash: AvailHashTarget,   // The input is a vector of bits (in BE bit order)
     pub head_block_num: Target,             // Should be a 32-bit unsigned integer
     pub encoded_headers: Vec<EncodedHeaderTarget>,
+}
+
+pub trait CircuitBuilderIVC {
+    fn process_header(
+        &mut self,
+        encoded_header: &EncodedHeaderTarget,
+        parent_hash_num: &Target,
+        parent_hash: &AvailHashTarget,
+        pih_acc: &AvailHashTarget,
+    );
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderIVC for CircuitBuilder<F, D> {
+    fn process_header(
+        &mut self,
+        encoded_header: &EncodedHeaderTarget,
+        parent_hash_num: &Target,
+        parent_hash_target: &AvailHashTarget,
+        pih_acc_target: &AvailHashTarget,
+    ) {
+        // Get the decoded_header object to retrieve the block numbers and parent hashes
+        let decoded_header = self.decode_header(encoded_header);
+
+        // Verify that this header's block number is one greater than the previous header's block number
+        let one = self.one();
+        let expected_block_num = self.add(*parent_hash_num, one);
+        self.connect(expected_block_num, decoded_header.block_number);
+
+        // Verify that the parent hash is equal to the decoded parent hash
+        self.connect_hash(parent_hash_target.clone(), decoded_header.parent_hash);
+
+        // Calculate the hash for the current header
+        let header_hasher = make_blake2b_circuit(
+            self,
+            MAX_HEADER_SIZE * 8,
+            HASH_SIZE
+        );
+
+        // Input the encoded header bytes into the hasher
+        for i in 0..MAX_HEADER_SIZE {
+            // Need to split the bytes into bits
+            let mut bits = self.split_le(encoded_header.header_bytes[i], 8);
+
+            // Needs to be in bit big endian order for the EDDSA verification circuit
+            bits.reverse();
+            for (j, bit) in bits.iter().enumerate().take(8){
+                self.connect(header_hasher.message[i*8+j].target, bit.target);
+            }
+        }
+
+        // Calculate the hash of the extracted fields and add them into the accumulator
+        let pih_acc_hasher = make_blake2b_circuit(
+            self,
+            CHUNK_128_BYTES,
+            HASH_SIZE,
+        );
+
+        let mut hasher_idx = 0;
+        // Input the accumulator
+        for hash_byte in pih_acc_target.0.iter() {
+            let mut bits = self.split_le(*hash_byte, 8);
+
+            bits.reverse();
+            assert!(bits.len() == 8);
+            for bit in bits.iter() {
+                self.connect(pih_acc_hasher.message[hasher_idx].target, bit.target);
+                hasher_idx += 1;
+            }
+        }
+
+        // Input the header hash
+        for bit in header_hasher.digest.iter() {
+            self.connect(pih_acc_hasher.message[hasher_idx].target, bit.target);
+            hasher_idx += 1;
+        }
+
+        // Input the state root
+        for byte in decoded_header.state_root.0.iter() {
+            let mut bits = self.split_le(*byte, 8);
+
+            bits.reverse();
+            assert!(bits.len() == 8);
+            for bit in bits.iter() {
+                self.connect(pih_acc_hasher.message[hasher_idx].target, bit.target);
+                hasher_idx += 1;
+            }
+        }
+
+        let input_len = self.constant(F::from_canonical_usize((hasher_idx+1)/8));
+        self.connect(pih_acc_hasher.message_len, input_len);
+
+        self.register_public_inputs(&header_hasher.digest.iter().map(|x| x.target).collect::<Vec<_>>());
+        self.register_public_inputs(&pih_acc_hasher.digest.iter().map(|x| x.target).collect::<Vec<_>>());
+    }
 }
 
 pub trait CircuitBuilderStep<C: Curve> {
@@ -250,13 +344,16 @@ mod tests {
 
     use anyhow::Result;
     use log::Level;
+    use plonky2::gates::noop::NoopGate;
     use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
-    use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData};
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::plonk::circuit_data::{CircuitConfig, CircuitData, CommonCircuitData};
+    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig, AlgebraicHasher};
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
+    use plonky2::recursion::cyclic_recursion::check_cyclic_proof_verifier_data;
+    use plonky2::recursion::dummy_circuit::cyclic_base_proof;
     use plonky2::util::timing::TimingTree;
     use plonky2_field::extension::Extendable;
     use plonky2_field::types::{Field, PrimeField64};
@@ -264,8 +361,8 @@ mod tests {
 
     use crate::justification::{set_precommits_pw, set_authority_set_pw};
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
-    use crate::step::make_step_circuit;
-    use crate::utils::{QUORUM_SIZE, WitnessAvailHash, WitnessEncodedHeader};
+    use crate::step::{make_step_circuit, CircuitBuilderIVC};
+    use crate::utils::{QUORUM_SIZE, WitnessAvailHash, WitnessEncodedHeader, CircuitBuilderUtils, AvailHashTarget};
     use crate::utils::tests::{
         BLOCK_530508_PARENT_HASH,
         BLOCK_530508_HEADER,
@@ -619,5 +716,191 @@ mod tests {
         fs::write("step_recursive.proof_with_public_inputs.json", outer_proof_serialized).expect("Unable to write file");
 
         ret
+    }
+
+    // Generates `CommonCircuitData` usable for recursion.
+    fn common_data_for_recursion<
+        F: RichField + Extendable<D>,
+        C: GenericConfig<D, F = F>,
+        const D: usize,
+    >() -> CommonCircuitData<F, D>
+    where
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        let config = CircuitConfig::standard_recursion_config();
+        let builder = CircuitBuilder::<F, D>::new(config);
+        let data = builder.build::<C>();
+        let config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config);
+        let proof = builder.add_virtual_proof_with_pis(&data.common);
+        let verifier_data =
+            builder.add_virtual_verifier_data(data.common.config.fri_config.cap_height);
+        builder.verify_proof::<C>(&proof, &verifier_data, &data.common);
+        let data = builder.build::<C>();
+
+        let config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config);
+        let proof = builder.add_virtual_proof_with_pis(&data.common);
+        let verifier_data =
+            builder.add_virtual_verifier_data(data.common.config.fri_config.cap_height);
+        builder.verify_proof::<C>(&proof, &verifier_data, &data.common);
+        while builder.num_gates() < 1 << 12 {
+            builder.add_gate(NoopGate, vec![]);
+        }
+        builder.build::<C>().common
+    }
+
+    #[test]
+    fn test_process_header_ivc() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Curve = Ed25519;
+
+        let config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config);
+
+        let head_block_num = builder.add_virtual_target();
+        builder.register_public_input(head_block_num);
+        let head_block_hash = builder.add_virtual_avail_hash_target_safe(true);
+        builder.register_public_inputs(&head_block_hash.0);
+        let initial_accumulator = builder.add_virtual_avail_hash_target_safe(true);
+        builder.register_public_inputs(&initial_accumulator.0);
+
+        let current_block_num = builder.add_virtual_target();
+        let current_block_hash = builder.add_virtual_avail_hash_target_safe(true);
+        let current_accumulator = builder.add_virtual_avail_hash_target_safe(true);
+
+        let encoded_block_input = builder.add_virtual_encoded_header_target_safe();
+
+        builder.process_header(
+            &encoded_block_input,
+            &current_block_num,
+            &current_block_hash,
+            &current_accumulator,
+        );
+
+        let mut common_data = common_data_for_recursion::<F, C, D>();
+        let verifier_data_target = builder.add_verifier_data_public_inputs();
+        common_data.num_public_inputs = builder.num_public_inputs();
+
+        let condition = builder.add_virtual_bool_target_safe();
+
+        // Unpack inner proof's public inputs.
+        let inner_cyclic_proof_with_pis = builder.add_virtual_proof_with_pis(&common_data);
+        let inner_cyclic_pis = &inner_cyclic_proof_with_pis.public_inputs;
+        let inner_cyclic_initial_block_num = inner_cyclic_pis[0];
+        let inner_cyclic_initial_block_hash = AvailHashTarget(inner_cyclic_pis[1..33].try_into().unwrap());
+        let inner_cyclic_initial_accumulator = AvailHashTarget(inner_cyclic_pis[33..65].try_into().unwrap());
+
+        // Connect our initial values to that of our inner proof. (If there is no inner proof, the
+        // initial values will be unconstrained, which is intentional.)
+        builder.connect(head_block_num, inner_cyclic_initial_block_num);
+        builder.connect_hash(head_block_hash.clone(), inner_cyclic_initial_block_hash.clone());
+        builder.connect_hash(initial_accumulator.clone(), inner_cyclic_initial_accumulator.clone());
+
+        // The input values is the previous outputs if we have an inner proof, or the initial values
+        // if this is the base case.
+        let actual_block_num_in =
+            builder.select(condition, inner_cyclic_initial_block_num, head_block_num);
+        let actual_block_hash_in =
+            builder.select_hash(condition, &inner_cyclic_initial_block_hash, &head_block_hash);
+        let actual_accumulator_in =
+            builder.select_hash(condition, &inner_cyclic_initial_accumulator, &initial_accumulator);
+        builder.connect(current_block_num, actual_block_num_in);
+        builder.connect_hash(current_block_hash, actual_block_hash_in);
+        builder.connect_hash(current_accumulator, actual_accumulator_in);
+
+
+        builder.conditionally_verify_cyclic_proof_or_dummy::<C>(
+            condition,
+            &inner_cyclic_proof_with_pis,
+            &common_data,
+        )?;
+
+        let cyclic_circuit_data = builder.build::<C>();
+
+        let headers = vec![
+            BLOCK_530508_HEADER.to_vec(),
+            BLOCK_530509_HEADER.to_vec(),
+            BLOCK_530510_HEADER.to_vec(),
+            BLOCK_530511_HEADER.to_vec(),
+            BLOCK_530512_HEADER.to_vec(),
+            BLOCK_530513_HEADER.to_vec(),
+            BLOCK_530514_HEADER.to_vec(),
+            BLOCK_530515_HEADER.to_vec(),
+            BLOCK_530516_HEADER.to_vec(),
+            BLOCK_530517_HEADER.to_vec(),
+            BLOCK_530518_HEADER.to_vec(),
+            BLOCK_530519_HEADER.to_vec(),
+            BLOCK_530520_HEADER.to_vec(),
+            BLOCK_530521_HEADER.to_vec(),
+            BLOCK_530522_HEADER.to_vec(),
+            BLOCK_530523_HEADER.to_vec(),
+            BLOCK_530524_HEADER.to_vec(),
+            BLOCK_530525_HEADER.to_vec(),
+            BLOCK_530526_HEADER.to_vec(),
+            BLOCK_530527_HEADER.to_vec(),
+        ];
+        let head_block_hash_val = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
+        let head_block_num_val = 530507;
+        let initial_accumulator_val = [0u8; 32];
+
+        let mut pw = PartialWitness::new();
+        pw.set_bool_target(condition, false);
+        pw.set_encoded_header_target(&encoded_block_input, headers[0].clone());
+
+        let mut initial_pi = Vec::new();
+        initial_pi.push(F::from_canonical_u64(head_block_num_val));
+        initial_pi.extend(head_block_hash_val.iter().map(|b| F::from_canonical_u64(*b as u64)));
+        initial_pi.extend(initial_accumulator_val.iter().map(|b| F::from_canonical_u64(*b as u64)));
+        let initial_pi_map = initial_pi.into_iter().enumerate().collect();
+
+        pw.set_proof_with_pis_target::<C, D>(
+            &inner_cyclic_proof_with_pis,
+            &cyclic_base_proof(
+                &common_data,
+                &cyclic_circuit_data.verifier_only,
+                initial_pi_map,
+            ),
+        );
+        pw.set_verifier_data_target(&verifier_data_target, &cyclic_circuit_data.verifier_only);
+        let proof = cyclic_circuit_data.prove(pw)?;
+        check_cyclic_proof_verifier_data(
+            &proof,
+            &cyclic_circuit_data.verifier_only,
+            &cyclic_circuit_data.common,
+        )?;
+        cyclic_circuit_data.verify(proof.clone())?;
+
+        // 1st recursive layer.
+        let mut pw = PartialWitness::new();
+        pw.set_bool_target(condition, true);
+        pw.set_proof_with_pis_target(&inner_cyclic_proof_with_pis, &proof);
+        pw.set_verifier_data_target(&verifier_data_target, &cyclic_circuit_data.verifier_only);
+        let proof = cyclic_circuit_data.prove(pw)?;
+        check_cyclic_proof_verifier_data(
+            &proof,
+            &cyclic_circuit_data.verifier_only,
+            &cyclic_circuit_data.common,
+        )?;
+        cyclic_circuit_data.verify(proof.clone())?;
+
+        // 2nd recursive layer.
+        let mut pw = PartialWitness::new();
+        pw.set_bool_target(condition, true);
+        pw.set_proof_with_pis_target(&inner_cyclic_proof_with_pis, &proof);
+        pw.set_verifier_data_target(&verifier_data_target, &cyclic_circuit_data.verifier_only);
+        let proof = cyclic_circuit_data.prove(pw)?;
+        check_cyclic_proof_verifier_data(
+            &proof,
+            &cyclic_circuit_data.verifier_only,
+            &cyclic_circuit_data.common,
+        )?;
+
+        // TODO: Verify that the proof correctly computes a repeated hash.
+
+        cyclic_circuit_data.verify(proof)
+
     }
 }

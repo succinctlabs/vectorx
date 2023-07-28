@@ -15,7 +15,7 @@ pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 
 use plonky2::{
     iop::{
-        target::Target,
+        target::{Target, BoolTarget},
         generator::{SimpleGenerator, GeneratedValues},
         witness::{PartitionWitness, Witness, WitnessWrite}
     },
@@ -131,6 +131,13 @@ pub trait CircuitBuilderUtils {
         y: AvailHashTarget
     );
 
+    fn select_hash(
+        &mut self,
+        selector: BoolTarget,
+        x: &AvailHashTarget,
+        y: &AvailHashTarget,
+    ) -> AvailHashTarget;
+
     fn int_div(
         &mut self,
         dividend: Target,
@@ -183,6 +190,19 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         for i in 0..HASH_SIZE {
             self.connect(x.0[i], y.0[i]);
         }
+    }
+
+    fn select_hash(
+        &mut self,
+        selector: BoolTarget,
+        x: &AvailHashTarget,
+        y: &AvailHashTarget,
+    ) -> AvailHashTarget {
+        let mut res = Vec::new();
+        for i in 0..HASH_SIZE {
+            res.push(self.select(selector, x.0[i], y.0[i]));
+        }
+        AvailHashTarget(res.try_into().unwrap())
     }
 
     fn int_div(

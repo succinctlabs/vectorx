@@ -17,8 +17,8 @@ pub trait CircuitBuilderIVC {
     fn process_header(
         &mut self,
         encoded_header: &EncodedHeaderTarget,
-        encoded_header_size: &Target,
-        parent_hash_num: &Target,
+        encoded_header_size: Target,
+        parent_block_num: Target,
         parent_hash: &AvailHashTarget,
         pih_acc: &AvailHashTarget,
     );
@@ -28,8 +28,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderIVC for Circuit
     fn process_header(
         &mut self,
         encoded_header: &EncodedHeaderTarget,
-        encoded_header_size: &Target,
-        parent_hash_num: &Target,
+        encoded_header_size: Target,
+        parent_block_num: Target,
         parent_hash_target: &AvailHashTarget,
         pih_acc_target: &AvailHashTarget,
     ) {
@@ -38,7 +38,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderIVC for Circuit
 
         // Verify that this header's block number is one greater than the previous header's block number
         let one = self.one();
-        let expected_block_num = self.add(*parent_hash_num, one);
+        let expected_block_num = self.add(parent_block_num, one);
         self.connect(expected_block_num, decoded_header.block_number);
         self.register_public_input(decoded_header.block_number);
 
@@ -64,7 +64,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderIVC for Circuit
             }
         }
 
-        self.connect(header_hasher.message_len, *encoded_header_size);
+        self.connect(header_hasher.message_len, encoded_header_size);
 
         // Calculate the hash of the extracted fields and add them into the accumulator
         let pih_acc_hasher = make_blake2b_circuit(
@@ -768,8 +768,7 @@ mod tests {
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let head_block_num = builder.add_virtual_target();
-        builder.register_public_input(head_block_num);
+        let head_block_num = builder.add_virtual_public_input();
         let head_block_hash = builder.add_virtual_avail_hash_target_safe(true);
         let initial_accumulator = builder.add_virtual_avail_hash_target_safe(true);
 
@@ -782,8 +781,8 @@ mod tests {
 
         builder.process_header(
             &encoded_block_input,
-            &encoded_block_size,
-            &current_block_num,
+            encoded_block_size,
+            current_block_num,
             &current_block_hash,
             &current_accumulator,
         );
@@ -995,7 +994,7 @@ mod tests {
             &cyclic_circuit_data.common,
         )?;
 
-        println!("proof public inputs: {:?}", proof3.public_inputs);
+        println!("proof public inputs: {:?}", proof3.public_inputs.iter().map(|x| x.to_canonical_u64()).collect::<Vec<_>>());
 
         // TODO: Verify that the proof correctly computes a repeated hash.
         cyclic_circuit_data.verify(proof3)

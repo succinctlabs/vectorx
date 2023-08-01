@@ -1,8 +1,15 @@
+use std::marker::PhantomData;
+
+use plonky2::hash::poseidon::PoseidonHash;
+use plonky2::iop::challenger::RecursiveChallenger;
+use plonky2::iop::generator::{SimpleGenerator, GeneratedValues};
+use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
+use plonky2::util::serialization::{IoResult, Buffer};
 use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powers_circuit};
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2_field::extension::Extendable;
-use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, HASH_SIZE, EncodedHeaderTarget };
+use crate::utils::{ AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, HASH_SIZE, MAX_HEADER_SIZE };
 
 trait CircuitBuilderScaleDecoder {
     fn decode_compact_int(
@@ -80,14 +87,14 @@ pub struct HeaderTarget {
     pub block_number: Target,
     pub parent_hash: AvailHashTarget,
     pub state_root: AvailHashTarget,
-    // pub data_root: HashTarget,
+    pub data_root: AvailHashTarget,
 }
-
 
 pub trait CircuitBuilderHeaderDecoder {
     fn decode_header(
         &mut self,
         header: &EncodedHeaderTarget,
+        header_hash: AvailHashTarget,
     ) -> HeaderTarget;
 }
 
@@ -96,15 +103,16 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
     fn decode_header(
         &mut self,
         header: &EncodedHeaderTarget,
+        header_hash: AvailHashTarget,
     ) -> HeaderTarget {
 
         // The first 32 bytes are the parent hash
-        let parent_hash_target = header.header_bytes[0..32].to_vec();
+        let parent_hash_target = header.header_bytes[0..HASH_SIZE].to_vec();
 
         // Next field is the block number
         // Can need up to 5 bytes to represent a compact u32
         const MAX_BLOCK_NUMBER_SIZE: usize = 5;
-        let (block_number_target, compress_mode, _) = self.decode_compact_int(header.header_bytes[32..32+MAX_BLOCK_NUMBER_SIZE].to_vec());
+        let (block_number_target, compress_mode, _) = self.decode_compact_int(header.header_bytes[HASH_SIZE..HASH_SIZE+MAX_BLOCK_NUMBER_SIZE].to_vec());
 
         let all_possible_state_roots = vec![
             header.header_bytes[33..33+HASH_SIZE].to_vec(),
@@ -118,34 +126,124 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
             &all_possible_state_roots,
         );
 
-        // Can't get this to work yet.  Getting an error with the random_access gate
-        /*
-        let mut all_possible_data_roots = Vec::new();
+        // Parse the data root field.
+        // For this, we will use a generator to extract the data root field from the header bytes.
+        // To verify that it is correct, we will use a method similar to reduce a row to a value
+        // (https://wiki.polygon.technology/docs/miden/design/multiset#computing-a-virtual-tables-trace-column).
+        // To retrieve the randomness, we use plonky2's recursive challenger seeding it with 3 elements of 56 bits from the header hash.
+        // We do the verification twice to increase the security of it.
+        let mut data_root_target = Vec::new();
 
-        // 97 bytes is the minimum total size of all the header's fields before the data root
-        const DATA_ROOT_MIN_START_IDX: usize = 97;
-        for start_idx in DATA_ROOT_MIN_START_IDX..MAX_HEADER_SIZE - HASH_SIZE {
-            all_possible_data_roots.push(header.header_bytes[start_idx..start_idx+HASH_SIZE].to_vec());
+        for _i in 0..HASH_SIZE {
+            data_root_target.push(self.add_virtual_target());
         }
 
-        // Need to pad all_possible_data_roots to be length of a power of 2
-        let min_power_of_2 = ((MAX_HEADER_SIZE - HASH_SIZE) as f32).log2().ceil() as usize;
-        let all_possible_data_roots_size = 2usize.pow(min_power_of_2 as u32);
-        for _ in all_possible_data_roots.len()..all_possible_data_roots_size {
-            all_possible_data_roots.push(vec![self.zero(); HASH_SIZE]);
+        self.add_simple_generator(DataRootFieldExtractor::<F, D> {
+            encoded_header: header.clone(),
+            data_root: data_root_target.as_slice().try_into().unwrap(),
+            _marker: PhantomData,
+        });
+
+        let mut challenger = RecursiveChallenger::<F, PoseidonHash, D>::new(self);
+        // Seed the challenger with 3 elements of 56 bits from the header hash.
+        let mut seed = Vec::new();
+        for i in 0..3 {
+            let seed_bytes: [Target; 7] = header_hash.0[i*7..i*7+7].try_into().unwrap();
+
+            // This code is splitting the bytes into bits and then recombining them into a 56 bit target.
+            // TODO:  This can be done by just combining the bytes directly.
+            let seed_bits = seed_bytes
+                .iter()
+                .flat_map(|t| self.split_le(*t, 8)).collect::<Vec<_>>();
+
+            seed.push(self.le_sum(seed_bits.iter()));
         }
 
-        let data_root_min_idx = self.constant(F::from_canonical_usize(DATA_ROOT_MIN_START_IDX));
-        let data_root_idx = self.sub(header.header_size, data_root_min_idx);
+        challenger.observe_elements(&seed);
 
-        let data_root_target = self.random_access_vec(data_root_idx, all_possible_data_roots);
-        */
+        for _i in 0..2 {
+            let challenges = challenger.get_n_challenges(self, 32);
+            let mut j_target = self.zero();
+            let data_root_size = self.constant(F::from_canonical_usize(32));
+            let data_root_start_idx = self.sub(header.header_size, data_root_size);
+            let mut within_sub_array = self.zero();
+            let one = self.one();
+
+            let mut accumulator1 = self.zero();
+            for j in 0..MAX_HEADER_SIZE {
+                let at_start_idx = self.is_equal(j_target, data_root_start_idx);
+                within_sub_array = self.add(within_sub_array, at_start_idx.target);
+                let at_end_idx = self.is_equal(j_target, header.header_size);
+                within_sub_array = self.sub(within_sub_array, at_end_idx.target);
+
+                let mut subarray_idx = self.sub(j_target, data_root_start_idx);
+                subarray_idx = self.mul(subarray_idx, within_sub_array);
+                let challenge = self.random_access(subarray_idx, challenges.clone());
+                let mut product = self.mul(header.header_bytes[j], challenge);
+                product = self.mul(within_sub_array, product);
+                accumulator1 = self.add(accumulator1, product);
+
+                j_target = self.add(j_target, one);
+            }
+
+            let mut accumulator2 = self.zero();
+            for j in 0..HASH_SIZE {
+                let product = self.mul(data_root_target[j], challenges[j]);
+                accumulator2 = self.add(accumulator2, product);
+            }
+
+            self.connect(accumulator1, accumulator2);
+        }
 
         HeaderTarget {
             parent_hash: AvailHashTarget(parent_hash_target.try_into().unwrap()),
             block_number: block_number_target,
             state_root: AvailHashTarget(state_root_target.try_into().unwrap()),
-            //data_root: HashTarget(data_root_target.try_into().unwrap()),
+            data_root: AvailHashTarget(data_root_target.try_into().unwrap()),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct DataRootFieldExtractor<F: RichField + Extendable<D>,
+    const D: usize
+> {
+    encoded_header: EncodedHeaderTarget,
+    data_root: [Target; 32],
+    _marker: PhantomData<F>,
+}
+
+
+impl<
+    F: RichField + Extendable<D>,
+    const D: usize,
+> SimpleGenerator<F> for DataRootFieldExtractor< F, D> {
+    fn id(&self) -> String {
+        "DataRootFieldExtractor".to_string()
+    }
+
+    fn serialize(&self, _dst: &mut Vec<u8>) -> IoResult<()> {
+        unimplemented!();
+    }
+
+    fn deserialize(_src: &mut Buffer) -> IoResult<Self> {
+        unimplemented!();
+    }
+
+    fn dependencies(&self) -> Vec<Target> {
+        let mut dependencies = Vec::new();
+        dependencies.extend(self.encoded_header.header_bytes.iter());
+        dependencies.push(self.encoded_header.header_size);
+        dependencies
+    }
+
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+        let header_length = witness.get_target(self.encoded_header.header_size).to_canonical_u64() as usize;
+        let data_root_start_idx = header_length - HASH_SIZE;
+
+        for i in data_root_start_idx..data_root_start_idx+HASH_SIZE {
+            let byte = witness.get_target(self.encoded_header.header_bytes[i]);
+            out_buffer.set_target(self.data_root[i - data_root_start_idx], byte);
         }
     }
 }
@@ -216,7 +314,7 @@ mod tests {
     use plonky2_field::types::Field;
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::utils::{MAX_HEADER_SIZE, AvailHashTarget, CircuitBuilderUtils};
-    use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
+    use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT, BLOCK_576728_BLOCK_HASH, BLOCK_576729_DATA_ROOT};
     use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
     fn test_compact_int(
@@ -322,7 +420,15 @@ mod tests {
             header_bytes_target.push(builder.zero());
         }
 
-        let decoded_header = builder.decode_header(&EncodedHeaderTarget{header_bytes: header_bytes_target.try_into().unwrap(), header_size});
+        let block_hash = hex::decode(BLOCK_576728_BLOCK_HASH).unwrap();
+        let block_hash_target = AvailHashTarget(block_hash.iter().map(
+            |b| builder.constant(F::from_canonical_u8(*b))
+        ).collect::<Vec<_>>().try_into().unwrap());
+
+        let decoded_header = builder.decode_header(
+            &EncodedHeaderTarget{header_bytes: header_bytes_target.try_into().unwrap(), header_size},
+            block_hash_target
+        );
 
         let expected_block_number = builder.constant(F::from_canonical_u64(576728));
         builder.connect(decoded_header.block_number, expected_block_number);
@@ -339,6 +445,13 @@ mod tests {
         ).collect::<Vec<_>>().try_into().unwrap());
 
         builder.connect_hash(decoded_header.state_root, expected_state_root_target);
+
+        let expected_data_root = hex::decode(BLOCK_576729_DATA_ROOT).unwrap();
+        let expected_data_root_target = AvailHashTarget(expected_data_root.iter().map(
+            |b| builder.constant(F::from_canonical_u8(*b))
+        ).collect::<Vec<_>>().try_into().unwrap());
+
+        builder.connect_hash(decoded_header.data_root, expected_data_root_target);
 
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;

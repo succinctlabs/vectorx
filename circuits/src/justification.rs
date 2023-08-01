@@ -6,7 +6,7 @@ use plonky2lib_succinct::ed25519::curve::eddsa::{EDDSASignature, EDDSAPublicKey,
 use plonky2lib_succinct::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2lib_succinct::ed25519::gadgets::curve::{CircuitBuilderCurve, decompress_point};
 use plonky2lib_succinct::ed25519::gadgets::eddsa::verify_message_circuit;
-use plonky2lib_succinct::ed25519::gadgets::eddsa::{EDDSASignatureTarget};
+use plonky2lib_succinct::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2lib_succinct::hash_functions::blake2b::{make_blake2b_circuit, CHUNK_128_BYTES};
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;

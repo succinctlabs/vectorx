@@ -4,8 +4,8 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::{Target, BoolTarget};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{GenericConfig, AlgebraicHasher};
-use plonky2_gadgets::ecc::ed25519::curve::curve_types::Curve;
-use plonky2_gadgets::hash::blake2::blake2b::blake2b;
+use plonky2x::ecc::ed25519::curve::curve_types::Curve;
+use plonky2x::hash::blake2::blake2b::blake2b;
 use crate::{decoder::CircuitBuilderHeaderDecoder, utils::{QUORUM_SIZE, AvailHashTarget, EncodedHeaderTarget, CircuitBuilderUtils}};
 use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, AuthoritySetSignersTarget, FinalizedBlockTarget};
 use crate::utils::{MAX_HEADER_SIZE, HASH_SIZE, MAX_NUM_HEADERS_PER_STEP};
@@ -283,7 +283,7 @@ mod tests {
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
-    use plonky2_gadgets::ecc::ed25519::curve::ed25519::Ed25519;
+    use plonky2x::ecc::ed25519::curve::ed25519::Ed25519;
 
     use crate::justification::{set_precommits_pw, set_authority_set_pw};
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;

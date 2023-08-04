@@ -8,15 +8,15 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{GenericConfig, AlgebraicHasher};
-use plonky2_gadgets::ecc::ed25519::curve::curve_types::Curve;
-use plonky2_gadgets::ecc::ed25519::curve::eddsa::{EDDSASignature, EDDSAPublicKey, verify_message};
-use plonky2_gadgets::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-use plonky2_gadgets::ecc::ed25519::gadgets::curve::{CircuitBuilderCurve, decompress_point};
-use plonky2_gadgets::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
-use plonky2_gadgets::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
-use plonky2_gadgets::hash::blake2::blake2b::blake2b;
-use plonky2_gadgets::num::biguint::{CircuitBuilderBiguint, WitnessBigUint};
-use plonky2_gadgets::num::nonnative::nonnative::CircuitBuilderNonNative;
+use plonky2x::ecc::ed25519::curve::curve_types::Curve;
+use plonky2x::ecc::ed25519::curve::eddsa::{EDDSASignature, EDDSAPublicKey, verify_message};
+use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
+use plonky2x::ecc::ed25519::gadgets::curve::{CircuitBuilderCurve, decompress_point};
+use plonky2x::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
+use plonky2x::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
+use plonky2x::hash::blake2::blake2b::blake2b;
+use plonky2x::num::biguint::{CircuitBuilderBiguint, WitnessBigUint};
+use plonky2x::num::nonnative::nonnative::CircuitBuilderNonNative;
 
 use crate::utils::{
     CircuitBuilderUtils,
@@ -370,13 +370,13 @@ pub (crate) mod tests {
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig, AlgebraicHasher};
-    use plonky2_gadgets::num::biguint::WitnessBigUint;
-    use plonky2_gadgets::ecc::ed25519::curve::curve_types::Curve;
-    use plonky2_gadgets::ecc::ed25519::curve::ed25519::Ed25519;
-    use plonky2_gadgets::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
-    use plonky2_gadgets::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-    use plonky2_gadgets::ecc::ed25519::gadgets::curve::decompress_point;
-    use plonky2_gadgets::ecc::ed25519::gadgets::eddsa::{EDDSATargets, verify_signatures_circuit};
+    use plonky2x::num::biguint::WitnessBigUint;
+    use plonky2x::ecc::ed25519::curve::curve_types::Curve;
+    use plonky2x::ecc::ed25519::curve::ed25519::Ed25519;
+    use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
+    use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
+    use plonky2x::ecc::ed25519::gadgets::curve::decompress_point;
+    use plonky2x::ecc::ed25519::gadgets::eddsa::{EDDSATargets, verify_signatures_circuit};
 
     use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget, set_precommits_pw, set_authority_set_pw};
     use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};

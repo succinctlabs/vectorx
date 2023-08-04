@@ -34,7 +34,7 @@ subxt = "0.27"
 # Avail circuits
 succinct_avail_circuits = { path = "../circuits" }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
-plonky2_gadgets = { git = "https://github.com/succinctlabs/plonky2-gadgets.git" }
+plonky2x = { git = "https://github.com/succinctlabs/sdk.git" }
 
 ### Binaries
 

@@ -15,7 +15,7 @@ lazy_static = "1.4.0"
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = [ "rand" ] }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
-plonky2_gadgets = { git = "https://github.com/succinctlabs/plonky2-gadgets.git" }
+plonky2x = { git = "https://github.com/succinctlabs/sdk.git" }
 rand = "0.4"
 serde = {version = "1", features= ["derive"]}
 serde_json = "1.0.86"

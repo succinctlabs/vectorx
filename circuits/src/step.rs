@@ -1,7 +1,11 @@
-use plonky2lib_succinct::ed25519::curve::curve_types::Curve;
-use plonky2lib_succinct::hash_functions::blake2b::make_blake2b_circuit;
-use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, plonk::{circuit_builder::CircuitBuilder}};
-use plonky2_field::extension::Extendable;
+use curta::plonky2::field::CubicParameters;
+use plonky2::field::extension::Extendable;
+use plonky2::hash::hash_types::RichField;
+use plonky2::iop::target::{Target, BoolTarget};
+use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::plonk::config::{GenericConfig, AlgebraicHasher};
+use plonky2_gadgets::ecc::ed25519::curve::curve_types::Curve;
+use plonky2_gadgets::hash::blake2::blake2b::blake2b;
 use crate::{decoder::CircuitBuilderHeaderDecoder, utils::{QUORUM_SIZE, AvailHashTarget, EncodedHeaderTarget, CircuitBuilderUtils}};
 use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, AuthoritySetSignersTarget, FinalizedBlockTarget};
 use crate::utils::{MAX_HEADER_SIZE, HASH_SIZE, MAX_NUM_HEADERS_PER_STEP};
@@ -13,24 +17,36 @@ pub struct VerifySubchainTarget {
     pub encoded_headers: Vec<EncodedHeaderTarget>,
 }
 
-pub trait CircuitBuilderStep<C: Curve> {
-    fn step(
+pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Curve> {
+    fn step<
+            Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+            E: CubicParameters<F>,
+    >(
         &mut self,
         subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget,
         public_inputs_hash: &AvailHashTarget,
-    );
+    )
+    where
+        Config::Hasher: AlgebraicHasher<F>
+    ;
 }
 
-impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<C> for CircuitBuilder<F, D> {
-    fn step(
+impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<F, D, C> for CircuitBuilder<F, D> {
+    fn step<
+        Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        E: CubicParameters<F>,
+    >(    
         &mut self,
         subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget,
         public_inputs_hash: &AvailHashTarget,
-    ) {
+    )
+    where
+        Config::Hasher: AlgebraicHasher<F>,
+    {
         assert!(subchain.encoded_headers.len() <= MAX_NUM_HEADERS_PER_STEP);
 
         // The public inputs are 1356 bytes long (for 20 headers);
@@ -99,10 +115,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             }
 
             // Calculate the hash for the current header
-            let hash_circuit = make_blake2b_circuit(
+            let hash_circuit = blake2b::<F, D, MAX_HEADER_SIZE, HASH_SIZE> (
                 self,
-                MAX_HEADER_SIZE * 8,
-                HASH_SIZE
             );
 
             // Input the encoded header bytes into the hasher
@@ -149,7 +163,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         }
 
         // Now verify the grandpa justification
-        self.verify_justification(
+        self.verify_justification::<Config, E>(
             signed_precommits,
             authority_set_signers,
             &FinalizedBlockTarget {
@@ -160,10 +174,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // The input digest is 1356 bytes (for 20 headers).  Need to pad that so that the result
         // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes
-        let public_inputs_hash_circuit = make_blake2b_circuit(
+        const PUBLIC_INPUTS_MAX_SIZE: usize = 1408 * 8;
+        let public_inputs_hash_circuit = blake2b::<F, D, PUBLIC_INPUTS_MAX_SIZE, HASH_SIZE>(
             self,
-            1408 * 8,
-            HASH_SIZE,
         );
 
         for (i, bit) in public_inputs_hash_input.iter().enumerate() {
@@ -200,7 +213,16 @@ pub struct StepTarget<C: Curve> {
     pub public_inputs_hash: AvailHashTarget,
 }
 
-pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>(builder: &mut CircuitBuilder::<F, D>) -> StepTarget<C>{
+pub fn make_step_circuit<
+            F: RichField + Extendable<D>,
+            const D: usize,
+            C: Curve,
+            Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+            E: CubicParameters<F>>
+    (builder: &mut CircuitBuilder::<F, D>) -> StepTarget<C>
+    where
+        Config::Hasher: AlgebraicHasher<F>,
+{
     let head_block_hash_target = builder.add_virtual_avail_hash_target_safe(false);
 
     let head_block_num_target = builder.add_virtual_target();
@@ -219,7 +241,7 @@ pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>
         precommit_targets.push(builder.add_virtual_precommit_target_safe());
     }
 
-    let authority_set = <CircuitBuilder<F, D> as CircuitBuilderGrandpaJustificationVerifier<C>>::add_virtual_authority_set_signers_target_safe(builder);
+    let authority_set = <CircuitBuilder<F, D> as CircuitBuilderGrandpaJustificationVerifier<F, C, D>>::add_virtual_authority_set_signers_target_safe(builder);
 
     let verify_subchain_target = VerifySubchainTarget {
         head_block_hash: head_block_hash_target,
@@ -229,7 +251,7 @@ pub fn make_step_circuit<F: RichField + Extendable<D>, const D: usize, C: Curve>
 
     let public_inputs_hash = builder.add_virtual_avail_hash_target_safe(true);
 
-    builder.step(
+    builder.step::<Config, E>(
         &verify_subchain_target,
         precommit_targets.clone(),
         &authority_set,
@@ -249,7 +271,10 @@ mod tests {
     use std::fs;
 
     use anyhow::Result;
+    use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
     use log::Level;
+    use plonky2::field::extension::Extendable;
+    use plonky2::field::types::{Field, PrimeField64};
     use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -258,9 +283,7 @@ mod tests {
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
-    use plonky2_field::extension::Extendable;
-    use plonky2_field::types::{Field, PrimeField64};
-    use plonky2lib_succinct::ed25519::curve::ed25519::Ed25519;
+    use plonky2_gadgets::ecc::ed25519::curve::ed25519::Ed25519;
 
     use crate::justification::{set_precommits_pw, set_authority_set_pw};
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
@@ -325,12 +348,13 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+        type E = GoldilocksCubicParameters;
         type Curve = Ed25519;
 
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
 
-        let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
+        let step_target = make_step_circuit::<F, D, Curve, C, E>(&mut builder);
 
         pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
         pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));
@@ -488,6 +512,7 @@ mod tests {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
         type F = <C as GenericConfig<D>>::F;
+        type E = GoldilocksCubicParameters;
         type Curve = Ed25519;
 
         let headers = vec![
@@ -525,7 +550,7 @@ mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
 
-        let step_target = make_step_circuit::<F, D, Curve>(&mut builder);
+        let step_target = make_step_circuit::<F, D, Curve, C, E>(&mut builder);
 
         pw.set_avail_hash_target(&step_target.subchain_target.head_block_hash, &(head_block_hash.try_into().unwrap()));
         pw.set_target(step_target.subchain_target.head_block_num, F::from_canonical_u64(head_block_num));

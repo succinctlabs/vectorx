@@ -1,7 +1,7 @@
-use plonky2::{hash::hash_types::RichField, plonk::plonk_common::reduce_with_powers_circuit};
+use plonky2::field::extension::Extendable;
+use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
-use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2_field::extension::Extendable;
+use plonky2::plonk::{ plonk_common::reduce_with_powers_circuit, circuit_builder::CircuitBuilder};
 use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, HASH_SIZE, EncodedHeaderTarget };
 
 trait CircuitBuilderScaleDecoder {
@@ -206,6 +206,7 @@ mod tests {
 
     use anyhow::Result;
     use log::Level;
+    use plonky2::field::types::Field;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
@@ -213,7 +214,6 @@ mod tests {
     use plonky2::plonk::prover::prove;
     use plonky2::util::serialization::DefaultGateSerializer;
     use plonky2::util::timing::TimingTree;
-    use plonky2_field::types::Field;
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::utils::{MAX_HEADER_SIZE, AvailHashTarget, CircuitBuilderUtils};
     use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};

@@ -1,29 +1,23 @@
 use std::marker::PhantomData;
-use plonky2lib_succinct::hash_functions::blake2b::CHUNK_128_BYTES;
+use plonky2::{field::{extension::Extendable, types::{PrimeField, PrimeField64}}, plonk::circuit_data::CommonCircuitData};
+use plonky2::hash::hash_types::RichField;
+use plonky2::iop::target::Target;
+use plonky2::iop::generator::{SimpleGenerator, GeneratedValues};
+use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
+use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 
 pub const NUM_AUTHORITIES: usize = 10;
 pub const NUM_AUTHORITIES_PADDED: usize = 16;  // The random access gadget requires a power of 2, so we pad the authority set to 16
 pub const QUORUM_SIZE: usize = 7;  // 2/3 + 1 of NUM_VALIDATORS
 pub const MAX_NUM_HEADERS_PER_STEP: usize = 20;
 
+pub const CHUNK_128_BYTES: usize = 128;
 pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 pub const HASH_SIZE: usize = 32;                         // in bytes
 pub const PUB_KEY_SIZE: usize = 32;                      // in bytes
 
-
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
-
-use plonky2::{
-    iop::{
-        target::Target,
-        generator::{SimpleGenerator, GeneratedValues},
-        witness::{PartitionWitness, Witness, WitnessWrite}
-    },
-    hash::hash_types::RichField,
-    plonk::circuit_builder::CircuitBuilder, util::serialization::{Buffer, IoResult, Read, Write}
-};
-use plonky2_field::{extension::Extendable, types::{PrimeField, PrimeField64}};
-
 #[derive(Debug, Clone)]
 pub struct AvailHashTarget(pub [Target; HASH_SIZE]);
 
@@ -249,19 +243,19 @@ struct FloorDivGenerator<
 impl<
     F: RichField + Extendable<D>,
     const D: usize,
-> SimpleGenerator<F> for FloorDivGenerator<F, D> {
+> SimpleGenerator<F, D> for FloorDivGenerator<F, D> {
     fn id(&self) -> String {
         "FloorDivGenerator".to_string()
     }
 
-    fn serialize(&self, dst: &mut Vec<u8>) -> IoResult<()> {
+    fn serialize(&self, dst: &mut Vec<u8>, common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
         dst.write_target(self.divisor)?;
         dst.write_target(self.dividend)?;
         dst.write_target(self.quotient)?;
         dst.write_target(self.remainder)
     }
 
-    fn deserialize(src: &mut Buffer) -> IoResult<Self> {
+    fn deserialize(src: &mut Buffer, common_data: &CommonCircuitData<F, D>) -> IoResult<Self> {
         let divisor = src.read_target()?;
         let dividend = src.read_target()?;
         let quotient = src.read_target()?;

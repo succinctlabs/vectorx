@@ -1,12 +1,13 @@
 use core::fmt;
-use std::{io::BufReader, marker::PhantomData, error::Error};
 
 use num::BigUint;
-use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
-use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension, types::Field};
-use serde::{Serialize, Deserialize, Serializer, Deserializer, de::Visitor};
+use std::{io::BufReader, marker::PhantomData, error::Error};
 
 use ff::{PrimeField, PrimeFieldRepr, Field as ff_Field};
+use plonky2::field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension, types::Field};
+use plonky2::hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField};
+use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
+use serde::{Serialize, Deserialize, Serializer, Deserializer, de::Visitor};
 
 use crate::{Fr, FrRepr, poseidon_bn128::GOLDILOCKS_ELEMENTS};
 use crate::poseidon_bn128::{permution, RATE};

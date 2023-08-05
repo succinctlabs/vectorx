@@ -181,7 +181,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Add the padding
         let zero = self.zero();
-        for i in public_inputs_hash_input.len()..PUBLIC_INPUTS_MAX_SIZE {
+        for i in public_inputs_hash_input.len()..PUBLIC_INPUTS_MAX_SIZE*8 {
             self.connect(zero, public_inputs_hash_circuit.message[i].target);
         }
 

@@ -32,11 +32,9 @@ sp-state-machine = "0.12.0"
 subxt = "0.27"
 
 # Avail circuits
-succinct_avail_proof_generators = { path = "../circuits" }
+succinct_avail_circuits = { path = "../circuits" }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
-plonky2_field = "0.1.0"
-plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git" }
-
+plonky2x = { git = "https://github.com/succinctlabs/sdk.git" }
 
 ### Binaries
 

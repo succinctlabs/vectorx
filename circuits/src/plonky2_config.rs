@@ -1,15 +1,21 @@
 use core::fmt;
-use std::{io::BufReader, marker::PhantomData, error::Error};
 
 use num::BigUint;
-use plonky2::{plonk::config::{GenericConfig, GenericHashOut, Hasher}, hash::{poseidon::{PoseidonHash, PoseidonPermutation}, hash_types::RichField}};
-use plonky2_field::{goldilocks_field::GoldilocksField, extension::quadratic::QuadraticExtension, types::Field};
-use serde::{Serialize, Deserialize, Serializer, Deserializer, de::Visitor};
+use std::{error::Error, io::BufReader, marker::PhantomData};
 
-use ff::{PrimeField, PrimeFieldRepr, Field as ff_Field};
+use ff::{Field as ff_Field, PrimeField, PrimeFieldRepr};
+use plonky2::field::{
+    extension::quadratic::QuadraticExtension, goldilocks_field::GoldilocksField, types::Field,
+};
+use plonky2::hash::{
+    hash_types::RichField,
+    poseidon::{PoseidonHash, PoseidonPermutation},
+};
+use plonky2::plonk::config::{GenericConfig, GenericHashOut, Hasher};
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{Fr, FrRepr, poseidon_bn128::GOLDILOCKS_ELEMENTS};
 use crate::poseidon_bn128::{permution, RATE};
+use crate::{poseidon_bn128::GOLDILOCKS_ELEMENTS, Fr, FrRepr};
 
 /// Configuration using Poseidon BN128 over the Goldilocks field.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize)]
@@ -35,7 +41,8 @@ fn hash_out_to_bytes<F: Field>(hash: PoseidonBN128HashOut<F>) -> Vec<u8> {
         limbs[1].to_le_bytes(),
         limbs[2].to_le_bytes(),
         limbs[3].to_le_bytes(),
-    ].concat()
+    ]
+    .concat()
 }
 
 impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
@@ -81,7 +88,8 @@ impl<F: RichField> Serialize for PoseidonBN128HashOut<F> {
             limbs[1].to_le_bytes(),
             limbs[2].to_le_bytes(),
             limbs[3].to_le_bytes(),
-        ].concat();
+        ]
+        .concat();
 
         let big_int = BigUint::from_bytes_le(bytes.as_slice());
         serializer.serialize_str(big_int.to_str_radix(10).as_str())
@@ -110,7 +118,9 @@ impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
             }
         }
 
-        let deserialized_str = deserializer.deserialize_str(PoseidonBN128HashOutVisitor).unwrap();
+        let deserialized_str = deserializer
+            .deserialize_str(PoseidonBN128HashOutVisitor)
+            .unwrap();
         let big_int = BigUint::parse_bytes(deserialized_str.as_bytes(), 10).unwrap();
 
         let mut bytes = big_int.to_bytes_le();
@@ -129,11 +139,10 @@ impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
     }
 }
 
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct PoseidonBN128Hash;
 impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
-    const HASH_SIZE: usize = 32;    // Hash output is 4 limbs of u64
+    const HASH_SIZE: usize = 32; // Hash output is 4 limbs of u64
     type Hash = PoseidonBN128HashOut<F>;
     type Permutation = PoseidonPermutation<F>;
 
@@ -142,7 +151,7 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
 
         state[0] = Fr::zero();
         for rate_chunk in input.chunks(RATE * 3) {
-            for (j, bn128_chunk)in rate_chunk.chunks(3).enumerate() {
+            for (j, bn128_chunk) in rate_chunk.chunks(3).enumerate() {
                 let mut bytes = bn128_chunk[0].to_canonical_u64().to_le_bytes().to_vec();
 
                 for gl_element in bn128_chunk.iter().skip(1) {
@@ -156,12 +165,12 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
 
                 let mut fr_repr: FrRepr = Default::default();
                 fr_repr.read_le(bytes.as_slice()).unwrap();
-                state[j+1] = Fr::from_repr(fr_repr).unwrap();
+                state[j + 1] = Fr::from_repr(fr_repr).unwrap();
             }
             permution(&mut state);
         }
 
-        PoseidonBN128HashOut{
+        PoseidonBN128HashOut {
             value: state[0],
             _phantom: PhantomData,
         }
@@ -170,7 +179,7 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
     fn hash_pad(input: &[F]) -> Self::Hash {
         let mut padded_input = input.to_vec();
         padded_input.push(F::ONE);
-        while (padded_input.len() + 1) % (RATE*GOLDILOCKS_ELEMENTS) != 0 {
+        while (padded_input.len() + 1) % (RATE * GOLDILOCKS_ELEMENTS) != 0 {
             padded_input.push(F::ZERO);
         }
         padded_input.push(F::ONE);
@@ -194,7 +203,7 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
         let mut state = [Fr::zero(), Fr::zero(), left.value, right.value];
         permution(&mut state);
 
-        PoseidonBN128HashOut{
+        PoseidonBN128HashOut {
             value: state[0],
             _phantom: PhantomData,
         }

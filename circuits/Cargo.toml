@@ -1,33 +1,26 @@
 [package]
-name = "succinct_avail_proof_generators"
+name = "succinct_avail_circuits"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.2.0", features = ["full"] }
-tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
+curta = { git = "https://github.com/succinctlabs/curta.git" }
+env_logger = { version = "0.9.0", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "std"] }
-serde_json = "1.0.86"
-serde = {version = "1", features= ["derive"]}
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
-avail-subxt = {git = "https://github.com/availproject/avail.git"}
-hex = "0.4.3"
 ed25519-dalek = "1.0.1"
+hex = "0.4.3"
+itertools = "0.10.5"
 ff = {package="ff_ce" , version="0.11", features = ["derive"]}
 lazy_static = "1.4.0"
-plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
-plonky2_ecdsa = { git = "ssh://git@github.com/succinctlabs/plonky2-ecdsa", branch="kevjue/serialization" }
-plonky2_field = "0.1.0"
-plonky2_u32 = { git = "ssh://git@github.com/succinctlabs/plonky2-u32", branch="kevjue/serialize" }
-plonky2lib_succinct = { git = "ssh://git@github.com/succinctlabs/plonky2lib.git" }
-num = { version = "0.4", features = [ "rand" ] }
-anyhow = "1.0.68"
-rand = "0.4"
-itertools = "0.10.5"
 log = { version = "0.4.14", default-features = false }
-env_logger = { version = "0.9.0", default-features = false }
+num = { version = "0.4", features = [ "rand" ] }
+plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
+plonky2x = { git = "https://github.com/succinctlabs/sdk.git" }
+rand = "0.4"
+serde = {version = "1", features= ["derive"]}
+serde_json = "1.0.86"
+tokio = { version = "1.2.0", features = ["full"] }
+tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 
-
-#[dev-dependencies]
-#[patch."https://github.com/mir-protocol/plonky2.git"]
-#plonky2 = { path = "../../plonky2/plonky2" }
+[dev-dependencies]
+anyhow = "1.0.68"

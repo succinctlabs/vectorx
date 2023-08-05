@@ -44,8 +44,8 @@ impl<T: Witness<F>, F: PrimeField64> WitnessAvailHash<F> for T {
     }
 
     fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: &[u8; HASH_SIZE]) {
-        for i in 0..HASH_SIZE {
-            self.set_target(target.0[i], F::from_canonical_u8(value[i]));
+        for (i, hash_byte) in value.iter().enumerate().take(HASH_SIZE) {
+            self.set_target(target.0[i], F::from_canonical_u8(*hash_byte));
         }
     }
 }
@@ -56,8 +56,8 @@ pub trait GeneratedValuesAvailHash<F: PrimeField> {
 
 impl<F: PrimeField> GeneratedValuesAvailHash<F> for GeneratedValues<F> {
     fn set_avail_hash_target(&mut self, target: &AvailHashTarget, value: [u8; HASH_SIZE]) {
-        for i in 0..HASH_SIZE {
-            self.set_target(target.0[i], F::from_canonical_u8(value[i]));
+        for (i, hash_byte) in value.iter().enumerate().take(HASH_SIZE) {
+            self.set_target(target.0[i], F::from_canonical_u8(*hash_byte));
         }
     }
 }
@@ -82,8 +82,6 @@ impl<T: Witness<F>, F: PrimeField64> WitnessEncodedHeader<F> for T {
             .take(header_size as usize)
             .map(|t| u8::try_from(self.get_target(*t).to_canonical_u64()).unwrap())
             .collect::<Vec<u8>>()
-            .try_into()
-            .unwrap()
     }
 
     fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>) {
@@ -92,8 +90,8 @@ impl<T: Witness<F>, F: PrimeField64> WitnessEncodedHeader<F> for T {
             target.header_size,
             F::from_canonical_u64(header_size as u64),
         );
-        for i in 0..header_size {
-            self.set_target(target.header_bytes[i], F::from_canonical_u8(value[i]));
+        for (i, byte) in value.iter().enumerate().take(header_size) {
+            self.set_target(target.header_bytes[i], F::from_canonical_u8(*byte));
         }
 
         for i in header_size..MAX_HEADER_SIZE {
@@ -113,8 +111,8 @@ impl<F: PrimeField> GeneratedValuesEncodedHeader<F> for GeneratedValues<F> {
             target.header_size,
             F::from_canonical_u64(header_size as u64),
         );
-        for i in 0..header_size {
-            self.set_target(target.header_bytes[i], F::from_canonical_u8(value[i]));
+        for (i, byte) in value.iter().enumerate().take(header_size) {
+            self.set_target(target.header_bytes[i], F::from_canonical_u8(*byte));
         }
 
         for i in header_size..MAX_HEADER_SIZE {
@@ -132,7 +130,7 @@ pub trait CircuitBuilderUtils {
 
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
 
-    fn random_access_vec(&mut self, index: Target, targets: &Vec<Vec<Target>>) -> Vec<Target>;
+    fn random_access_vec(&mut self, index: Target, targets: &[Vec<Target>]) -> Vec<Target>;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
@@ -190,7 +188,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         quotient
     }
 
-    fn random_access_vec(&mut self, index: Target, targets: &Vec<Vec<Target>>) -> Vec<Target> {
+    fn random_access_vec(&mut self, index: Target, targets: &[Vec<Target>]) -> Vec<Target> {
         assert!(!targets.is_empty());
 
         let v_size = targets[0].len();
@@ -264,10 +262,9 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
 // Will convert each byte into 8 bits (big endian)
 pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
     let mut res = Vec::new();
-    for i in 0..msg.len() {
-        let char = msg[i];
+    for char in msg.iter() {
         for j in 0..8 {
-            if (char & (1 << 7 - j)) != 0 {
+            if (char & (1 << (7 - j))) != 0 {
                 res.push(true);
             } else {
                 res.push(false);

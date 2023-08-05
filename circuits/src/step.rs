@@ -105,11 +105,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             let mut hash_bytes = Vec::new();
 
             // Convert hash digest into bytes
-            // Also input the header has into the public_inputs_hasher
             for bits in hash_circuit.digest.chunks(8) {
                 // These bits are in big endian order
                 hash_bytes.push(self.le_sum(bits.to_vec().iter().rev()));
-                public_inputs_hash_input.append(&mut bits.to_vec());
             }
 
             // Get the decoded_header object to retrieve the block numbers and parent hashes
@@ -144,6 +142,12 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             }
 
             calculated_hashes.push(hash_circuit.digest.clone());
+
+            // Convert hash digest into bytes
+            for bits in hash_circuit.digest.chunks(8) {
+                // These bits are in big endian order
+                public_inputs_hash_input.append(&mut bits.to_vec());
+            }
 
             // Verify that the block numbers are sequential
             let one = self.one();

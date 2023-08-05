@@ -7,35 +7,28 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::config::{GenericConfig, AlgebraicHasher};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::ecc::ed25519::curve::curve_types::Curve;
-use plonky2x::ecc::ed25519::curve::eddsa::{EDDSASignature, EDDSAPublicKey, verify_message};
+use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
 use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-use plonky2x::ecc::ed25519::gadgets::curve::{CircuitBuilderCurve, decompress_point};
+use plonky2x::ecc::ed25519::gadgets::curve::{decompress_point, CircuitBuilderCurve};
 use plonky2x::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
 use plonky2x::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::hash::blake2::blake2b::blake2b;
 use plonky2x::num::biguint::{CircuitBuilderBiguint, WitnessBigUint};
 use plonky2x::num::nonnative::nonnative::CircuitBuilderNonNative;
 
+use crate::decoder::{CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget};
 use crate::utils::{
-    CircuitBuilderUtils,
-    AvailHashTarget,
-    QUORUM_SIZE,
-    HASH_SIZE,
-    ENCODED_PRECOMMIT_LENGTH,
-    NUM_AUTHORITIES,
-    NUM_AUTHORITIES_PADDED,
-    PUB_KEY_SIZE,
-    to_bits, CHUNK_128_BYTES
+    to_bits, AvailHashTarget, CircuitBuilderUtils, CHUNK_128_BYTES, ENCODED_PRECOMMIT_LENGTH,
+    HASH_SIZE, NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE, QUORUM_SIZE,
 };
-use crate::decoder::{ CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget };
 
 #[derive(Clone, Debug)]
 pub struct PrecommitTarget<C: Curve> {
     pub precommit_message: [Target; ENCODED_PRECOMMIT_LENGTH],
     pub signature: EDDSASignatureTarget<C>,
-    pub pub_key_idx: Target,   // The ith index in the AuthoritySetSignersTarget.pub_keys vector.  Must have value between 0 and NUM_AUTHORITIES-1
+    pub pub_key_idx: Target, // The ith index in the AuthoritySetSignersTarget.pub_keys vector.  Must have value between 0 and NUM_AUTHORITIES-1
 }
 
 #[derive(Clone, Debug)]
@@ -43,7 +36,7 @@ pub struct PubKeyTarget(pub [Target; PUB_KEY_SIZE]); // The pub key in compresse
 
 #[derive(Clone)]
 pub struct AuthoritySetSignersTarget {
-    pub pub_keys: [PubKeyTarget; NUM_AUTHORITIES_PADDED],           // Array of pub keys (in compressed form)
+    pub pub_keys: [PubKeyTarget; NUM_AUTHORITIES_PADDED], // Array of pub keys (in compressed form)
     pub commitment: AvailHashTarget,
     pub set_id: Target,
 }
@@ -54,9 +47,10 @@ pub struct FinalizedBlockTarget {
 }
 
 pub trait CircuitBuilderGrandpaJustificationVerifier<
-        F: RichField + Extendable<D>,
-        C: Curve,
-        const D: usize>
+    F: RichField + Extendable<D>,
+    C: Curve,
+    const D: usize,
+>
 {
     fn add_virtual_precommit_target_safe(&mut self) -> PrecommitTarget<C>;
 
@@ -64,19 +58,19 @@ pub trait CircuitBuilderGrandpaJustificationVerifier<
 
     fn verify_justification<
         Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
-        E: CubicParameters<F>>
-    (
+        E: CubicParameters<F>,
+    >(
         &mut self,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget,
-        finalized_block: &FinalizedBlockTarget
-    )
-    where
-        Config::Hasher: AlgebraicHasher<F>
-    ;    
+        finalized_block: &FinalizedBlockTarget,
+    ) where
+        Config::Hasher: AlgebraicHasher<F>;
 }
 
-impl<F: RichField + Extendable<D>, C: Curve, const D: usize> CircuitBuilderGrandpaJustificationVerifier<F, C, D> for CircuitBuilder<F, D> {
+impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
+    CircuitBuilderGrandpaJustificationVerifier<F, C, D> for CircuitBuilder<F, D>
+{
     fn add_virtual_precommit_target_safe(&mut self) -> PrecommitTarget<C> {
         let precommit_message = self.add_virtual_targets(ENCODED_PRECOMMIT_LENGTH);
         for byte in precommit_message.iter().take(ENCODED_PRECOMMIT_LENGTH) {
@@ -103,10 +97,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize> CircuitBuilderGrand
         let s_cmp = self.cmp_biguint(&s_biguint, &scalar_field_order);
         self.connect(s_cmp.target, one);
 
-        let signature = EDDSASignatureTarget {
-            r: sig_r,
-            s: sig_s,
-        };
+        let signature = EDDSASignatureTarget { r: sig_r, s: sig_s };
 
         let pub_key_idx = self.add_virtual_target();
 
@@ -131,7 +122,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize> CircuitBuilderGrand
     }
 
     fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget {
-
         let mut pub_keys = Vec::new();
         for _i in 0..NUM_AUTHORITIES_PADDED {
             // Create the virtual target for the pub keys
@@ -161,63 +151,67 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize> CircuitBuilderGrand
 
     // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
     fn verify_justification<
-            Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
-            E: CubicParameters<F>>
-    (    
+        Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        E: CubicParameters<F>,
+    >(
         &mut self,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget,
-        finalized_block: &FinalizedBlockTarget
-    )
-    where
+        finalized_block: &FinalizedBlockTarget,
+    ) where
         Config::Hasher: AlgebraicHasher<F>,
-    {	
+    {
         // First check to see that we have the right authority set
         // Calculate the hash for the authority set
         // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
         const AUTHORITIES_INPUT_LENGTH: usize = NUM_AUTHORITIES * PUB_KEY_SIZE;
-        const AUTHORITIES_INPUT_PADDING: usize = (CHUNK_128_BYTES - (AUTHORITIES_INPUT_LENGTH % CHUNK_128_BYTES)) % CHUNK_128_BYTES;
-        const AUTHORITIES_INPUT_PADDED_LENGTH: usize = AUTHORITIES_INPUT_LENGTH + AUTHORITIES_INPUT_PADDING;
-        let hash_circuit = blake2b::<F, D, AUTHORITIES_INPUT_PADDED_LENGTH, HASH_SIZE>(
-            self,
-        );
+        const AUTHORITIES_INPUT_PADDING: usize =
+            (CHUNK_128_BYTES - (AUTHORITIES_INPUT_LENGTH % CHUNK_128_BYTES)) % CHUNK_128_BYTES;
+        const AUTHORITIES_INPUT_PADDED_LENGTH: usize =
+            AUTHORITIES_INPUT_LENGTH + AUTHORITIES_INPUT_PADDING;
+        let hash_circuit = blake2b::<F, D, AUTHORITIES_INPUT_PADDED_LENGTH, HASH_SIZE>(self);
 
         // Input the pub keys into the hasher
-        for i in 0 .. NUM_AUTHORITIES {
+        for i in 0..NUM_AUTHORITIES {
             for j in 0..PUB_KEY_SIZE {
                 // covert bytes to BE bits for the BLAKE2B circuit
                 let mut bits = self.split_le(authority_set_signers.pub_keys[i].0[j], 8);
                 bits.reverse();
                 for (k, bit) in bits.iter().enumerate().take(8) {
-                    self.connect(hash_circuit.message[i*256 + j*8 + k].target, bit.target);
+                    self.connect(hash_circuit.message[i * 256 + j * 8 + k].target, bit.target);
                 }
             }
         }
 
         // Add the padding
         let zero = self.zero();
-	for i in AUTHORITIES_INPUT_LENGTH..AUTHORITIES_INPUT_PADDED_LENGTH {
+        for i in AUTHORITIES_INPUT_LENGTH * 8..AUTHORITIES_INPUT_PADDED_LENGTH * 8 {
             self.connect(hash_circuit.message[i].target, zero);
         }
 
         // Length of the input in bytes
-	let authority_set_hash_input_length = self.constant(F::from_canonical_usize(NUM_AUTHORITIES * PUB_KEY_SIZE));
+        let authority_set_hash_input_length =
+            self.constant(F::from_canonical_usize(NUM_AUTHORITIES * PUB_KEY_SIZE));
         self.connect(hash_circuit.message_len, authority_set_hash_input_length);
 
         // Verify that the hash matches
-        for i in 0 .. HASH_SIZE {
+        for i in 0..HASH_SIZE {
             let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
             for (j, bit) in bits.iter().enumerate().take(8) {
-                self.connect(hash_circuit.digest[i*8+j].target, bit.target);
+                self.connect(hash_circuit.digest[i * 8 + j].target, bit.target);
             }
         }
 
         // TODO:  Need to check for dupes of the pub_key_idx field
 
-	let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(self, QUORUM_SIZE, ENCODED_PRECOMMIT_LENGTH as u128);
+        let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
+            self,
+            QUORUM_SIZE,
+            ENCODED_PRECOMMIT_LENGTH as u128,
+        );
 
         // Now verify all of the signatures
         for (i, signed_precommit) in signed_precommits.iter().enumerate().take(QUORUM_SIZE) {
@@ -225,7 +219,11 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize> CircuitBuilderGrand
             // Random access arrays must be a power of 2, so we pad the array to 16
             let mut pub_key = self.random_access_vec(
                 signed_precommit.pub_key_idx,
-                &authority_set_signers.pub_keys.iter().map(|x| x.0.to_vec()).collect::<Vec<_>>(),
+                &authority_set_signers
+                    .pub_keys
+                    .iter()
+                    .map(|x| x.0.to_vec())
+                    .collect::<Vec<_>>(),
             );
 
             // Need to reverse the byte endianess of the pub key
@@ -242,12 +240,20 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize> CircuitBuilderGrand
             // Verify that the precommit's fields match the claimed finalized block's
             // Note that we are currently assuming that all of the authorities sign on the finalized block,
             // as opposed to a decendent of that block.
-            let decoded_precommit_msg = self.decode_precommit(EncodedPrecommitTarget(signed_precommits[i].precommit_message.to_vec()));
+            let decoded_precommit_msg = self.decode_precommit(EncodedPrecommitTarget(
+                signed_precommits[i].precommit_message.to_vec(),
+            ));
             self.connect(finalized_block.num, decoded_precommit_msg.block_number);
             for j in 0..HASH_SIZE {
-                self.connect(finalized_block.hash.0[j], decoded_precommit_msg.block_hash[j]);
+                self.connect(
+                    finalized_block.hash.0[j],
+                    decoded_precommit_msg.block_hash[j],
+                );
             }
-            self.connect(authority_set_signers.set_id, decoded_precommit_msg.authority_set_id);
+            self.connect(
+                authority_set_signers.set_id,
+                decoded_precommit_msg.authority_set_id,
+            );
 
             // Need to convert the encoded message to a bit array.  For now, assume that all validators are signing the same message
             let mut encoded_msg_bits = Vec::with_capacity(ENCODED_PRECOMMIT_LENGTH * 8);
@@ -261,17 +267,26 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize> CircuitBuilderGrand
                 }
             }
 
-            for (j, bit) in encoded_msg_bits.iter().enumerate().take(ENCODED_PRECOMMIT_LENGTH * 8) {
-	            self.connect(verify_sigs_targets.msgs[i][j].target, bit.target);
+            for (j, bit) in encoded_msg_bits
+                .iter()
+                .enumerate()
+                .take(ENCODED_PRECOMMIT_LENGTH * 8)
+            {
+                self.connect(verify_sigs_targets.msgs[i][j].target, bit.target);
             }
 
-            self.connect_affine_point(&verify_sigs_targets.sigs[i].r,&signed_precommits[i].signature.r);
-            self.connect_nonnative(&verify_sigs_targets.sigs[i].s,&signed_precommits[i].signature.s);
+            self.connect_affine_point(
+                &verify_sigs_targets.sigs[i].r,
+                &signed_precommits[i].signature.r,
+            );
+            self.connect_nonnative(
+                &verify_sigs_targets.sigs[i].s,
+                &signed_precommits[i].signature.s,
+            );
             self.connect_affine_point(&verify_sigs_targets.pub_keys[i].0, &pub_key_uncompressed);
         }
     }
 }
-
 
 pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
     pw: &mut PartialWitness<F>,
@@ -310,18 +325,33 @@ pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>
         ));
 
         let precommit_target = &precommit_targets[i];
-        pw.set_biguint_target(&precommit_target.signature.r.x.value, &sig.r.x.to_canonical_biguint());
-        pw.set_biguint_target(&precommit_target.signature.r.y.value, &sig.r.y.to_canonical_biguint());
-        pw.set_biguint_target(&precommit_target.signature.s.value, &sig_s.to_canonical_biguint());
+        pw.set_biguint_target(
+            &precommit_target.signature.r.x.value,
+            &sig.r.x.to_canonical_biguint(),
+        );
+        pw.set_biguint_target(
+            &precommit_target.signature.r.y.value,
+            &sig.r.y.to_canonical_biguint(),
+        );
+        pw.set_biguint_target(
+            &precommit_target.signature.s.value,
+            &sig_s.to_canonical_biguint(),
+        );
 
-        pw.set_target(precommit_target.pub_key_idx, F::from_canonical_usize(pub_key_indices[i]));
+        pw.set_target(
+            precommit_target.pub_key_idx,
+            F::from_canonical_usize(pub_key_indices[i]),
+        );
 
         assert!(precommit_messages[i].len() == ENCODED_PRECOMMIT_LENGTH);
         assert!(precommit_messages[i].len() == precommit_target.precommit_message.len());
 
-        precommit_messages[i].iter()
-        .zip(precommit_target.precommit_message.iter())
-        .for_each(|(msg_byte, msg_byte_target)| pw.set_target(*msg_byte_target, F::from_canonical_u8(*msg_byte)));
+        precommit_messages[i]
+            .iter()
+            .zip(precommit_target.precommit_message.iter())
+            .for_each(|(msg_byte, msg_byte_target)| {
+                pw.set_target(*msg_byte_target, F::from_canonical_u8(*msg_byte))
+            });
     }
 }
 
@@ -342,26 +372,34 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
         assert!(pub_key.len() == PUB_KEY_SIZE);
         assert!(pub_key.len() == authority_set_signers_target.0.len());
 
-        pub_key.iter()
-        .zip(authority_set_signers_target.0.iter())
-        .for_each(|(pub_key_byte, pub_key_byte_target)| pw.set_target(*pub_key_byte_target, F::from_canonical_u8(*pub_key_byte)));
+        pub_key
+            .iter()
+            .zip(authority_set_signers_target.0.iter())
+            .for_each(|(pub_key_byte, pub_key_byte_target)| {
+                pw.set_target(*pub_key_byte_target, F::from_canonical_u8(*pub_key_byte))
+            });
     }
 
-    pw.set_target(authority_set_target.set_id, F::from_canonical_u64(authority_set_id));
+    pw.set_target(
+        authority_set_target.set_id,
+        F::from_canonical_u64(authority_set_id),
+    );
 
     for (i, byte) in authority_set_commitment.iter().enumerate().take(HASH_SIZE) {
-        pw.set_target(authority_set_target.commitment.0[i], F::from_canonical_u8(*byte));
+        pw.set_target(
+            authority_set_target.commitment.0[i],
+            F::from_canonical_u8(*byte),
+        );
     }
 }
 
 #[cfg(test)]
-pub (crate) mod tests {
-    use std::time::SystemTime;
-
+pub(crate) mod tests {
     use anyhow::Result;
     use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
     use curta::plonky2::field::CubicParameters;
     use ed25519_dalek::{PublicKey, Signature};
+    use log::Level;
     use num::BigUint;
     use plonky2::field::extension::Extendable;
     use plonky2::field::types::{Field, PrimeField};
@@ -369,17 +407,26 @@ pub (crate) mod tests {
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
-    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig, AlgebraicHasher};
-    use plonky2x::num::biguint::WitnessBigUint;
+    use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::plonk::prover::prove;
+    use plonky2::util::timing::TimingTree;
     use plonky2x::ecc::ed25519::curve::curve_types::Curve;
     use plonky2x::ecc::ed25519::curve::ed25519::Ed25519;
     use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
     use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
     use plonky2x::ecc::ed25519::gadgets::curve::decompress_point;
-    use plonky2x::ecc::ed25519::gadgets::eddsa::{EDDSATargets, verify_signatures_circuit};
+    use plonky2x::ecc::ed25519::gadgets::eddsa::{verify_signatures_circuit, EDDSATargets};
+    use plonky2x::num::biguint::WitnessBigUint;
 
-    use crate::justification::{CircuitBuilderGrandpaJustificationVerifier, PrecommitTarget, FinalizedBlockTarget, AuthoritySetSignersTarget, set_precommits_pw, set_authority_set_pw};
-    use crate::utils::tests::{BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PUB_KEY_INDICES, BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_BLOCK_HASH, BLOCK_530527_AUTHORITY_SET_COMMITMENT};
+    use crate::justification::{
+        set_authority_set_pw, set_precommits_pw, AuthoritySetSignersTarget,
+        CircuitBuilderGrandpaJustificationVerifier, FinalizedBlockTarget, PrecommitTarget,
+    };
+    use crate::utils::tests::{
+        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_COMMITMENT,
+        BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_BLOCK_HASH,
+        BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_PUB_KEY_INDICES,
+    };
     use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, QUORUM_SIZE};
 
     pub struct JustificationTarget<C: Curve> {
@@ -393,9 +440,9 @@ pub (crate) mod tests {
         const D: usize,
         C: Curve,
         Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
-        E: CubicParameters<F>>
-    (
-        builder: &mut CircuitBuilder::<F, D>
+        E: CubicParameters<F>,
+    >(
+        builder: &mut CircuitBuilder<F, D>,
     ) -> JustificationTarget<C>
     where
         Config::Hasher: AlgebraicHasher<F>,
@@ -405,7 +452,11 @@ pub (crate) mod tests {
             precommit_targets.push(builder.add_virtual_precommit_target_safe());
         }
 
-        let authority_set = <CircuitBuilder<F, D> as CircuitBuilderGrandpaJustificationVerifier<F, C, D>>::add_virtual_authority_set_signers_target_safe(builder);
+        let authority_set = <CircuitBuilder<F, D> as CircuitBuilderGrandpaJustificationVerifier<
+            F,
+            C,
+            D,
+        >>::add_virtual_authority_set_signers_target_safe(builder);
 
         let finalized_block_hash = builder.add_virtual_avail_hash_target_safe(false);
         let finalized_block_num = builder.add_virtual_target();
@@ -416,7 +467,7 @@ pub (crate) mod tests {
             &FinalizedBlockTarget {
                 hash: finalized_block_hash.clone(),
                 num: finalized_block_num,
-            }
+            },
         );
 
         JustificationTarget {
@@ -425,7 +476,7 @@ pub (crate) mod tests {
             finalized_block: FinalizedBlockTarget {
                 hash: finalized_block_hash,
                 num: finalized_block_num,
-            }
+            },
         }
     }
 
@@ -440,18 +491,14 @@ pub (crate) mod tests {
         let mut pw = PartialWitness::new();
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
 
-        // grabbed from avail round 7642
-        // let sig_msg = hex::decode("019f87ee2f28b0debfbe661c573beaa899db45211fd2b3b41f44bdbc685599e2be106a040082300000000000000f01000000000000").unwrap();
         let sig_msg = hex::decode("0162f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f0655f180800680b000000000000f001000000000000").unwrap();
         let sig_msg_bits = to_bits(sig_msg.to_vec());
 
-        // let signature= hex::decode("cc1286a1716d00a8c310cfae32e8fb83f5f9c8bc1a6da1fb0de33361aaf7871d2e33e6c72606295e5b175ec4033b7e63392d76e2e4271561d6d2db149191e609").unwrap();
         let signature= hex::decode("3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c").unwrap();
         let sig_r = decompress_point(&signature[0..32]);
         assert!(sig_r.is_valid());
 
-        let sig_s_biguint =
-            BigUint::from_bytes_le(&signature[32..64]);
+        let sig_s_biguint = BigUint::from_bytes_le(&signature[32..64]);
         let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
         let sig = EDDSASignature { r: sig_r, s: sig_s };
 
@@ -467,11 +514,18 @@ pub (crate) mod tests {
             &EDDSAPublicKey(pub_key)
         ));
 
-        let targets: EDDSATargets<Curve> = verify_signatures_circuit::<F, Curve, E, C, D>(&mut builder, 1, sig_msg.len().try_into().unwrap());
+        let targets: EDDSATargets<Curve> = verify_signatures_circuit::<F, Curve, E, C, D>(
+            &mut builder,
+            1,
+            sig_msg.len().try_into().unwrap(),
+        );
 
         let mut msg = Vec::with_capacity(sig_msg.len());
         for byte in sig_msg.iter() {
-            msg.push(CircuitBuilder::constant(&mut builder, F::from_canonical_u8(*byte)));
+            msg.push(CircuitBuilder::constant(
+                &mut builder,
+                F::from_canonical_u8(*byte),
+            ));
         }
 
         let mut msg_bits = Vec::with_capacity(sig_msg.len() * 8);
@@ -480,17 +534,23 @@ pub (crate) mod tests {
 
             // Needs to be in bit big endian order for the EDDSA verification circuit
             bits.reverse();
-            for j in 0..8 {
-                msg_bits.push(bits[j]);
+            for bit in bits.iter().take(8) {
+                msg_bits.push(*bit);
             }
         }
 
-        for i in 0..msg_bits.len() {
-            builder.connect(msg_bits[i].target, targets.msgs[0][i].target)
+        for (i, bit) in msg_bits.iter().enumerate() {
+            builder.connect(bit.target, targets.msgs[0][i].target)
         }
 
-        pw.set_biguint_target(&targets.pub_keys[0].0.x.value, &pub_key.x.to_canonical_biguint());
-        pw.set_biguint_target(&targets.pub_keys[0].0.y.value, &pub_key.y.to_canonical_biguint());
+        pw.set_biguint_target(
+            &targets.pub_keys[0].0.x.value,
+            &pub_key.x.to_canonical_biguint(),
+        );
+        pw.set_biguint_target(
+            &targets.pub_keys[0].0.y.value,
+            &pub_key.y.to_canonical_biguint(),
+        );
 
         pw.set_biguint_target(&targets.sigs[0].r.x.value, &sig_r.x.to_canonical_biguint());
         pw.set_biguint_target(&targets.sigs[0].r.y.value, &sig_r.y.to_canonical_biguint());
@@ -543,38 +603,45 @@ pub (crate) mod tests {
         set_precommits_pw::<F, D, Curve>(
             &mut pw,
             justification_target.precommit_targets,
-            (0..QUORUM_SIZE).map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec()).collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_SIGS.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            (0..QUORUM_SIZE)
+                .map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec())
+                .collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SIGS
+                .iter()
+                .map(|s| hex::decode(s).unwrap())
+                .collect::<Vec<_>>(),
             BLOCK_530527_PUB_KEY_INDICES.to_vec(),
-            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SET
+                .iter()
+                .map(|s| hex::decode(s).unwrap())
+                .collect::<Vec<_>>(),
         );
 
         set_authority_set_pw::<F, D, Curve>(
             &mut pw,
             &justification_target.authority_set_signers,
-            BLOCK_530527_AUTHORITY_SET.iter().map(|s| hex::decode(s).unwrap()).collect::<Vec<_>>(),
+            BLOCK_530527_AUTHORITY_SET
+                .iter()
+                .map(|s| hex::decode(s).unwrap())
+                .collect::<Vec<_>>(),
             BLOCK_530527_AUTHORITY_SET_ID,
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
         let block_hash_bytes = hex::decode(BLOCK_530527_BLOCK_HASH).unwrap();
-        pw.set_avail_hash_target(&justification_target.finalized_block.hash, &(block_hash_bytes.try_into().unwrap()));
-        pw.set_target(justification_target.finalized_block.num, F::from_canonical_u32(530527u32));
+        pw.set_avail_hash_target(
+            &justification_target.finalized_block.hash,
+            &(block_hash_bytes.try_into().unwrap()),
+        );
+        pw.set_target(
+            justification_target.finalized_block.num,
+            F::from_canonical_u32(530527u32),
+        );
 
         let data = builder.build::<C>();
-        let proof_gen_start_time = SystemTime::now();
-        let proof = data.prove(pw).unwrap();
-        let proof_gen_end_time = SystemTime::now();
-        let proof_gen_duration = proof_gen_end_time.duration_since(proof_gen_start_time).unwrap();
-
-        let proof_verification_start_time = SystemTime::now();
-        let verification_res = data.verify(proof);
-        let proof_verification_end_time = SystemTime::now();
-        let proof_verification_time = proof_verification_end_time.duration_since(proof_verification_start_time).unwrap();
-
-        println!("proof gen time is {:?}", proof_gen_duration);
-        println!("proof verification time is {:?}", proof_verification_time);
-
-        verification_res
+        let mut timing = TimingTree::new("grandpa proof gen", Level::Info);
+        let proof = prove::<F, C, D>(&data.prover_only, &data.common, pw, &mut timing).unwrap();
+        timing.print();
+        data.verify(proof)
     }
 }

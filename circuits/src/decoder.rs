@@ -1,28 +1,20 @@
+use crate::utils::{AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, HASH_SIZE};
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
-use plonky2::plonk::{ plonk_common::reduce_with_powers_circuit, circuit_builder::CircuitBuilder};
-use crate::utils::{ CircuitBuilderUtils, AvailHashTarget, HASH_SIZE, EncodedHeaderTarget };
+use plonky2::plonk::{circuit_builder::CircuitBuilder, plonk_common::reduce_with_powers_circuit};
 
 trait CircuitBuilderScaleDecoder {
-    fn decode_compact_int(
-        &mut self,
-        compact_bytes: Vec<Target>,
-    ) -> (Target, Target, Target);
+    fn decode_compact_int(&mut self, compact_bytes: Vec<Target>) -> (Target, Target, Target);
 
-    fn decode_fixed_int(
-        &mut self,
-        bytes: Vec<Target>,
-        num_bytes: usize,
-    ) -> Target;
+    fn decode_fixed_int(&mut self, bytes: Vec<Target>, num_bytes: usize) -> Target;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
-impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder for CircuitBuilder<F, D> {
-    fn decode_compact_int(
-        &mut self,
-        compact_bytes: Vec<Target>
-    ) -> (Target, Target, Target) {
+impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
+    for CircuitBuilder<F, D>
+{
+    fn decode_compact_int(&mut self, compact_bytes: Vec<Target>) -> (Target, Target, Target) {
         // For now, assume that compact_bytes is 5 bytes long
         assert!(compact_bytes.len() == 5);
 
@@ -36,7 +28,15 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder fo
         let one_mode_value = reduce_with_powers_circuit(self, &compact_bytes[0..2], alpha);
         let two_mode_value = reduce_with_powers_circuit(self, &compact_bytes[0..4], alpha);
         let three_mode_value = reduce_with_powers_circuit(self, &compact_bytes[1..5], alpha);
-        let value = self.random_access(compress_mode, vec![zero_mode_value, one_mode_value, two_mode_value, three_mode_value]);
+        let value = self.random_access(
+            compress_mode,
+            vec![
+                zero_mode_value,
+                one_mode_value,
+                two_mode_value,
+                three_mode_value,
+            ],
+        );
 
         // Will need to divide by 4 (remove least 2 significnat bits) for mode 0, 1, 2.  Those bits stores the encoding mode
         let three = self.constant(F::from_canonical_u8(3));
@@ -56,24 +56,17 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder fo
         (decoded_int, compress_mode, encoded_byte_length)
     }
 
-
     // WARNING !!!!
     // Note that this only works for fixed ints that are 64 bytes or less, since the goldilocks field is a little under 64 bytes.
     // So technically, it doesn't even work for 64 byte ints, but for now assume that all u64 values we encounter are less than
     // the goldilocks field size.
-    fn decode_fixed_int(
-        &mut self,
-        bytes: Vec<Target>,
-        value_byte_length: usize,
-    ) -> Target {
+    fn decode_fixed_int(&mut self, bytes: Vec<Target>, value_byte_length: usize) -> Target {
         assert!(bytes.len() == value_byte_length);
         assert!(value_byte_length <= 64);
 
         let alpha = self.constant(F::from_canonical_u16(256));
         reduce_with_powers_circuit(self, &bytes, alpha)
     }
-
-
 }
 
 pub struct HeaderTarget {
@@ -83,40 +76,32 @@ pub struct HeaderTarget {
     // pub data_root: HashTarget,
 }
 
-
 pub trait CircuitBuilderHeaderDecoder {
-    fn decode_header(
-        &mut self,
-        header: &EncodedHeaderTarget,
-    ) -> HeaderTarget;
+    fn decode_header(&mut self, header: &EncodedHeaderTarget) -> HeaderTarget;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
-impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder for CircuitBuilder<F, D> {
-    fn decode_header(
-        &mut self,
-        header: &EncodedHeaderTarget,
-    ) -> HeaderTarget {
-
+impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
+    for CircuitBuilder<F, D>
+{
+    fn decode_header(&mut self, header: &EncodedHeaderTarget) -> HeaderTarget {
         // The first 32 bytes are the parent hash
         let parent_hash_target = header.header_bytes[0..32].to_vec();
 
         // Next field is the block number
         // Can need up to 5 bytes to represent a compact u32
         const MAX_BLOCK_NUMBER_SIZE: usize = 5;
-        let (block_number_target, compress_mode, _) = self.decode_compact_int(header.header_bytes[32..32+MAX_BLOCK_NUMBER_SIZE].to_vec());
+        let (block_number_target, compress_mode, _) =
+            self.decode_compact_int(header.header_bytes[32..32 + MAX_BLOCK_NUMBER_SIZE].to_vec());
 
         let all_possible_state_roots = vec![
-            header.header_bytes[33..33+HASH_SIZE].to_vec(),
-            header.header_bytes[34..34+HASH_SIZE].to_vec(),
-            header.header_bytes[36..36+HASH_SIZE].to_vec(),
-            header.header_bytes[37..37+HASH_SIZE].to_vec(),
+            header.header_bytes[33..33 + HASH_SIZE].to_vec(),
+            header.header_bytes[34..34 + HASH_SIZE].to_vec(),
+            header.header_bytes[36..36 + HASH_SIZE].to_vec(),
+            header.header_bytes[37..37 + HASH_SIZE].to_vec(),
         ];
 
-        let state_root_target = self.random_access_vec(
-            compress_mode,
-            &all_possible_state_roots,
-        );
+        let state_root_target = self.random_access_vec(compress_mode, &all_possible_state_roots);
 
         // Can't get this to work yet.  Getting an error with the random_access gate
         /*
@@ -150,31 +135,25 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder f
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct EncodedPrecommitTarget(pub Vec<Target>);
 
 pub struct PrecommitTarget {
-    pub block_hash: Vec<Target>,   // Vector of 32 bytes
+    pub block_hash: Vec<Target>, // Vector of 32 bytes
     pub block_number: Target,
     pub justification_round: Target,
     pub authority_set_id: Target,
 }
 
-
 pub trait CircuitBuilderPrecommitDecoder {
-    fn decode_precommit(
-        &mut self,
-        precommit: EncodedPrecommitTarget,
-    ) -> PrecommitTarget;
+    fn decode_precommit(&mut self, precommit: EncodedPrecommitTarget) -> PrecommitTarget;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
-impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecoder for CircuitBuilder<F, D> {
-    fn decode_precommit(
-        &mut self,
-        precommit: EncodedPrecommitTarget,
-    ) -> PrecommitTarget {
+impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecoder
+    for CircuitBuilder<F, D>
+{
+    fn decode_precommit(&mut self, precommit: EncodedPrecommitTarget) -> PrecommitTarget {
         // The first byte is the variant number and should be 1
         let one = self.one();
         self.connect(precommit.0[0], one);
@@ -202,28 +181,25 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
+    use crate::decoder::{
+        CircuitBuilderHeaderDecoder, CircuitBuilderScaleDecoder, EncodedHeaderTarget,
+    };
+    use crate::utils::tests::{
+        BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT,
+    };
+    use crate::utils::{AvailHashTarget, CircuitBuilderUtils, MAX_HEADER_SIZE};
     use anyhow::Result;
-    use log::Level;
     use plonky2::field::types::Field;
-    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2::plonk::prover::prove;
-    use plonky2::util::serialization::DefaultGateSerializer;
-    use plonky2::util::timing::TimingTree;
-    use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
-    use crate::utils::{MAX_HEADER_SIZE, AvailHashTarget, CircuitBuilderUtils};
-    use crate::utils::tests::{BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH, BLOCK_576728_STATE_ROOT};
-    use crate::decoder::{ CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder, EncodedHeaderTarget };
 
     fn test_compact_int(
         encoded_bytes: [u8; 5],
         expected_int: u64,
         expected_compress_mode: u8,
-        expected_length: u8
+        expected_length: u8,
     ) -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
@@ -248,7 +224,7 @@ mod tests {
 
         let expected_length = builder.constant(F::from_canonical_u8(expected_length));
         builder.connect(length, expected_length);
-        
+
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;
 
@@ -284,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn test_decode_compact_int_16384() -> Result<()>  {
+    fn test_decode_compact_int_16384() -> Result<()> {
         let encoded_bytes = [2, 0, 1, 0, 0];
         let expected_value = 16384;
         test_compact_int(encoded_bytes, expected_value, 2, 4)
@@ -310,11 +286,12 @@ mod tests {
 
         let config = CircuitConfig::standard_recursion_config();
         let pw = PartialWitness::new();
-        let mut builder = CircuitBuilder::<F, D>::new(config.clone());
+        let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut header_bytes_target = BLOCK_576728_HEADER.iter().map(|b| {
-            builder.constant(F::from_canonical_u8(*b))
-        }).collect::<Vec<_>>();
+        let mut header_bytes_target = BLOCK_576728_HEADER
+            .iter()
+            .map(|b| builder.constant(F::from_canonical_u8(*b)))
+            .collect::<Vec<_>>();
         let header_size = builder.constant(F::from_canonical_usize(BLOCK_576728_HEADER.len()));
 
         // pad the header bytes
@@ -322,106 +299,35 @@ mod tests {
             header_bytes_target.push(builder.zero());
         }
 
-        let decoded_header = builder.decode_header(&EncodedHeaderTarget{header_bytes: header_bytes_target.try_into().unwrap(), header_size});
+        let decoded_header = builder.decode_header(&EncodedHeaderTarget {
+            header_bytes: header_bytes_target.try_into().unwrap(),
+            header_size,
+        });
 
         let expected_block_number = builder.constant(F::from_canonical_u64(576728));
         builder.connect(decoded_header.block_number, expected_block_number);
 
         let expected_parent_hash = hex::decode(BLOCK_576728_PARENT_HASH).unwrap();
-        for i in 0..expected_parent_hash.len() {
-            let expected_parent_hash_byte = builder.constant(F::from_canonical_u8(expected_parent_hash[i]));
+        for (i, byte) in expected_parent_hash.iter().enumerate() {
+            let expected_parent_hash_byte = builder.constant(F::from_canonical_u8(*byte));
             builder.connect(decoded_header.parent_hash.0[i], expected_parent_hash_byte);
         }
 
         let expected_state_root = hex::decode(BLOCK_576728_STATE_ROOT).unwrap();
-        let expected_state_root_target = AvailHashTarget(expected_state_root.iter().map(
-            |b| builder.constant(F::from_canonical_u8(*b))
-        ).collect::<Vec<_>>().try_into().unwrap());
+        let expected_state_root_target = AvailHashTarget(
+            expected_state_root
+                .iter()
+                .map(|b| builder.constant(F::from_canonical_u8(*b)))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+        );
 
         builder.connect_hash(decoded_header.state_root, expected_state_root_target);
 
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;
 
-        data.verify(proof.clone()).unwrap();
-
-        let mut outer_builder = CircuitBuilder::<F, D>::new(config);
-        let inner_proof_target = outer_builder.add_virtual_proof_with_pis(&data.common);
-        let inner_verifier_data = outer_builder.add_virtual_verifier_data(data.common.config.fri_config.cap_height);
-        outer_builder.verify_proof::<C>(&inner_proof_target, &inner_verifier_data, &data.common);
-
-        let outer_data = outer_builder.build::<C>();
-
-        let mut outer_pw = PartialWitness::new();
-        outer_pw.set_proof_with_pis_target(&inner_proof_target, &proof);
-        outer_pw.set_verifier_data_target(&inner_verifier_data, &data.verifier_only);
-
-        let outer_proof = outer_data.prove(outer_pw).unwrap();
-
-        outer_data.verify(outer_proof.clone()).unwrap();
-
-        let mut final_builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
-        let final_proof_target = final_builder.add_virtual_proof_with_pis(&outer_data.common);
-        let final_verifier_data = final_builder.add_virtual_verifier_data(outer_data.common.config.fri_config.cap_height);
-        final_builder.verify_proof::<C>(&final_proof_target, &final_verifier_data, &outer_data.common);
-
-        let final_data = final_builder.build::<PoseidonBN128GoldilocksConfig>();
-
-        let mut final_pw = PartialWitness::new();
-        final_pw.set_proof_with_pis_target(&final_proof_target, &outer_proof);
-        final_pw.set_verifier_data_target(&final_verifier_data, &outer_data.verifier_only);
-
-        let mut timing = TimingTree::new("prove", Level::Debug);
-        let final_proof = prove::<F, PoseidonBN128GoldilocksConfig, D>(&final_data.prover_only, &final_data.common, final_pw, &mut timing).unwrap();
-        timing.print();
-
-        final_data.verify(final_proof.clone()).unwrap();
-
-        // Serialize the final proof's artifacts to json (to be used by the gnark plonky2 verifier)
-        let final_proof_serialized = serde_json::to_string(&final_proof).unwrap();
-        fs::write(
-            "final.proof_with_public_inputs.json",
-            final_proof_serialized,
-        )
-        .expect("Unable to write file");
-    
-        let final_vd_serialized = serde_json::to_string(&final_data.verifier_only).unwrap();
-        fs::write(
-            "final.verifier_only_circuit_data.json",
-            final_vd_serialized,
-        )
-        .expect("Unable to write file");
-
-        let final_cd_serialized = serde_json::to_string(&final_data.common).unwrap();
-        fs::write(
-            "final.common_circuit_data.json",
-            final_cd_serialized,
-        )
-        .expect("Unable to write file");
-
-        // Serialize the final proof into byts (to be used by the plonky2 verifier)
-        let final_proof_bytes = final_proof.to_bytes();
-        fs::write(
-            "final.proof_with_public_inputs.bytes",
-            final_proof_bytes,
-        ).expect("Unable to write file");
-
-        let final_vd_bytes = final_data.verifier_only.to_bytes().unwrap();
-        fs::write(
-            "final.verifier_only_circuit_data.bytes",
-            final_vd_bytes,
-        ).expect("Unable to write file");
-
-        let gate_serializer = DefaultGateSerializer;
-        let final_cd_bytes = final_data.common
-            .to_bytes(&gate_serializer).unwrap();
-
-        fs::write(
-            "final.common_circuit_data.bytes",
-            final_cd_bytes,
-        ).expect("Unable to write file");
-
-        Ok(())
-
+        data.verify(proof)
     }
 }

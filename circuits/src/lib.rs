@@ -1,15 +1,15 @@
-pub mod plonky2_config;
 pub mod decoder;
 pub mod justification;
+pub mod plonky2_config;
 pub mod poseidon_bn128;
 mod poseidon_bn128_constants;
 pub mod step;
 pub mod utils;
 
-extern crate rand;
 extern crate ff;
-use ff::PrimeField;
+extern crate rand;
 use ff::Field;
+use ff::PrimeField;
 use ff::PrimeFieldRepr;
 
 #[derive(PrimeField)]

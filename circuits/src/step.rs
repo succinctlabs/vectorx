@@ -82,8 +82,39 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();
         let mut decoded_block_nums = Vec::new();
         for i in 0..subchain.encoded_headers.len() {
+            // Calculate the hash for the current header
+            let hash_circuit = blake2b::<F, D, MAX_HEADER_SIZE, HASH_SIZE>(self);
+
+            // Input the encoded header bytes into the hasher
+            for j in 0..MAX_HEADER_SIZE {
+                // Need to split the bytes into bits
+                let mut bits = self.split_le(subchain.encoded_headers[i].header_bytes[j], 8);
+
+                // Needs to be in bit big endian order for the EDDSA verification circuit
+                bits.reverse();
+                for (k, bit) in bits.iter().enumerate().take(8) {
+                    self.connect(hash_circuit.message[j * 8 + k].target, bit.target);
+                }
+            }
+
+            self.connect(
+                hash_circuit.message_len,
+                subchain.encoded_headers[i].header_size,
+            );
+
+            let mut hash_bytes = Vec::new();
+
+            // Convert hash digest into bytes
+            for bits in hash_circuit.digest.chunks(8) {
+                // These bits are in big endian order
+                hash_bytes.push(self.le_sum(bits.to_vec().iter().rev()));
+            }
+
             // Get the decoded_header object to retrieve the block numbers and parent hashes
-            let decoded_header = self.decode_header(&subchain.encoded_headers[i]);
+            let decoded_header = self.decode_header(
+                &subchain.encoded_headers[i],
+                AvailHashTarget(hash_bytes.try_into().unwrap()),
+            );
 
             for j in 0..HASH_SIZE {
                 let mut bits = self.split_le(decoded_header.state_root.0[j], 8);
@@ -109,26 +140,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                     }
                 }
             }
-
-            // Calculate the hash for the current header
-            let hash_circuit = blake2b::<F, D, MAX_HEADER_SIZE, HASH_SIZE>(self);
-
-            // Input the encoded header bytes into the hasher
-            for j in 0..MAX_HEADER_SIZE {
-                // Need to split the bytes into bits
-                let mut bits = self.split_le(subchain.encoded_headers[i].header_bytes[j], 8);
-
-                // Needs to be in bit big endian order for the EDDSA verification circuit
-                bits.reverse();
-                for (k, bit) in bits.iter().enumerate().take(8) {
-                    self.connect(hash_circuit.message[j * 8 + k].target, bit.target);
-                }
-            }
-
-            self.connect(
-                hash_circuit.message_len,
-                subchain.encoded_headers[i].header_size,
-            );
 
             calculated_hashes.push(hash_circuit.digest.clone());
 
@@ -181,7 +192,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Add the padding
         let zero = self.zero();
-        for i in public_inputs_hash_input.len()..PUBLIC_INPUTS_MAX_SIZE*8 {
+        for i in public_inputs_hash_input.len()..PUBLIC_INPUTS_MAX_SIZE * 8 {
             self.connect(zero, public_inputs_hash_circuit.message[i].target);
         }
 

@@ -350,6 +350,9 @@ pub(crate) mod tests {
     pub const BLOCK_576728_STATE_ROOT: &str =
         "110769b4c5b850bd3b8276b39daf6dece324cef62e214c3768a7a12da7a8ff7c";
 
+    pub const BLOCK_576729_DATA_ROOT: &str =
+        "b9145d47a99255602a62d1276f53643f992b45c237817f4710cd01412f4a0400";
+
     // Sequence of blocks from 530508 to 530528, with block 530528's justification
     pub const BLOCK_530508_BLOCK_HASH: &str =
         "a0c3627de86be3e8843fc36c508e8c7580a993a416bdaf28a7b65f5b734061cd";

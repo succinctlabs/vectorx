@@ -172,7 +172,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // The input digest is 1356 bytes (for 20 headers).  Need to pad that so that the result
         // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes
-        const PUBLIC_INPUTS_MAX_SIZE: usize = 1408 * 8;
+        const PUBLIC_INPUTS_MAX_SIZE: usize = 1408;
         let public_inputs_hash_circuit = blake2b::<F, D, PUBLIC_INPUTS_MAX_SIZE, HASH_SIZE>(self);
 
         for (i, bit) in public_inputs_hash_input.iter().enumerate() {
@@ -181,7 +181,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Add the padding
         let zero = self.zero();
-        for i in public_inputs_hash_input.len()..1408 * 8 {
+        for i in public_inputs_hash_input.len()..PUBLIC_INPUTS_MAX_SIZE {
             self.connect(zero, public_inputs_hash_circuit.message[i].target);
         }
 

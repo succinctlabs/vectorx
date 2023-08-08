@@ -8,7 +8,7 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2x::ecc::ed25519::curve::curve_types::{Curve, AffinePoint};
+use plonky2x::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
 use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
 use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2x::ecc::ed25519::gadgets::curve::{AffinePointTarget, CircuitBuilderCurve};
@@ -162,10 +162,18 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         for i in 0..NUM_AUTHORITIES {
             let mut compressed_pub_key = self.compress_point(&authority_set_signers.pub_keys[i]);
 
-            for (byte_num, bits) in compressed_pub_key.bit_targets.chunks_mut(8).enumerate() {
-                bits.reverse();  // convert to bit BE
+            // Reverse the byte endian order
+            for (byte_num, bits) in compressed_pub_key
+                .bit_targets
+                .chunks_mut(8)
+                .rev()
+                .enumerate()
+            {
                 for (bit_num, bit) in bits.iter().enumerate() {
-                    self.connect(hash_circuit.message[i * 256 + byte_num * 8 + bit_num].target, bit.target);
+                    self.connect(
+                        hash_circuit.message[i * 256 + byte_num * 8 + bit_num].target,
+                        bit.target,
+                    );
                 }
             }
         }
@@ -339,8 +347,14 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
         let authority_set_signers_target = &authority_set_target.pub_keys[i];
         let pub_key_affine_point = AffinePoint::<C>::new_from_compressed_point(&pub_key[..]);
 
-        pw.set_biguint_target(&authority_set_signers_target.x.value, &pub_key_affine_point.x.to_canonical_biguint());
-        pw.set_biguint_target(&authority_set_signers_target.y.value, &pub_key_affine_point.y.to_canonical_biguint());
+        pw.set_biguint_target(
+            &authority_set_signers_target.x.value,
+            &pub_key_affine_point.x.to_canonical_biguint(),
+        );
+        pw.set_biguint_target(
+            &authority_set_signers_target.y.value,
+            &pub_key_affine_point.y.to_canonical_biguint(),
+        );
     }
 
     pw.set_target(
@@ -373,7 +387,7 @@ pub(crate) mod tests {
     use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
-    use plonky2x::ecc::ed25519::curve::curve_types::{Curve, AffinePoint};
+    use plonky2x::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
     use plonky2x::ecc::ed25519::curve::ed25519::Ed25519;
     use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
     use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;

@@ -137,7 +137,11 @@ pub trait CircuitBuilderUtils {
 
     fn connect_avail_hash(&mut self, x: AvailHashTarget, y: AvailHashTarget);
 
-    fn random_access_avail_hash(&mut self, index: Target, targets: Vec<AvailHashTarget>) -> AvailHashTarget;
+    fn random_access_avail_hash(
+        &mut self,
+        index: Target,
+        targets: Vec<AvailHashTarget>,
+    ) -> AvailHashTarget;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
@@ -195,12 +199,13 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         quotient
     }
 
-    fn random_access_avail_hash(&mut self, access_index: Target, v: Vec<AvailHashTarget>) -> AvailHashTarget {
+    fn random_access_avail_hash(
+        &mut self,
+        access_index: Target,
+        v: Vec<AvailHashTarget>,
+    ) -> AvailHashTarget {
         let selected = core::array::from_fn(|i| {
-            self.random_access(
-                access_index,
-                v.iter().map(|hash| hash.0[i]).collect(),
-            )
+            self.random_access(access_index, v.iter().map(|hash| hash.0[i]).collect())
         });
         selected.into()
     }

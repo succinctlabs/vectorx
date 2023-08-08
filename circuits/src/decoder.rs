@@ -121,7 +121,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
             AvailHashTarget(header.header_bytes[37..37 + HASH_SIZE].try_into().unwrap()),
         ];
 
-        let state_root_target = self.random_access_avail_hash(compress_mode, all_possible_state_roots);
+        let state_root_target =
+            self.random_access_avail_hash(compress_mode, all_possible_state_roots);
 
         // Parse the data root field.
         // For this, we will use a generator to extract the data root field from the header bytes.
@@ -301,7 +302,7 @@ mod tests {
         BLOCK_576728_BLOCK_HASH, BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH,
         BLOCK_576728_STATE_ROOT, BLOCK_576729_DATA_ROOT,
     };
-    use crate::utils::{AvailHashTarget, MAX_HEADER_SIZE, CircuitBuilderUtils};
+    use crate::utils::{AvailHashTarget, CircuitBuilderUtils, MAX_HEADER_SIZE};
     use anyhow::Result;
     use plonky2::field::types::Field;
     use plonky2::iop::witness::PartialWitness;

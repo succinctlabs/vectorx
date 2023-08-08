@@ -24,8 +24,15 @@ pub const HASH_SIZE: usize = 32; // in bytes
 pub const PUB_KEY_SIZE: usize = 32; // in bytes
 
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
+
 #[derive(Debug, Clone)]
 pub struct AvailHashTarget(pub [Target; HASH_SIZE]);
+
+impl From<[Target; HASH_SIZE]> for AvailHashTarget {
+    fn from(elements: [Target; HASH_SIZE]) -> Self {
+        Self(elements)
+    }
+}
 
 pub trait WitnessAvailHash<F: PrimeField64>: Witness<F> {
     fn get_avail_hash_target(&self, target: AvailHashTarget) -> [u8; HASH_SIZE];
@@ -126,11 +133,11 @@ pub trait CircuitBuilderUtils {
 
     fn add_virtual_encoded_header_target_safe(&mut self) -> EncodedHeaderTarget;
 
-    fn connect_hash(&mut self, x: AvailHashTarget, y: AvailHashTarget);
-
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
 
-    fn random_access_vec(&mut self, index: Target, targets: &[Vec<Target>]) -> Vec<Target>;
+    fn connect_avail_hash(&mut self, x: AvailHashTarget, y: AvailHashTarget);
+
+    fn random_access_avail_hash(&mut self, index: Target, targets: Vec<AvailHashTarget>) -> AvailHashTarget;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
@@ -164,7 +171,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         }
     }
 
-    fn connect_hash(&mut self, x: AvailHashTarget, y: AvailHashTarget) {
+    fn connect_avail_hash(&mut self, x: AvailHashTarget, y: AvailHashTarget) {
         for i in 0..HASH_SIZE {
             self.connect(x.0[i], y.0[i]);
         }
@@ -188,21 +195,14 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         quotient
     }
 
-    fn random_access_vec(&mut self, index: Target, targets: &[Vec<Target>]) -> Vec<Target> {
-        assert!(!targets.is_empty());
-
-        let v_size = targets[0].len();
-
-        // Assert that all vectors have the same length
-        targets.iter().for_each(|t| {
-            assert_eq!(t.len(), v_size);
+    fn random_access_avail_hash(&mut self, access_index: Target, v: Vec<AvailHashTarget>) -> AvailHashTarget {
+        let selected = core::array::from_fn(|i| {
+            self.random_access(
+                access_index,
+                v.iter().map(|hash| hash.0[i]).collect(),
+            )
         });
-
-        (0..v_size)
-            .map(|i| {
-                self.random_access(index, targets.iter().map(|t| t[i]).collect::<Vec<Target>>())
-            })
-            .collect::<Vec<Target>>()
+        selected.into()
     }
 }
 

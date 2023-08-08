@@ -3974,6 +3974,27 @@ checksum = "5696e2e2a6bb5c48a6e33fb0dd4d20d0a9472784b709964f337f224e99bd6d06"
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
+source = "git+https://github.com/succinctlabs/sdk.git?branch=kevjue/random_access_functions#69b79be1ff06b74ecaa6604a3c0f158a09658447"
+dependencies = [
+ "anyhow",
+ "curta",
+ "curve25519-dalek 4.0.0",
+ "digest 0.10.7",
+ "hex",
+ "itertools 0.10.5",
+ "log",
+ "num",
+ "plonky2",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "sha2 0.10.7",
+ "subtle-encoding",
+]
+
+[[package]]
+name = "plonky2x"
+version = "0.1.0"
 source = "git+https://github.com/succinctlabs/sdk.git#7f308df1cad70ce7e7c07a0d7c34b634558e7875"
 dependencies = [
  "anyhow",
@@ -6402,7 +6423,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/sdk.git?branch=kevjue/random_access_functions)",
  "rand 0.4.6",
  "serde",
  "serde_json",
@@ -6428,7 +6449,7 @@ dependencies = [
  "pallet-grandpa",
  "parity-scale-codec",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/sdk.git)",
  "serde",
  "serde_json",
  "sp-core 16.0.0",

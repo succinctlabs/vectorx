@@ -28,7 +28,7 @@ pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Cu
         &mut self,
         subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_signers: &AuthoritySetSignersTarget,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
         public_inputs_hash: &AvailHashTarget,
     ) where
         Config::Hasher: AlgebraicHasher<F>;
@@ -41,7 +41,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         &mut self,
         subchain: &VerifySubchainTarget,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_signers: &AuthoritySetSignersTarget,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
         public_inputs_hash: &AvailHashTarget,
     ) where
         Config::Hasher: AlgebraicHasher<F>,
@@ -223,7 +223,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 pub struct StepTarget<C: Curve> {
     pub subchain_target: VerifySubchainTarget,
     pub precommits: [PrecommitTarget<C>; QUORUM_SIZE],
-    pub authority_set: AuthoritySetSignersTarget,
+    pub authority_set: AuthoritySetSignersTarget<C>,
     pub public_inputs_hash: AvailHashTarget,
 }
 

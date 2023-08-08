@@ -8,10 +8,10 @@ use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2x::ecc::ed25519::curve::curve_types::Curve;
+use plonky2x::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
 use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
 use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-use plonky2x::ecc::ed25519::gadgets::curve::{decompress_point, CircuitBuilderCurve};
+use plonky2x::ecc::ed25519::gadgets::curve::{AffinePointTarget, CircuitBuilderCurve};
 use plonky2x::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
 use plonky2x::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::hash::blake2::blake2b::blake2b;
@@ -31,12 +31,9 @@ pub struct PrecommitTarget<C: Curve> {
     pub pub_key_idx: Target, // The ith index in the AuthoritySetSignersTarget.pub_keys vector.  Must have value between 0 and NUM_AUTHORITIES-1
 }
 
-#[derive(Clone, Debug)]
-pub struct PubKeyTarget(pub [Target; PUB_KEY_SIZE]); // The pub key in compressed form (i.e. 32 bytes)
-
 #[derive(Clone)]
-pub struct AuthoritySetSignersTarget {
-    pub pub_keys: [PubKeyTarget; NUM_AUTHORITIES_PADDED], // Array of pub keys (in compressed form)
+pub struct AuthoritySetSignersTarget<C: Curve> {
+    pub pub_keys: [AffinePointTarget<C>; NUM_AUTHORITIES_PADDED], // Array of pub keys (in compressed form)
     pub commitment: AvailHashTarget,
     pub set_id: Target,
 }
@@ -54,7 +51,7 @@ pub trait CircuitBuilderGrandpaJustificationVerifier<
 {
     fn add_virtual_precommit_target_safe(&mut self) -> PrecommitTarget<C>;
 
-    fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget;
+    fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget<C>;
 
     fn verify_justification<
         Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
@@ -62,7 +59,7 @@ pub trait CircuitBuilderGrandpaJustificationVerifier<
     >(
         &mut self,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_signers: &AuthoritySetSignersTarget,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
         finalized_block: &FinalizedBlockTarget,
     ) where
         Config::Hasher: AlgebraicHasher<F>;
@@ -121,20 +118,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         }
     }
 
-    fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget {
+    fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget<C> {
         let mut pub_keys = Vec::new();
         for _i in 0..NUM_AUTHORITIES_PADDED {
-            // Create the virtual target for the pub keys
-            let mut pub_key = Vec::new();
-            for _j in 0..PUB_KEY_SIZE {
-                let pub_key_byte = self.add_virtual_target();
-
-                // TODO:  Can also decompose the bytes into bits here, since the range check basically does that.
-                self.range_check(pub_key_byte, 8);
-                pub_key.push(pub_key_byte);
-            }
-
-            pub_keys.push(PubKeyTarget(pub_key.try_into().unwrap()));
+            pub_keys.push(self.add_virtual_affine_point_target());
         }
 
         let commitment = self.add_virtual_avail_hash_target_safe(false);
@@ -156,7 +143,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
     >(
         &mut self,
         signed_precommits: Vec<PrecommitTarget<C>>,
-        authority_set_signers: &AuthoritySetSignersTarget,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
         finalized_block: &FinalizedBlockTarget,
     ) where
         Config::Hasher: AlgebraicHasher<F>,
@@ -173,12 +160,20 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
 
         // Input the pub keys into the hasher
         for i in 0..NUM_AUTHORITIES {
-            for j in 0..PUB_KEY_SIZE {
-                // covert bytes to BE bits for the BLAKE2B circuit
-                let mut bits = self.split_le(authority_set_signers.pub_keys[i].0[j], 8);
-                bits.reverse();
-                for (k, bit) in bits.iter().enumerate().take(8) {
-                    self.connect(hash_circuit.message[i * 256 + j * 8 + k].target, bit.target);
+            let mut compressed_pub_key = self.compress_point(&authority_set_signers.pub_keys[i]);
+
+            // Reverse the byte endian order
+            for (byte_num, bits) in compressed_pub_key
+                .bit_targets
+                .chunks_mut(8)
+                .rev()
+                .enumerate()
+            {
+                for (bit_num, bit) in bits.iter().enumerate() {
+                    self.connect(
+                        hash_circuit.message[i * 256 + byte_num * 8 + bit_num].target,
+                        bit.target,
+                    );
                 }
             }
         }
@@ -205,37 +200,19 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             }
         }
 
-        // TODO:  Need to check for dupes of the pub_key_idx field
-
         let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
             self,
             QUORUM_SIZE,
             ENCODED_PRECOMMIT_LENGTH as u128,
         );
-
         // Now verify all of the signatures
         for (i, signed_precommit) in signed_precommits.iter().enumerate().take(QUORUM_SIZE) {
             // Get the pub key
             // Random access arrays must be a power of 2, so we pad the array to 16
-            let mut pub_key = self.random_access_vec(
+            let pub_key = self.random_access_affine_point(
                 signed_precommit.pub_key_idx,
-                &authority_set_signers
-                    .pub_keys
-                    .iter()
-                    .map(|x| x.0.to_vec())
-                    .collect::<Vec<_>>(),
+                authority_set_signers.pub_keys.to_vec(),
             );
-
-            // Need to reverse the byte endianess of the pub key
-            pub_key.reverse();
-            let mut pub_key_bits = Vec::new();
-
-            for byte in pub_key.iter().take(PUB_KEY_SIZE) {
-                let mut bits = self.split_le(*byte, 8);
-                bits.reverse();
-                pub_key_bits.extend(bits);
-            }
-            let pub_key_uncompressed = self.decompress_point(&pub_key_bits);
 
             // Verify that the precommit's fields match the claimed finalized block's
             // Note that we are currently assuming that all of the authorities sign on the finalized block,
@@ -283,7 +260,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 &verify_sigs_targets.sigs[i].s,
                 &signed_precommits[i].signature.s,
             );
-            self.connect_affine_point(&verify_sigs_targets.pub_keys[i].0, &pub_key_uncompressed);
+            self.connect_affine_point(&verify_sigs_targets.pub_keys[i].0, &pub_key);
         }
     }
 }
@@ -304,7 +281,7 @@ pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>
 
     // Set the precommit partial witness values
     for i in 0..precommit_messages.len() {
-        let sig_r = decompress_point(&signatures[i][0..32]);
+        let sig_r = AffinePoint::new_from_compressed_point(&signatures[i][0..32]);
         assert!(sig_r.is_valid());
 
         let pub_key = &pub_keys[pub_key_indices[i]];
@@ -313,7 +290,7 @@ pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>
         let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
         let sig = EDDSASignature { r: sig_r, s: sig_s };
 
-        let pub_key_point = decompress_point(&pub_key[..]);
+        let pub_key_point = AffinePoint::new_from_compressed_point(&pub_key[..]);
         assert!(pub_key_point.is_valid());
 
         let precommit_message_bits = to_bits(precommit_messages[i].clone());
@@ -357,7 +334,7 @@ pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>
 
 pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>(
     pw: &mut PartialWitness<F>,
-    authority_set_target: &AuthoritySetSignersTarget,
+    authority_set_target: &AuthoritySetSignersTarget<C>,
     pub_keys: Vec<Vec<u8>>,
     authority_set_id: u64,
     authority_set_commitment: Vec<u8>,
@@ -368,16 +345,16 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
     // Set the authority set partial witness values
     for (i, pub_key) in pub_keys.iter().enumerate() {
         let authority_set_signers_target = &authority_set_target.pub_keys[i];
+        let pub_key_affine_point = AffinePoint::<C>::new_from_compressed_point(&pub_key[..]);
 
-        assert!(pub_key.len() == PUB_KEY_SIZE);
-        assert!(pub_key.len() == authority_set_signers_target.0.len());
-
-        pub_key
-            .iter()
-            .zip(authority_set_signers_target.0.iter())
-            .for_each(|(pub_key_byte, pub_key_byte_target)| {
-                pw.set_target(*pub_key_byte_target, F::from_canonical_u8(*pub_key_byte))
-            });
+        pw.set_biguint_target(
+            &authority_set_signers_target.x.value,
+            &pub_key_affine_point.x.to_canonical_biguint(),
+        );
+        pw.set_biguint_target(
+            &authority_set_signers_target.y.value,
+            &pub_key_affine_point.y.to_canonical_biguint(),
+        );
     }
 
     pw.set_target(
@@ -410,11 +387,10 @@ pub(crate) mod tests {
     use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
-    use plonky2x::ecc::ed25519::curve::curve_types::Curve;
+    use plonky2x::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
     use plonky2x::ecc::ed25519::curve::ed25519::Ed25519;
     use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
     use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-    use plonky2x::ecc::ed25519::gadgets::curve::decompress_point;
     use plonky2x::ecc::ed25519::gadgets::eddsa::{verify_signatures_circuit, EDDSATargets};
     use plonky2x::num::biguint::WitnessBigUint;
 
@@ -431,7 +407,7 @@ pub(crate) mod tests {
 
     pub struct JustificationTarget<C: Curve> {
         precommit_targets: Vec<PrecommitTarget<C>>,
-        authority_set_signers: AuthoritySetSignersTarget,
+        authority_set_signers: AuthoritySetSignersTarget<C>,
         finalized_block: FinalizedBlockTarget,
     }
 
@@ -495,7 +471,7 @@ pub(crate) mod tests {
         let sig_msg_bits = to_bits(sig_msg.to_vec());
 
         let signature= hex::decode("3ebc508daaf5edd7a4b4779743ce9241519aa8940264c2be4f39dfd0f7a4f2c4c587752fbc35d6d34b8ecd494dfe101e49e6c1ccb0e41ff2aa52bc481fcd3e0c").unwrap();
-        let sig_r = decompress_point(&signature[0..32]);
+        let sig_r = AffinePoint::new_from_compressed_point(&signature[0..32]);
         assert!(sig_r.is_valid());
 
         let sig_s_biguint = BigUint::from_bytes_le(&signature[32..64]);
@@ -505,7 +481,7 @@ pub(crate) mod tests {
         let pubkey_bytes =
             hex::decode("0e0945b2628f5c3b4e2a6b53df997fc693344af985b11e3054f36a384cc4114b")
                 .unwrap();
-        let pub_key = decompress_point(&pubkey_bytes[..]);
+        let pub_key = AffinePoint::new_from_compressed_point(&pubkey_bytes[..]);
         assert!(pub_key.is_valid());
 
         assert!(verify_message(

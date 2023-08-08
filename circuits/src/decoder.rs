@@ -115,13 +115,14 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
         );
 
         let all_possible_state_roots = vec![
-            header.header_bytes[33..33 + HASH_SIZE].to_vec(),
-            header.header_bytes[34..34 + HASH_SIZE].to_vec(),
-            header.header_bytes[36..36 + HASH_SIZE].to_vec(),
-            header.header_bytes[37..37 + HASH_SIZE].to_vec(),
+            AvailHashTarget(header.header_bytes[33..33 + HASH_SIZE].try_into().unwrap()),
+            AvailHashTarget(header.header_bytes[34..34 + HASH_SIZE].try_into().unwrap()),
+            AvailHashTarget(header.header_bytes[36..36 + HASH_SIZE].try_into().unwrap()),
+            AvailHashTarget(header.header_bytes[37..37 + HASH_SIZE].try_into().unwrap()),
         ];
 
-        let state_root_target = self.random_access_vec(compress_mode, &all_possible_state_roots);
+        let state_root_target =
+            self.random_access_avail_hash(compress_mode, all_possible_state_roots);
 
         // Parse the data root field.
         // For this, we will use a generator to extract the data root field from the header bytes.
@@ -196,7 +197,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
         HeaderTarget {
             parent_hash: AvailHashTarget(parent_hash_target.try_into().unwrap()),
             block_number: block_number_target,
-            state_root: AvailHashTarget(state_root_target.try_into().unwrap()),
+            state_root: state_root_target,
             data_root: AvailHashTarget(data_root_target.try_into().unwrap()),
         }
     }
@@ -460,9 +461,9 @@ mod tests {
                 .unwrap(),
         );
 
-        builder.connect_hash(decoded_header.data_root, expected_data_root_target);
+        builder.connect_avail_hash(decoded_header.data_root, expected_data_root_target);
 
-        builder.connect_hash(decoded_header.state_root, expected_state_root_target);
+        builder.connect_avail_hash(decoded_header.state_root, expected_state_root_target);
 
         let data = builder.build::<C>();
         let proof = data.prove(pw)?;

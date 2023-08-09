@@ -225,8 +225,10 @@ contract LightClient is EventDecoder, StepVerifier {
             revert("Incorrect event list committed to the state root");
         }
 
-        bytes32[NUM_AUTHORITIES] memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
-        setAuthorities(update.newAuthoritySetIDProof.authoritySetID, newAuthorities);
+        bytes memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
+        bytes memory digest = Blake2b.blake2b(newAuthorities, 32);
+
+        authoritySetCommitments[update.newAuthoritySetIDProof.authoritySetID] = Bytes.toBytes32(digest);
     }
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {

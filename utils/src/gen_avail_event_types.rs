@@ -6,8 +6,11 @@ use avail_subxt::build_client;
 use codec::{Decode, IoReader};
 use enum_extract::extract;
 use itertools::Itertools;
-use subxt::{ext::{sp_runtime::scale_info::{TypeDef, interner::UntrackedSymbol}}, Metadata};
-use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128 };
+use scale_info::TypeDef;
+use scale_info::interner::UntrackedSymbol;
+use subxt::Metadata;
+//use subxt::{ext::{sp_runtime::scale_info::{TypeDef, interner::UntrackedSymbol}}, Metadata};
+//use subxt::ext::sp_runtime::scale_info::TypeDefPrimitive::{ Bool, U8, U16, U32, U64, U128, I8, I16, I32, I64, I128 };
 
 
 #[derive(Debug, Clone)]
@@ -78,37 +81,37 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
         TypeDef::Primitive(p) => {
             let primitive_size:u32;
             match p {
-                    Bool => {
+                    scale_info::TypeDefPrimitive::Bool => {
                         primitive_size = 1;
                     }
-                    U8 => {
+                    scale_info::TypeDefPrimitive::U8 => {
                         primitive_size = 1;
                     }
-                    U16 => {
+                    scale_info::TypeDefPrimitive::U16 => {
                         primitive_size =  2;
                     }
-                    U32 => {
+                    scale_info::TypeDefPrimitive::U32 => {
                         primitive_size = 4;
                     }
-                    U64 => {
+                    scale_info::TypeDefPrimitive::U64 => {
                         primitive_size = 8;
                     }
-                    U128 => {
+                    scale_info::TypeDefPrimitive::U128 => {
                         primitive_size = 16;
                     }
-                    I8 => {
+                    scale_info::TypeDefPrimitive::I8 => {
                         primitive_size = 1;
                     }
-                    I16 => {
+                    scale_info::TypeDefPrimitive::I16 => {
                         primitive_size = 2;
                     }
-                    I32 => {
+                    scale_info::TypeDefPrimitive::I32 => {
                         primitive_size = 4;
                     }
-                    I64 => {
+                    scale_info::TypeDefPrimitive::I64 => {
                         primitive_size = 8;
                     }
-                    I128 => {
+                    scale_info::TypeDefPrimitive::I128 => {
                         primitive_size = 16;
                     }
                     _ => {
@@ -128,9 +131,9 @@ fn get_type_size<'b>(md: &Metadata, substrate_type: &'b UntrackedSymbol<TypeId>,
 }
 
 async fn get_type_chunks() -> HashMap<u8, HashMap<u8, Vec<Chunk>>>{
-    let url: &str = "wss://testnet.avail.tools:443/ws";
+    let url: &str = "wss://kate.avail.tools:443/ws";
 
-    let c = build_client(url).await.unwrap();
+    let c = build_client(url, false).await.unwrap();
     let md = c.metadata();
 
     let mut avail_event_type_chunks = HashMap::new();

@@ -80,7 +80,7 @@ pub enum SignerMessage {
 pub async fn main() {
     let url: &str = "wss://kate.avail.tools:443/ws";
 
-    let c = build_client(url, true).await.unwrap();
+    let c: subxt::OnlineClient<avail_subxt::AvailConfig> = build_client(url, false).await.unwrap();
     let t = c.rpc().deref();
     let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
         .subscribe(

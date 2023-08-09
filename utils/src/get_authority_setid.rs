@@ -11,7 +11,7 @@ pub async fn main() {
 
     let c = build_client(url, false).await.unwrap();
 
-    let block_hash_vec = hex::decode("4db46d17c09899817fc128b81b09c09775cc4b729111295697059e63a9fb8115").unwrap();
+    let block_hash_vec = hex::decode("c63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f").unwrap();
 
     let mut block_hash_array: [u8; 32] = [0; 32];
     for i in 0..block_hash_vec.len() {

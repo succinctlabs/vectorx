@@ -1,5 +1,6 @@
 pragma solidity 0.8.17;
 
+import { Memory } from "solidity-merkle-trees/src/trie/Memory.sol";
 import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
 import { NUM_AUTHORITIES } from "src/Constants.sol";
@@ -24,7 +25,14 @@ contract EventDecoder {
     constructor() {
         eventChunks[0][0].push();
         eventChunks[0][0][0].chunkType = chunkType.CONSTANT_SIZE;
-        eventChunks[0][0][0].size = 14;
+        eventChunks[0][0][0].size = 4;
+        eventChunks[0][0].push();
+        eventChunks[0][0][1].chunkType = chunkType.COMPACT;
+        eventChunks[0][0].push();
+        eventChunks[0][0][2].chunkType = chunkType.COMPACT;
+        eventChunks[0][0].push();
+        eventChunks[0][0][3].chunkType = chunkType.CONSTANT_SIZE;
+        eventChunks[0][0][3].size = 2;
         eventChunks[0][1].push();
         eventChunks[0][1][0].chunkType = chunkType.CONSTANT_SIZE;
         eventChunks[0][1][0].size = 15;
@@ -271,6 +279,9 @@ contract EventDecoder {
         eventChunks[18][6].push();
         eventChunks[18][6][0].chunkType = chunkType.CONSTANT_SIZE;
         eventChunks[18][6][0].size = 16;
+        eventChunks[18][8].push();
+        eventChunks[18][8][0].chunkType = chunkType.CONSTANT_SIZE;
+        eventChunks[18][8][0].size = 32;
         eventChunks[19][0].push();
         eventChunks[19][0][0].chunkType = chunkType.CONSTANT_SIZE;
         eventChunks[19][0][0].size = 6;
@@ -422,18 +433,21 @@ contract EventDecoder {
         eventChunks[32][0][0].size = 72;
     }
 
+    event Address(bytes addressBytes);
+
     /// @notice This function will decode the authority set from the encoded event list
-    function decodeAuthoritySet(bytes memory encodedEventList) public returns (bytes32[NUM_AUTHORITIES] memory) {
+    function decodeAuthoritySet(bytes memory encodedEventList) public returns (bytes memory) {
         ByteSlice memory encodedEventsListSlice = ByteSlice(encodedEventList, 0);
 
         // First get the length of the encoded_events_list
         uint256 num_events = ScaleCodec.decodeUintCompact(encodedEventsListSlice);
 
-        bytes32[NUM_AUTHORITIES] memory authorities;
-
         uint8 phase;
         uint8 palletIndex;
         uint8 eventIndex;
+
+        bytes memory authoritiesBuffer = new bytes(NUM_AUTHORITIES*32);
+        (uint destAddr,) = Memory.fromBytes(authoritiesBuffer);
 
         // Parse the scale encoded events
         for (uint256 i = 0; i < num_events; i++) {
@@ -456,12 +470,19 @@ contract EventDecoder {
                     revert("Incorrect number of authorities");
                 }
 
+                (uint srcAddr,) = Memory.fromBytes(encodedEventsListSlice.data);
+                srcAddr += encodedEventsListSlice.offset;
+
                 // Parse the scale encoded authorities
                 for (uint256 j = 0; j < numAuthorities; j++) {
                     // First 32 bytes is the eddsa pub key
-                    authorities[j] = Bytes.toBytes32(Bytes.read(encodedEventsListSlice, 32));
+                    Memory.copy(srcAddr, destAddr, 32);
+                    encodedEventsListSlice.offset += 32;
+                    destAddr += 32;
+
                     // Next 8 bytes is the weight.  We can ignore that.
-                    Bytes.read(encodedEventsListSlice, 8);
+                    encodedEventsListSlice.offset += 8;
+                    srcAddr += 40;
                 }
             } else {
                 for (uint256 chunkIdx = 0; chunkIdx < eventChunks[palletIndex][eventIndex].length; chunkIdx++) {
@@ -475,13 +496,13 @@ contract EventDecoder {
 
         require(encodedEventsListSlice.offset == encodedEventList.length, "Did not parse all of the encoded events bytes");
 
-        return authorities;
+        return authoritiesBuffer;
     }
 
     /// @notice This function will "jump over" a chunk in the encoded event list.
     function jumpOverChunk(Chunk memory chunk, ByteSlice memory encodedEventsListSlice) internal {
         if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
-            Bytes.read(encodedEventsListSlice, chunk.size);
+            encodedEventsListSlice.offset += chunk.size;
         } else if (chunk.chunkType == chunkType.COMPACT) {
             ScaleCodec.decodeUintCompact(encodedEventsListSlice);
         } else if (chunk.chunkType == chunkType.SEQUENCE) {

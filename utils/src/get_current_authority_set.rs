@@ -26,6 +26,4 @@ pub async fn main() {
     for authority in authority_list.iter() {
         println!("\tauthority: {:?}", authority.0);
     }
-
-    let concatted_al = authority_list.iter().map(|authority| authority.0.into_u256()).collect::<Vec<_>>().join(",");
 }

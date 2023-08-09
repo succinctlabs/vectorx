@@ -1,14 +1,14 @@
-use avail_subxt::{build_client};
+use avail_subxt::build_client;
 use codec::Encode;
-use subxt::ext::sp_core::H256;
+use primitive_types::H256;
 
 #[tokio::main]
 pub async fn main() {
-    let url: &str = "wss://testnet.avail.tools:443/ws";    
+    let url: &str = "wss://kate.avail.tools:443/ws"; 
 
-    let c = build_client(url).await.unwrap();
+    let c = build_client(url, false).await.unwrap();
 
-    let block_hash_vec = hex::decode("b71429ef80257a25358e386e4ca1debe72c38ea69d833e23416a4225fabb1a78").unwrap();
+    let block_hash_vec = hex::decode("c63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f").unwrap();
     let mut block_hash_array: [u8; 32] = [0; 32];
     for i in 0..block_hash_vec.len() {
         block_hash_array[i] = block_hash_vec[i];

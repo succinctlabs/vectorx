@@ -1,18 +1,13 @@
-use std::marker::PhantomData;
-
 use curta::plonky2::field::CubicParameters;
 use num::BigUint;
 
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::{Field, PrimeField};
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::generator::{SimpleGenerator, GeneratedValues};
 use plonky2::iop::target::Target;
-use plonky2::iop::witness::{PartialWitness, WitnessWrite, PartitionWitness, Witness};
+use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
-use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2::util::serialization::{IoResult, Buffer};
 use plonky2x::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
 use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
 use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
@@ -205,68 +200,15 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             }
         }
 
-        // Verify that the pub_key_idx are all within the range of the authority set indices.
-        // Will do the following.
-        // 1) Generate a "lookup table" that contains a sorted list of all the possible pub_key_idx values (lenght of this == NUM_AUTHORITIES)
-        // 2) Get the list of pub_key_idx from signed_precommits (length of this == QUORUM_SIZE)
-        // 3) Expand that list so that it "fills" it up to match the length of lookup table.
-        // 4) Verify that the expanded list is a permutation of the lookup table.
-        // 5) Verify that the number of distinct elements in the list is equal to QUORUM_SIZE.
-        // 6) Generate the list of pub keys corresponding to the signed_precommits list for signature verification.
-
-        // Generate the lookup table
-        let mut lookup_table = Vec::new();
-        let one = self.one();
-        let mut i_target = zero;
-        for _i in 0..NUM_AUTHORITIES {
-            lookup_table.push(i_target);
-            i_target = self.add(i_target, one);
-        }
-
-        let signature_pub_key_indices = signed_precommits
-            .iter()
-            .map(|precommit| precommit.pub_key_idx)
-            .collect::<Vec<_>>();
-
-        let mut expanded_signature_pub_key_indices = Vec::new();
-
-        for _i in 0..NUM_AUTHORITIES {
-            expanded_signature_pub_key_indices.push(self.add_virtual_target());
-        }
-
-        self.add_simple_generator(PubKeyIndicesExtender::<F, D> {
-            pub_key_indices: &signature_pub_key_indices,
-            pub_key_indices_lookup_table: &lookup_table,
-            extended_pub_key_indices: &expanded_signature_pub_key_indices,
-            _marker: PhantomData,
-        });
-
-        let neg_one = self.neg_one();
-        let mut previous_entry:Target;
-        let mut num_distinct_entries = zero;  // Number of distinct entries in the expanded vector
-        for (i, (expanded_entry, lookup_entry)) in expanded_signature_pub_key_indices.iter().zip(lookup_table.iter()).enumerate() {
-            // Check either that the entries are equal or that the expanded vector's previous entry is equal.
-            // -1 is allowed to be the first entry in the expanded vector.
-            // Also count the number of distinct entries in the expanded vector
-            let is_equal_to_lookup = self.is_equal(*expanded_entry, *lookup_entry);
-            num_distinct_entries = self.add(num_distinct_entries, is_equal_to_lookup.target);
-
-            if i == 0 {
-                let is_neg_one = self.is_equal(neg_one, *expanded_entry);
-                let first_check = self.or(is_neg_one, is_equal_to_lookup);
-                self.assert_one(first_check.target);
-            } else {
-                let is_equal_to_previous = self.is_equal(*expanded_entry, previous_entry);
-                let check = self.or(is_equal_to_lookup, is_equal_to_previous);
-                self.assert_one(check.target);
+        // Verify that there are no sig_idx dupes
+        for i in 0..QUORUM_SIZE {
+            for j in i + 1..QUORUM_SIZE {
+                if i != j {
+                    let is_equal = self.is_equal(signed_precommits[i].pub_key_idx, signed_precommits[j].pub_key_idx);
+                    self.assert_zero(is_equal.target);
+                }
             }
-            previous_entry = *expanded_entry;
         }
-
-        let quorum_size_t = self.constant(F::from_canonical_usize(QUORUM_SIZE));
-        self.connect(num_distinct_entries, quorum_size_t);
-
-
 
         let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
             self,
@@ -437,69 +379,6 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
         );
     }
 }
-
-
-#[derive(Debug)]
-struct PubKeyIndicesExtender<'a, F: RichField + Extendable<D>, const D: usize> {
-    pub_key_indices: &'a Vec<Target>,
-    pub_key_indices_lookup_table: &'a Vec<Target>,
-    extended_pub_key_indices: &'a Vec<Target>,
-    _marker: PhantomData<F>,
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
-    for PubKeyIndicesExtender<F, D>
-{
-    fn id(&self) -> String {
-        "PubKeyIndicesExtender".to_string()
-    }
-
-    fn serialize(
-        &self,
-        _dst: &mut Vec<u8>,
-        _common_data: &CommonCircuitData<F, D>,
-    ) -> IoResult<()> {
-        unimplemented!();
-    }
-
-    fn deserialize(_src: &mut Buffer, _common_data: &CommonCircuitData<F, D>) -> IoResult<Self> {
-        unimplemented!();
-    }
-
-    fn dependencies(&self) -> Vec<Target> {
-        let mut dependencies = Vec::new();
-        dependencies.extend(self.pub_key_indices.clone());
-        dependencies.extend(self.pub_key_indices_lookup_table.clone());
-        dependencies
-    }
-
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-        let pub_key_indices_u64 = (0..self.pub_key_indices.len())
-            .map(|i| witness.get_target(self.pub_key_indices[i]).to_canonical_u64())
-            .collect::<Vec<_>>();
-
-        let pub_key_indices_lookup_table_u64 = (0..self.pub_key_indices_lookup_table.len())
-            .map(|i| {
-                witness
-                    .get_target(self.pub_key_indices_lookup_table[i])
-                    .to_canonical_u64()
-            })
-            .collect::<Vec<_>>();
-
-        let mut cursor_val = std::u64::MAX;
-        let mut idx_cursor = 0;   // index into pub_key_indices_u64
-        for (i, lookup_entry) in pub_key_indices_lookup_table_u64.iter().enumerate() {
-            if pub_key_indices_u64[idx_cursor] == *lookup_entry {
-                idx_cursor += 1;
-                cursor_val = *lookup_entry;
-            }
-
-            out_buffer.set_target(self.extended_pub_key_indices[i], F::from_canonical_u64(cursor_val));
-        }
-    }
-}
-
-
 #[cfg(test)]
 pub(crate) mod tests {
     use anyhow::Result;

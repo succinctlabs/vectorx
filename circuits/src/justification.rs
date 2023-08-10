@@ -200,6 +200,16 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             }
         }
 
+        // Verify that the pub_key_idx are all within the range of the authority set indices.
+        // Will do the following.
+        // 1) Generate a "lookup table" that contains a sorted list of all the possible pub_key_idx values (lenght of this == NUM_AUTHORITIES)
+        // 2) Get the list of pub_key_idx from signed_precommits (length of this == QUORUM_SIZE)
+        // 3) Expand that list so that it "fills" it up to match the length of lookup table.
+        // 4) Verify that the expanded list is a permutation of the lookup table.
+        // 5) Verify that the number of distinct elements in the list is equal to QUORUM_SIZE.
+        // 6) Generate the list of pub keys corresponding to the signed_precommits list for signature verification.
+
+
         let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
             self,
             QUORUM_SIZE,

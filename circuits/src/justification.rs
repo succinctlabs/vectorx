@@ -235,11 +235,36 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         }
 
         self.add_simple_generator(PubKeyIndicesExtender::<F, D> {
-            pub_key_indices: signature_pub_key_indices,
-            pub_key_indices_lookup_table: lookup_table,
-            extended_pub_key_indices: expanded_signature_pub_key_indices.clone(),
+            pub_key_indices: &signature_pub_key_indices,
+            pub_key_indices_lookup_table: &lookup_table,
+            extended_pub_key_indices: &expanded_signature_pub_key_indices,
             _marker: PhantomData,
         });
+
+        let neg_one = self.neg_one();
+        let mut previous_entry:Target;
+        let mut num_distinct_entries = zero;  // Number of distinct entries in the expanded vector
+        for (i, (expanded_entry, lookup_entry)) in expanded_signature_pub_key_indices.iter().zip(lookup_table.iter()).enumerate() {
+            // Check either that the entries are equal or that the expanded vector's previous entry is equal.
+            // -1 is allowed to be the first entry in the expanded vector.
+            // Also count the number of distinct entries in the expanded vector
+            let is_equal_to_lookup = self.is_equal(*expanded_entry, *lookup_entry);
+            num_distinct_entries = self.add(num_distinct_entries, is_equal_to_lookup.target);
+
+            if i == 0 {
+                let is_neg_one = self.is_equal(neg_one, *expanded_entry);
+                let first_check = self.or(is_neg_one, is_equal_to_lookup);
+                self.assert_one(first_check.target);
+            } else {
+                let is_equal_to_previous = self.is_equal(*expanded_entry, previous_entry);
+                let check = self.or(is_equal_to_lookup, is_equal_to_previous);
+                self.assert_one(check.target);
+            }
+            previous_entry = *expanded_entry;
+        }
+
+        let quorum_size_t = self.constant(F::from_canonical_usize(QUORUM_SIZE));
+        self.connect(num_distinct_entries, quorum_size_t);
 
 
 
@@ -415,10 +440,10 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
 
 
 #[derive(Debug)]
-struct PubKeyIndicesExtender<F: RichField + Extendable<D>, const D: usize> {
-    pub_key_indices: Vec<Target>,
-    pub_key_indices_lookup_table: Vec<Target>,
-    extended_pub_key_indices: Vec<Target>,
+struct PubKeyIndicesExtender<'a, F: RichField + Extendable<D>, const D: usize> {
+    pub_key_indices: &'a Vec<Target>,
+    pub_key_indices_lookup_table: &'a Vec<Target>,
+    extended_pub_key_indices: &'a Vec<Target>,
     _marker: PhantomData<F>,
 }
 

@@ -33,7 +33,7 @@ pub struct PrecommitTarget<C: Curve> {
 
 #[derive(Clone)]
 pub struct AuthoritySetSignersTarget<C: Curve> {
-    pub pub_keys: [AffinePointTarget<C>; NUM_AUTHORITIES_PADDED], // Array of pub keys (in compressed form)
+    pub pub_keys: [AffinePointTarget<C>; NUM_AUTHORITIES], // Array of pub keys (in compressed form)
     pub commitment: AvailHashTarget,
     pub set_id: Target,
 }
@@ -120,7 +120,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
 
     fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget<C> {
         let mut pub_keys = Vec::new();
-        for _i in 0..NUM_AUTHORITIES_PADDED {
+        for _i in 0..NUM_AUTHORITIES {
             pub_keys.push(self.add_virtual_affine_point_target());
         }
 
@@ -200,18 +200,42 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             }
         }
 
+        // Verify that there are no sig_idx dupes
+        for i in 0..QUORUM_SIZE {
+            for j in i + 1..QUORUM_SIZE {
+                if i != j {
+                    let is_equal = self.is_equal(signed_precommits[i].pub_key_idx, signed_precommits[j].pub_key_idx);
+                    self.assert_zero(is_equal.target);
+                }
+            }
+        }
+
         let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
             self,
             QUORUM_SIZE,
             ENCODED_PRECOMMIT_LENGTH as u128,
         );
+
+
+        // Generate a padded array of the pub keys.  The random access affine point requires that the array be a power of 2.
+        let dummy_pub_key = C::GENERATOR_AFFINE;
+        let dummy_pub_key_t = self.constant_affine_point(dummy_pub_key);
+        let mut authority_set_padded = Vec::new();
+        for i in 0..NUM_AUTHORITIES_PADDED {
+            if i < NUM_AUTHORITIES {
+                authority_set_padded.push(authority_set_signers.pub_keys[i].clone());
+            } else {
+                authority_set_padded.push(dummy_pub_key_t.clone());
+            }
+        }
+
         // Now verify all of the signatures
         for (i, signed_precommit) in signed_precommits.iter().enumerate().take(QUORUM_SIZE) {
             // Get the pub key
             // Random access arrays must be a power of 2, so we pad the array to 16
             let pub_key = self.random_access_affine_point(
                 signed_precommit.pub_key_idx,
-                authority_set_signers.pub_keys.to_vec(),
+                authority_set_padded.clone(),
             );
 
             // Verify that the precommit's fields match the claimed finalized block's
@@ -277,7 +301,7 @@ pub fn set_precommits_pw<F: RichField + Extendable<D>, const D: usize, C: Curve>
     assert!(precommit_messages.len() == QUORUM_SIZE);
     assert!(signatures.len() == QUORUM_SIZE);
     assert!(pub_key_indices.len() == QUORUM_SIZE);
-    assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
+    assert!(pub_keys.len() == NUM_AUTHORITIES);
 
     // Set the precommit partial witness values
     for i in 0..precommit_messages.len() {
@@ -339,8 +363,8 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
     authority_set_id: u64,
     authority_set_commitment: Vec<u8>,
 ) {
-    assert!(pub_keys.len() == NUM_AUTHORITIES_PADDED);
-    assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES_PADDED);
+    assert!(pub_keys.len() == NUM_AUTHORITIES);
+    assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES);
 
     // Set the authority set partial witness values
     for (i, pub_key) in pub_keys.iter().enumerate() {
@@ -369,7 +393,6 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
         );
     }
 }
-
 #[cfg(test)]
 pub(crate) mod tests {
     use anyhow::Result;

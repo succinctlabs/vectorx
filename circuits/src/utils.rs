@@ -282,7 +282,7 @@ pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
 #[cfg(test)]
 #[allow(dead_code)]
 pub(crate) mod tests {
-    use super::{ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES_PADDED, QUORUM_SIZE};
+    use super::{ENCODED_PRECOMMIT_LENGTH, QUORUM_SIZE, NUM_AUTHORITIES};
 
     // Block 576728 contains a new authorities event
     pub const BLOCK_576728_BLOCK_HASH: &str =
@@ -874,7 +874,7 @@ pub(crate) mod tests {
     ];
     pub const BLOCK_530527_PUB_KEY_INDICES: [usize; QUORUM_SIZE] = [2, 3, 6, 1, 0, 9, 5];
     pub const BLOCK_530527_AUTHORITY_SET_ID: u64 = 496;
-    pub const BLOCK_530527_AUTHORITY_SET: [&str; NUM_AUTHORITIES_PADDED] = [
+    pub const BLOCK_530527_AUTHORITY_SET: [&str; NUM_AUTHORITIES] = [
         "8e9edb840fcf9ce51b9d2e65dcae423aafd03ab5973da8d806207395a26af66e",
         "8d9b15ea8335270510135b7f7c5ef94e0df70e751d3c5f95fd1aa6d7766929b6",
         "0e0945b2628f5c3b4e2a6b53df997fc693344af985b11e3054f36a384cc4114b",
@@ -885,12 +885,6 @@ pub(crate) mod tests {
         "079590df34cd1fa2f83cb1ef770b3e254abb00fa7dbfb2f7f21b383a7a726bb2",
         "cc068bf6c1e467be8e2fdafb1d42ddafe8e66a0d05ea036c3d766cb6a0360797",
         "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150",
-        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150", // Can be any valid pubkey
-        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150", // Can be any valid pubkey
-        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150", // Can be any valid pubkey
-        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150", // Can be any valid pubkey
-        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150", // Can be any valid pubkey
-        "ba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150", // Can be any valid pubkey
     ];
     pub const BLOCK_530527_AUTHORITY_SET_COMMITMENT: &str =
         "0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6";

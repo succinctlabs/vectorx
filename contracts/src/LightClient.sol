@@ -23,13 +23,6 @@ struct AuthoritySetIDProof {
 }
 
 
-// Storage value and proof
-struct EventListProof {
-    bytes encodedEventList;
-    bytes[] merkleProof; // Proof that it's within the state root.
-}
-
-
 struct Header {
     uint32 blockNumber;
     bytes32 headerHash;
@@ -63,7 +56,7 @@ struct Step {
 // but this will need to be converted into a snark proof.
 struct Rotate {
     // This field specifies and proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
-    EventListProof eventListProof;
+    bytes[] eventListProof;
 
     // This field specifies and proves the new authority set's ID (proved against the state root of the blockNumber).
     AuthoritySetIDProof newAuthoritySetIDProof;
@@ -204,31 +197,24 @@ contract LightClient is EventDecoder, StepVerifier {
         // Verify the new authority set id
         bytes[] memory authSetKeys = new bytes[](1);
         authSetKeys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory authSetProofRet = MerklePatricia.VerifySubstrateProof(stateRoots[head],
-                                                                           update.newAuthoritySetIDProof.merkleProof,
-                                                                           authSetKeys)[0];
+        (bytes[] memory authSetProofRet,) = VerifySubstrateProof(stateRoots[head],
+                                                                 update.newAuthoritySetIDProof.merkleProof,
+                                                                 authSetKeys,
+                                                                 false);
 
-        if (ScaleCodec.decodeUint64(authSetProofRet) != update.newAuthoritySetIDProof.authoritySetID) {
+        if (ScaleCodec.decodeUint64(authSetProofRet[0]) != update.newAuthoritySetIDProof.authoritySetID) {
             revert("Incorrect authority set ID committed to the state root");
         }
 
         // Verify the encoded event list
         bytes[] memory systemEventsKeys = new bytes[](1);
         systemEventsKeys[0] = SYSTEM_EVENTS_KEY;
-        bytes memory systemEventsProofRet = MerklePatricia.VerifySubstrateProof(stateRoots[head],
-                                                                                update.eventListProof.merkleProof,
-                                                                                systemEventsKeys)[0];
+        (, bytes32 digest) = VerifySubstrateProof(stateRoots[head],
+                                                  update.eventListProof,
+                                                  systemEventsKeys,
+                                                  true);
 
-        // See here for bytes comparison:  https://ethereum.stackexchange.com/a/99342
-        if (systemEventsProofRet.length != update.eventListProof.encodedEventList.length ||
-            keccak256(systemEventsProofRet) != keccak256(update.eventListProof.encodedEventList)) {
-            revert("Incorrect event list committed to the state root");
-        }
-
-        bytes memory newAuthorities = decodeAuthoritySet(update.eventListProof.encodedEventList);
-        bytes memory digest = Blake2b.blake2b(newAuthorities, 32);
-
-        authoritySetCommitments[update.newAuthoritySetIDProof.authoritySetID] = Bytes.toBytes32(digest);
+        authoritySetCommitments[update.newAuthoritySetIDProof.authoritySetID] = digest;
     }
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {

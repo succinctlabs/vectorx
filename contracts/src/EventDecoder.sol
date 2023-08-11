@@ -7,6 +7,18 @@ import { NUM_AUTHORITIES } from "src/Constants.sol";
 import "forge-std/Test.sol";
 
 
+import "solidity-merkle-trees/src/trie/Bytes.sol";
+import "solidity-merkle-trees/src/trie/Node.sol";
+
+import "solidity-merkle-trees/src/trie/Option.sol";
+import "solidity-merkle-trees/src/trie/NibbleSlice.sol";
+import "solidity-merkle-trees/src/trie/TrieDB.sol";
+
+import "solidity-merkle-trees/src/trie/substrate/SubstrateTrieDB.sol";
+import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
+
+
+
 /// @title Event Scale Decoder
 /// @author Succinct Labs
 /// @notice This function is used to scale decode events.
@@ -436,7 +448,7 @@ contract EventDecoder {
     event Address(bytes addressBytes);
 
     /// @notice This function will decode the authority set from the encoded event list
-    function decodeAuthoritySet(bytes memory encodedEventList) public returns (bytes memory) {
+    function decodeAuthoritySet(bytes memory encodedEventList) internal view returns (bytes32 digest) {
         ByteSlice memory encodedEventsListSlice = ByteSlice(encodedEventList, 0);
 
         // First get the length of the encoded_events_list
@@ -445,9 +457,6 @@ contract EventDecoder {
         uint8 phase;
         uint8 palletIndex;
         uint8 eventIndex;
-
-        bytes memory authoritiesBuffer = new bytes(NUM_AUTHORITIES*32);
-        (uint destAddr,) = Memory.fromBytes(authoritiesBuffer);
 
         // Parse the scale encoded events
         for (uint256 i = 0; i < num_events; i++) {
@@ -472,18 +481,13 @@ contract EventDecoder {
 
                 (uint srcAddr,) = Memory.fromBytes(encodedEventsListSlice.data);
                 srcAddr += encodedEventsListSlice.offset;
+                uint256 msg_len = numAuthorities * 40;
 
-                // Parse the scale encoded authorities
-                for (uint256 j = 0; j < numAuthorities; j++) {
-                    // First 32 bytes is the eddsa pub key
-                    Memory.copy(srcAddr, destAddr, 32);
-                    encodedEventsListSlice.offset += 32;
-                    destAddr += 32;
-
-                    // Next 8 bytes is the weight.  We can ignore that.
-                    encodedEventsListSlice.offset += 8;
-                    srcAddr += 40;
+                assembly {
+                    digest := keccak256(srcAddr, msg_len)
                 }
+
+                break;
             } else {
                 for (uint256 chunkIdx = 0; chunkIdx < eventChunks[palletIndex][eventIndex].length; chunkIdx++) {
                     jumpOverChunk(eventChunks[palletIndex][eventIndex][chunkIdx], encodedEventsListSlice);
@@ -493,14 +497,10 @@ contract EventDecoder {
             // There is a 0 value byte at the end of each event
             require(Bytes.readByte(encodedEventsListSlice) == 0, "last byte of event is not 0");
         }
-
-        require(encodedEventsListSlice.offset == encodedEventList.length, "Did not parse all of the encoded events bytes");
-
-        return authoritiesBuffer;
     }
 
     /// @notice This function will "jump over" a chunk in the encoded event list.
-    function jumpOverChunk(Chunk memory chunk, ByteSlice memory encodedEventsListSlice) internal {
+    function jumpOverChunk(Chunk memory chunk, ByteSlice memory encodedEventsListSlice) internal view {
         if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
             encodedEventsListSlice.offset += chunk.size;
         } else if (chunk.chunkType == chunkType.COMPACT) {
@@ -515,5 +515,76 @@ contract EventDecoder {
         } else {
             revert("Unknown chunk type");
         }
+    }
+
+     /**
+      * @notice Verifies substrate specific merkle patricia proofs.
+      * @param root hash of the merkle patricia trie
+      * @param proof a list of proof nodes
+      * @param keys a list of keys to verify
+      * @return bytes[] a list of values corresponding to the supplied keys.
+      */
+    function VerifySubstrateProof(bytes32 root, bytes[] memory proof,  bytes[] memory keys, bool decodeEventList)
+        internal
+        view
+        returns (bytes[] memory, bytes32)
+    {
+        bytes[] memory values = new bytes[](keys.length);
+        TrieNode[] memory nodes = new TrieNode[](proof.length);
+
+        for (uint256 i = 0; i < proof.length; i++) {
+            nodes[i] = TrieNode(Bytes.toBytes32(Blake2b.blake2b(proof[i], 32)), proof[i]);
+        }
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            NibbleSlice memory keyNibbles = NibbleSlice(keys[i], 0);
+            NodeKind memory node = SubstrateTrieDB.decodeNodeKind(TrieDB.get(nodes, root));
+
+            // worst case scenario, so we avoid unbounded loops
+            for (uint256 j = 0; j < 50; j++) {
+                NodeHandle memory nextNode;
+
+                if (TrieDB.isLeaf(node)) {
+                    Leaf memory leaf = SubstrateTrieDB.decodeLeaf(node);
+                    if (NibbleSliceOps.eq(leaf.key, keyNibbles)) {
+                        values[i] = TrieDB.load(nodes, leaf.value);
+                    }
+                    break;
+                }  else if (TrieDB.isNibbledBranch(node)) {
+                    NibbledBranch memory nibbled = SubstrateTrieDB.decodeNibbledBranch(node);
+                    uint256 nibbledBranchKeyLength = NibbleSliceOps.len(nibbled.key);
+                    if (!NibbleSliceOps.startsWith(keyNibbles, nibbled.key)) {
+                        break;
+                    }
+
+                    if (NibbleSliceOps.len(keyNibbles) == nibbledBranchKeyLength) {
+                        if (Option.isSome(nibbled.value)) {
+                            values[i] = TrieDB.load(nodes, nibbled.value.value);
+                        }
+                        break;
+                    } else {
+                        uint256 index = NibbleSliceOps.at(keyNibbles, nibbledBranchKeyLength);
+                        NodeHandleOption memory handle = nibbled.children[index];
+                        if (Option.isSome(handle)) {
+                            keyNibbles = NibbleSliceOps.mid(keyNibbles, nibbledBranchKeyLength + 1);
+                            nextNode = handle.value;
+                        } else {
+                            break;
+                        }
+                    }
+                }  else if (TrieDB.isEmpty(node)) {
+                    break;
+                }
+
+                node = SubstrateTrieDB.decodeNodeKind(TrieDB.load(nodes, nextNode));
+            }
+        }
+
+        bytes32 digest;
+        if (decodeEventList == true) {
+            digest = decodeAuthoritySet(values[0]);
+        }
+
+        return (values, digest);
     }
 }

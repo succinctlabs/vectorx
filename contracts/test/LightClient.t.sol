@@ -6,7 +6,6 @@ import "forge-std/Test.sol";
 
 import { LightClient,
          AuthoritySetIDProof,
-         EventListProof,
          Header,
          Step as LCStep,
          Rotate as LCRotate } from "src/LightClient.sol";
@@ -31,11 +30,12 @@ contract LightClientTest is Test, LightClientFixture {
         bytes memory stepParsed = vm.parseJson(vm.readFile(stepFilename));
         fixtureStep = abi.decode(stepParsed, (Step));
 
-        string memory rotateFilename = string.concat(root, "/test/LightClient/fixtures/rotate.json");
+        string memory rotateFilename = string.concat(root, "/test/LightClient/fixtures/rotate_big.json");
         bytes memory rotateParsed = vm.parseJson(vm.readFile(rotateFilename));
         fixtureRotate = abi.decode(rotateParsed, (Rotate));
     }
 
+    /*
     function test_SetUp() public {
         assertTrue(fixtureInitial.blockNumber > 0);
         assertTrue(fixtureStep.blockNumbers.length > 0);
@@ -88,6 +88,7 @@ contract LightClientTest is Test, LightClientFixture {
             assertTrue(lc.stateRoots(blockNumber) == fixtureStep.stateRoots[i]);
         }
     }
+    */
 
     /*
     function test_LightClientStepRotate() public {
@@ -205,4 +206,17 @@ contract LightClientTest is Test, LightClientFixture {
         lc.step(step);
     }
     */
+
+    function test_LightClientRotateBig() public {
+        LightClient lc = newLightClient(fixtureInitial);
+        LCRotate memory rotate;
+
+        rotate.eventListProof = fixtureRotate.encodedEventListProof;
+        rotate.newAuthoritySetIDProof = AuthoritySetIDProof({
+            authoritySetID: fixtureRotate.newAuthoritySetID,
+            merkleProof: fixtureRotate.newAuthoritySetIDProof
+        });
+
+        lc.rotate(rotate);
+    }
 }

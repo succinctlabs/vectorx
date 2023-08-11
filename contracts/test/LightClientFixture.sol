@@ -20,9 +20,7 @@ contract LightClientFixture is CommonBase {
     }
 
     struct Rotate {
-        bytes encodedEventList;
         bytes[] encodedEventListProof;
-        bytes32 newAuthoritySetCommitment;
         uint64 newAuthoritySetID;
         bytes[] newAuthoritySetIDProof;
 

@@ -3,20 +3,22 @@ pragma solidity 0.8.17;
 import { Memory } from "solidity-merkle-trees/src/trie/Memory.sol";
 import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
-import { NUM_AUTHORITIES } from "src/Constants.sol";
-import "forge-std/Test.sol";
+import { MAX_NUM_PROOF_NODES, NUM_AUTHORITIES } from "src/Constants.sol";
+import "src/SubstrateTrieDB.sol";
+import "src/NibbleSlice.sol";
 
+import "forge-std/Test.sol";
 
 import "solidity-merkle-trees/src/trie/Bytes.sol";
 import "solidity-merkle-trees/src/trie/Node.sol";
+import { NibbleSliceOps as NibbleSliceOpsOriginal } from "solidity-merkle-trees/src/trie/NibbleSlice.sol";
+
 
 import "solidity-merkle-trees/src/trie/Option.sol";
-import "solidity-merkle-trees/src/trie/NibbleSlice.sol";
 import "solidity-merkle-trees/src/trie/TrieDB.sol";
 
-import "solidity-merkle-trees/src/trie/substrate/SubstrateTrieDB.sol";
 import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
-
+import { SubstrateTrieDB as SubstrateTrieDBOriginal } from "solidity-merkle-trees/src/trie/substrate/SubstrateTrieDB.sol";
 
 
 /// @title Event Scale Decoder
@@ -445,10 +447,8 @@ contract EventDecoder {
         eventChunks[32][0][0].size = 72;
     }
 
-    event Address(bytes addressBytes);
-
     /// @notice This function will decode the authority set from the encoded event list
-    function decodeAuthoritySet(bytes memory encodedEventList) internal view returns (bytes32 digest) {
+    function decodeAuthoritySet(bytes memory encodedEventList) internal returns (bytes32 digest) {
         ByteSlice memory encodedEventsListSlice = ByteSlice(encodedEventList, 0);
 
         // First get the length of the encoded_events_list
@@ -499,6 +499,99 @@ contract EventDecoder {
         }
     }
 
+    /// @notice This function will decode the authority set from the encoded event list
+    function decodeAuthoritySetCalldata(bytes calldata encodedEventsList) internal returns (bytes32 digest) {
+        uint256 cursor = 0;
+        uint256 num_events;
+        uint256 bytesRead;
+        // First get the length of the encoded_events_list
+        (num_events, bytesRead) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList);
+        cursor += bytesRead;
+
+        uint8 phase;
+        uint8 palletIndex;
+        uint8 eventIndex;
+
+        // Parse the scale encoded events
+        for (uint256 i = 0; i < num_events; i++) {
+            // First element is the Phase enum value (0 - ApplyExtrinsic, 1 - Finalization, 2 - Initialization)
+            phase = uint8(encodedEventsList[cursor]);
+            cursor += 1;
+
+            // Second element is the pallet_index
+            palletIndex = uint8(encodedEventsList[cursor]);
+            cursor += 1;
+
+            // Third element is the event_index
+            eventIndex = uint8(encodedEventsList[cursor]);
+            cursor += 1;
+
+            // Decode the actual event
+            if (phase == 1 && palletIndex == 17 && eventIndex == 0) {
+                // This is the NewAuthorities event
+
+                // The next element is the length of the encoded new authorities list
+                uint256 numAuthorities;
+                (numAuthorities, bytesRead) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList);
+                cursor += bytesRead;
+                /*
+                if (numAuthorities != NUM_AUTHORITIES) {
+                    revert("Incorrect number of authorities");
+                }
+                */
+
+                assembly {
+                    let ptr := mload(0x40)
+                    let msg_len := mul(numAuthorities, 40)
+                    // 68 is ther result of the first 4 bytes of calldata is the function signature
+                    // The next 32 bytes points to location in calldata where encodedEventsList starts
+                    // The next 32 bytes stores the size of encodedEventsList
+                    // See https://medium.com/@kalexotsu/understanding-solidity-assembly-hashing-a-string-from-calldata-fbd2ece82263
+                    calldatacopy(ptr, add(68, cursor), msg_len)
+                    digest := keccak256(ptr, msg_len)
+		        }
+
+                break;
+            } else {
+                for (uint256 chunkIdx = 0; chunkIdx < eventChunks[palletIndex][eventIndex].length; chunkIdx++) {
+                    cursor += jumpOverChunkCalldata(palletIndex, eventIndex, chunkIdx, encodedEventsList[cursor:]);
+                }
+            }
+
+            // There is a 0 value byte at the end of each event
+            require(uint8(encodedEventsList[cursor]) == 0, "last byte of event is not 0");
+            cursor += 1;
+        }
+    }
+
+    /// @notice This function will "jump over" a chunk in the encoded event list.
+    function jumpOverChunkCalldata(uint8 palletIndex, uint8 eventIndex, uint256 chunkIndex, bytes calldata encodedEventsList)
+        internal
+        view
+        returns (uint256)
+    {
+        Chunk storage chunk = eventChunks[palletIndex][eventIndex][chunkIndex];
+        uint256 bytesRead;
+        if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
+            bytesRead += chunk.size;
+        } else if (chunk.chunkType == chunkType.COMPACT) {
+            (, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList[bytesRead:]);
+            bytesRead += uintByteLen;
+        } else if (chunk.chunkType == chunkType.SEQUENCE) {
+            (uint256 numChunks, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList[bytesRead:]);
+            bytesRead += uintByteLen;
+            for (uint256 i = 0; i < numChunks; i++) {
+                for (uint256 j = 0; j < chunk.sequenceChunks.length; j++) {
+                    bytesRead += jumpOverChunkCalldata(palletIndex, eventIndex, chunkIndex, encodedEventsList[bytesRead:]);
+                }
+            }
+        } else {
+            revert("Unknown chunk type");
+        }
+
+        return bytesRead;
+    }
+
     /// @notice This function will "jump over" a chunk in the encoded event list.
     function jumpOverChunk(Chunk memory chunk, ByteSlice memory encodedEventsListSlice) internal view {
         if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
@@ -522,11 +615,11 @@ contract EventDecoder {
       * @param root hash of the merkle patricia trie
       * @param proof a list of proof nodes
       * @param keys a list of keys to verify
-      * @return bytes[] a list of values corresponding to the supplied keys.
+      * @return bytes value corresponding to the supplied key.
+      * @return bytes32 digest of the encoded event list
       */
-    function VerifySubstrateProof(bytes32 root, bytes[] memory proof,  bytes[] memory keys, bool decodeEventList)
+    function VerifySubstrateProof(bytes32 root, bytes[] memory proof, bytes[] memory keys, bool decodeEventList)
         internal
-        view
         returns (bytes[] memory, bytes32)
     {
         bytes[] memory values = new bytes[](keys.length);
@@ -538,35 +631,35 @@ contract EventDecoder {
 
         for (uint256 i = 0; i < keys.length; i++) {
             NibbleSlice memory keyNibbles = NibbleSlice(keys[i], 0);
-            NodeKind memory node = SubstrateTrieDB.decodeNodeKind(TrieDB.get(nodes, root));
+            NodeKind memory node = SubstrateTrieDBOriginal.decodeNodeKind(TrieDB.get(nodes, root));
 
             // worst case scenario, so we avoid unbounded loops
             for (uint256 j = 0; j < 50; j++) {
                 NodeHandle memory nextNode;
 
                 if (TrieDB.isLeaf(node)) {
-                    Leaf memory leaf = SubstrateTrieDB.decodeLeaf(node);
-                    if (NibbleSliceOps.eq(leaf.key, keyNibbles)) {
+                    Leaf memory leaf = SubstrateTrieDBOriginal.decodeLeaf(node);
+                    if (NibbleSliceOpsOriginal.eq(leaf.key, keyNibbles)) {
                         values[i] = TrieDB.load(nodes, leaf.value);
                     }
                     break;
                 }  else if (TrieDB.isNibbledBranch(node)) {
-                    NibbledBranch memory nibbled = SubstrateTrieDB.decodeNibbledBranch(node);
-                    uint256 nibbledBranchKeyLength = NibbleSliceOps.len(nibbled.key);
-                    if (!NibbleSliceOps.startsWith(keyNibbles, nibbled.key)) {
+                    NibbledBranch memory nibbled = SubstrateTrieDBOriginal.decodeNibbledBranch(node);
+                    uint256 nibbledBranchKeyLength = NibbleSliceOpsOriginal.len(nibbled.key);
+                    if (!NibbleSliceOpsOriginal.startsWith(keyNibbles, nibbled.key)) {
                         break;
                     }
 
-                    if (NibbleSliceOps.len(keyNibbles) == nibbledBranchKeyLength) {
+                    if (NibbleSliceOpsOriginal.len(keyNibbles) == nibbledBranchKeyLength) {
                         if (Option.isSome(nibbled.value)) {
                             values[i] = TrieDB.load(nodes, nibbled.value.value);
                         }
                         break;
                     } else {
-                        uint256 index = NibbleSliceOps.at(keyNibbles, nibbledBranchKeyLength);
+                        uint256 index = NibbleSliceOpsOriginal.at(keyNibbles, nibbledBranchKeyLength);
                         NodeHandleOption memory handle = nibbled.children[index];
                         if (Option.isSome(handle)) {
-                            keyNibbles = NibbleSliceOps.mid(keyNibbles, nibbledBranchKeyLength + 1);
+                            keyNibbles = NibbleSliceOpsOriginal.mid(keyNibbles, nibbledBranchKeyLength + 1);
                             nextNode = handle.value;
                         } else {
                             break;
@@ -576,7 +669,7 @@ contract EventDecoder {
                     break;
                 }
 
-                node = SubstrateTrieDB.decodeNodeKind(TrieDB.load(nodes, nextNode));
+                node = SubstrateTrieDBOriginal.decodeNodeKind(TrieDB.load(nodes, nextNode));
             }
         }
 
@@ -586,5 +679,240 @@ contract EventDecoder {
         }
 
         return (values, digest);
+    }
+
+    struct ValueInfo {
+        bytes32 nodeHash;
+        uint256 start;
+        uint256 len;
+        bool found;
+    }
+
+    struct NodeCursor {
+        bytes32 nodeHash;
+        uint256 cursor;
+        SubstrateTrieDB.NodeType nodeType;
+    }
+
+    function extractChildren(
+        NodeCursor memory nodeCursor,
+        uint256 index,
+        bytes calldata node
+    )
+        internal
+        returns (NodeCursor memory updatedNodeCursor)
+    {
+        SubstrateTrieDB.ChildNodeHandle[16] memory children;
+        uint256 childrenStart;
+        if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH) {
+            (children, childrenStart, ) = SubstrateTrieDB.decodeNibbledBranch(node[nodeCursor.cursor:]);
+            childrenStart += nodeCursor.cursor;
+        } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
+            (, children, childrenStart, ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(node[nodeCursor.cursor:]);
+            childrenStart += nodeCursor.cursor;
+        } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
+            (, , children, childrenStart, ) = SubstrateTrieDB.decodeNibbledValueBranch(node[nodeCursor.cursor:]);
+            childrenStart += nodeCursor.cursor;
+        }
+
+        if (!children[index].isEmpty) {
+            if (children[index].isInline) {
+                updatedNodeCursor.cursor = childrenStart + children[index].inlineStart;
+                updatedNodeCursor.nodeHash = nodeCursor.nodeHash;
+            } else {
+                updatedNodeCursor.nodeHash = children[index].digest;
+                updatedNodeCursor.cursor = 0;
+            }
+        } else {
+            revert("Key not found in proof");
+        }
+    }
+
+    function extractValue(
+        SubstrateTrieDB.NodeType nodeType,
+        NodeCursor memory nodeCursor,
+        bytes calldata node
+    ) 
+        internal
+        returns (ValueInfo memory valueInfo)
+    {
+        if (nodeType == SubstrateTrieDB.NodeType.LEAF) {
+            // Get the size of the value
+            (valueInfo.len, ) = ScaleCodec.decodeUintCompactCalldata(node[nodeCursor.cursor:]);
+            valueInfo.start = nodeCursor.cursor;
+            valueInfo.nodeHash = nodeCursor.nodeHash;
+            valueInfo.found = true;
+            return valueInfo;
+
+        } else if (nodeType == SubstrateTrieDB.NodeType.HASHED_LEAF) {
+            valueInfo.nodeHash = Bytes.toBytes32(node[nodeCursor.cursor : nodeCursor.cursor + SubstrateTrieDB.HASH_LENGTH]);
+            //valueInfo.nodeHash = Bytes.toBytes32Calldata(node[nodeCursor.cursor : nodeCursor.cursor + SubstrateTrieDB.HASH_LENGTH]);
+            valueInfo.start = 0;
+            valueInfo.len = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+            valueInfo.found = true;
+            return valueInfo;
+        } else if (
+            nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH ||
+            nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
+
+            if (nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
+                (valueInfo.nodeHash, , , ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(node[nodeCursor.cursor:]);
+                valueInfo.start = 0;
+                valueInfo.len = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+                valueInfo.found = true;
+                return valueInfo;
+            } else if (nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
+                uint256 nodeValueStart;
+                uint256 nodeValueLen;
+                (nodeValueStart, nodeValueLen, , , ) = SubstrateTrieDB.decodeNibbledValueBranch(node[nodeCursor.cursor:]);
+                valueInfo.nodeHash = nodeCursor.nodeHash;
+                valueInfo.start = nodeValueStart;
+                valueInfo.len = nodeValueLen;
+                valueInfo.found = true;
+                return valueInfo;
+            }
+        }
+    }
+
+    function processNode(
+        NodeCursor memory nodeCursor,
+        uint256 keyNibbleCursor,
+        bytes calldata node,
+        bytes calldata key
+    )
+        internal
+        returns (
+            NodeCursor memory updatedNodeCursor,
+            uint256 updatedKeyNibbleCursor,
+            ValueInfo memory valueInfo)
+    {
+        updatedNodeCursor = nodeCursor;
+
+        uint256 bytesRead;
+        uint256 nibbleSize;
+        (updatedNodeCursor.nodeType, nibbleSize, bytesRead) = SubstrateTrieDB.decodeNodeKind(node[nodeCursor.cursor:]);
+        updatedNodeCursor.cursor += bytesRead;
+
+        if (updatedNodeCursor.nodeType == SubstrateTrieDB.NodeType.EMPTY) {
+            revert("Empty node found in proof");
+        }
+
+        // Get the key nibble from the node
+        uint256 commonKeyPrefixLen = 0;
+        if (nibbleSize > 0) {
+            bytesRead = SubstrateTrieDB.decodeKey(node[updatedNodeCursor.cursor:], nibbleSize);
+            commonKeyPrefixLen = NibbleSliceOpsCalldata.commonPrefix(
+                key, keyNibbleCursor, key.length * 2,
+                node[updatedNodeCursor.cursor:], nibbleSize % SubstrateTrieDB.NIBBLE_PER_BYTE, nibbleSize);
+            updatedNodeCursor.cursor += bytesRead;
+        }
+
+        bool keyNibbleFullMatch = (commonKeyPrefixLen == key.length * 2 - keyNibbleCursor);
+        if (keyNibbleFullMatch) {
+            if (!(updatedNodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH)) {
+                valueInfo = extractValue(
+                    updatedNodeCursor.nodeType,
+                    updatedNodeCursor,
+                    node
+                );
+            } else {
+                revert("Key not found in proof");
+            }
+        } else {
+            if (updatedNodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH ||
+                updatedNodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH ||
+                updatedNodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
+                    uint256 at = keyNibbleCursor + nibbleSize;
+                    uint256 index = NibbleSliceOpsCalldata.at(key, at);
+                    updatedNodeCursor = extractChildren(
+                        updatedNodeCursor,
+                        index,
+                        node
+                    );
+            } else {
+                revert("Key not found in proof");
+            }
+        }
+
+        if (!valueInfo.found) {
+            // Increment the key
+            updatedKeyNibbleCursor = keyNibbleCursor + (nibbleSize + 1);
+        }
+    }
+
+     /**
+      * @notice Verifies substrate specific merkle patricia proofs.
+      * @param root hash of the merkle patricia trie
+      * @param proof a list of proof nodes
+      * @param key a key to verify
+      * @return bytes[] a list of values corresponding to the supplied keys.
+      */
+    function VerifySubstrateProofCalldata
+    (
+        bytes[] calldata proof,
+        bytes calldata key,
+        bytes32 root,
+        bool authEventListPostProcess
+    )
+        internal
+        returns (uint64, bytes32)
+    {
+        bytes32[] memory trieNodeHashes = new bytes32[](proof.length);
+
+        uint256 i;
+        for (i = 0; i < proof.length; i++) {
+            // TODO:  Make blake2b work with calldata
+            bytes32 nodeDigest = Bytes.toBytes32(Blake2b.blake2b(proof[i], 32));
+            trieNodeHashes[i] = nodeDigest;
+        }
+
+        uint256 keyNibbleCursor = 0;
+
+        // Start with looking up the node that maps to the root hash
+        NodeCursor memory currentNodeCursor;
+        currentNodeCursor.nodeHash = root;
+        currentNodeCursor.cursor = 0;
+
+        ValueInfo memory valueInfo;
+        for (i = 0; i < MAX_NUM_PROOF_NODES; i++) {
+            (currentNodeCursor, keyNibbleCursor, valueInfo) = processNode(
+                currentNodeCursor,
+                keyNibbleCursor,
+                proof[TrieNodeLookup(trieNodeHashes, currentNodeCursor.nodeHash)],
+                key
+            );
+
+            if (valueInfo.found) {
+                if (valueInfo.len == 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) {  // This means that the value info length needs to be filled
+                    valueInfo.len = proof[TrieNodeLookup(trieNodeHashes, valueInfo.nodeHash)].length;
+                    break;
+                }
+            }
+        }
+
+        // If the key is for the authority event list, then decode it and hash the result
+        // If the key is for the authority set id, then decode it to a uint64
+        bytes32 authoritySetDigest;
+        uint64 authoritySetId;
+        if (authEventListPostProcess) {
+            authoritySetDigest = decodeAuthoritySetCallData(proof[TrieNodeLookup(trieNodeHashes, valueInfo.nodeHash)][valueInfo.start:valueInfo.start + valueInfo.len]);
+        } else {
+            authoritySetId = ScaleCodec.decodeUint64(proof[TrieNodeLookup(trieNodeHashes, valueInfo.nodeHash)][valueInfo.start:valueInfo.start + valueInfo.len]);
+        }
+
+        return (authoritySetId, authoritySetDigest);
+    }
+
+    function TrieNodeLookup(bytes32[] memory trieNodeDigests, bytes32 hash)
+        internal
+        pure
+        returns (uint256 i)
+    {
+        for (i = 0; i < trieNodeDigests.length; i++) {
+            if (trieNodeDigests[i]== hash) {
+                return i;
+            }
+        }
+        revert("TrieNodeLookup failed");
     }
 }

@@ -8,6 +8,9 @@ import { NibbleSliceOps } from "solidity-merkle-trees/src/trie/NibbleSlice.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
 import "openzeppelin/utils/Strings.sol";
 
+import "forge-std/console.sol";
+
+
 // SPDX-License-Identifier: Apache2
 
 library SubstrateTrieDB {
@@ -25,6 +28,13 @@ library SubstrateTrieDB {
     uint256 public constant HASH_LENGTH = 32;
 
     enum NodeType{ EMPTY, LEAF, NIBBLED_VALUE_BRANCH, NIBBLED_BRANCH, HASHED_LEAF, NIBBLED_HASHED_VALUE_BRANCH }
+
+    struct NodeCursor {
+        bytes32 nodeHash;
+        uint256 calldataStartAddress;
+        uint256 cursor;
+        NodeType nodeType;
+    }
 
     function decodeNodeKind(bytes calldata encoded)
         internal
@@ -74,10 +84,10 @@ library SubstrateTrieDB {
         uint256 inlineLen;
     }
 
-    function decodeChildren(bytes calldata input, uint16 bitmap)
+    function decodeChildren(ChildNodeHandle[16] memory children, bytes calldata input, uint16 bitmap, NodeCursor memory nodeCursor)
         internal
-        pure
-        returns (ChildNodeHandle[16] memory children, uint256 bytesRead)
+        view
+        returns (uint256 bytesRead)
     {
         for (uint256 i = 0; i < 16; i++) {
             if (valueAt(bitmap, i)) {
@@ -87,8 +97,7 @@ library SubstrateTrieDB {
                 bytesRead += lenBytes;
                 if (len == HASH_LENGTH) {
                     children[i].isInline = false;
-                    //children[i].digest = Bytes.toBytes32Calldata(input[bytesRead: bytesRead + HASH_LENGTH]);
-                    children[i].digest = Bytes.toBytes32(input[bytesRead: bytesRead + HASH_LENGTH]);
+                    children[i].digest = Bytes.toBytes32Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor + bytesRead);
                     bytesRead += HASH_LENGTH;
                 } else {
                     children[i].isInline = true;
@@ -102,43 +111,46 @@ library SubstrateTrieDB {
         }
     }
 
-    function decodeNibbledBranch(bytes calldata input)
+    function decodeNibbledBranch(ChildNodeHandle[16] memory children, bytes calldata input, NodeCursor memory nodeCursor)
         internal
-        pure
-        returns (ChildNodeHandle[16] memory children, uint256 childrenStart, uint256 bytesRead)
+        view
+        returns (uint256 childrenStart, uint256 bytesRead)
     {
-        uint16 bitmap = uint16(ScaleCodec.decodeUint256(input[0:2]));
+        uint16 bitmap = uint16(ScaleCodec.decodeUint256Calldata(input[0:2]));
         bytesRead += 2;
 
         childrenStart = bytesRead;
         uint256 childrenByteLen;
-        (children, childrenByteLen) = decodeChildren(input[bytesRead:], bitmap);
+        nodeCursor.cursor += bytesRead;
+        childrenByteLen = decodeChildren(children, input[bytesRead:], bitmap, nodeCursor);
         bytesRead += childrenByteLen;
     }
 
-    function decodeNibbledHashedValueBranch(bytes calldata input)
+    function decodeNibbledHashedValueBranch(ChildNodeHandle[16] memory children, bytes calldata input, NodeCursor memory nodeCursor)
         internal
-        pure
-        returns (bytes32 digest, ChildNodeHandle[16] memory children, uint256 childrenStart, uint256 bytesRead)
+        view
+        returns (bytes32 digest, uint256 childrenStart, uint256 bytesRead)
     {
-        uint16 bitmap = uint16(ScaleCodec.decodeUint256(input[0:2]));
+        uint16 bitmap = uint16(ScaleCodec.decodeUint256Calldata(input[0:2]));
         bytesRead += 2;
 
-        digest = Bytes.toBytes32Calldata(input[bytesRead : bytesRead + HASH_LENGTH]);
+        //digest = Bytes.toBytes32Calldata(input[bytesRead : bytesRead + HASH_LENGTH]);
+        digest = Bytes.toBytes32(input[bytesRead : bytesRead + HASH_LENGTH]);
         bytesRead += HASH_LENGTH;
 
         childrenStart = bytesRead;
         uint256 childrenByteLen;
-        (children, childrenByteLen) = decodeChildren(input, bitmap);
+        nodeCursor.cursor += bytesRead;
+        childrenByteLen = decodeChildren(children, input, bitmap, nodeCursor);
         bytesRead += childrenByteLen;
     }
     
-    function decodeNibbledValueBranch(bytes calldata input)
+    function decodeNibbledValueBranch(ChildNodeHandle[16] memory children, bytes calldata input, NodeCursor memory nodeCursor)
         internal
-        pure
-        returns (uint256 valueStart, uint256 valueLen, ChildNodeHandle[16] memory children, uint256 childrenStart, uint256 bytesRead)
+        view
+        returns (uint256 valueStart, uint256 valueLen, uint256 childrenStart, uint256 bytesRead)
     {
-        uint16 bitmap = uint16(ScaleCodec.decodeUint256(input[0:2]));
+        uint16 bitmap = uint16(ScaleCodec.decodeUint256Calldata(input[0:2]));
         bytesRead += 2;
 
         (uint256 valuelen, uint256 valueByteLen) = ScaleCodec.decodeUintCompactCalldata(input[bytesRead:]);
@@ -148,7 +160,8 @@ library SubstrateTrieDB {
         bytesRead += valueLen;
         childrenStart = bytesRead;
         uint256 childrenByteLen;
-        (children, childrenByteLen) = decodeChildren(input, bitmap);
+        nodeCursor.cursor += bytesRead;
+        childrenByteLen = decodeChildren(children, input, bitmap, nodeCursor);
         bytesRead += childrenByteLen;
     }
 

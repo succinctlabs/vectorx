@@ -3,7 +3,7 @@ pragma solidity 0.8.17;
 import { Memory } from "solidity-merkle-trees/src/trie/Memory.sol";
 import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
-import { MAX_NUM_PROOF_NODES, NUM_AUTHORITIES } from "src/Constants.sol";
+import { KEY_BYTE_LENGTH, MAX_NUM_PROOF_NODES, NUM_AUTHORITIES } from "src/Constants.sol";
 import "src/SubstrateTrieDB.sol";
 import "src/NibbleSlice.sol";
 
@@ -501,7 +501,7 @@ contract EventDecoder {
     }
 
     /// @notice This function will decode the authority set from the encoded event list
-    function decodeAuthoritySetCalldata(bytes calldata encodedEventsList) internal returns (bytes32 digest) {
+    function decodeAuthoritySetCalldata(nodeCursor) internal returns (bytes32 digest) {
         uint256 cursor = 0;
         uint256 num_events;
         uint256 bytesRead;
@@ -780,12 +780,10 @@ contract EventDecoder {
         ValueInfo memory valueInfo,
         SubstrateTrieDB.ChildNodeHandle[16] memory children,
         uint256 keyNibbleCursor,
-        bytes calldata key
+        uint256 keyAddress
     )
         internal
-        returns (
-            uint256 updatedKeyNibbleCursor
-        )
+        returns (uint256 updatedKeyNibbleCursor)
     {
         uint256 bytesRead;
         uint256 nibbleSize;
@@ -800,12 +798,12 @@ contract EventDecoder {
         if (nibbleSize > 0) {
             uint256 nibbleByteLen = SubstrateTrieDB.decodeKey(nodeCursor, nibbleSize);
             commonKeyPrefixLen = NibbleSliceOpsCalldata.commonPrefix(
-                key, keyNibbleCursor, key.length * 2,
+                keyAddress, keyNibbleCursor, KEY_BYTE_LENGTH * 2,
                 nodeCursor, nibbleSize % SubstrateTrieDB.NIBBLE_PER_BYTE, nibbleSize);
             nodeCursor.cursor += nibbleByteLen;
         }
 
-        bool keyNibbleFullMatch = (commonKeyPrefixLen == key.length * 2 - keyNibbleCursor);
+        bool keyNibbleFullMatch = (commonKeyPrefixLen == KEY_BYTE_LENGTH * 2 - keyNibbleCursor);
         if (keyNibbleFullMatch) {
             if (!(nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH)) {
                 extractValue(
@@ -821,7 +819,7 @@ contract EventDecoder {
                 nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH ||
                 nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
                     uint256 at = keyNibbleCursor + nibbleSize;
-                    uint256 index = NibbleSliceOpsCalldata.at(key, at);
+                    uint256 index = NibbleSliceOpsCalldata.at(keyAddress, at);
                     extractChildren(
                         nodeCursor,
                         children,
@@ -864,11 +862,11 @@ contract EventDecoder {
         bytes32 three;
         bytes32 four;
         assembly {
-            zero := calldataload(4580)
-            one := calldataload(4612)
-            two := calldataload(4644)
-            three := calldataload(4676)
-            four := calldataload(4708)
+            zero := calldataload(4868)
+            one := calldataload(4900)
+            two := calldataload(4932)
+            three := calldataload(4964)
+            four := calldataload(4996)
         }
         console.logBytes32(zero);
         console.logBytes32(one);
@@ -884,6 +882,7 @@ contract EventDecoder {
             trieNodeHashes[i] = nodeDigest;
         }
 
+        uint256 keyAddress = 4932;
         uint256 keyNibbleCursor = 0;
 
         // Start with looking up the node that maps to the root hash
@@ -899,7 +898,7 @@ contract EventDecoder {
                 valueInfo,
                 children,
                 keyNibbleCursor,
-                key
+                keyAddress
             );
 
             if (valueInfo.found) {

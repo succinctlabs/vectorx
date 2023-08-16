@@ -3,7 +3,9 @@ pragma solidity 0.8.17;
 import { Memory } from "solidity-merkle-trees/src/trie/Memory.sol";
 import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
-import { KEY_BYTE_LENGTH, MAX_NUM_PROOF_NODES, NUM_AUTHORITIES } from "src/Constants.sol";
+import { KEY_ADDRESS, KEY_BYTE_LENGTH,
+         MAX_NUM_PROOF_NODES, NUM_AUTHORITIES, NUM_CHILDREN,
+         PROOF_ARRAY_LEN_ADDRESS, PROOF_ELEMENT_START_ADDRESS_ADDRESS, PROOF_ELEMENT_START_ADDRESS_OFFSET } from "src/Constants.sol";
 import "src/SubstrateTrieDB.sol";
 import "src/NibbleSlice.sol";
 
@@ -687,7 +689,8 @@ contract EventDecoder {
 
     function extractChildren(
         SubstrateTrieDB.NodeCursor memory nodeCursor,
-        SubstrateTrieDB.ChildNodeHandle[16] memory children,
+        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children,
+        ProofCalldataInfo[] memory proofCalldataInfo,
         uint256 index
     )
         internal
@@ -707,22 +710,8 @@ contract EventDecoder {
                 nodeCursor.nodeHash = nodeCursor.nodeHash;
             } else {
                 nodeCursor.nodeHash = children[index].digest;
-                nodeCursor.cursor = 0;
-
-                if (children[index].digest == 0xae414b798b4d311636287745034330a1e71c2fa06a03c249d14d86fb7d6e942c) {
-                    nodeCursor.cursor = 388;
-                } else if (children[index].digest == 0x392e31be566cea43139373a9dbc60ac59faeca64e2d99a663ce19ae79e14d72b) {
-                    nodeCursor.cursor = 3652;
-                } else if (children[index].digest == 0x174d296b2a5b2aca13d8b25eab3d206e041134a550f2fe802c67c8bc0b017a4d) {
-                    nodeCursor.cursor = 3748;
-                } else if (children[index].digest == 0x0ed6846e8dc9b1835c06f995123a2b1ae2f74a61597cd032c20c5620c3a9c003) {
-                    nodeCursor.cursor = 3876;
-                } else if (children[index].digest == 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da) {
-                    nodeCursor.cursor = 4100;
-                } else if (children[index].digest == 0xfc1f1fa639bef923233bbcd9fbcc86e565f52d33c5c19b238fccd26dd41c2bc3) {
-                    nodeCursor.cursor = 4612;
-                }
-
+                uint256 idx = TrieNodeLookup(proofCalldataInfo, nodeCursor.nodeHash);
+                nodeCursor.cursor = proofCalldataInfo[idx].calldataAddress;
             }
         } else {
             revert("Key not found in proof");
@@ -732,7 +721,8 @@ contract EventDecoder {
     function extractValue(
         SubstrateTrieDB.NodeCursor memory nodeCursor,
         ValueInfo memory valueInfo,
-        SubstrateTrieDB.ChildNodeHandle[16] memory children
+        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children,
+        ProofCalldataInfo[] memory proofCalldataInfo
     ) 
         internal
     {
@@ -744,26 +734,9 @@ contract EventDecoder {
 
         } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.HASHED_LEAF) {
             bytes32 nodeHash = Bytes.toBytes32Calldata(nodeCursor.cursor);
-
-            if (nodeHash == 0xae414b798b4d311636287745034330a1e71c2fa06a03c249d14d86fb7d6e942c) {
-                valueInfo.cursor = 388;
-                valueInfo.len = 3222;
-            } else if (nodeHash == 0x392e31be566cea43139373a9dbc60ac59faeca64e2d99a663ce19ae79e14d72b) {
-                valueInfo.cursor = 3652;
-                valueInfo.len = 40;
-            } else if (nodeHash == 0x174d296b2a5b2aca13d8b25eab3d206e041134a550f2fe802c67c8bc0b017a4d) {
-                valueInfo.cursor = 3748;
-                valueInfo.len = 69;
-            } else if (nodeHash == 0x0ed6846e8dc9b1835c06f995123a2b1ae2f74a61597cd032c20c5620c3a9c003) {
-                valueInfo.cursor = 3876;
-                valueInfo.len = 168;
-            } else if (nodeHash == 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da) {
-                valueInfo.cursor = 4100;
-                valueInfo.len = 465;
-            } else if (nodeHash == 0xfc1f1fa639bef923233bbcd9fbcc86e565f52d33c5c19b238fccd26dd41c2bc3) {
-                valueInfo.cursor = 4612;
-                valueInfo.len = 288;
-            }
+            uint256 idx = TrieNodeLookup(proofCalldataInfo, nodeHash);
+            valueInfo.cursor = proofCalldataInfo[idx].calldataAddress;
+            valueInfo.len = proofCalldataInfo[idx].len;
             valueInfo.found = true;
 
         } else if (
@@ -772,26 +745,9 @@ contract EventDecoder {
 
             if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
                 (bytes32 nodeHash, ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, nodeCursor);
-
-                if (nodeHash == 0xae414b798b4d311636287745034330a1e71c2fa06a03c249d14d86fb7d6e942c) {
-                    valueInfo.cursor = 388;
-                    valueInfo.len = 3222;
-                } else if (nodeHash == 0x392e31be566cea43139373a9dbc60ac59faeca64e2d99a663ce19ae79e14d72b) {
-                    valueInfo.cursor = 3652;
-                    valueInfo.len = 40;
-                } else if (nodeHash == 0x174d296b2a5b2aca13d8b25eab3d206e041134a550f2fe802c67c8bc0b017a4d) {
-                    valueInfo.cursor = 3748;
-                    valueInfo.len = 69;
-                } else if (nodeHash == 0x0ed6846e8dc9b1835c06f995123a2b1ae2f74a61597cd032c20c5620c3a9c003) {
-                    valueInfo.cursor = 3876;
-                    valueInfo.len = 168;
-                } else if (nodeHash == 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da) {
-                    valueInfo.cursor = 4100;
-                    valueInfo.len = 465;
-                } else if (nodeHash == 0xfc1f1fa639bef923233bbcd9fbcc86e565f52d33c5c19b238fccd26dd41c2bc3) {
-                    valueInfo.cursor = 4612;
-                    valueInfo.len = 288;
-                }
+                uint256 idx = TrieNodeLookup(proofCalldataInfo, nodeHash);
+                valueInfo.cursor = proofCalldataInfo[idx].calldataAddress;
+                valueInfo.len = proofCalldataInfo[idx].len;
                 valueInfo.found = true;
 
             } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
@@ -808,7 +764,8 @@ contract EventDecoder {
     function processNode(
         SubstrateTrieDB.NodeCursor memory nodeCursor,
         ValueInfo memory valueInfo,
-        SubstrateTrieDB.ChildNodeHandle[16] memory children,
+        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children,
+        ProofCalldataInfo[] memory proofCalldataInfo,
         uint256 keyNibbleCursor,
         uint256 keyAddress
     )
@@ -839,7 +796,8 @@ contract EventDecoder {
                 extractValue(
                     nodeCursor,
                     valueInfo,
-                    children
+                    children,
+                    proofCalldataInfo
                 );
             } else {
                 revert("Key not found in proof");
@@ -853,6 +811,7 @@ contract EventDecoder {
                     extractChildren(
                         nodeCursor,
                         children,
+                        proofCalldataInfo,
                         index
                     );
             } else {
@@ -864,6 +823,12 @@ contract EventDecoder {
             // Increment the key
             updatedKeyNibbleCursor = keyNibbleCursor + (nibbleSize + 1);
         }
+    }
+
+    struct ProofCalldataInfo {
+        uint256 calldataAddress;
+        uint256 len;
+        bytes32 digest;
     }
 
      /**
@@ -883,30 +848,58 @@ contract EventDecoder {
         internal
         returns (uint64, bytes32)
     {
-        bytes32[] memory trieNodeHashes = new bytes32[](proof.length);
+        // First load the calldata addresses for the proof elements and key.
+        // See the comment in Constants.sol for an example of the calldata layout.
+        uint256 keyAddress;
+        uint256 keyNibbleCursor;
 
-        uint256 i;
-        for (i = 0; i < proof.length; i++) {
-            // TODO:  Make blake2b work with calldata
-            bytes32 nodeDigest = Bytes.toBytes32(Blake2b.blake2b(proof[i], 32));
-            trieNodeHashes[i] = nodeDigest;
+        uint256 proofLen;
+        assembly {
+            // Load the calldata address of key
+            // Adding by 36, since there are 4 bytes for the function signature and 
+            // then 32 bytes for the proof parameter address (which is already hard coded).
+            keyAddress := add(calldataload(KEY_ADDRESS), 36)
+
+            // Load the calldata address of proof
+            proofLen := calldataload(PROOF_ARRAY_LEN_ADDRESS)
         }
 
-        uint256 keyAddress = 4932;
-        uint256 keyNibbleCursor = 0;
+        ProofCalldataInfo[] memory proofCalldataInfo = new ProofCalldataInfo[](proofLen);
+
+        uint16 i;
+        for (i = 0; i < proofLen; i++) {
+            uint256 elementStartAddress;
+            uint256 elementLen;
+
+            assembly {
+                let elementStartAddressAddress := add(PROOF_ELEMENT_START_ADDRESS_ADDRESS, mul(i, 32))
+                elementStartAddress := add(calldataload(elementStartAddressAddress), PROOF_ELEMENT_START_ADDRESS_OFFSET)
+                elementLen := calldataload(elementStartAddress)
+                // add 32 bytes since the first word is the element length
+                elementStartAddress := add(elementStartAddress, 32)
+            }
+
+            proofCalldataInfo[i].calldataAddress = elementStartAddress;
+            proofCalldataInfo[i].len = elementLen;
+
+            // TODO:  Make blake2b work with calldata
+            bytes32 nodeDigest = Bytes.toBytes32(Blake2b.blake2b(proof[i], 32));
+            proofCalldataInfo[i].digest = nodeDigest;
+        }
 
         // Start with looking up the node that maps to the root hash
         SubstrateTrieDB.NodeCursor memory nodeCursor;
         nodeCursor.nodeHash = root;
-        nodeCursor.cursor = 4100;
+        nodeCursor.cursor = proofCalldataInfo[TrieNodeLookup(proofCalldataInfo, root)].calldataAddress;
 
         ValueInfo memory valueInfo;
-        SubstrateTrieDB.ChildNodeHandle[16] memory children;
+        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children;
         for (i = 0; i < MAX_NUM_PROOF_NODES; i++) {
             keyNibbleCursor = processNode(
                 nodeCursor,
                 valueInfo,
                 children,
+                proofCalldataInfo,
                 keyNibbleCursor,
                 keyAddress
             );
@@ -929,13 +922,13 @@ contract EventDecoder {
         return (authoritySetId, authoritySetDigest);
     }
 
-    function TrieNodeLookup(bytes32[] memory trieNodeDigests, bytes32 hash)
+    function TrieNodeLookup(ProofCalldataInfo[] memory proofCalldataInfo, bytes32 digest)
         internal
         pure
         returns (uint256 i)
     {
-        for (i = 0; i < trieNodeDigests.length; i++) {
-            if (trieNodeDigests[i]== hash) {
+        for (i = 0; i < proofCalldataInfo.length; i++) {
+            if (proofCalldataInfo[i].digest == digest) {
                 return i;
             }
         }

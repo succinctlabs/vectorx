@@ -795,8 +795,7 @@ contract EventDecoder {
     {
         uint256 bytesRead;
         uint256 nibbleSize;
-        (nodeCursor.nodeType, nibbleSize, bytesRead) = SubstrateTrieDB.decodeNodeKind(node[nodeCursor.cursor:]);
-        nodeCursor.cursor += bytesRead;
+        nibbleSize = SubstrateTrieDB.decodeNodeKind(nodeCursor);
 
         if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.EMPTY) {
             revert("Empty node found in proof");
@@ -805,11 +804,11 @@ contract EventDecoder {
         // Get the key nibble from the node
         uint256 commonKeyPrefixLen = 0;
         if (nibbleSize > 0) {
-            bytesRead = SubstrateTrieDB.decodeKey(node[nodeCursor.cursor:], nibbleSize);
+            uint256 nibbleByteLen = SubstrateTrieDB.decodeKey(nodeCursor, nibbleSize);
             commonKeyPrefixLen = NibbleSliceOpsCalldata.commonPrefix(
                 key, keyNibbleCursor, key.length * 2,
-                node[nodeCursor.cursor:], nibbleSize % SubstrateTrieDB.NIBBLE_PER_BYTE, nibbleSize);
-            nodeCursor.cursor += bytesRead;
+                nodeCursor, nibbleSize % SubstrateTrieDB.NIBBLE_PER_BYTE, nibbleSize);
+            nodeCursor.cursor += nibbleByteLen;
         }
 
         bool keyNibbleFullMatch = (commonKeyPrefixLen == key.length * 2 - keyNibbleCursor);
@@ -896,20 +895,20 @@ contract EventDecoder {
         uint256 keyNibbleCursor = 0;
 
         // Start with looking up the node that maps to the root hash
-        SubstrateTrieDB.NodeCursor memory currentNodeCursor;
-        currentNodeCursor.nodeHash = root;
-        currentNodeCursor.cursor = 0;
-        currentNodeCursor.calldataStartAddress = 4100;
+        SubstrateTrieDB.NodeCursor memory nodeCursor;
+        nodeCursor.nodeHash = root;
+        nodeCursor.cursor = 0;
+        nodeCursor.calldataStartAddress = 4100;
 
         ValueInfo memory valueInfo;
         SubstrateTrieDB.ChildNodeHandle[16] memory children;
         for (i = 0; i < MAX_NUM_PROOF_NODES; i++) {
             keyNibbleCursor = processNode(
-                currentNodeCursor,
+                nodeCursor,
                 valueInfo,
                 children,
                 keyNibbleCursor,
-                proof[TrieNodeLookup(trieNodeHashes, currentNodeCursor.nodeHash)],
+                proof[TrieNodeLookup(trieNodeHashes, nodeCursor.nodeHash)],
                 key
             );
 

@@ -9,6 +9,7 @@ import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.
 import "openzeppelin/utils/Strings.sol";
 
 import "forge-std/console.sol";
+import "forge-std/console2.sol";
 
 
 // SPDX-License-Identifier: Apache2
@@ -36,44 +37,42 @@ library SubstrateTrieDB {
         NodeType nodeType;
     }
 
-    function decodeNodeKind(bytes calldata encoded)
+    function decodeNodeKind(NodeCursor memory nodeCursor)
         internal
         view 
-        returns (NodeType nodeType, uint256 nibbleSize, uint256 bytesRead)
+        returns (uint256 nibbleSize)
     {
-        uint8 i = uint8(encoded[0]);
-        bytesRead += 1;
+        uint8 i = Bytes.toUint8Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        nodeCursor.cursor += 1;
         
         if (i == EMPTY_TRIE) {
-            nodeType = NodeType.EMPTY;
+            nodeCursor.nodeType = NodeType.EMPTY;
         }
 
         uint8 mask = i & (0x03 << 6);
 
         uint256 decodeSizeBytesRead;
         if (mask == LEAF_PREFIX_MASK) {
-            (nibbleSize, decodeSizeBytesRead) = decodeSize(i, encoded[bytesRead:], 2);
-            nodeType = NodeType.LEAF;
+            nibbleSize = decodeSize(i, nodeCursor, 2);
+            nodeCursor.nodeType = NodeType.LEAF;
         } else if (mask == BRANCH_WITH_MASK) {
-            (nibbleSize, decodeSizeBytesRead) = decodeSize(i, encoded[bytesRead:], 2);
-            nodeType = NodeType.NIBBLED_VALUE_BRANCH;
+            nibbleSize = decodeSize(i, nodeCursor, 2);
+            nodeCursor.nodeType = NodeType.NIBBLED_VALUE_BRANCH;
         } else if (mask == BRANCH_WITHOUT_MASK) {
-            (nibbleSize, decodeSizeBytesRead) = decodeSize(i, encoded[bytesRead:], 2);
-            nodeType = NodeType.NIBBLED_BRANCH;
+            nibbleSize = decodeSize(i, nodeCursor, 2);
+            nodeCursor.nodeType = NodeType.NIBBLED_BRANCH;
         } else if (mask == EMPTY_TRIE) {
             if (i & (0x07 << 5) == ALT_HASHING_LEAF_PREFIX_MASK) {
-                (nibbleSize, decodeSizeBytesRead) = decodeSize(i, encoded[bytesRead:], 3);
-                nodeType = NodeType.HASHED_LEAF;
+                nibbleSize = decodeSize(i, nodeCursor, 3);
+                nodeCursor.nodeType = NodeType.HASHED_LEAF;
             }  else if (i & (0x0F << 4) == ALT_HASHING_BRANCH_WITH_MASK) {
-                (nibbleSize, decodeSizeBytesRead) = decodeSize(i, encoded[bytesRead:], 4);
-                nodeType = NodeType.NIBBLED_HASHED_VALUE_BRANCH;
+                nibbleSize = decodeSize(i, nodeCursor, 4);
+                nodeCursor.nodeType = NodeType.NIBBLED_HASHED_VALUE_BRANCH;
             } else {
                 // do not allow any special encoding
                 revert("Unallowed encoding");
             }
         }
-
-        bytesRead += decodeSizeBytesRead;
     }
 
     struct ChildNodeHandle {
@@ -165,40 +164,40 @@ library SubstrateTrieDB {
         bytesRead += childrenByteLen;
     }
 
-    function decodeKey(bytes calldata encoded, uint256 nibbleSize)
+    function decodeKey(NodeCursor memory nodeCursor, uint256 nibbleSize)
         internal
         pure
-        returns (uint256 bytesRead)
+        returns (uint256 nibbleByteLen)
     {
         bool padding = nibbleSize % NIBBLE_PER_BYTE != 0;
-        if (padding && padLeft(uint8(encoded[0])) != 0) {
+        uint8 firstChar = Bytes.toUint8Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        if (padding && padLeft(firstChar) != 0) {
             revert("Bad Format!");
         }
 
-        uint256 nibbleByteLen = (nibbleSize + (NibbleSliceOps.NIBBLE_PER_BYTE - 1)) / NibbleSliceOps.NIBBLE_PER_BYTE;
-        bytesRead = nibbleByteLen;
+        nibbleByteLen = (nibbleSize + (NibbleSliceOps.NIBBLE_PER_BYTE - 1)) / NibbleSliceOps.NIBBLE_PER_BYTE;
     }
 
-    function decodeSize(uint8 first, bytes calldata encoded, uint8 prefixMask) internal view returns (uint256 result, uint256 bytesRead) {
+    function decodeSize(uint8 first, NodeCursor memory nodeCursor, uint8 prefixMask) internal view returns (uint256 result) {
         uint8 maxValue = uint8(255 >> prefixMask);
         result = uint256(first & maxValue);
 
         if (result < maxValue) {
-            return (result, 0);
+            return result;
         }
 
         result -= 1;
 
         while (result <= NIBBLE_SIZE_BOUND) {
-            uint256 n = uint256(uint8(encoded[0]));
-            bytesRead += 1;
+            uint256 n = uint256(Bytes.toUint8Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor));
+            nodeCursor.cursor += 1;
             if (n < 255) {
-                return (result + n + 1, bytesRead);
+                return (result + n + 1);
             }
             result += 255;
         }
 
-        return (NIBBLE_SIZE_BOUND, bytesRead);
+        return NIBBLE_SIZE_BOUND;
     }
 
     function padLeft(uint8 b) internal pure returns (uint8) {

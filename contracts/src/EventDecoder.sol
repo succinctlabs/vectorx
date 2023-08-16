@@ -544,11 +544,7 @@ contract EventDecoder {
                 assembly {
                     let ptr := mload(0x40)
                     let msg_len := mul(numAuthorities, 40)
-                    // 68 is ther result of the first 4 bytes of calldata is the function signature
-                    // The next 32 bytes points to location in calldata where encodedEventsList starts
-                    // The next 32 bytes stores the size of encodedEventsList
-                    // See https://medium.com/@kalexotsu/understanding-solidity-assembly-hashing-a-string-from-calldata-fbd2ece82263
-                    calldatacopy(ptr, add(68, cursor), msg_len)
+                    calldatacopy(ptr, cursor, msg_len)
                     digest := keccak256(ptr, msg_len)
 		        }
 
@@ -679,9 +675,6 @@ contract EventDecoder {
         if (decodeEventList == true) {
             digest = decodeAuthoritySet(values[0]);
         }
-
-        console.log("memory version");
-        console.logBytes32(digest);
 
         return (values, digest);
     }
@@ -932,9 +925,6 @@ contract EventDecoder {
         } else {
             authoritySetId = ScaleCodec.decodeUint64Calldata(valueInfo.cursor);
         }
-
-        console.log("calldata version");
-        console.logBytes32(authoritySetDigest);
 
         return (authoritySetId, authoritySetDigest);
     }

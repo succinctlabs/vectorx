@@ -32,7 +32,6 @@ library SubstrateTrieDB {
 
     struct NodeCursor {
         bytes32 nodeHash;
-        uint256 calldataStartAddress;
         uint256 cursor;
         NodeType nodeType;
     }
@@ -42,7 +41,7 @@ library SubstrateTrieDB {
         view 
         returns (uint256 nibbleSize)
     {
-        uint8 i = Bytes.toUint8Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        uint8 i = Bytes.toUint8Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 1;
         
         if (i == EMPTY_TRIE) {
@@ -91,11 +90,11 @@ library SubstrateTrieDB {
             if (valueAt(bitmap, i)) {
                 children[i].isEmpty = false;
 
-                (uint256 len, uint256 lenBytes) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+                (uint256 len, uint256 lenBytes) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.cursor);
                 nodeCursor.cursor += lenBytes;
                 if (len == HASH_LENGTH) {
                     children[i].isInline = false;
-                    children[i].digest = Bytes.toBytes32Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+                    children[i].digest = Bytes.toBytes32Calldata(nodeCursor.cursor);
                     nodeCursor.cursor += HASH_LENGTH;
                 } else {
                     children[i].isInline = true;
@@ -114,7 +113,7 @@ library SubstrateTrieDB {
         view
         returns (uint256 childrenStart)
     {
-        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 2;
 
         childrenStart = nodeCursor.cursor;
@@ -126,10 +125,10 @@ library SubstrateTrieDB {
         view
         returns (bytes32 digest, uint256 childrenStart)
     {
-        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 2;
 
-        digest = Bytes.toBytes32Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        digest = Bytes.toBytes32Calldata(nodeCursor.cursor);
         nodeCursor.cursor += HASH_LENGTH;
 
         childrenStart = nodeCursor.cursor;
@@ -141,10 +140,10 @@ library SubstrateTrieDB {
         view
         returns (uint256 valueStart, uint256 valueLen, uint256 childrenStart)
     {
-        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 2;
 
-        (uint256 valuelen, uint256 valueByteLen) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        (uint256 valuelen, uint256 valueByteLen) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.cursor);
         nodeCursor.cursor += valueByteLen;
         valueStart = nodeCursor.cursor;
 
@@ -160,7 +159,7 @@ library SubstrateTrieDB {
         returns (uint256 nibbleByteLen)
     {
         bool padding = nibbleSize % NIBBLE_PER_BYTE != 0;
-        uint8 firstChar = Bytes.toUint8Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        uint8 firstChar = Bytes.toUint8Calldata(nodeCursor.cursor);
         if (padding && padLeft(firstChar) != 0) {
             revert("Bad Format!");
         }
@@ -179,7 +178,7 @@ library SubstrateTrieDB {
         result -= 1;
 
         while (result <= NIBBLE_SIZE_BOUND) {
-            uint256 n = uint256(Bytes.toUint8Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor));
+            uint256 n = uint256(Bytes.toUint8Calldata(nodeCursor.cursor));
             nodeCursor.cursor += 1;
             if (n < 255) {
                 return (result + n + 1);

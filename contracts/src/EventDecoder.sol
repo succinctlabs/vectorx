@@ -716,17 +716,17 @@ contract EventDecoder {
                 nodeCursor.cursor = 0;
 
                 if (children[index].digest == 0xae414b798b4d311636287745034330a1e71c2fa06a03c249d14d86fb7d6e942c) {
-                    nodeCursor.calldataStartAddress = 388;
+                    nodeCursor.cursor = 388;
                 } else if (children[index].digest == 0x392e31be566cea43139373a9dbc60ac59faeca64e2d99a663ce19ae79e14d72b) {
-                    nodeCursor.calldataStartAddress = 3652;
+                    nodeCursor.cursor = 3652;
                 } else if (children[index].digest == 0x174d296b2a5b2aca13d8b25eab3d206e041134a550f2fe802c67c8bc0b017a4d) {
-                    nodeCursor.calldataStartAddress = 3748;
+                    nodeCursor.cursor = 3748;
                 } else if (children[index].digest == 0x0ed6846e8dc9b1835c06f995123a2b1ae2f74a61597cd032c20c5620c3a9c003) {
-                    nodeCursor.calldataStartAddress = 3876;
+                    nodeCursor.cursor = 3876;
                 } else if (children[index].digest == 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da) {
-                    nodeCursor.calldataStartAddress = 4100;
+                    nodeCursor.cursor = 4100;
                 } else if (children[index].digest == 0xfc1f1fa639bef923233bbcd9fbcc86e565f52d33c5c19b238fccd26dd41c2bc3) {
-                    nodeCursor.calldataStartAddress = 4612;
+                    nodeCursor.cursor = 4612;
                 }
 
             }
@@ -744,13 +744,13 @@ contract EventDecoder {
     {
         if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.LEAF) {
             // Get the size of the value
-            (valueInfo.len, ) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+            (valueInfo.len, ) = ScaleCodec.decodeUintCompactCalldata( nodeCursor.cursor);
             valueInfo.start = nodeCursor.cursor;
             valueInfo.nodeHash = nodeCursor.nodeHash;
             valueInfo.found = true;
 
         } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.HASHED_LEAF) {
-            valueInfo.nodeHash = Bytes.toBytes32Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+            valueInfo.nodeHash = Bytes.toBytes32Calldata(nodeCursor.cursor);
             valueInfo.start = 0;
             valueInfo.len = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
             valueInfo.found = true;
@@ -889,8 +889,7 @@ contract EventDecoder {
         // Start with looking up the node that maps to the root hash
         SubstrateTrieDB.NodeCursor memory nodeCursor;
         nodeCursor.nodeHash = root;
-        nodeCursor.cursor = 0;
-        nodeCursor.calldataStartAddress = 4100;
+        nodeCursor.cursor = 4100;
 
         ValueInfo memory valueInfo;
         SubstrateTrieDB.ChildNodeHandle[16] memory children;

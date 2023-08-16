@@ -13,7 +13,7 @@ library NibbleSliceOpsCalldata {
     function at(SubstrateTrieDB.NodeCursor memory nodeCursor, uint256 i) internal pure returns (uint256) {
         uint256 ix = i / NIBBLE_PER_BYTE;
         uint256 pad = i % NIBBLE_PER_BYTE;
-        uint8 data = Bytes.toUint8Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor + ix);
+        uint8 data = Bytes.toUint8Calldata(nodeCursor.cursor + ix);
         return (pad == 1) ? data & 0x0F : data >> BITS_PER_NIBBLE;
     }
 

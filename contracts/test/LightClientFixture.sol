@@ -21,10 +21,8 @@ contract LightClientFixture is CommonBase {
 
     struct Rotate {
         bytes[] encodedEventListProof;
-        uint64 newAuthoritySetID;
         bytes[] newAuthoritySetIDProof;
-
-        Step step;
+        //Step step;
     }
 
     // Fields authoritySetID and merkleProof are for the AuthoritySetIDProof struct.

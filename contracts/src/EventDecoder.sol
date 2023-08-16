@@ -848,20 +848,25 @@ contract EventDecoder {
         internal
         returns (uint64, bytes32)
     {
-        // First load the calldata addresses for the proof elements and key.
+        // First load the calldata addresses for the proof elements.
         // See the comment in Constants.sol for an example of the calldata layout.
         uint256 keyAddress;
         uint256 keyNibbleCursor;
 
         uint256 proofLen;
+        bytes32 proofStartAddress;
         assembly {
             // Load the calldata address of key
             // Adding by 36, since there are 4 bytes for the function signature and 
             // then 32 bytes for the proof parameter address (which is already hard coded).
             keyAddress := add(calldataload(KEY_ADDRESS), 36)
 
+            proofStartAddress := calldataload(4)
+            proofStartAddress := add(proofStartAddress, 4)
+
             // Load the calldata address of proof
-            proofLen := calldataload(PROOF_ARRAY_LEN_ADDRESS)
+            proofLen := calldataload(proofStartAddress)
+            proofStartAddress := add(proofStartAddress, 32)
         }
 
         ProofCalldataInfo[] memory proofCalldataInfo = new ProofCalldataInfo[](proofLen);
@@ -872,8 +877,8 @@ contract EventDecoder {
             uint256 elementLen;
 
             assembly {
-                let elementStartAddressAddress := add(PROOF_ELEMENT_START_ADDRESS_ADDRESS, mul(i, 32))
-                elementStartAddress := add(calldataload(elementStartAddressAddress), PROOF_ELEMENT_START_ADDRESS_OFFSET)
+                let elementStartAddressAddress := add(proofStartAddress, mul(i, 32))
+                elementStartAddress := add(calldataload(elementStartAddressAddress), proofStartAddress)
                 elementLen := calldataload(elementStartAddress)
                 // add 32 bytes since the first word is the element length
                 elementStartAddress := add(elementStartAddress, 32)

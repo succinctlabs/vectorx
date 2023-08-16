@@ -128,6 +128,7 @@ contract LightClient is EventDecoder, StepVerifier {
         emit AuthoritySetUpdate(activeAuthoritySetID);
     }
 
+    /*
     function step(Step memory update) external {
         doStep(update);
     }
@@ -177,7 +178,9 @@ contract LightClient is EventDecoder, StepVerifier {
 
         emit HeadUpdate(lastHeader.blockNumber, lastHeader.headerHash);
     }
+    */
 
+    /*
     /// @notice Rotates the authority set and will optionally execute a step.
     function rotate(Rotate memory update) external {
         // First call step
@@ -207,15 +210,15 @@ contract LightClient is EventDecoder, StepVerifier {
 
         authoritySetCommitments[update.newAuthoritySetIDProof.authoritySetID] = digest;
     }
+    */
 
+    /*
     /// @notice Rotates the authority set and will optionally execute a step.
     function rotateCalldata(Rotate calldata update) external {
         // First call step
-        /*
         if (update.step.headers.length > 0) {
             doStep(update.step);
         }
-        */
 
         // Verify and extract the new authority set id
         (uint64 authoritySetID, ) = VerifySubstrateProofCalldata(
@@ -233,6 +236,38 @@ contract LightClient is EventDecoder, StepVerifier {
                 true);
 
         authoritySetCommitments[authoritySetID] = digest;
+    }
+    */
+
+    /// @notice Rotates the authority set and will optionally execute a step.
+    function verifySubstrateProof(
+        bytes[] calldata proof,
+        bytes calldata key,
+        bytes32 root,
+        bool authEventListPostProcess
+    ) external {
+        VerifySubstrateProofCalldata(
+            proof,
+            key,
+            root,
+            authEventListPostProcess
+        );
+    }
+
+    function verifySubstrateProof2(
+        bytes[] memory proof,
+        bytes memory key,
+        bytes32 root,
+        bool authEventListPostProcess
+    ) external {
+        bytes[] memory keys = new bytes[](1);
+        keys[0] = key;
+        VerifySubstrateProof(
+            root,
+            proof,
+            keys,
+            authEventListPostProcess
+        );
     }
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {

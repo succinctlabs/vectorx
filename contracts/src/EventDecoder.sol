@@ -694,8 +694,7 @@ contract EventDecoder {
     function extractChildren(
         SubstrateTrieDB.NodeCursor memory nodeCursor,
         SubstrateTrieDB.ChildNodeHandle[16] memory children,
-        uint256 index,
-        bytes calldata node
+        uint256 index
     )
         internal
     {
@@ -781,7 +780,6 @@ contract EventDecoder {
         ValueInfo memory valueInfo,
         SubstrateTrieDB.ChildNodeHandle[16] memory children,
         uint256 keyNibbleCursor,
-        bytes calldata node,
         bytes calldata key
     )
         internal
@@ -827,8 +825,7 @@ contract EventDecoder {
                     extractChildren(
                         nodeCursor,
                         children,
-                        index,
-                        node
+                        index
                     );
             } else {
                 revert("Key not found in proof");
@@ -903,7 +900,6 @@ contract EventDecoder {
                 valueInfo,
                 children,
                 keyNibbleCursor,
-                proof[TrieNodeLookup(trieNodeHashes, nodeCursor.nodeHash)],
                 key
             );
 

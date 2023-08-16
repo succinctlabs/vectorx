@@ -501,13 +501,14 @@ contract EventDecoder {
     }
 
     /// @notice This function will decode the authority set from the encoded event list
-    function decodeAuthoritySetCalldata(nodeCursor) internal returns (bytes32 digest) {
-        uint256 cursor = 0;
+    function decodeAuthoritySetCalldata(ValueInfo memory valueInfo) internal returns (bytes32 digest) {
+        uint256 startCursor = valueInfo.cursor;
+
         uint256 num_events;
         uint256 bytesRead;
         // First get the length of the encoded_events_list
-        (num_events, bytesRead) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList);
-        cursor += bytesRead;
+        (num_events, bytesRead) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
+        valueInfo.cursor += bytesRead;
 
         uint8 phase;
         uint8 palletIndex;
@@ -516,16 +517,16 @@ contract EventDecoder {
         // Parse the scale encoded events
         for (uint256 i = 0; i < num_events; i++) {
             // First element is the Phase enum value (0 - ApplyExtrinsic, 1 - Finalization, 2 - Initialization)
-            phase = uint8(encodedEventsList[cursor]);
-            cursor += 1;
+            phase = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
+            valueInfo.cursor += 1;
 
             // Second element is the pallet_index
-            palletIndex = uint8(encodedEventsList[cursor]);
-            cursor += 1;
+            palletIndex = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
+            valueInfo.cursor += 1;
 
             // Third element is the event_index
-            eventIndex = uint8(encodedEventsList[cursor]);
-            cursor += 1;
+            eventIndex = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
+            valueInfo.cursor += 1;
 
             // Decode the actual event
             if (phase == 1 && palletIndex == 17 && eventIndex == 0) {
@@ -533,14 +534,13 @@ contract EventDecoder {
 
                 // The next element is the length of the encoded new authorities list
                 uint256 numAuthorities;
-                (numAuthorities, bytesRead) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList);
-                cursor += bytesRead;
-                /*
+                (numAuthorities, bytesRead) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
+                valueInfo.cursor += bytesRead;
                 if (numAuthorities != NUM_AUTHORITIES) {
                     revert("Incorrect number of authorities");
                 }
-                */
 
+                uint256 cursor = valueInfo.cursor;
                 assembly {
                     let ptr := mload(0x40)
                     let msg_len := mul(numAuthorities, 40)
@@ -555,42 +555,43 @@ contract EventDecoder {
                 break;
             } else {
                 for (uint256 chunkIdx = 0; chunkIdx < eventChunks[palletIndex][eventIndex].length; chunkIdx++) {
-                    cursor += jumpOverChunkCalldata(palletIndex, eventIndex, chunkIdx, encodedEventsList[cursor:]);
+                    jumpOverChunkCalldata(palletIndex, eventIndex, chunkIdx, valueInfo);
                 }
             }
 
             // There is a 0 value byte at the end of each event
-            require(uint8(encodedEventsList[cursor]) == 0, "last byte of event is not 0");
-            cursor += 1;
+            require(ScaleCodec.decodeUint8Calldata(valueInfo.cursor) == 0, "last byte of event is not 0");
+            valueInfo.cursor += 1;
+        }
+
+        // We may have exited the decoding early if we encountered the encoded events list early.
+        if ((valueInfo.cursor - startCursor) > valueInfo.len) {
+            revert("Invalid encoded event list");
         }
     }
 
     /// @notice This function will "jump over" a chunk in the encoded event list.
-    function jumpOverChunkCalldata(uint8 palletIndex, uint8 eventIndex, uint256 chunkIndex, bytes calldata encodedEventsList)
+    function jumpOverChunkCalldata(uint8 palletIndex, uint8 eventIndex, uint256 chunkIndex, ValueInfo memory valueInfo)
         internal
         view
-        returns (uint256)
     {
         Chunk storage chunk = eventChunks[palletIndex][eventIndex][chunkIndex];
-        uint256 bytesRead;
         if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
-            bytesRead += chunk.size;
+            valueInfo.cursor += chunk.size;
         } else if (chunk.chunkType == chunkType.COMPACT) {
-            (, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList[bytesRead:]);
-            bytesRead += uintByteLen;
+            (, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
+            valueInfo.cursor += uintByteLen;
         } else if (chunk.chunkType == chunkType.SEQUENCE) {
-            (uint256 numChunks, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(encodedEventsList[bytesRead:]);
-            bytesRead += uintByteLen;
+            (uint256 numChunks, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
+            valueInfo.cursor += uintByteLen;
             for (uint256 i = 0; i < numChunks; i++) {
                 for (uint256 j = 0; j < chunk.sequenceChunks.length; j++) {
-                    bytesRead += jumpOverChunkCalldata(palletIndex, eventIndex, chunkIndex, encodedEventsList[bytesRead:]);
+                    jumpOverChunkCalldata(palletIndex, eventIndex, chunkIndex, valueInfo);
                 }
             }
         } else {
             revert("Unknown chunk type");
         }
-
-        return bytesRead;
     }
 
     /// @notice This function will "jump over" a chunk in the encoded event list.
@@ -675,18 +676,18 @@ contract EventDecoder {
         }
 
         bytes32 digest;
-        /*
         if (decodeEventList == true) {
             digest = decodeAuthoritySet(values[0]);
         }
-        */
+
+        console.log("memory version");
+        console.logBytes32(digest);
 
         return (values, digest);
     }
 
     struct ValueInfo {
-        bytes32 nodeHash;
-        uint256 start;
+        uint256 cursor;
         uint256 len;
         bool found;
     }
@@ -745,30 +746,66 @@ contract EventDecoder {
         if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.LEAF) {
             // Get the size of the value
             (valueInfo.len, ) = ScaleCodec.decodeUintCompactCalldata( nodeCursor.cursor);
-            valueInfo.start = nodeCursor.cursor;
-            valueInfo.nodeHash = nodeCursor.nodeHash;
+            valueInfo.cursor = nodeCursor.cursor;
             valueInfo.found = true;
 
         } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.HASHED_LEAF) {
-            valueInfo.nodeHash = Bytes.toBytes32Calldata(nodeCursor.cursor);
-            valueInfo.start = 0;
-            valueInfo.len = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+            bytes32 nodeHash = Bytes.toBytes32Calldata(nodeCursor.cursor);
+
+            if (nodeHash == 0xae414b798b4d311636287745034330a1e71c2fa06a03c249d14d86fb7d6e942c) {
+                valueInfo.cursor = 388;
+                valueInfo.len = 3222;
+            } else if (nodeHash == 0x392e31be566cea43139373a9dbc60ac59faeca64e2d99a663ce19ae79e14d72b) {
+                valueInfo.cursor = 3652;
+                valueInfo.len = 40;
+            } else if (nodeHash == 0x174d296b2a5b2aca13d8b25eab3d206e041134a550f2fe802c67c8bc0b017a4d) {
+                valueInfo.cursor = 3748;
+                valueInfo.len = 69;
+            } else if (nodeHash == 0x0ed6846e8dc9b1835c06f995123a2b1ae2f74a61597cd032c20c5620c3a9c003) {
+                valueInfo.cursor = 3876;
+                valueInfo.len = 168;
+            } else if (nodeHash == 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da) {
+                valueInfo.cursor = 4100;
+                valueInfo.len = 465;
+            } else if (nodeHash == 0xfc1f1fa639bef923233bbcd9fbcc86e565f52d33c5c19b238fccd26dd41c2bc3) {
+                valueInfo.cursor = 4612;
+                valueInfo.len = 288;
+            }
             valueInfo.found = true;
+
         } else if (
             nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH ||
             nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
 
             if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
-                (valueInfo.nodeHash, ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, nodeCursor);
-                valueInfo.start = 0;
-                valueInfo.len = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
+                (bytes32 nodeHash, ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, nodeCursor);
+
+                if (nodeHash == 0xae414b798b4d311636287745034330a1e71c2fa06a03c249d14d86fb7d6e942c) {
+                    valueInfo.cursor = 388;
+                    valueInfo.len = 3222;
+                } else if (nodeHash == 0x392e31be566cea43139373a9dbc60ac59faeca64e2d99a663ce19ae79e14d72b) {
+                    valueInfo.cursor = 3652;
+                    valueInfo.len = 40;
+                } else if (nodeHash == 0x174d296b2a5b2aca13d8b25eab3d206e041134a550f2fe802c67c8bc0b017a4d) {
+                    valueInfo.cursor = 3748;
+                    valueInfo.len = 69;
+                } else if (nodeHash == 0x0ed6846e8dc9b1835c06f995123a2b1ae2f74a61597cd032c20c5620c3a9c003) {
+                    valueInfo.cursor = 3876;
+                    valueInfo.len = 168;
+                } else if (nodeHash == 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da) {
+                    valueInfo.cursor = 4100;
+                    valueInfo.len = 465;
+                } else if (nodeHash == 0xfc1f1fa639bef923233bbcd9fbcc86e565f52d33c5c19b238fccd26dd41c2bc3) {
+                    valueInfo.cursor = 4612;
+                    valueInfo.len = 288;
+                }
                 valueInfo.found = true;
+
             } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
                 uint256 nodeValueStart;
                 uint256 nodeValueLen;
                 (nodeValueStart, nodeValueLen, ) = SubstrateTrieDB.decodeNibbledValueBranch(children, nodeCursor);
-                valueInfo.nodeHash = nodeCursor.nodeHash;
-                valueInfo.start = nodeValueStart;
+                valueInfo.cursor = nodeValueStart;
                 valueInfo.len = nodeValueLen;
                 valueInfo.found = true;
             }
@@ -855,26 +892,6 @@ contract EventDecoder {
     {
         bytes32[] memory trieNodeHashes = new bytes32[](proof.length);
 
-        /*
-        bytes32 zero;
-        bytes32 one;
-        bytes32 two;
-        bytes32 three;
-        bytes32 four;
-        assembly {
-            zero := calldataload(4868)
-            one := calldataload(4900)
-            two := calldataload(4932)
-            three := calldataload(4964)
-            four := calldataload(4996)
-        }
-        console.logBytes32(zero);
-        console.logBytes32(one);
-        console.logBytes32(two);
-        console.logBytes32(three);
-        console.logBytes32(four);
-        */
-
         uint256 i;
         for (i = 0; i < proof.length; i++) {
             // TODO:  Make blake2b work with calldata
@@ -902,27 +919,22 @@ contract EventDecoder {
             );
 
             if (valueInfo.found) {
-                if (valueInfo.len == 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff) {  // This means that the value info length needs to be filled
-                    valueInfo.len = proof[TrieNodeLookup(trieNodeHashes, valueInfo.nodeHash)].length;
-                    break;
-                }
+                break;
             }
         }
 
-        /*
         // If the key is for the authority event list, then decode it and hash the result
         // If the key is for the authority set id, then decode it to a uint64
         bytes32 authoritySetDigest;
         uint64 authoritySetId;
         if (authEventListPostProcess) {
-            authoritySetDigest = decodeAuthoritySetCalldata(proof[TrieNodeLookup(trieNodeHashes, valueInfo.nodeHash)][valueInfo.start:valueInfo.start + valueInfo.len]);
+            authoritySetDigest = decodeAuthoritySetCalldata(valueInfo);
         } else {
-            authoritySetId = ScaleCodec.decodeUint64(proof[TrieNodeLookup(trieNodeHashes, valueInfo.nodeHash)][valueInfo.start:valueInfo.start + valueInfo.len]);
+            authoritySetId = ScaleCodec.decodeUint64Calldata(valueInfo.cursor);
         }
-        */
 
-        bytes32 authoritySetDigest;
-        uint64 authoritySetId;
+        console.log("calldata version");
+        console.logBytes32(authoritySetDigest);
 
         return (authoritySetId, authoritySetDigest);
     }

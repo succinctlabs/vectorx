@@ -41,7 +41,7 @@ library SubstrateTrieDB {
         view 
         returns (uint256 nibbleSize)
     {
-        uint8 i = Bytes.toUint8Calldata(nodeCursor.cursor);
+        uint8 i = ScaleCodec.decodeUint8Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 1;
         
         if (i == EMPTY_TRIE) {
@@ -113,7 +113,7 @@ library SubstrateTrieDB {
         view
         returns (uint256 childrenStart)
     {
-        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.cursor);
+        uint16 bitmap = ScaleCodec.decodeUint16Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 2;
 
         childrenStart = nodeCursor.cursor;
@@ -125,7 +125,7 @@ library SubstrateTrieDB {
         view
         returns (bytes32 digest, uint256 childrenStart)
     {
-        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.cursor);
+        uint16 bitmap = ScaleCodec.decodeUint16Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 2;
 
         digest = Bytes.toBytes32Calldata(nodeCursor.cursor);
@@ -140,7 +140,7 @@ library SubstrateTrieDB {
         view
         returns (uint256 valueStart, uint256 valueLen, uint256 childrenStart)
     {
-        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.cursor);
+        uint16 bitmap = ScaleCodec.decodeUint16Calldata(nodeCursor.cursor);
         nodeCursor.cursor += 2;
 
         (uint256 valuelen, uint256 valueByteLen) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.cursor);
@@ -159,7 +159,7 @@ library SubstrateTrieDB {
         returns (uint256 nibbleByteLen)
     {
         bool padding = nibbleSize % NIBBLE_PER_BYTE != 0;
-        uint8 firstChar = Bytes.toUint8Calldata(nodeCursor.cursor);
+        uint8 firstChar = ScaleCodec.decodeUint8Calldata(nodeCursor.cursor);
         if (padding && padLeft(firstChar) != 0) {
             revert("Bad Format!");
         }
@@ -178,7 +178,7 @@ library SubstrateTrieDB {
         result -= 1;
 
         while (result <= NIBBLE_SIZE_BOUND) {
-            uint256 n = uint256(Bytes.toUint8Calldata(nodeCursor.cursor));
+            uint256 n = uint256(ScaleCodec.decodeUint8Calldata(nodeCursor.cursor));
             nodeCursor.cursor += 1;
             if (n < 255) {
                 return (result + n + 1);

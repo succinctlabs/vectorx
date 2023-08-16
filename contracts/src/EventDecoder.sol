@@ -707,7 +707,6 @@ contract EventDecoder {
         if (!children[index].isEmpty) {
             if (children[index].isInline) {
                 nodeCursor.cursor = children[index].inlineStart;
-                nodeCursor.nodeHash = nodeCursor.nodeHash;
             } else {
                 nodeCursor.nodeHash = children[index].digest;
                 uint256 idx = TrieNodeLookup(proofCalldataInfo, nodeCursor.nodeHash);
@@ -728,8 +727,9 @@ contract EventDecoder {
     {
         if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.LEAF) {
             // Get the size of the value
-            (valueInfo.len, ) = ScaleCodec.decodeUintCompactCalldata( nodeCursor.cursor);
-            valueInfo.cursor = nodeCursor.cursor;
+            uint256 bytesRead;
+            (valueInfo.len, bytesRead) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.cursor);
+            valueInfo.cursor = nodeCursor.cursor + bytesRead;
             valueInfo.found = true;
 
         } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.HASHED_LEAF) {

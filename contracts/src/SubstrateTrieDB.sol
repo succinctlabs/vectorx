@@ -92,16 +92,17 @@ library SubstrateTrieDB {
 
                 (uint256 len, uint256 lenBytes) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.cursor);
                 nodeCursor.cursor += lenBytes;
+
                 if (len == HASH_LENGTH) {
                     children[i].isInline = false;
                     children[i].digest = Bytes.toBytes32Calldata(nodeCursor.cursor);
-                    nodeCursor.cursor += HASH_LENGTH;
                 } else {
                     children[i].isInline = true;
                     children[i].inlineStart = nodeCursor.cursor;
                     children[i].inlineLen = len;
-                    nodeCursor.cursor += len;
                 }
+
+                nodeCursor.cursor += len;
             } else {
                 children[i].isEmpty = true;
             }

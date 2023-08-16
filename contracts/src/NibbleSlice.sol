@@ -17,15 +17,15 @@ library NibbleSliceOpsCalldata {
         return (pad == 1) ? data & 0x0F : data >> BITS_PER_NIBBLE;
     }
 
-    function at(uint256 calldataAddress, uint256 i) internal pure returns (uint256) {
+    function at(bytes32 key, uint256 i) internal pure returns (uint256) {
         uint256 ix = i / NIBBLE_PER_BYTE;
         uint256 pad = i % NIBBLE_PER_BYTE;
-        uint8 data = ScaleCodec.decodeUint8Calldata(calldataAddress + ix);
+        uint8 data = uint8(key[ix]);
         return (pad == 1) ? data & 0x0F : data >> BITS_PER_NIBBLE;
      }
 
     function commonPrefix(
-        uint256 keyAddress, uint256 keyNibbleCursor, uint256 keyNibbleSize,
+        bytes32 key, uint256 keyNibbleCursor, uint256 keyNibbleSize,
         SubstrateTrieDB.NodeCursor memory nodeCursor, uint256 nodeKeyNibbleStart, uint256 nodeKeyNibbleLen)
         internal
         pure
@@ -35,7 +35,7 @@ library NibbleSliceOpsCalldata {
         uint256 maxNumIter = min(keyRemainingLen, nodeKeyNibbleLen);
 
         for (uint256 i = 0; i < maxNumIter; i ++) {
-            if (at(keyAddress, keyNibbleCursor) != at(nodeCursor, nodeKeyNibbleStart)) {
+            if (at(key, keyNibbleCursor) != at(nodeCursor, nodeKeyNibbleStart)) {
                 if (i == 0) {
                     revert("Key not found in proof");
                 }

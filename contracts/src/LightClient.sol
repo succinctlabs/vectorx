@@ -242,7 +242,7 @@ contract LightClient is EventDecoder, StepVerifier {
     /// @notice Rotates the authority set and will optionally execute a step.
     function verifySubstrateProof(
         bytes[] calldata proof,
-        bytes calldata key,
+        bytes32 key,
         bytes32 root,
         bool authEventListPostProcess
     ) external {

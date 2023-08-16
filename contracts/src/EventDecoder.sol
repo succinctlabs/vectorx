@@ -767,7 +767,7 @@ contract EventDecoder {
         SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children,
         ProofCalldataInfo[] memory proofCalldataInfo,
         uint256 keyNibbleCursor,
-        uint256 keyAddress
+        bytes32 key
     )
         internal
         returns (uint256 updatedKeyNibbleCursor)
@@ -785,7 +785,7 @@ contract EventDecoder {
         if (nibbleSize > 0) {
             uint256 nibbleByteLen = SubstrateTrieDB.decodeKey(nodeCursor, nibbleSize);
             commonKeyPrefixLen = NibbleSliceOpsCalldata.commonPrefix(
-                keyAddress, keyNibbleCursor, KEY_BYTE_LENGTH * 2,
+                key, keyNibbleCursor, KEY_BYTE_LENGTH * 2,
                 nodeCursor, nibbleSize % SubstrateTrieDB.NIBBLE_PER_BYTE, nibbleSize);
             nodeCursor.cursor += nibbleByteLen;
         }
@@ -807,7 +807,7 @@ contract EventDecoder {
                 nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH ||
                 nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
                     uint256 at = keyNibbleCursor + nibbleSize;
-                    uint256 index = NibbleSliceOpsCalldata.at(keyAddress, at);
+                    uint256 index = NibbleSliceOpsCalldata.at(key, at);
                     extractChildren(
                         nodeCursor,
                         children,
@@ -841,7 +841,7 @@ contract EventDecoder {
     function VerifySubstrateProofCalldata
     (
         bytes[] calldata proof,
-        bytes calldata key,
+        bytes32 key,
         bytes32 root,
         bool authEventListPostProcess
     )
@@ -850,17 +850,10 @@ contract EventDecoder {
     {
         // First load the calldata addresses for the proof elements.
         // See the comment in Constants.sol for an example of the calldata layout.
-        uint256 keyAddress;
-        uint256 keyNibbleCursor;
 
         uint256 proofLen;
         bytes32 proofStartAddress;
         assembly {
-            // Load the calldata address of key
-            // Adding by 36, since there are 4 bytes for the function signature and 
-            // then 32 bytes for the proof parameter address (which is already hard coded).
-            keyAddress := add(calldataload(KEY_ADDRESS), 36)
-
             proofStartAddress := calldataload(4)
             proofStartAddress := add(proofStartAddress, 4)
 
@@ -892,6 +885,8 @@ contract EventDecoder {
             proofCalldataInfo[i].digest = nodeDigest;
         }
 
+        uint256 keyNibbleCursor;
+
         // Start with looking up the node that maps to the root hash
         SubstrateTrieDB.NodeCursor memory nodeCursor;
         nodeCursor.nodeHash = root;
@@ -906,7 +901,7 @@ contract EventDecoder {
                 children,
                 proofCalldataInfo,
                 keyNibbleCursor,
-                keyAddress
+                key
             );
 
             if (valueInfo.found) {

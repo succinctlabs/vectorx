@@ -180,40 +180,8 @@ contract LightClient is EventDecoder, StepVerifier {
     }
     */
 
-    /*
     /// @notice Rotates the authority set and will optionally execute a step.
-    function rotate(Rotate memory update) external {
-        // First call step
-        if (update.step.headers.length > 0) {
-            doStep(update.step);
-        }
-
-        // Verify the new authority set id
-        bytes[] memory authSetKeys = new bytes[](1);
-        authSetKeys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        (bytes[] memory authSetProofRet,) = VerifySubstrateProof(stateRoots[head],
-                                                                 update.newAuthoritySetIDProof.merkleProof,
-                                                                 authSetKeys,
-                                                                 false);
-
-        if (ScaleCodec.decodeUint64(authSetProofRet[0]) != update.newAuthoritySetIDProof.authoritySetID) {
-            revert("Incorrect authority set ID committed to the state root");
-        }
-
-        // Verify the encoded event list
-        bytes[] memory systemEventsKeys = new bytes[](1);
-        systemEventsKeys[0] = SYSTEM_EVENTS_KEY;
-        (, bytes32 digest) = VerifySubstrateProof(stateRoots[head],
-                                                  update.eventListProof,
-                                                  systemEventsKeys,
-                                                  true);
-
-        authoritySetCommitments[update.newAuthoritySetIDProof.authoritySetID] = digest;
-    }
-    */
-
-    /// @notice Rotates the authority set and will optionally execute a step.
-    function rotateCalldata(Rotate calldata update) external {
+    function rotate(Rotate calldata update) external {
         // First call step
         /*
         if (update.step.headers.length > 0) {
@@ -229,53 +197,20 @@ contract LightClient is EventDecoder, StepVerifier {
         }
 
         // Verify and extract the new authority set id
-        (uint64 authoritySetID, ) = VerifySubstrateProofCalldata(
+        (uint64 authoritySetID, ) = VerifySubstrateProof(
                 authoritySetIDProofAddress,
                 GRANDPA_AUTHORITIES_SETID_KEY,
                 stateRoots[head],
                 false);
 
         // Verify and extract the encoded event list
-        (, bytes32 digest) = VerifySubstrateProofCalldata(
+        (, bytes32 digest) = VerifySubstrateProof(
                 eventListProofAddress,
                 SYSTEM_EVENTS_KEY,
                 stateRoots[head],
                 true);
 
         authoritySetCommitments[authoritySetID] = digest;
-    }
-
-    /*
-    /// @notice Rotates the authority set and will optionally execute a step.
-    function verifySubstrateProof(
-        bytes[] calldata proof,
-        bytes32 key,
-        bytes32 root,
-        bool authEventListPostProcess
-    ) external {
-        VerifySubstrateProofCalldata(
-            proof,
-            key,
-            root,
-            authEventListPostProcess
-        );
-    }
-    */
-
-    function verifySubstrateProof2(
-        bytes[] memory proof,
-        bytes memory key,
-        bytes32 root,
-        bool authEventListPostProcess
-    ) external {
-        bytes[] memory keys = new bytes[](1);
-        keys[0] = key;
-        VerifySubstrateProof(
-            root,
-            proof,
-            keys,
-            authEventListPostProcess
-        );
     }
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {

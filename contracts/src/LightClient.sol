@@ -15,14 +15,6 @@ struct Groth16Proof {
     uint256[2] c;
 }
 
-
-// Storage value and proof
-struct AuthoritySetIDProof {
-    uint64 authoritySetID;
-    bytes[] merkleProof;  // Proof that it's within the state root.
-}
-
-
 struct Header {
     uint32 blockNumber;
     bytes32 headerHash;
@@ -30,14 +22,13 @@ struct Header {
     bytes32 dataRoot;
 }
 
-
 struct Step {
     Header[] headers;
 
     // This field specifies and proves the last header's authority set id.
     // Note that this is proven aginst the state root of the 2nd to last header (which may already be saved in the smart contract's state).
     // Note that we can move this verfiication logic into the proof field, if we need to save on the gas.
-    AuthoritySetIDProof authoritySetIDProof;
+    bytes[] authoritySetIDProof;
 
     // This proof is used to verify the following:
     // 1) There exists a sequence of block headers that have the following properties:
@@ -55,11 +46,11 @@ struct Step {
 // Note that the verification logic is currently done purely in solidity since the Avail testnet's authority set is small,
 // but this will need to be converted into a snark proof.
 struct Rotate {
-    // This field specifies and proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
+    // This field proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
     bytes[] eventListProof;
 
-    // This field specifies and proves the new authority set's ID (proved against the state root of the blockNumber).
-    AuthoritySetIDProof newAuthoritySetIDProof;
+    // This field proves the new authority set's ID (proved against the state root of the blockNumber).
+    bytes[] authoritySetIDProof;
 
     // This field updates the light client's headers up to Rotate.blocknumber.
     Step step;
@@ -215,6 +206,33 @@ contract LightClient is EventDecoder, StepVerifier {
                                                   true);
 
         authoritySetCommitments[update.newAuthoritySetIDProof.authoritySetID] = digest;
+    }
+
+    /// @notice Rotates the authority set and will optionally execute a step.
+    function rotateCalldata(Rotate calldata update) external {
+        // First call step
+        /*
+        if (update.step.headers.length > 0) {
+            doStep(update.step);
+        }
+        */
+
+        // Verify and extract the new authority set id
+        (uint64 authoritySetID, ) = VerifySubstrateProofCalldata(
+                update.newAuthoritySetIDProof,
+                GRANDPA_AUTHORITIES_SETID_KEY,
+                stateRoots[head],
+                false);
+
+        // Verify and extract the encoded event list
+        systemEventsKeys[0] = SYSTEM_EVENTS_KEY;
+        (, bytes32 digest) = VerifySubstrateProofCalldata(
+                update.eventListProof;
+                SYSTEM_EVENTS_KEY,
+                stateRoots[head],
+                true);
+
+        authoritySetCommitments[authoritySetID] = digest;
     }
 
     function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {

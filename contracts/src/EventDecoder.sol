@@ -833,14 +833,15 @@ contract EventDecoder {
 
      /**
       * @notice Verifies substrate specific merkle patricia proofs.
+      * @param proofCalldataAddress calldata address of the proof
+      * @param key a key to verify and retrieve the value
       * @param root hash of the merkle patricia trie
-      * @param proof a list of proof nodes
-      * @param key a key to verify
-      * @return bytes[] a list of values corresponding to the supplied keys.
+      * @param authEventListPostProcess bool to run the event list post process
+      * @return (uint64, bytes32) a list of values corresponding to the supplied keys.
       */
     function VerifySubstrateProofCalldata
     (
-        bytes[] calldata proof,
+        uint256 proofCalldataAddress,
         bytes32 key,
         bytes32 root,
         bool authEventListPostProcess
@@ -848,40 +849,45 @@ contract EventDecoder {
         internal
         returns (uint64, bytes32)
     {
+
         // First load the calldata addresses for the proof elements.
         // See the comment in Constants.sol for an example of the calldata layout.
 
         uint256 proofLen;
         bytes32 proofStartAddress;
         assembly {
-            proofStartAddress := calldataload(4)
-            proofStartAddress := add(proofStartAddress, 4)
-
             // Load the calldata address of proof
-            proofLen := calldataload(proofStartAddress)
-            proofStartAddress := add(proofStartAddress, 32)
+            proofLen := calldataload(proofCalldataAddress)
+            proofStartAddress := add(proofCalldataAddress, 32)
         }
 
         ProofCalldataInfo[] memory proofCalldataInfo = new ProofCalldataInfo[](proofLen);
 
         uint16 i;
         for (i = 0; i < proofLen; i++) {
-            uint256 elementStartAddress;
-            uint256 elementLen;
+            uint256 nodeStartAddress;
+            uint256 nodeLen;
 
             assembly {
-                let elementStartAddressAddress := add(proofStartAddress, mul(i, 32))
-                elementStartAddress := add(calldataload(elementStartAddressAddress), proofStartAddress)
-                elementLen := calldataload(elementStartAddress)
-                // add 32 bytes since the first word is the element length
-                elementStartAddress := add(elementStartAddress, 32)
+                let nodeStartAddressAddress := add(proofStartAddress, mul(i, 32))
+                nodeStartAddress := add(calldataload(nodeStartAddressAddress), proofStartAddress)
+                nodeLen := calldataload(nodeStartAddress)
             }
 
-            proofCalldataInfo[i].calldataAddress = elementStartAddress;
-            proofCalldataInfo[i].len = elementLen;
+            bytes memory node = new bytes(nodeLen);
+            assembly {
+                calldatacopy(node, nodeStartAddress, add(nodeLen, 32))
+
+                // add 32 bytes since the first word is the node length
+                nodeStartAddress := add(nodeStartAddress, 32)
+            }
+
+            proofCalldataInfo[i].calldataAddress = nodeStartAddress;
+            proofCalldataInfo[i].len = nodeLen;
 
             // TODO:  Make blake2b work with calldata
-            bytes32 nodeDigest = Bytes.toBytes32(Blake2b.blake2b(proof[i], 32));
+            bytes32 nodeDigest = Bytes.toBytes32(Blake2b.blake2b(node, 32));
+
             proofCalldataInfo[i].digest = nodeDigest;
         }
 

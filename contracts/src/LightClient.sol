@@ -53,7 +53,7 @@ struct Rotate {
     bytes[] authoritySetIDProof;
 
     // This field updates the light client's headers up to Rotate.blocknumber.
-    Step step;
+    //Step step;
 }
 
 
@@ -212,33 +212,40 @@ contract LightClient is EventDecoder, StepVerifier {
     }
     */
 
-    /*
     /// @notice Rotates the authority set and will optionally execute a step.
     function rotateCalldata(Rotate calldata update) external {
         // First call step
+        /*
         if (update.step.headers.length > 0) {
             doStep(update.step);
+        }
+        */
+
+        uint256 authoritySetIDProofAddress;
+        uint256 eventListProofAddress;
+        assembly {
+            eventListProofAddress := add(calldataload(36), 36)
+            authoritySetIDProofAddress := add(calldataload(68), 36)
         }
 
         // Verify and extract the new authority set id
         (uint64 authoritySetID, ) = VerifySubstrateProofCalldata(
-                update.newAuthoritySetIDProof,
+                authoritySetIDProofAddress,
                 GRANDPA_AUTHORITIES_SETID_KEY,
                 stateRoots[head],
                 false);
 
         // Verify and extract the encoded event list
-        systemEventsKeys[0] = SYSTEM_EVENTS_KEY;
         (, bytes32 digest) = VerifySubstrateProofCalldata(
-                update.eventListProof;
+                eventListProofAddress,
                 SYSTEM_EVENTS_KEY,
                 stateRoots[head],
                 true);
 
         authoritySetCommitments[authoritySetID] = digest;
     }
-    */
 
+    /*
     /// @notice Rotates the authority set and will optionally execute a step.
     function verifySubstrateProof(
         bytes[] calldata proof,
@@ -253,6 +260,7 @@ contract LightClient is EventDecoder, StepVerifier {
             authEventListPostProcess
         );
     }
+    */
 
     function verifySubstrateProof2(
         bytes[] memory proof,

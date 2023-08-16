@@ -701,19 +701,16 @@ contract EventDecoder {
     {
         uint256 childrenStart;
         if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH) {
-            (childrenStart, ) = SubstrateTrieDB.decodeNibbledBranch(children, node[nodeCursor.cursor:], nodeCursor);
-            childrenStart += nodeCursor.cursor;
+            childrenStart = SubstrateTrieDB.decodeNibbledBranch(children, nodeCursor);
         } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
-            (, childrenStart, ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, node[nodeCursor.cursor:], nodeCursor);
-            childrenStart += nodeCursor.cursor;
+            (, childrenStart) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, nodeCursor);
         } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
-            (, , childrenStart, ) = SubstrateTrieDB.decodeNibbledValueBranch(children, node[nodeCursor.cursor:], nodeCursor);
-            childrenStart += nodeCursor.cursor;
+            (, , childrenStart) = SubstrateTrieDB.decodeNibbledValueBranch(children, nodeCursor);
         }
 
         if (!children[index].isEmpty) {
             if (children[index].isInline) {
-                nodeCursor.cursor = childrenStart + children[index].inlineStart;
+                nodeCursor.cursor = children[index].inlineStart;
                 nodeCursor.nodeHash = nodeCursor.nodeHash;
             } else {
                 nodeCursor.nodeHash = children[index].digest;
@@ -742,14 +739,13 @@ contract EventDecoder {
     function extractValue(
         SubstrateTrieDB.NodeCursor memory nodeCursor,
         ValueInfo memory valueInfo,
-        SubstrateTrieDB.ChildNodeHandle[16] memory children,
-        bytes calldata node
+        SubstrateTrieDB.ChildNodeHandle[16] memory children
     ) 
         internal
     {
         if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.LEAF) {
             // Get the size of the value
-            (valueInfo.len, ) = ScaleCodec.decodeUintCompactCalldata(node[nodeCursor.cursor:]);
+            (valueInfo.len, ) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
             valueInfo.start = nodeCursor.cursor;
             valueInfo.nodeHash = nodeCursor.nodeHash;
             valueInfo.found = true;
@@ -764,14 +760,14 @@ contract EventDecoder {
             nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
 
             if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
-                (valueInfo.nodeHash, , ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, node[nodeCursor.cursor:], nodeCursor);
+                (valueInfo.nodeHash, ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, nodeCursor);
                 valueInfo.start = 0;
                 valueInfo.len = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
                 valueInfo.found = true;
             } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
                 uint256 nodeValueStart;
                 uint256 nodeValueLen;
-                (nodeValueStart, nodeValueLen, , ) = SubstrateTrieDB.decodeNibbledValueBranch(children, node[nodeCursor.cursor:], nodeCursor);
+                (nodeValueStart, nodeValueLen, ) = SubstrateTrieDB.decodeNibbledValueBranch(children, nodeCursor);
                 valueInfo.nodeHash = nodeCursor.nodeHash;
                 valueInfo.start = nodeValueStart;
                 valueInfo.len = nodeValueLen;
@@ -817,8 +813,7 @@ contract EventDecoder {
                 extractValue(
                     nodeCursor,
                     valueInfo,
-                    children,
-                    node
+                    children
                 );
             } else {
                 revert("Key not found in proof");

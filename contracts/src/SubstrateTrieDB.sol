@@ -83,26 +83,25 @@ library SubstrateTrieDB {
         uint256 inlineLen;
     }
 
-    function decodeChildren(ChildNodeHandle[16] memory children, bytes calldata input, uint16 bitmap, NodeCursor memory nodeCursor)
+    function decodeChildren(ChildNodeHandle[16] memory children, uint16 bitmap, NodeCursor memory nodeCursor)
         internal
         view
-        returns (uint256 bytesRead)
     {
         for (uint256 i = 0; i < 16; i++) {
             if (valueAt(bitmap, i)) {
                 children[i].isEmpty = false;
 
-                (uint256 len, uint256 lenBytes) = ScaleCodec.decodeUintCompactCalldata(input[bytesRead:]);
-                bytesRead += lenBytes;
+                (uint256 len, uint256 lenBytes) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+                nodeCursor.cursor += lenBytes;
                 if (len == HASH_LENGTH) {
                     children[i].isInline = false;
-                    children[i].digest = Bytes.toBytes32Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor + bytesRead);
-                    bytesRead += HASH_LENGTH;
+                    children[i].digest = Bytes.toBytes32Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+                    nodeCursor.cursor += HASH_LENGTH;
                 } else {
                     children[i].isInline = true;
-                    children[i].inlineStart = bytesRead;
+                    children[i].inlineStart = nodeCursor.cursor;
                     children[i].inlineLen = len;
-                    bytesRead += len;
+                    nodeCursor.cursor += len;
                 }
             } else {
                 children[i].isEmpty = true;
@@ -110,58 +109,49 @@ library SubstrateTrieDB {
         }
     }
 
-    function decodeNibbledBranch(ChildNodeHandle[16] memory children, bytes calldata input, NodeCursor memory nodeCursor)
+    function decodeNibbledBranch(ChildNodeHandle[16] memory children, NodeCursor memory nodeCursor)
         internal
         view
-        returns (uint256 childrenStart, uint256 bytesRead)
+        returns (uint256 childrenStart)
     {
-        uint16 bitmap = uint16(ScaleCodec.decodeUint256Calldata(input[0:2]));
-        bytesRead += 2;
+        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        nodeCursor.cursor += 2;
 
-        childrenStart = bytesRead;
-        uint256 childrenByteLen;
-        nodeCursor.cursor += bytesRead;
-        childrenByteLen = decodeChildren(children, input[bytesRead:], bitmap, nodeCursor);
-        bytesRead += childrenByteLen;
+        childrenStart = nodeCursor.cursor;
+        decodeChildren(children, bitmap, nodeCursor);
     }
 
-    function decodeNibbledHashedValueBranch(ChildNodeHandle[16] memory children, bytes calldata input, NodeCursor memory nodeCursor)
+    function decodeNibbledHashedValueBranch(ChildNodeHandle[16] memory children, NodeCursor memory nodeCursor)
         internal
         view
-        returns (bytes32 digest, uint256 childrenStart, uint256 bytesRead)
+        returns (bytes32 digest, uint256 childrenStart)
     {
-        uint16 bitmap = uint16(ScaleCodec.decodeUint256Calldata(input[0:2]));
-        bytesRead += 2;
+        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        nodeCursor.cursor += 2;
 
-        //digest = Bytes.toBytes32Calldata(input[bytesRead : bytesRead + HASH_LENGTH]);
-        digest = Bytes.toBytes32(input[bytesRead : bytesRead + HASH_LENGTH]);
-        bytesRead += HASH_LENGTH;
+        digest = Bytes.toBytes32Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        nodeCursor.cursor += HASH_LENGTH;
 
-        childrenStart = bytesRead;
-        uint256 childrenByteLen;
-        nodeCursor.cursor += bytesRead;
-        childrenByteLen = decodeChildren(children, input, bitmap, nodeCursor);
-        bytesRead += childrenByteLen;
+        childrenStart = nodeCursor.cursor;
+        decodeChildren(children, bitmap, nodeCursor);
     }
     
-    function decodeNibbledValueBranch(ChildNodeHandle[16] memory children, bytes calldata input, NodeCursor memory nodeCursor)
+    function decodeNibbledValueBranch(ChildNodeHandle[16] memory children, NodeCursor memory nodeCursor)
         internal
         view
-        returns (uint256 valueStart, uint256 valueLen, uint256 childrenStart, uint256 bytesRead)
+        returns (uint256 valueStart, uint256 valueLen, uint256 childrenStart)
     {
-        uint16 bitmap = uint16(ScaleCodec.decodeUint256Calldata(input[0:2]));
-        bytesRead += 2;
+        uint16 bitmap = Bytes.toUint16Calldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        nodeCursor.cursor += 2;
 
-        (uint256 valuelen, uint256 valueByteLen) = ScaleCodec.decodeUintCompactCalldata(input[bytesRead:]);
-        bytesRead += valueByteLen;
-        valueStart = bytesRead;
+        (uint256 valuelen, uint256 valueByteLen) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.calldataStartAddress + nodeCursor.cursor);
+        nodeCursor.cursor += valueByteLen;
+        valueStart = nodeCursor.cursor;
 
-        bytesRead += valueLen;
-        childrenStart = bytesRead;
-        uint256 childrenByteLen;
-        nodeCursor.cursor += bytesRead;
-        childrenByteLen = decodeChildren(children, input, bitmap, nodeCursor);
-        bytesRead += childrenByteLen;
+        nodeCursor.cursor += valueLen;
+        childrenStart = nodeCursor.cursor;
+
+        decodeChildren(children, bitmap, nodeCursor);
     }
 
     function decodeKey(NodeCursor memory nodeCursor, uint256 nibbleSize)

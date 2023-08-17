@@ -5,8 +5,10 @@ import "solidity-merkle-trees/src/trie/Bytes.sol";
 import "solidity-merkle-trees/src/trie/Memory.sol";
 import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
 import { EventDecoder } from "src/EventDecoder.sol";
-import {StepVerifier} from "src/StepVerifier.sol";
-import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
+import { Pairing, StepVerifier } from "src/StepVerifier.sol";
+import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY, EVENT_LIST_PROOF_ADDRESS, AUTHORITY_SETID_PROOF_ADDRESS } from "src/Constants.sol";
+
+import "forge-std/console2.sol";
 
 
 struct Groth16Proof {
@@ -15,29 +17,22 @@ struct Groth16Proof {
     uint256[2] c;
 }
 
-
-// Storage value and proof
-struct AuthoritySetIDProof {
-    uint64 authoritySetID;
-    bytes[] merkleProof;  // Proof that it's within the state root.
-}
-
-
-struct Header {
-    uint32 blockNumber;
-    bytes32 headerHash;
-    bytes32 stateRoot;
-    bytes32 dataRoot;
-}
-
-
 struct Step {
-    Header[] headers;
-
     // This field specifies and proves the last header's authority set id.
     // Note that this is proven aginst the state root of the 2nd to last header (which may already be saved in the smart contract's state).
     // Note that we can move this verfiication logic into the proof field, if we need to save on the gas.
-    AuthoritySetIDProof authoritySetIDProof;
+    bytes[] authoritySetIDProof;
+
+    uint32 head;
+
+    bytes32 headHash;
+
+    // This is needed to verify the authoritySetIDProof;
+    bytes32 previousStateRoot;
+
+    bytes32 stateRoot;
+
+    bytes32 updatedDataRootsCommitment;
 
     // This proof is used to verify the following:
     // 1) There exists a sequence of block headers that have the following properties:
@@ -55,14 +50,14 @@ struct Step {
 // Note that the verification logic is currently done purely in solidity since the Avail testnet's authority set is small,
 // but this will need to be converted into a snark proof.
 struct Rotate {
-    // This field specifies and proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
+    // This field proves the new authority set's ID (proved against the state root of the blockNumber).
+    bytes[] authoritySetIDProof;
+
+    // This field proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
     bytes[] eventListProof;
 
-    // This field specifies and proves the new authority set's ID (proved against the state root of the blockNumber).
-    AuthoritySetIDProof newAuthoritySetIDProof;
-
     // This field updates the light client's headers up to Rotate.blocknumber.
-    Step step;
+    //Step step;
 }
 
 
@@ -78,22 +73,19 @@ contract LightClient is EventDecoder, StepVerifier {
     /// @notice The latest finalized header's block number.
     uint32 public head;
 
-    /// @notice The active authority set ID.
-    uint64 public activeAuthoritySetID;
-
-    /// @notice Maps from a block number to an Avail header hash.
-    mapping(uint32 => bytes32) public headerHashes;
+    /// @notice The latest finalized header hash.
+    bytes32 public headHash;
 
     /// @notice Maps from a block number to the state root.
     mapping(uint32 => bytes32) public stateRoots;
 
-    /// @notice Maps from a block number to the data root.
-    mapping(uint32 => bytes32) public dataRoots;
+    /// @notice Commitment of the data root merkle mountain trie
+    bytes32 public dataRootsCommitment;
 
-    /// @notice Maps from an authority set id to the authorities' pub keys
-    mapping(uint64 => bytes32[NUM_AUTHORITIES]) public authoritySets;
+    /// @notice The active authority set ID.
+    uint64 public activeAuthoritySetID;
 
-    /// @notice Maps from an authority set id to the blake2b hash of the authorities' pub keys
+    /// @notice Maps from an authority set id to the keccak hash of the authorities' pub keys
     mapping(uint64 => bytes32) public authoritySetCommitments;
 
     /// @notice The plonky2 step circuit digest
@@ -101,159 +93,164 @@ contract LightClient is EventDecoder, StepVerifier {
 
     event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
     event AuthoritySetUpdate(uint64 indexed authoritySetID);
+    event StepCircuitDigestUpdate(uint256[4] indexed circuitDigest);
 
     constructor(
-        uint64 startCheckpointAuthoritySetID,
-        bytes32[NUM_AUTHORITIES] memory startCheckpointAuthorities,
-        Header memory startCheckpointHeader
+        uint32 startHead,
+        bytes32 startHeadHash,
+        uint64 startAuthoritySetID,
+        bytes32 startAuthoritiesCommitment
     ) {
-        START_CHECKPOINT_BLOCK_NUMBER = startCheckpointHeader.blockNumber;
-        START_CHECKPOINT_HEADER_HASH = startCheckpointHeader.headerHash;
-        headerHashes[startCheckpointHeader.blockNumber] = startCheckpointHeader.headerHash;
-        stateRoots[startCheckpointHeader.blockNumber] = startCheckpointHeader.stateRoot;
-        dataRoots[startCheckpointHeader.blockNumber] = startCheckpointHeader.dataRoot;
-        head = startCheckpointHeader.blockNumber;
-        emit HeadUpdate(head, startCheckpointHeader.headerHash);
+        START_CHECKPOINT_BLOCK_NUMBER = startHead;
+        START_CHECKPOINT_HEADER_HASH = startHeadHash;
+        head = startHead;
+        headHash = startHeadHash;
+        emit HeadUpdate(head, headHash);
 
-        setAuthorities(startCheckpointAuthoritySetID, startCheckpointAuthorities);
+        activeAuthoritySetID = startAuthoritySetID;
+        authoritySetCommitments[activeAuthoritySetID] = startAuthoritiesCommitment;
+        emit AuthoritySetUpdate(activeAuthoritySetID);
     }
 
     /// @notice Updates the step circuit digest.
     function setStepCircuitDigest(uint256[4] memory _stepCircuitDigest) external {
         stepCircuitDigest = _stepCircuitDigest;
+        emit StepCircuitDigestUpdate(_stepCircuitDigest);
     }
 
-    function setAuthorities(uint64 authoritySetID, bytes32[NUM_AUTHORITIES] memory _authorities) internal {
-        bytes memory hash_input;
-
-        for (uint16 i = 0; i < NUM_AUTHORITIES; i++) {
-            authoritySets[authoritySetID][i]  = _authorities[i];
-            hash_input = Bytes.concat(hash_input, Memory.toBytes(_authorities[i]));
-        }
-
-        authoritySetCommitments[authoritySetID] = Bytes.toBytes32(Blake2b.blake2b(hash_input, 32));
-        activeAuthoritySetID = authoritySetID;
-
-        emit AuthoritySetUpdate(activeAuthoritySetID);
-    }
-
-    function step(Step memory update) external {
+    function step(Step calldata update) external {
         doStep(update);
     }
 
     /// @notice Updates the head of the light client with the provided list of headers.
-    function doStep(Step memory update) internal {
-        // First verify that the authority set is correct.
-        if (update.authoritySetIDProof.authoritySetID != activeAuthoritySetID) {
+    function doStep(Step calldata update) internal {
+        uint256 authoritySetIDProofAddress;
+        assembly {
+            authoritySetIDProofAddress := add(calldataload(AUTHORITY_SETID_PROOF_ADDRESS), 36)
+        }
+
+        // Verify and extract the new authority set id
+        (uint64 authoritySetID, ) = VerifySubstrateProof(
+                authoritySetIDProofAddress,
+                GRANDPA_AUTHORITIES_SETID_KEY,
+                update.previousStateRoot,
+                false);
+
+        // Verify that the authority set is correct.
+        if (authoritySetID != activeAuthoritySetID) {
             revert("Authority set ID is not currently active");
         }
 
-        // Check to see that the last block's authority set ID is correct.
-        bytes32 authSetIDMerkleRoot;
-        if (update.headers.length > 1) {
-            authSetIDMerkleRoot = update.headers[update.headers.length-2].stateRoot;
-        } else {
-            authSetIDMerkleRoot = stateRoots[head];
-        }
-
-        bytes[] memory keys = new bytes[](1);
-        keys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        bytes memory proofRet = MerklePatricia.VerifySubstrateProof(authSetIDMerkleRoot,
-                                                                    update.authoritySetIDProof.merkleProof,
-                                                                    keys)[0];
-
-        if (ScaleCodec.decodeUint64(proofRet) != update.authoritySetIDProof.authoritySetID) {
-            revert("Finalized block authority set proof is not correct");
-        }
+        Proof memory proof;
+        proof.A = Pairing.G1Point(update.proof.a[0], update.proof.a[1]);
+        proof.B = Pairing.G2Point(update.proof.b[0], update.proof.b[1]);
+        proof.C = Pairing.G1Point(update.proof.c[0], update.proof.c[1]);
 
         verifyStepProof(
-            update.proof,
-            update.headers
+            update.head,
+            update.headHash,
+            update.previousStateRoot,
+            update.stateRoot,
+            update.updatedDataRootsCommitment,
+            proof
         );
 
         // Note that the snark proof above verifies that the first header is correctly linked to the current head.
-        // Update the storage maps.
-        Header memory header;
-        for (uint16 i = 0; i < update.headers.length; i ++) {
-            header = update.headers[i];
-            headerHashes[header.blockNumber] = header.headerHash;
-            stateRoots[header.blockNumber] = header.stateRoot;
-            dataRoots[header.blockNumber] = header.dataRoot;
+        // Update the light client storage
+        head = update.head;
+        headHash = update.headHash;
+        stateRoots[head] = update.stateRoot;
+        dataRootsCommitment = update.updatedDataRootsCommitment;
+
+        emit HeadUpdate(head, headHash);
+    }
+
+    function verifyStepProof(
+        uint32 updatedHead,
+        bytes32 updatedHeadHash,
+        bytes32 previousStateRoot,
+        bytes32 newStateRoot,
+        bytes32 updatedDataRootsCommitment,
+        Proof memory proof) internal view
+    {
+        uint256[8] memory inputs;
+
+        // hashInput will be a concatenation of the following
+        // 1) current head hash (32 bytes)
+        // 2) updated head hash (32 bytes)
+        // 3) data root commitment (32 bytes)
+        // 4) updated data root commitment (32 bytes)
+        // 5) previous state root (32 bytes)
+        // 6) new state root (32 bytes)
+        // 7) authority set commitment (32 bytes)
+        // 8) active authority set id (8 bytes)
+        // 9) current head number (4 bytes)
+        // 10) updated head number (4 bytes)
+        bytes memory hashInput = bytes.concat(
+            headHash,
+            updatedHeadHash,
+            dataRootsCommitment,
+            updatedDataRootsCommitment,
+            previousStateRoot,
+            newStateRoot,
+            authoritySetCommitments[activeAuthoritySetID],
+            bytes8(activeAuthoritySetID),
+            bytes4(head),
+            bytes4(updatedHead));
+
+        bytes32 publicInputsHash;
+        assembly {
+            publicInputsHash := keccak256(hashInput, 240)
         }
 
-        Header memory lastHeader = update.headers[update.headers.length - 1];
-        head = lastHeader.blockNumber;
+        inputs[0] = (uint256(publicInputsHash) >> 192) & 0xffffffffffffffff;
+        inputs[1] = (uint256(publicInputsHash) >> 128) & 0xffffffffffffffff;
+        inputs[2] = (uint256(publicInputsHash) >> 64) & 0xffffffffffffffff;
+        inputs[3] = uint256(publicInputsHash) & 0xffffffffffffffff;
 
-        emit HeadUpdate(lastHeader.blockNumber, lastHeader.headerHash);
+        // Add in the plonky2 step circuit digest
+        inputs[4] = stepCircuitDigest[0];
+        inputs[5] = stepCircuitDigest[1];
+        inputs[6] = stepCircuitDigest[2];
+        inputs[7] = stepCircuitDigest[3];
+
+        require(verifyProof(proof, inputs));
     }
 
     /// @notice Rotates the authority set and will optionally execute a step.
-    function rotate(Rotate memory update) external {
+    function rotate(Rotate calldata update) external {
         // First call step
+        /*
         if (update.step.headers.length > 0) {
             doStep(update.step);
         }
+        */
 
-        // Verify the new authority set id
-        bytes[] memory authSetKeys = new bytes[](1);
-        authSetKeys[0] = GRANDPA_AUTHORITIES_SETID_KEY;
-        (bytes[] memory authSetProofRet,) = VerifySubstrateProof(stateRoots[head],
-                                                                 update.newAuthoritySetIDProof.merkleProof,
-                                                                 authSetKeys,
-                                                                 false);
-
-        if (ScaleCodec.decodeUint64(authSetProofRet[0]) != update.newAuthoritySetIDProof.authoritySetID) {
-            revert("Incorrect authority set ID committed to the state root");
+        uint256 authoritySetIDProofAddress;
+        uint256 eventListProofAddress;
+        assembly {
+            authoritySetIDProofAddress := add(calldataload(AUTHORITY_SETID_PROOF_ADDRESS), 36)
+            eventListProofAddress := add(calldataload(EVENT_LIST_PROOF_ADDRESS), 36)
         }
 
-        // Verify the encoded event list
-        bytes[] memory systemEventsKeys = new bytes[](1);
-        systemEventsKeys[0] = SYSTEM_EVENTS_KEY;
-        (, bytes32 digest) = VerifySubstrateProof(stateRoots[head],
-                                                  update.eventListProof,
-                                                  systemEventsKeys,
-                                                  true);
+        bytes32 stateRoot = 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da;
+        //bytes32 stateRoot = stateRoots[head];
 
-        authoritySetCommitments[update.newAuthoritySetIDProof.authoritySetID] = digest;
-    }
+        // Verify and extract the new authority set id
+        (uint64 authoritySetID, ) = VerifySubstrateProof(
+                authoritySetIDProofAddress,
+                GRANDPA_AUTHORITIES_SETID_KEY,
+                stateRoot,
+                false);
 
-    function verifyStepProof(Groth16Proof memory proof, Header[] memory headers) internal view {
-        uint256[36] memory inputs;
+        // Verify and extract the encoded event list
+        (, bytes32 digest) = VerifySubstrateProof(
+                eventListProofAddress,
+                SYSTEM_EVENTS_KEY,
+                stateRoot,
+                true);
 
-        bytes memory hashInput;
-        // Add the head num and hash authority set commitment, and validator set id
-        hashInput = bytes.concat(
-            headerHashes[head],
-            bytes4(head),
-            authoritySetCommitments[activeAuthoritySetID],
-            bytes8(activeAuthoritySetID)
-        );
-
-        hashInput = bytes.concat();
-
-        // For 20 headers, add the following
-        // 1) header state root
-        // 2) header block hash
-        for (uint8 i = 0; i < 20; i++) {
-            hashInput = bytes.concat(
-                hashInput,
-                headers[i].stateRoot,
-                headers[i].headerHash
-            );
-        }
-
-        bytes memory digest = Blake2b.blake2b(hashInput, 32);
-
-        for (uint8 i = 0; i < 32; i++) {
-            inputs[i] = uint256(uint8(digest[i]));
-        }
-
-        // Add in the plonky2 step circuit digest
-        inputs[32] = stepCircuitDigest[0];
-        inputs[33] = stepCircuitDigest[1];
-        inputs[34] = stepCircuitDigest[2];
-        inputs[35] = stepCircuitDigest[3];
-
-        require(verifyProof(proof.a, proof.b, proof.c, inputs));
+        authoritySetCommitments[authoritySetID] = digest;
+        emit AuthoritySetUpdate(activeAuthoritySetID);
     }
 }

@@ -1,20 +1,6 @@
 {
-    "authorityPubKeys": [
-        "0x8e9edb840fcf9ce51b9d2e65dcae423aafd03ab5973da8d806207395a26af66e",
-        "0x8d9b15ea8335270510135b7f7c5ef94e0df70e751d3c5f95fd1aa6d7766929b6",
-        "0x0e0945b2628f5c3b4e2a6b53df997fc693344af985b11e3054f36a384cc4114b",
-        "0x5568a33085a85e1680b83823c6b4b8a0b51d506748b5d5266dd536e258e18a9d",
-        "0xcc6de644a35f4b205603fa125612df211d4f9d75e07c84d85cd35ea32a6b1ced",
-        "0xe4c08a068e72a466e2f377e862b5b2ed473c4f0e58d7d265a123ad11fef2a797",
-        "0x8916179559464bd193d94b053b250a0edf3da5b61d1f2bf2bf2640930dfd2c0e",
-        "0x079590df34cd1fa2f83cb1ef770b3e254abb00fa7dbfb2f7f21b383a7a726bb2",
-        "0xcc068bf6c1e467be8e2fdafb1d42ddafe8e66a0d05ea036c3d766cb6a0360797",
-        "0xba76ee41deca67a1d69113f89e233df3a63e6722ca988163848770f4659eb150"
-    ],
-    "authoritySetCommitment": "0x0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6",
-    "authoritySetID": 496,
-    "blockNumber": 530507,
-    "startCheckpointDataRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "startCheckpointHeaderHash": "0x2f6566c7411edfeba04ebcd68c5ecdbc8e95bf65da47ef553d6d8537200b74fa",
-    "startCheckpointStateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    "startAuthoritySetCommitment": "0x0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6",
+    "startAuthoritySetID": 496,
+    "startHead": 530507,
+    "startHeadHash": "0x2f6566c7411edfeba04ebcd68c5ecdbc8e95bf65da47ef553d6d8537200b74fa"
 }

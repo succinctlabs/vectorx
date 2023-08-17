@@ -3,9 +3,7 @@ pragma solidity 0.8.17;
 import { Memory } from "solidity-merkle-trees/src/trie/Memory.sol";
 import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
-import { KEY_ADDRESS, KEY_BYTE_LENGTH,
-         MAX_NUM_PROOF_NODES, NUM_AUTHORITIES, NUM_CHILDREN,
-         PROOF_ARRAY_LEN_ADDRESS, PROOF_ELEMENT_START_ADDRESS_ADDRESS, PROOF_ELEMENT_START_ADDRESS_OFFSET } from "src/Constants.sol";
+import { KEY_BYTE_LENGTH, MAX_NUM_PROOF_NODES, NUM_AUTHORITIES, NUM_CHILDREN} from "src/Constants.sol";
 import "src/SubstrateTrieDB.sol";
 import "src/NibbleSlice.sol";
 

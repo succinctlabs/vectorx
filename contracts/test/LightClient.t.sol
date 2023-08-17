@@ -5,11 +5,9 @@ import "forge-std/console.sol";
 import "forge-std/Test.sol";
 
 import { LightClient,
-         AuthoritySetIDProof,
-         Header,
          Step as LCStep,
          Rotate as LCRotate } from "src/LightClient.sol";
-import { NUM_AUTHORITIES } from "src/Constants.sol";
+import { GRANDPA_AUTHORITIES_SETID_KEY, NUM_AUTHORITIES, SYSTEM_EVENTS_KEY } from "src/Constants.sol";
 import { LightClientFixture } from "test/LightClientFixture.sol";
 import { Strings } from "openzeppelin-contracts/utils/Strings.sol";
 
@@ -58,37 +56,29 @@ contract LightClientTest is Test, LightClientFixture {
 
         assertTrue(lc.authoritySetCommitments(fixtureInitial.authoritySetID) == fixtureInitial.authoritySetCommitment);
     }
+    */
 
     function test_LightClientStep() public {
         LightClient lc = newLightClient(fixtureInitial);
         LCStep memory step;
-        step.headers = new Header[](fixtureStep.blockNumbers.length);
 
-        for (uint8 i = 0; i < fixtureStep.blockNumbers.length; i++) {
-            step.headers[i] = Header({
-                    blockNumber: fixtureStep.blockNumbers[i],
-                    dataRoot: fixtureStep.dataRoots[i],
-                    headerHash: fixtureStep.headerHashes[i],
-                    stateRoot: fixtureStep.stateRoots[i]
-                });
-        }
+        step.head = fixtureStep.head;
+        step.headHash = fixtureStep.headHash;
+        step.stateRoot = fixtureStep.stateRoot;
+        step.previousStateRoot = fixtureStep.previousStateRoot;
+        step.updatedDataRootsCommitment = fixtureStep.updatedDataRootsCommitment;
 
-        step.authoritySetIDProof.authoritySetID = fixtureStep.authoritySetID;
-        step.authoritySetIDProof.merkleProof = fixtureStep.merkleProof;
+        step.authoritySetIDProof = fixtureStep.authoritySetIDProof;
 
         step.proof = convertToGroth16Proof(fixtureStep);
 
         lc.step(step);
 
-        assertTrue(lc.head() == fixtureStep.blockNumbers[fixtureStep.blockNumbers.length - 1]);
-        for (uint8 i = 0; i < fixtureStep.blockNumbers.length; i++) {
-            uint32 blockNumber = fixtureStep.blockNumbers[i];
-            assertTrue(lc.dataRoots(blockNumber) == fixtureStep.dataRoots[i]);
-            assertTrue(lc.headerHashes(blockNumber) == fixtureStep.headerHashes[i]);
-            assertTrue(lc.stateRoots(blockNumber) == fixtureStep.stateRoots[i]);
-        }
+        assertTrue(lc.head() == fixtureStep.head);
+        assertTrue(lc.headHash() == fixtureStep.headHash);
+        assertTrue(lc.stateRoots(fixtureStep.head) == fixtureStep.stateRoot);
+        assertTrue(lc.dataRootsCommitment() == fixtureStep.updatedDataRootsCommitment);
     }
-    */
 
     /*
     function test_LightClientStepRotate() public {
@@ -207,15 +197,14 @@ contract LightClientTest is Test, LightClientFixture {
     }
     */
 
+    // Rotating using event list from block 0xc63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f
+    // on kate testnet.
     function test_LightClientRotateBig() public {
         LightClient lc = newLightClient(fixtureInitial);
         LCRotate memory rotate;
 
         rotate.eventListProof = fixtureRotate.encodedEventListProof;
-        rotate.newAuthoritySetIDProof = AuthoritySetIDProof({
-            authoritySetID: fixtureRotate.newAuthoritySetID,
-            merkleProof: fixtureRotate.newAuthoritySetIDProof
-        });
+        rotate.authoritySetIDProof = fixtureRotate.newAuthoritySetIDProof;
 
         lc.rotate(rotate);
     }

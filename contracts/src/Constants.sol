@@ -5,20 +5,15 @@ uint16 constant FINALITY_THRESHOLD = 7;  // This is Ceil(2/3 * NUM_AUTHORITIES)
 
 // TwoX hash of Grandpa::CurrentSetId
 bytes32 constant GRANDPA_AUTHORITIES_SETID_KEY = hex'5f9cc45b7a00c5899361e1c6099678dc8a2d09463effcc78a22d75b9cb87dffc';
-
 // TwxX hash of System::Events
 bytes32 constant SYSTEM_EVENTS_KEY = hex'26aa394eea5630e07c48ae0c9558cef780d41e5e16056765bc8461851072c9d7';
-
 uint8 constant KEY_BYTE_LENGTH = 32;
 
+uint8 constant AUTHORITY_SETID_PROOF_ADDRESS = 36;
+uint8 constant EVENT_LIST_PROOF_ADDRESS = 68;
+
 uint8 constant NUM_CHILDREN = 16;
-
 uint16 constant MAX_NUM_PROOF_NODES = 50; // worst case scenario, so we avoid unbounded loops
-
-uint256 constant KEY_ADDRESS = 36;
-uint256 constant PROOF_ARRAY_LEN_ADDRESS = 132;
-uint256 constant PROOF_ELEMENT_START_ADDRESS_ADDRESS = 164;
-uint256 constant PROOF_ELEMENT_START_ADDRESS_OFFSET = 164;
 
 
 /*

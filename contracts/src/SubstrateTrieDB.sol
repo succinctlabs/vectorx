@@ -8,10 +8,6 @@ import { NibbleSliceOps } from "solidity-merkle-trees/src/trie/NibbleSlice.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
 import "openzeppelin/utils/Strings.sol";
 
-import "forge-std/console.sol";
-import "forge-std/console2.sol";
-
-
 // SPDX-License-Identifier: Apache2
 
 library SubstrateTrieDB {

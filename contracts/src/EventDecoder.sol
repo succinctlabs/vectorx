@@ -7,9 +7,6 @@ import { KEY_BYTE_LENGTH, MAX_NUM_PROOF_NODES, NUM_AUTHORITIES, NUM_CHILDREN} fr
 import "src/SubstrateTrieDB.sol";
 import "src/NibbleSlice.sol";
 
-import "forge-std/Test.sol";
-import "forge-std/console.sol";
-
 import "solidity-merkle-trees/src/trie/Bytes.sol";
 import "solidity-merkle-trees/src/trie/Node.sol";
 import { NibbleSliceOps as NibbleSliceOpsOriginal } from "solidity-merkle-trees/src/trie/NibbleSlice.sol";
@@ -494,7 +491,7 @@ contract EventDecoder {
                     let msg_len := mul(numAuthorities, 40)
                     calldatacopy(ptr, cursor, msg_len)
                     digest := keccak256(ptr, msg_len)
-		        }
+                }
 
                 break;
             } else {

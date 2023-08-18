@@ -17,11 +17,3 @@ uint8 constant EVENT_LIST_PROOF_ADDRESS = 68;
 
 uint8 constant NUM_CHILDREN = 16;
 uint16 constant MAX_NUM_PROOF_NODES = 50; // worst case scenario, so we avoid unbounded loops
-
-// This struct contains information of the location of the found 
-// value during verification.
-struct ValueInfo {
-    uint256 cursor;     // Address within calldata
-    uint256 len;        // length of the value
-    bool found;
-}

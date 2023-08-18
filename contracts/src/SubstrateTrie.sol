@@ -7,7 +7,6 @@ import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.
 import { KEY_BYTE_LENGTH, MAX_NUM_PROOF_NODES, NUM_CHILDREN } from "src/Constants.sol";
 import { EventDecoder } from "src/EventDecoder.sol";
 import { NibbleSliceOps } from "src/NibbleSlice.sol";
-import { ValueInfo } from "src/Constants.sol";
 
 
 // SPDX-License-Identifier: Apache2
@@ -20,6 +19,14 @@ struct NodeCursor {
     bytes32 nodeHash;
     uint256 cursor;    // Address within calldata
     NodeType nodeType;
+}
+
+// This struct contains information of the location of the found
+// value during verification.
+struct ValueInfo {
+    uint256 cursor;     // Address within calldata
+    uint256 len;        // length of the value
+    bool found;
 }
 
 // This struct contains information for each node of the proof.
@@ -144,7 +151,7 @@ contract SubstrateTrie is EventDecoder {
         bytes32 authoritySetDigest;
         uint64 authoritySetId;
         if (authEventListPostProcess) {
-            authoritySetDigest = decodeAuthoritySet(valueInfo);
+            authoritySetDigest = decodeAuthoritySet(valueInfo.cursor, valueInfo.len);
         } else {
             authoritySetId = ScaleCodec.decodeUint64Calldata(valueInfo.cursor);
         }

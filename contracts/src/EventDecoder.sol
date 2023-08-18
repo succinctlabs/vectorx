@@ -4,10 +4,6 @@ import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.
 
 import { NUM_AUTHORITIES } from "src/Constants.sol";
 
-import { ValueInfo } from "src/Constants.sol";
-
-
-
 /// @title Event Scale Decoder
 /// @author Succinct Labs
 /// @notice This function is used to scale decode events.
@@ -435,14 +431,14 @@ contract EventDecoder {
     }
 
     /// @notice This function will decode the authority set from the encoded event list
-    function decodeAuthoritySet(ValueInfo memory valueInfo) internal view returns (bytes32 digest) {
-        uint256 startCursor = valueInfo.cursor;
+    function decodeAuthoritySet(uint256 cursor, uint256 len) internal view returns (bytes32 digest) {
+        uint256 startCursor = cursor;
 
         uint256 num_events;
         uint256 bytesRead;
         // First get the length of the encoded_events_list
-        (num_events, bytesRead) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-        valueInfo.cursor += bytesRead;
+        (num_events, bytesRead) = ScaleCodec.decodeUintCompactCalldata(cursor);
+        cursor += bytesRead;
 
         uint8 phase;
         uint8 palletIndex;
@@ -451,16 +447,16 @@ contract EventDecoder {
         // Parse the scale encoded events
         for (uint256 i = 0; i < num_events; i++) {
             // First element is the Phase enum value (0 - ApplyExtrinsic, 1 - Finalization, 2 - Initialization)
-            phase = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
-            valueInfo.cursor += 1;
+            phase = ScaleCodec.decodeUint8Calldata(cursor);
+            cursor += 1;
 
             // Second element is the pallet_index
-            palletIndex = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
-            valueInfo.cursor += 1;
+            palletIndex = ScaleCodec.decodeUint8Calldata(cursor);
+            cursor += 1;
 
             // Third element is the event_index
-            eventIndex = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
-            valueInfo.cursor += 1;
+            eventIndex = ScaleCodec.decodeUint8Calldata(cursor);
+            cursor += 1;
 
             // Decode the actual event
             if (phase == 1 && palletIndex == 17 && eventIndex == 0) {
@@ -468,13 +464,12 @@ contract EventDecoder {
 
                 // The next element is the length of the encoded new authorities list
                 uint256 numAuthorities;
-                (numAuthorities, bytesRead) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-                valueInfo.cursor += bytesRead;
+                (numAuthorities, bytesRead) = ScaleCodec.decodeUintCompactCalldata(cursor);
+                cursor += bytesRead;
                 if (numAuthorities != NUM_AUTHORITIES) {
                     revert("Incorrect number of authorities");
                 }
 
-                uint256 cursor = valueInfo.cursor;
                 assembly {
                     let ptr := mload(0x40)
                     let msg_len := mul(numAuthorities, 40)
@@ -485,42 +480,45 @@ contract EventDecoder {
                 break;
             } else {
                 for (uint256 chunkIdx = 0; chunkIdx < eventChunks[palletIndex][eventIndex].length; chunkIdx++) {
-                    jumpOverChunk(palletIndex, eventIndex, chunkIdx, valueInfo);
+                    cursor = jumpOverChunk(palletIndex, eventIndex, chunkIdx, cursor);
                 }
             }
 
             // There is a 0 value byte at the end of each event
-            require(ScaleCodec.decodeUint8Calldata(valueInfo.cursor) == 0, "last byte of event is not 0");
-            valueInfo.cursor += 1;
+            require(ScaleCodec.decodeUint8Calldata(cursor) == 0, "last byte of event is not 0");
+            cursor += 1;
         }
 
         // We may have exited the decoding early if we encountered the encoded events list early.
-        if ((valueInfo.cursor - startCursor) > valueInfo.len) {
+        if ((cursor - startCursor) > len) {
             revert("Invalid encoded event list");
         }
     }
 
     /// @notice This function will "jump over" a chunk in the encoded event list.
-    function jumpOverChunk(uint8 palletIndex, uint8 eventIndex, uint256 chunkIndex, ValueInfo memory valueInfo)
+    function jumpOverChunk(uint8 palletIndex, uint8 eventIndex, uint256 chunkIndex, uint256 cursor)
         internal
         view
+        returns (uint256)
     {
         Chunk storage chunk = eventChunks[palletIndex][eventIndex][chunkIndex];
         if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
-            valueInfo.cursor += chunk.size;
+            cursor += chunk.size;
         } else if (chunk.chunkType == chunkType.COMPACT) {
-            (, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-            valueInfo.cursor += uintByteLen;
+            (, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(cursor);
+            cursor += uintByteLen;
         } else if (chunk.chunkType == chunkType.SEQUENCE) {
-            (uint256 numChunks, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-            valueInfo.cursor += uintByteLen;
+            (uint256 numChunks, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(cursor);
+            cursor += uintByteLen;
             for (uint256 i = 0; i < numChunks; i++) {
                 for (uint256 j = 0; j < chunk.sequenceChunks.length; j++) {
-                    jumpOverChunk(palletIndex, eventIndex, chunkIndex, valueInfo);
+                    cursor = jumpOverChunk(palletIndex, eventIndex, chunkIndex, cursor);
                 }
             }
         } else {
             revert("Unknown chunk type");
         }
+
+        return cursor;
     }
 }

@@ -1,14 +1,9 @@
 pragma solidity 0.8.17;
 
-import "solidity-merkle-trees/src/MerklePatricia.sol";
-import "solidity-merkle-trees/src/trie/Bytes.sol";
-import "solidity-merkle-trees/src/trie/Memory.sol";
 import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
-import { EventDecoder } from "src/EventDecoder.sol";
 import { Pairing, StepVerifier } from "src/StepVerifier.sol";
+import { SubstrateTrie } from "src/SubstrateTrie.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY, EVENT_LIST_PROOF_ADDRESS, AUTHORITY_SETID_PROOF_ADDRESS } from "src/Constants.sol";
-
-import "forge-std/console2.sol";
 
 
 struct Groth16Proof {
@@ -65,8 +60,7 @@ struct Rotate {
 /// @author Succinct Labs
 /// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
 ///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
-//contract LightClient is EventDecoder, StepVerifier {
-contract LightClient is EventDecoder, StepVerifier {
+contract LightClient is StepVerifier, SubstrateTrie {
     uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
     bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
 
@@ -237,14 +231,14 @@ contract LightClient is EventDecoder, StepVerifier {
         //bytes32 stateRoot = stateRoots[head];
 
         // Verify and extract the new authority set id
-        (uint64 authoritySetID, ) = VerifySubstrateProof(
+        (uint64 authoritySetID, ) = SubstrateTrie.VerifySubstrateProof(
                 authoritySetIDProofAddress,
                 GRANDPA_AUTHORITIES_SETID_KEY,
                 stateRoot,
                 false);
 
         // Verify and extract the encoded event list
-        (, bytes32 digest) = VerifySubstrateProof(
+        (, bytes32 digest) = SubstrateTrie.VerifySubstrateProof(
                 eventListProofAddress,
                 SYSTEM_EVENTS_KEY,
                 stateRoot,

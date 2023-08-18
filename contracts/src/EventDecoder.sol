@@ -1,23 +1,8 @@
 pragma solidity 0.8.17;
 
-import { Memory } from "solidity-merkle-trees/src/trie/Memory.sol";
-import { ByteSlice, Bytes } from "solidity-merkle-trees/src/trie/Bytes.sol";
 import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
-import { KEY_BYTE_LENGTH, MAX_NUM_PROOF_NODES, NUM_AUTHORITIES, NUM_CHILDREN} from "src/Constants.sol";
-import "src/SubstrateTrieDB.sol";
-import "src/NibbleSlice.sol";
 
-import "solidity-merkle-trees/src/trie/Bytes.sol";
-import "solidity-merkle-trees/src/trie/Node.sol";
-import { NibbleSliceOps as NibbleSliceOpsOriginal } from "solidity-merkle-trees/src/trie/NibbleSlice.sol";
-
-
-import "solidity-merkle-trees/src/trie/Option.sol";
-import "solidity-merkle-trees/src/trie/TrieDB.sol";
-
-import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
-import { SubstrateTrieDB as SubstrateTrieDBOriginal } from "solidity-merkle-trees/src/trie/substrate/SubstrateTrieDB.sol";
-
+import { NUM_AUTHORITIES } from "src/Constants.sol";
 
 /// @title Event Scale Decoder
 /// @author Succinct Labs
@@ -446,14 +431,14 @@ contract EventDecoder {
     }
 
     /// @notice This function will decode the authority set from the encoded event list
-    function decodeAuthoritySet(ValueInfo memory valueInfo) internal returns (bytes32 digest) {
-        uint256 startCursor = valueInfo.cursor;
+    function decodeAuthoritySet(uint256 cursor, uint256 len) internal view returns (bytes32 digest) {
+        uint256 startCursor = cursor;
 
         uint256 num_events;
         uint256 bytesRead;
         // First get the length of the encoded_events_list
-        (num_events, bytesRead) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-        valueInfo.cursor += bytesRead;
+        (num_events, bytesRead) = ScaleCodec.decodeUintCompactCalldata(cursor);
+        cursor += bytesRead;
 
         uint8 phase;
         uint8 palletIndex;
@@ -462,16 +447,16 @@ contract EventDecoder {
         // Parse the scale encoded events
         for (uint256 i = 0; i < num_events; i++) {
             // First element is the Phase enum value (0 - ApplyExtrinsic, 1 - Finalization, 2 - Initialization)
-            phase = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
-            valueInfo.cursor += 1;
+            phase = ScaleCodec.decodeUint8Calldata(cursor);
+            cursor += 1;
 
             // Second element is the pallet_index
-            palletIndex = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
-            valueInfo.cursor += 1;
+            palletIndex = ScaleCodec.decodeUint8Calldata(cursor);
+            cursor += 1;
 
             // Third element is the event_index
-            eventIndex = ScaleCodec.decodeUint8Calldata(valueInfo.cursor);
-            valueInfo.cursor += 1;
+            eventIndex = ScaleCodec.decodeUint8Calldata(cursor);
+            cursor += 1;
 
             // Decode the actual event
             if (phase == 1 && palletIndex == 17 && eventIndex == 0) {
@@ -479,13 +464,12 @@ contract EventDecoder {
 
                 // The next element is the length of the encoded new authorities list
                 uint256 numAuthorities;
-                (numAuthorities, bytesRead) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-                valueInfo.cursor += bytesRead;
+                (numAuthorities, bytesRead) = ScaleCodec.decodeUintCompactCalldata(cursor);
+                cursor += bytesRead;
                 if (numAuthorities != NUM_AUTHORITIES) {
                     revert("Incorrect number of authorities");
                 }
 
-                uint256 cursor = valueInfo.cursor;
                 assembly {
                     let ptr := mload(0x40)
                     let msg_len := mul(numAuthorities, 40)
@@ -496,302 +480,45 @@ contract EventDecoder {
                 break;
             } else {
                 for (uint256 chunkIdx = 0; chunkIdx < eventChunks[palletIndex][eventIndex].length; chunkIdx++) {
-                    jumpOverChunk(palletIndex, eventIndex, chunkIdx, valueInfo);
+                    cursor = jumpOverChunk(palletIndex, eventIndex, chunkIdx, cursor);
                 }
             }
 
             // There is a 0 value byte at the end of each event
-            require(ScaleCodec.decodeUint8Calldata(valueInfo.cursor) == 0, "last byte of event is not 0");
-            valueInfo.cursor += 1;
+            require(ScaleCodec.decodeUint8Calldata(cursor) == 0, "last byte of event is not 0");
+            cursor += 1;
         }
 
         // We may have exited the decoding early if we encountered the encoded events list early.
-        if ((valueInfo.cursor - startCursor) > valueInfo.len) {
+        if ((cursor - startCursor) > len) {
             revert("Invalid encoded event list");
         }
     }
 
     /// @notice This function will "jump over" a chunk in the encoded event list.
-    function jumpOverChunk(uint8 palletIndex, uint8 eventIndex, uint256 chunkIndex, ValueInfo memory valueInfo)
+    function jumpOverChunk(uint8 palletIndex, uint8 eventIndex, uint256 chunkIndex, uint256 cursor)
         internal
         view
+        returns (uint256)
     {
         Chunk storage chunk = eventChunks[palletIndex][eventIndex][chunkIndex];
         if (chunk.chunkType == chunkType.CONSTANT_SIZE) {
-            valueInfo.cursor += chunk.size;
+            cursor += chunk.size;
         } else if (chunk.chunkType == chunkType.COMPACT) {
-            (, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-            valueInfo.cursor += uintByteLen;
+            (, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(cursor);
+            cursor += uintByteLen;
         } else if (chunk.chunkType == chunkType.SEQUENCE) {
-            (uint256 numChunks, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(valueInfo.cursor);
-            valueInfo.cursor += uintByteLen;
+            (uint256 numChunks, uint256 uintByteLen) = ScaleCodec.decodeUintCompactCalldata(cursor);
+            cursor += uintByteLen;
             for (uint256 i = 0; i < numChunks; i++) {
                 for (uint256 j = 0; j < chunk.sequenceChunks.length; j++) {
-                    jumpOverChunk(palletIndex, eventIndex, chunkIndex, valueInfo);
+                    cursor = jumpOverChunk(palletIndex, eventIndex, chunkIndex, cursor);
                 }
             }
         } else {
             revert("Unknown chunk type");
         }
-    }
 
-    function extractChildren(
-        SubstrateTrieDB.NodeCursor memory nodeCursor,
-        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children,
-        ProofCalldataInfo[] memory proofCalldataInfo,
-        uint256 index
-    )
-        internal
-    {
-        uint256 childrenStart;
-        if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH) {
-            childrenStart = SubstrateTrieDB.decodeNibbledBranch(children, nodeCursor);
-        } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
-            (, childrenStart) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, nodeCursor);
-        } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
-            (, , childrenStart) = SubstrateTrieDB.decodeNibbledValueBranch(children, nodeCursor);
-        }
-
-        if (!children[index].isEmpty) {
-            if (children[index].isInline) {
-                nodeCursor.cursor = children[index].inlineStart;
-            } else {
-                nodeCursor.nodeHash = children[index].digest;
-                uint256 idx = TrieNodeLookup(proofCalldataInfo, nodeCursor.nodeHash);
-                nodeCursor.cursor = proofCalldataInfo[idx].calldataAddress;
-            }
-        } else {
-            revert("Key not found in proof");
-        }
-    }
-
-    struct ValueInfo {
-        uint256 cursor;
-        uint256 len;
-        bool found;
-    }
-
-    function extractValue(
-        SubstrateTrieDB.NodeCursor memory nodeCursor,
-        ValueInfo memory valueInfo,
-        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children,
-        ProofCalldataInfo[] memory proofCalldataInfo
-    ) 
-        internal
-    {
-        if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.LEAF) {
-            // Get the size of the value
-            uint256 bytesRead;
-            (valueInfo.len, bytesRead) = ScaleCodec.decodeUintCompactCalldata(nodeCursor.cursor);
-            valueInfo.cursor = nodeCursor.cursor + bytesRead;
-            valueInfo.found = true;
-
-        } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.HASHED_LEAF) {
-            bytes32 nodeHash = Bytes.toBytes32Calldata(nodeCursor.cursor);
-            uint256 idx = TrieNodeLookup(proofCalldataInfo, nodeHash);
-            valueInfo.cursor = proofCalldataInfo[idx].calldataAddress;
-            valueInfo.len = proofCalldataInfo[idx].len;
-            valueInfo.found = true;
-
-        } else if (
-            nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH ||
-            nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
-
-            if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH) {
-                (bytes32 nodeHash, ) = SubstrateTrieDB.decodeNibbledHashedValueBranch(children, nodeCursor);
-                uint256 idx = TrieNodeLookup(proofCalldataInfo, nodeHash);
-                valueInfo.cursor = proofCalldataInfo[idx].calldataAddress;
-                valueInfo.len = proofCalldataInfo[idx].len;
-                valueInfo.found = true;
-
-            } else if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
-                uint256 nodeValueStart;
-                uint256 nodeValueLen;
-                (nodeValueStart, nodeValueLen, ) = SubstrateTrieDB.decodeNibbledValueBranch(children, nodeCursor);
-                valueInfo.cursor = nodeValueStart;
-                valueInfo.len = nodeValueLen;
-                valueInfo.found = true;
-            }
-        }
-    }
-
-    function processNode(
-        SubstrateTrieDB.NodeCursor memory nodeCursor,
-        ValueInfo memory valueInfo,
-        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children,
-        ProofCalldataInfo[] memory proofCalldataInfo,
-        uint256 keyNibbleCursor,
-        bytes32 key
-    )
-        internal
-        returns (uint256 updatedKeyNibbleCursor)
-    {
-        uint256 bytesRead;
-        uint256 nibbleSize;
-        nibbleSize = SubstrateTrieDB.decodeNodeKind(nodeCursor);
-
-        if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.EMPTY) {
-            revert("Empty node found in proof");
-        }
-
-        // Get the key nibble from the node
-        uint256 commonKeyPrefixLen = 0;
-        if (nibbleSize > 0) {
-            uint256 nibbleByteLen = SubstrateTrieDB.decodeKey(nodeCursor, nibbleSize);
-            commonKeyPrefixLen = NibbleSliceOpsCalldata.commonPrefix(
-                key, keyNibbleCursor, KEY_BYTE_LENGTH * 2,
-                nodeCursor, nibbleSize % SubstrateTrieDB.NIBBLE_PER_BYTE, nibbleSize);
-            nodeCursor.cursor += nibbleByteLen;
-        }
-
-        bool keyNibbleFullMatch = (commonKeyPrefixLen == KEY_BYTE_LENGTH * 2 - keyNibbleCursor);
-        if (keyNibbleFullMatch) {
-            if (!(nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH)) {
-                extractValue(
-                    nodeCursor,
-                    valueInfo,
-                    children,
-                    proofCalldataInfo
-                );
-            } else {
-                revert("Key not found in proof");
-            }
-        } else {
-            if (nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_BRANCH ||
-                nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_HASHED_VALUE_BRANCH ||
-                nodeCursor.nodeType == SubstrateTrieDB.NodeType.NIBBLED_VALUE_BRANCH) {
-                    uint256 at = keyNibbleCursor + nibbleSize;
-                    uint256 index = NibbleSliceOpsCalldata.at(key, at);
-                    extractChildren(
-                        nodeCursor,
-                        children,
-                        proofCalldataInfo,
-                        index
-                    );
-            } else {
-                revert("Key not found in proof");
-            }
-        }
-
-        if (!valueInfo.found) {
-            // Increment the key
-            updatedKeyNibbleCursor = keyNibbleCursor + (nibbleSize + 1);
-        }
-    }
-
-    struct ProofCalldataInfo {
-        uint256 calldataAddress;
-        uint256 len;
-        bytes32 digest;
-    }
-
-     /**
-      * @notice Verifies substrate specific merkle patricia proofs.
-      * @param proofCalldataAddress calldata address of the proof
-      * @param key a key to verify and retrieve the value
-      * @param root hash of the merkle patricia trie
-      * @param authEventListPostProcess bool to run the event list post process
-      * @return (uint64, bytes32) a list of values corresponding to the supplied keys.
-      */
-    function VerifySubstrateProof
-    (
-        uint256 proofCalldataAddress,
-        bytes32 key,
-        bytes32 root,
-        bool authEventListPostProcess
-    )
-        internal
-        returns (uint64, bytes32)
-    {
-
-        // First load the calldata addresses for the proof elements.
-        // See the comment in Constants.sol for an example of the calldata layout.
-
-        uint256 proofLen;
-        bytes32 proofStartAddress;
-        assembly {
-            // Load the calldata address of proof
-            proofLen := calldataload(proofCalldataAddress)
-            proofStartAddress := add(proofCalldataAddress, 32)
-        }
-
-        ProofCalldataInfo[] memory proofCalldataInfo = new ProofCalldataInfo[](proofLen);
-
-        uint16 i;
-        for (i = 0; i < proofLen; i++) {
-            uint256 nodeStartAddress;
-            uint256 nodeLen;
-
-            assembly {
-                let nodeStartAddressAddress := add(proofStartAddress, mul(i, 32))
-                nodeStartAddress := add(calldataload(nodeStartAddressAddress), proofStartAddress)
-                nodeLen := calldataload(nodeStartAddress)
-            }
-
-            bytes memory node = new bytes(nodeLen);
-            assembly {
-                calldatacopy(node, nodeStartAddress, add(nodeLen, 32))
-
-                // add 32 bytes since the first word is the node length
-                nodeStartAddress := add(nodeStartAddress, 32)
-            }
-
-            proofCalldataInfo[i].calldataAddress = nodeStartAddress;
-            proofCalldataInfo[i].len = nodeLen;
-
-            // TODO:  Make blake2b work with calldata
-            bytes32 nodeDigest = Bytes.toBytes32(Blake2b.blake2b(node, 32));
-
-            proofCalldataInfo[i].digest = nodeDigest;
-        }
-
-        uint256 keyNibbleCursor;
-
-        // Start with looking up the node that maps to the root hash
-        SubstrateTrieDB.NodeCursor memory nodeCursor;
-        nodeCursor.nodeHash = root;
-        nodeCursor.cursor = proofCalldataInfo[TrieNodeLookup(proofCalldataInfo, root)].calldataAddress;
-
-        ValueInfo memory valueInfo;
-        SubstrateTrieDB.ChildNodeHandle[NUM_CHILDREN] memory children;
-        for (i = 0; i < MAX_NUM_PROOF_NODES; i++) {
-            keyNibbleCursor = processNode(
-                nodeCursor,
-                valueInfo,
-                children,
-                proofCalldataInfo,
-                keyNibbleCursor,
-                key
-            );
-
-            if (valueInfo.found) {
-                break;
-            }
-        }
-
-        // If the key is for the authority event list, then decode it and hash the result
-        // If the key is for the authority set id, then decode it to a uint64
-        bytes32 authoritySetDigest;
-        uint64 authoritySetId;
-        if (authEventListPostProcess) {
-            authoritySetDigest = decodeAuthoritySet(valueInfo);
-        } else {
-            authoritySetId = ScaleCodec.decodeUint64Calldata(valueInfo.cursor);
-        }
-
-        return (authoritySetId, authoritySetDigest);
-    }
-
-    function TrieNodeLookup(ProofCalldataInfo[] memory proofCalldataInfo, bytes32 digest)
-        internal
-        pure
-        returns (uint256 i)
-    {
-        for (i = 0; i < proofCalldataInfo.length; i++) {
-            if (proofCalldataInfo[i].digest == digest) {
-                return i;
-            }
-        }
-        revert("TrieNodeLookup failed");
+        return cursor;
     }
 }

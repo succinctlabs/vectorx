@@ -1,16 +1,16 @@
 pragma solidity ^0.8.17;
 
-import "solidity-merkle-trees/src/trie/Bytes.sol";
+import { NodeCursor } from "src/SubstrateTrie.sol";
+import { ScaleCodec } from "solidity-merkle-trees/src/trie/substrate/ScaleCodec.sol";
 
-import "src/SubstrateTrieDB.sol";
 
 // SPDX-License-Identifier: Apache2
 
-library NibbleSliceOpsCalldata {
+library NibbleSliceOps {
     uint256 internal constant NIBBLE_PER_BYTE = 2;
     uint256 internal constant BITS_PER_NIBBLE = 4;
 
-    function at(SubstrateTrieDB.NodeCursor memory nodeCursor, uint256 i) internal pure returns (uint256) {
+    function at(NodeCursor memory nodeCursor, uint256 i) internal pure returns (uint256) {
         uint256 ix = i / NIBBLE_PER_BYTE;
         uint256 pad = i % NIBBLE_PER_BYTE;
         uint8 data = ScaleCodec.decodeUint8Calldata(nodeCursor.cursor + ix);
@@ -26,7 +26,7 @@ library NibbleSliceOpsCalldata {
 
     function commonPrefix(
         bytes32 key, uint256 keyNibbleCursor, uint256 keyNibbleSize,
-        SubstrateTrieDB.NodeCursor memory nodeCursor, uint256 nodeKeyNibbleStart, uint256 nodeKeyNibbleLen)
+        NodeCursor memory nodeCursor, uint256 nodeKeyNibbleStart, uint256 nodeKeyNibbleLen)
         internal
         pure
         returns (uint256 commonKeyPrefixLen)

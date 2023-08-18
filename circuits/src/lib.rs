@@ -1,4 +1,5 @@
 pub mod decoder;
+pub mod header_verification;
 pub mod justification;
 pub mod plonky2_config;
 pub mod poseidon_bn128;

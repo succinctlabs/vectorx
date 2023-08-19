@@ -10,7 +10,7 @@ futures-util = { version = "0.3", default-features = false, features = ["async-a
 ed25519-dalek = "1.0.1"
 hex = "0.4.3"
 itertools = "0.10.5"
-ff = {package="ff_ce" , version="0.11", features = ["derive"]}
+ff = {package="ff" , version="0.13", features = ["derive"]}
 lazy_static = "1.4.0"
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = [ "rand" ] }

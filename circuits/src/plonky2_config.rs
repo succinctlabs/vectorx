@@ -3,7 +3,7 @@ use core::fmt;
 use num::BigUint;
 use std::{error::Error, io::BufReader, marker::PhantomData};
 
-use ff::{Field as ff_Field, PrimeField, PrimeFieldRepr};
+use ff::{Field as ff_Field, PrimeField};
 use plonky2::field::{
     extension::quadratic::QuadraticExtension, goldilocks_field::GoldilocksField, types::Field,
 };
@@ -27,14 +27,14 @@ impl GenericConfig<2> for PoseidonBN128GoldilocksConfig {
     type InnerHasher = PoseidonHash;
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct PoseidonBN128HashOut<F: Field> {
     value: Fr,
     _phantom: PhantomData<F>,
 }
 
 fn hash_out_to_bytes<F: Field>(hash: PoseidonBN128HashOut<F>) -> Vec<u8> {
-    let binding = hash.value.into_repr();
+    let binding = hash.value.to_repr();
     let limbs = binding.as_ref();
     [
         limbs[0].to_le_bytes(),
@@ -51,8 +51,9 @@ impl<F: RichField> GenericHashOut<F> for PoseidonBN128HashOut<F> {
     }
 
     fn from_bytes(bytes: &[u8]) -> Self {
-        let mut fr_repr: FrRepr = Default::default();
-        fr_repr.read_le(BufReader::new(bytes)).unwrap();
+        let sized_bytes: [u8; 32] = bytes.try_into().unwrap();
+        let mut fr_repr: FrRepr = FrRepr(sized_bytes);
+        // fr_repr.read_le(BufReader::new(bytes)).unwrap();
         let fr = Fr::from_repr(fr_repr).unwrap();
 
         Self {
@@ -81,7 +82,7 @@ impl<F: RichField> Serialize for PoseidonBN128HashOut<F> {
         S: Serializer,
     {
         // Output the hash as a bigint string.
-        let binding = self.value.into_repr();
+        let binding = self.value.to_repr();
         let limbs = binding.as_ref();
         let bytes = [
             limbs[0].to_le_bytes(),
@@ -128,8 +129,9 @@ impl<'de, F: RichField> Deserialize<'de> for PoseidonBN128HashOut<F> {
             bytes.push(0);
         }
 
-        let mut fr_repr: FrRepr = Default::default();
-        fr_repr.read_le(bytes.as_slice()).unwrap();
+        let sized_bytes: [u8; 32] = bytes.try_into().unwrap();
+        let mut fr_repr: FrRepr = FrRepr(sized_bytes);
+        // fr_repr.read_le(bytes.as_slice()).unwrap();
         let fr = Fr::from_repr(fr_repr).unwrap();
 
         Ok(Self {
@@ -147,9 +149,9 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
     type Permutation = PoseidonPermutation<F>;
 
     fn hash_no_pad(input: &[F]) -> Self::Hash {
-        let mut state = [Fr::zero(); 4];
+        let mut state = [Fr::ZERO; 4];
 
-        state[0] = Fr::zero();
+        state[0] = Fr::ZERO;
         for rate_chunk in input.chunks(RATE * 3) {
             for (j, bn128_chunk) in rate_chunk.chunks(3).enumerate() {
                 let mut bytes = bn128_chunk[0].to_canonical_u64().to_le_bytes().to_vec();
@@ -162,9 +164,10 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
                 for _i in bytes.len()..32 {
                     bytes.push(0);
                 }
-
-                let mut fr_repr: FrRepr = Default::default();
-                fr_repr.read_le(bytes.as_slice()).unwrap();
+                
+                let sized_bytes: [u8; 32] = bytes.try_into().unwrap();
+                let mut fr_repr: FrRepr = FrRepr(sized_bytes);
+                // fr_repr.read_le(bytes.as_slice()).unwrap();
                 state[j + 1] = Fr::from_repr(fr_repr).unwrap();
             }
             permution(&mut state);
@@ -200,7 +203,7 @@ impl<F: RichField> Hasher<F> for PoseidonBN128Hash {
     }
 
     fn two_to_one(left: Self::Hash, right: Self::Hash) -> Self::Hash {
-        let mut state = [Fr::zero(), Fr::zero(), left.value, right.value];
+        let mut state = [Fr::ZERO, Fr::ZERO, left.value, right.value];
         permution(&mut state);
 
         PoseidonBN128HashOut {

@@ -282,7 +282,7 @@ pub fn to_bits(msg: Vec<u8>) -> Vec<bool> {
 #[cfg(test)]
 #[allow(dead_code)]
 pub(crate) mod tests {
-    use super::{ENCODED_PRECOMMIT_LENGTH, QUORUM_SIZE, NUM_AUTHORITIES};
+    use super::{ENCODED_PRECOMMIT_LENGTH, NUM_AUTHORITIES, QUORUM_SIZE};
 
     // Block 576728 contains a new authorities event
     pub const BLOCK_576728_BLOCK_HASH: &str =

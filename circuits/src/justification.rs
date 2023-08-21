@@ -204,7 +204,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         for i in 0..QUORUM_SIZE {
             for j in i + 1..QUORUM_SIZE {
                 if i != j {
-                    let is_equal = self.is_equal(signed_precommits[i].pub_key_idx, signed_precommits[j].pub_key_idx);
+                    let is_equal = self.is_equal(
+                        signed_precommits[i].pub_key_idx,
+                        signed_precommits[j].pub_key_idx,
+                    );
                     self.assert_zero(is_equal.target);
                 }
             }
@@ -215,7 +218,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             QUORUM_SIZE,
             ENCODED_PRECOMMIT_LENGTH as u128,
         );
-
 
         // Generate a padded array of the pub keys.  The random access affine point requires that the array be a power of 2.
         let dummy_pub_key = C::GENERATOR_AFFINE;

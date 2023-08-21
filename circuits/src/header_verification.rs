@@ -14,10 +14,6 @@ struct PublicInputsElements {
     latest_block_hash: AvailHashTarget,
     latest_block_num: Target,
     latest_data_root_accumulator: AvailHashTarget,
-    previous_circuit_digest: HashOutTarget,
-    previous_constants_sigmas_cap: HashOutTarget,
-    circuit_digest: HashOutTarget,
-    constants_sigmas_cap: HashOutTarget,
 }
 
 pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D: usize> {
@@ -145,17 +141,11 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
 
         let common_data = self.header_verification_ivc_common_data();
 
+        let verifier_data_target = self.add_verifier_data_public_inputs();
+
         // Unpack inner proof's public inputs.
         let previous_header_verification_proof_with_pis = self.add_virtual_proof_with_pis(&common_data);        
         let previous_proof_elements = self.parse_public_inputs(previous_header_verification_proof_with_pis.public_inputs);
-
-        // We need to ensure that all of the IVC iterations are using the same
-        // circuit digest and constants_sigmas_cap.
-        // These values are known after the circuit is built, so the 
-        // verifier of the final proof will need to check that these values 
-        // match the built circuit's values.
-        self.connect_hashes(previous_proof_elements.previous_circuit_digest, previous_proof_elements.circuit_digest);
-        self.connect_hashes(previous_proof_elements.previous_constants_sigmas_cap, previous_proof_elements.constants_sigmas_cap);
 
         // Create inputs for the current encoded block;
         let encoded_block_input = self.add_virtual_encoded_header_target_safe();
@@ -272,7 +262,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
     }
     
     fn parse_public_inputs(&mut self, public_inputs: Vec<Target>) -> PublicInputsElements {
-        assert!(public_inputs.len() == 2 * (HASH_SIZE + 1 + HASH_SIZE) + 4 * NUM_HASH_OUT_ELTS);
+        assert!(public_inputs.len() == 2 * (HASH_SIZE + 1 + HASH_SIZE));
 
         let public_inputs_iter = public_inputs.into_iter();
 
@@ -283,10 +273,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             latest_block_hash: AvailHashTarget(public_inputs_iter.take(HASH_SIZE).collect_vec().as_slice().try_into().unwrap()),
             latest_block_num:  public_inputs_iter.take(1).collect_vec()[0],
             latest_data_root_accumulator: AvailHashTarget(public_inputs_iter.take(HASH_SIZE).collect_vec().as_slice().try_into().unwrap()),
-            previous_circuit_digest: HashOutTarget { elements: public_inputs_iter.take(NUM_HASH_OUT_ELTS).collect_vec().as_slice().try_into().unwrap() },
-            previous_constants_sigmas_cap: HashOutTarget { elements: public_inputs_iter.take(NUM_HASH_OUT_ELTS).collect_vec().as_slice().try_into().unwrap() },
-            circuit_digest: HashOutTarget { elements: public_inputs_iter.take(NUM_HASH_OUT_ELTS).collect_vec().as_slice().try_into().unwrap() },
-            constants_sigmas_cap: HashOutTarget { elements: public_inputs_iter.take(NUM_HASH_OUT_ELTS).collect_vec().as_slice().try_into().unwrap() },
         }
     }
 
@@ -295,8 +281,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
 
 #[cfg(test)]
 mod tests {
-    use plonky2::{plonk::{config::{PoseidonGoldilocksConfig, GenericConfig}, circuit_data::{CircuitConfig, CommonCircuitData}, circuit_builder::CircuitBuilder}, recursion::cyclic_recursion::check_cyclic_proof_verifier_data, iop::witness::PartialWitness};
-
+    use plonky2::{plonk::{config::{PoseidonGoldilocksConfig, GenericConfig}, circuit_data::CircuitConfig, circuit_builder::CircuitBuilder}, recursion::cyclic_recursion::check_cyclic_proof_verifier_data, iop::witness::PartialWitness};
     use crate::utils::tests::{BLOCK_530508_HEADER, BLOCK_530509_HEADER, BLOCK_530510_HEADER, BLOCK_530508_PARENT_HASH};
 
     #[test]

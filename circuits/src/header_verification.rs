@@ -100,11 +100,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             }
         }
 
-        for i in hasher_idx..CHUNK_128_BYTES * 8 {
-            let zero = self.zero();
-            self.connect(data_root_acc_hasher.message[i].target, zero);
-        }
-
         // Input the data root
         for byte in decoded_header.data_root.0.iter() {
             let mut bits = self.split_le(*byte, 8);
@@ -115,6 +110,11 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 self.connect(data_root_acc_hasher.message[hasher_idx].target, bit.target);
                 hasher_idx += 1;
             }
+        }
+
+        for i in hasher_idx..CHUNK_128_BYTES * 8 {
+            let zero = self.zero();
+            self.connect(data_root_acc_hasher.message[i].target, zero);
         }
 
         let input_len = self.constant(F::from_canonical_usize(hasher_idx/8));
@@ -134,8 +134,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         let condition = self.add_virtual_bool_target_safe();
 
         let common_data = self.header_verification_ivc_common_data();
-
-        let verifier_data_target = self.add_verifier_data_public_inputs();
 
         // Unpack inner proof's public inputs.
         let previous_header_verification_proof_with_pis = self.add_virtual_proof_with_pis(&common_data);
@@ -167,6 +165,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             &previous_block_hash,
             &previous_data_root_accumulator,
         );
+
+        let verifier_data_target = self.add_verifier_data_public_inputs();
 
         self.conditionally_verify_cyclic_proof_or_dummy::<C>(
             condition,
@@ -258,9 +258,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
     }
     
     fn parse_public_inputs(&mut self, public_inputs: Vec<Target>) -> PublicInputsElements {
-        //println!("{:?}", public_inputs.len());
-        //assert!(public_inputs.len() == 2 * (HASH_SIZE + 1 + HASH_SIZE));
-
         let mut public_inputs_iter = public_inputs.into_iter();
 
         PublicInputsElements { 
@@ -347,20 +344,21 @@ mod tests {
         initial_pi.extend(initial_data_root_accumulator_val.iter().map(|b| F::from_canonical_u64(*b as u64)));
         let initial_pi_map = initial_pi.into_iter().enumerate().collect();
 
+        let base_proof = cyclic_base_proof(
+            &common_data,
+            &cyclic_circuit_data.verifier_only,
+            initial_pi_map,
+        );
+
         pw.set_proof_with_pis_target::<C, D>(
             &previous_header_verification_proof_with_pis,
-            &cyclic_base_proof(
-                &common_data,
-                &cyclic_circuit_data.verifier_only,
-                initial_pi_map,
-            ),
+            &base_proof,
         );
         pw.set_verifier_data_target(&verifier_data_target, &cyclic_circuit_data.verifier_only);
 
         let mut timing1 = TimingTree::new("proof1 proof gen", Level::Info);
         println!("creating base proof");
         let proof1 = prove::<F, C, D>(&cyclic_circuit_data.prover_only, &cyclic_circuit_data.common, pw, &mut timing1)?;
-        println!("created base proof");
         timing1.print();
 
         check_cyclic_proof_verifier_data(
@@ -370,6 +368,7 @@ mod tests {
         )?;
 
         cyclic_circuit_data.verify(proof1.clone())?;
+        println!("base proof verified");
 
         // 1st recursive layer.
         let mut pw = PartialWitness::new();
@@ -381,7 +380,6 @@ mod tests {
         let mut timing2 = TimingTree::new("proof1 proof gen", Level::Info);
         println!("creating 1st recursive proof");
         let proof2 = prove::<F, C, D>(&cyclic_circuit_data.prover_only, &cyclic_circuit_data.common, pw, &mut timing2)?;
-        println!("created 1st recursive proof");
         timing2.print();
         check_cyclic_proof_verifier_data(
             &proof2,
@@ -389,6 +387,7 @@ mod tests {
             &cyclic_circuit_data.common,
         )?;
         cyclic_circuit_data.verify(proof2.clone())?;
+        println!("1st recursive proof verified");
 
         // 2nd recursive layer.
         let mut pw = PartialWitness::new();
@@ -400,7 +399,6 @@ mod tests {
         let mut timing3 = TimingTree::new("proof1 proof gen", Level::Info);
         println!("creating 2nd recursive proof");
         let proof3 = prove::<F, C, D>(&cyclic_circuit_data.prover_only, &cyclic_circuit_data.common, pw, &mut timing3)?;
-        println!("created 2nd recursive proof");
         timing3.print();
         check_cyclic_proof_verifier_data(
             &proof3,
@@ -411,6 +409,9 @@ mod tests {
         println!("proof public inputs: {:?}", proof3.public_inputs.iter().map(|x| x.to_canonical_u64()).collect::<Vec<_>>());
 
         // TODO: Verify that the proof correctly computes a repeated hash.
-        cyclic_circuit_data.verify(proof3)
+        let res = cyclic_circuit_data.verify(proof3);
+        println!("2nd recursive proof verifier");
+
+        res
     }    
 }

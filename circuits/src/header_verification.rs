@@ -85,7 +85,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         self.connect_avail_hash(parent_hash_target.clone(), decoded_header.parent_hash);
 
         // Calculate the hash of the extracted fields and add them into the accumulator
-        let data_root_acc_hasher = blake2b::<F, D, MAX_HEADER_SIZE, HASH_SIZE>(self);
+        let data_root_acc_hasher = blake2b::<F, D, CHUNK_128_BYTES, HASH_SIZE>(self);
 
         let mut hasher_idx = 0;
         // Input the accumulator
@@ -100,10 +100,9 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             }
         }
 
-        // Input the header hash
-        for bit in header_hasher.digest.iter() {
-            self.connect(data_root_acc_hasher.message[hasher_idx].target, bit.target);
-            hasher_idx += 1;
+        for i in hasher_idx..CHUNK_128_BYTES * 8 {
+            let zero = self.zero();
+            self.connect(data_root_acc_hasher.message[i].target, zero);
         }
 
         // Input the data root
@@ -118,12 +117,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             }
         }
 
-        for i in hasher_idx..CHUNK_128_BYTES * 8 {
-            let zero = self.zero();
-            self.connect(data_root_acc_hasher.message[i].target, zero);
-        }
-
-        let input_len = self.constant(F::from_canonical_usize((hasher_idx+1)/8));
+        let input_len = self.constant(F::from_canonical_usize(hasher_idx/8));
         self.connect(data_root_acc_hasher.message_len, input_len);
 
         for byte_chunk in data_root_acc_hasher.digest.chunks(8) {
@@ -233,31 +227,33 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 GateRef::new(PublicInputGate{}),
                 GateRef::new(BaseSumGate::<2>::new(32)),
                 GateRef::new(BaseSumGate::<2>::new(63)),
+                GateRef::new(RandomAccessGate{bits: 1, num_copies: 20, num_extra_constants: 0, _phantom: std::marker::PhantomData}),
                 GateRef::new(ReducingExtensionGate::new(32)),
-                GateRef::new(ReducingGate::new(43)),
+                GateRef::new(ReducingGate{num_coeffs: 43}),
                 GateRef::new(ArithmeticExtensionGate{num_ops: 10}),
                 GateRef::new(ArithmeticGate{num_ops: 20}),
                 GateRef::new(MulExtensionGate{num_ops: 13}),
-                GateRef::new(RandomAccessGate{bits:2,num_copies:13,num_extra_constants:2, _phantom: std::marker::PhantomData }),
-                GateRef::new(ExponentiationGate{num_power_bits: 66, _phantom: std::marker::PhantomData }),
-                GateRef::new(U32AddManyGate{num_addends: 3, num_ops: 5, _phantom: std::marker::PhantomData }),
+                GateRef::new(RandomAccessGate{bits: 2, num_copies: 13, num_extra_constants: 2, _phantom: std::marker::PhantomData}),
+                GateRef::new(ExponentiationGate{num_power_bits: 66, _phantom: std::marker::PhantomData}),
+                GateRef::new(U32AddManyGate{num_addends: 3, num_ops: 5, _phantom: std::marker::PhantomData}),
                 GateRef::new(RandomAccessGate{bits: 4, num_copies: 4, num_extra_constants: 2, _phantom: std::marker::PhantomData}),
                 GateRef::new(CosetInterpolationGate::<F, D>{ subgroup_bits:4, degree:6, barycentric_weights: barycentric_weights_fields, _phantom: std::marker::PhantomData }),
+                GateRef::new(RandomAccessGate {bits: 5, num_copies: 2, num_extra_constants: 2, _phantom: std::marker::PhantomData}),
                 GateRef::new(PoseidonGate::new()),
             ],
             selectors_info: SelectorsInfo {
-                selector_indices: vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3],
-                groups: vec![0..7, 7..12, 12..15, 15..17],
+                selector_indices: vec![0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 4],
+                groups: vec![0..7, 7..13, 13..16, 16..18, 18..19],
             },
             quotient_degree_factor: 8,
             num_gate_constraints: 123,
-            num_constants: 6,
-            num_public_inputs: 130,
+            num_constants: 7,
+            num_public_inputs: 198,
             k_is: k_i_fields,
             num_partial_products: 9,
             num_lookup_polys: 0,
             num_lookup_selectors: 0,
-            luts: Vec::new(),
+            luts: vec![],
         }
     }
     

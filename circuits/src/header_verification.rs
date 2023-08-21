@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::{RichField, HashOutTarget, NUM_HASH_OUT_ELTS}, field::{extension::Extendable, goldilocks_field}, plonk::{circuit_builder::CircuitBuilder, circuit_data::{CommonCircuitData, CircuitConfig}, proof::ProofWithPublicInputsTarget, config::{GenericConfig, AlgebraicHasher}}, gates::{gate::GateRef, noop::NoopGate, constant::ConstantGate, poseidon_mds::PoseidonMdsGate, public_input::PublicInputGate, base_sum::BaseSumGate, reducing_extension::ReducingExtensionGate, reducing::ReducingGate, arithmetic_extension::ArithmeticExtensionGate, arithmetic_base::ArithmeticGate, multiplication_extension::MulExtensionGate, random_access::RandomAccessGate, exponentiation::ExponentiationGate, coset_interpolation::CosetInterpolationGate, poseidon::PoseidonGate}, fri::{FriParams, FriConfig, reduction_strategies::FriReductionStrategy}};
+use plonky2::{iop::target::{Target, BoolTarget}, hash::hash_types::RichField, field::{extension::Extendable, goldilocks_field}, plonk::{circuit_builder::CircuitBuilder, circuit_data::{CommonCircuitData, CircuitConfig}, proof::ProofWithPublicInputsTarget, config::{GenericConfig, AlgebraicHasher}}, gates::{gate::GateRef, noop::NoopGate, constant::ConstantGate, poseidon_mds::PoseidonMdsGate, public_input::PublicInputGate, base_sum::BaseSumGate, reducing_extension::ReducingExtensionGate, reducing::ReducingGate, arithmetic_extension::ArithmeticExtensionGate, arithmetic_base::ArithmeticGate, multiplication_extension::MulExtensionGate, random_access::RandomAccessGate, exponentiation::ExponentiationGate, coset_interpolation::CosetInterpolationGate, poseidon::PoseidonGate}, fri::{FriParams, FriConfig, reduction_strategies::FriReductionStrategy}};
 use plonky2::gates::selectors::SelectorsInfo;
 use plonky2x::{hash::blake2::blake2b::blake2b, num::u32::gates::add_many_u32::U32AddManyGate};
 
@@ -170,10 +170,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             &previous_block_hash,
             &previous_data_root_accumulator,
         );
-
-        // Register the previous proof's circuit digest and constants sigma cap as public input
-        self.register_public_inputs(&previous_proof_elements.circuit_digest.elements);
-        self.register_public_inputs(&previous_proof_elements.constants_sigmas_cap.elements);
 
         self.conditionally_verify_cyclic_proof_or_dummy::<C>(
             condition,

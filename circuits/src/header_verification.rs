@@ -36,12 +36,12 @@ use crate::{
 pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 
 pub struct PublicInputsElements {
-    initial_block_hash: AvailHashTarget,
-    initial_block_num: Target,
-    initial_data_root_accumulator: AvailHashTarget,
-    latest_block_hash: AvailHashTarget,
-    latest_block_num: Target,
-    latest_data_root_accumulator: AvailHashTarget,
+    pub initial_block_hash: AvailHashTarget,
+    pub initial_block_num: Target,
+    pub initial_data_root_accumulator: AvailHashTarget,
+    pub latest_block_hash: AvailHashTarget,
+    pub latest_block_num: Target,
+    pub latest_data_root_accumulator: AvailHashTarget,
 }
 
 pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D: usize> {
@@ -68,13 +68,13 @@ pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D
 
     fn header_verification_ivc_common_data(&mut self) -> CommonCircuitData<F, D>;
 
-    fn header_verification_ivc_verification_data<C: GenericConfig<D, F = F> + 'static>(
+    fn header_verification_ivc_verifier_data<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
     ) -> VerifierOnlyCircuitData<C, D>
     where
         C::Hasher: AlgebraicHasher<F>;
 
-    fn parse_public_inputs(&mut self, public_inputs: Vec<Target>) -> PublicInputsElements;
+    fn parse_public_inputs(&mut self, public_inputs: &Vec<Target>) -> PublicInputsElements;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerification<F, D>
@@ -190,11 +190,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         // Unpack inner proof's public inputs.
         let previous_header_verification_proof_with_pis =
             self.add_virtual_proof_with_pis(&common_data);
-        let previous_proof_elements = self.parse_public_inputs(
-            previous_header_verification_proof_with_pis
-                .public_inputs
-                .clone(),
-        );
+        let previous_proof_elements =
+            self.parse_public_inputs(&previous_header_verification_proof_with_pis.public_inputs);
 
         let previous_block_hash = self.random_access_avail_hash(
             condition.target,
@@ -463,7 +460,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         }
     }
 
-    fn header_verification_ivc_verification_data<C: GenericConfig<D, F = F> + 'static>(
+    fn header_verification_ivc_verifier_data<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
     ) -> VerifierOnlyCircuitData<C, D>
     where
@@ -611,7 +608,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         }
     }
 
-    fn parse_public_inputs(&mut self, public_inputs: Vec<Target>) -> PublicInputsElements {
+    fn parse_public_inputs(&mut self, public_inputs: &Vec<Target>) -> PublicInputsElements {
         let mut public_inputs_iter = public_inputs.into_iter();
 
         PublicInputsElements {
@@ -619,16 +616,18 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 public_inputs_iter
                     .by_ref()
                     .take(HASH_SIZE)
+                    .map(|x| *x)
                     .collect_vec()
                     .as_slice()
                     .try_into()
                     .unwrap(),
             ),
-            initial_block_num: public_inputs_iter.by_ref().take(1).collect_vec()[0],
+            initial_block_num: *public_inputs_iter.by_ref().take(1).collect_vec()[0],
             initial_data_root_accumulator: AvailHashTarget(
                 public_inputs_iter
                     .by_ref()
                     .take(HASH_SIZE)
+                    .map(|x| *x)
                     .collect_vec()
                     .as_slice()
                     .try_into()
@@ -638,16 +637,18 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 public_inputs_iter
                     .by_ref()
                     .take(HASH_SIZE)
+                    .map(|x| *x)
                     .collect_vec()
                     .as_slice()
                     .try_into()
                     .unwrap(),
             ),
-            latest_block_num: public_inputs_iter.by_ref().take(1).collect_vec()[0],
+            latest_block_num: *public_inputs_iter.by_ref().take(1).collect_vec()[0],
             latest_data_root_accumulator: AvailHashTarget(
                 public_inputs_iter
                     .take(HASH_SIZE)
                     .by_ref()
+                    .map(|x| *x)
                     .collect_vec()
                     .as_slice()
                     .try_into()

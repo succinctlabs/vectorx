@@ -1,32 +1,23 @@
+use crate::header_verification::CircuitBuilderHeaderVerification;
 use crate::justification::{
     AuthoritySetSignersTarget, CircuitBuilderGrandpaJustificationVerifier, FinalizedBlockTarget,
     PrecommitTarget,
 };
-use crate::utils::{HASH_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS_PER_STEP};
-use crate::{
-    decoder::CircuitBuilderHeaderDecoder,
-    utils::{AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, QUORUM_SIZE},
-};
+use crate::utils::HASH_SIZE;
+use crate::utils::{AvailHashTarget, CircuitBuilderUtils, QUORUM_SIZE};
 use curta::plonky2::field::CubicParameters;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use plonky2::plonk::proof::ProofWithPublicInputsTarget;
 use plonky2x::ecc::ed25519::curve::curve_types::Curve;
 use plonky2x::hash::blake2::blake2b::blake2b;
-
-#[derive(Clone)]
-pub struct VerifySubchainTarget {
-    pub head_block_hash: AvailHashTarget, // The input is a vector of bits (in BE bit order)
-    pub head_block_num: Target,           // Should be a 32-bit unsigned integer
-    pub encoded_headers: Vec<EncodedHeaderTarget>,
-}
 
 pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Curve> {
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
         &mut self,
-        subchain: &VerifySubchainTarget,
+        header_verification_proof: &ProofWithPublicInputsTarget<D>,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget<C>,
         public_inputs_hash: &AvailHashTarget,
@@ -39,151 +30,90 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 {
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
         &mut self,
-        subchain: &VerifySubchainTarget,
+        header_verification_proof: &ProofWithPublicInputsTarget<D>,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget<C>,
         public_inputs_hash: &AvailHashTarget,
     ) where
         Config::Hasher: AlgebraicHasher<F>,
     {
-        assert!(subchain.encoded_headers.len() <= MAX_NUM_HEADERS_PER_STEP);
-
-        // The public inputs are 1356 bytes long (for 20 headers);
+        // The public inputs are 240 bytes long;
         // Need to store each byte as BE bits
         let mut public_inputs_hash_input = Vec::new();
 
-        // Input the head hash into the public inputs hasher
+        let header_verification_proof_pis =
+            self.parse_public_inputs(&header_verification_proof.public_inputs);
+
+        // Input the initial head head hash into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(subchain.head_block_hash.0[i], 8);
+            let mut bits = self.split_le(header_verification_proof_pis.initial_block_hash.0[i], 8);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
             public_inputs_hash_input.append(&mut bits);
         }
 
-        // Input the head number into the hasher
-        let mut head_block_num_bits = self.split_le(subchain.head_block_num, 32);
-        head_block_num_bits.reverse();
-        public_inputs_hash_input.append(&mut head_block_num_bits);
+        // Input the updated head hash into the public inputs hasher
+        for i in 0..HASH_SIZE {
+            let mut bits = self.split_le(header_verification_proof_pis.latest_block_hash.0[i], 8);
 
-        // Input the validator commitment into the hasher
+            // Needs to be in bit big endian order for the blake2b verification circuit
+            bits.reverse();
+            public_inputs_hash_input.append(&mut bits);
+        }
+
+        // Input the initial data root commitment into the public inputs hasher
+        for i in 0..HASH_SIZE {
+            let mut bits = self.split_le(
+                header_verification_proof_pis
+                    .initial_data_root_accumulator
+                    .0[i],
+                8,
+            );
+
+            // Needs to be in bit big endian order for the blake2b verification circuit
+            bits.reverse();
+            public_inputs_hash_input.append(&mut bits);
+        }
+
+        // Input the updated data root commitment into the public inputs hasher
+        for i in 0..HASH_SIZE {
+            let mut bits = self.split_le(
+                header_verification_proof_pis.latest_data_root_accumulator.0[i],
+                8,
+            );
+
+            // Needs to be in bit big endian order for the blake2b verification circuit
+            bits.reverse();
+            public_inputs_hash_input.append(&mut bits);
+        }
+
+        // Input the validator commitment into the public inputs hasher
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
             bits.reverse();
             public_inputs_hash_input.append(&mut bits);
         }
 
-        // Input the validator set id into the hasher
+        // Input the validator set id into the public inputs hasher
         let mut set_id_bits = self.split_le(authority_set_signers.set_id, 64);
         set_id_bits.reverse();
         public_inputs_hash_input.append(&mut set_id_bits);
 
-        // We plan to store the the calculated blake2b hash (in bits) in calculated_hashes
-        let mut calculated_hashes: Vec<Vec<BoolTarget>> = Vec::new();
-        let mut decoded_block_nums = Vec::new();
-        for i in 0..subchain.encoded_headers.len() {
-            // Calculate the hash for the current header
-            let hash_circuit = blake2b::<F, D, MAX_HEADER_SIZE, HASH_SIZE>(self);
+        // Input the initial block number into the public inputs hasher
+        let mut initial_block_num_bits =
+            self.split_le(header_verification_proof_pis.initial_block_num, 32);
+        initial_block_num_bits.reverse();
+        public_inputs_hash_input.append(&mut initial_block_num_bits);
 
-            // Input the encoded header bytes into the hasher
-            for j in 0..MAX_HEADER_SIZE {
-                // Need to split the bytes into bits
-                let mut bits = self.split_le(subchain.encoded_headers[i].header_bytes[j], 8);
+        // Input the updated block number into the public inputs hasher
+        let mut latest_block_num_bits =
+            self.split_le(header_verification_proof_pis.latest_block_num, 32);
+        latest_block_num_bits.reverse();
+        public_inputs_hash_input.append(&mut latest_block_num_bits);
 
-                // Needs to be in bit big endian order for the EDDSA verification circuit
-                bits.reverse();
-                for (k, bit) in bits.iter().enumerate().take(8) {
-                    self.connect(hash_circuit.message[j * 8 + k].target, bit.target);
-                }
-            }
-
-            self.connect(
-                hash_circuit.message_len,
-                subchain.encoded_headers[i].header_size,
-            );
-
-            let mut hash_bytes = Vec::new();
-
-            // Convert hash digest into bytes
-            for bits in hash_circuit.digest.chunks(8) {
-                // These bits are in big endian order
-                hash_bytes.push(self.le_sum(bits.to_vec().iter().rev()));
-            }
-
-            // Get the decoded_header object to retrieve the block numbers and parent hashes
-            let decoded_header = self.decode_header(
-                &subchain.encoded_headers[i],
-                AvailHashTarget(hash_bytes.try_into().unwrap()),
-            );
-
-            for j in 0..HASH_SIZE {
-                let mut bits = self.split_le(decoded_header.state_root.0[j], 8);
-                bits.reverse();
-                public_inputs_hash_input.append(&mut bits);
-            }
-
-            // Verify that the previous calculated block hash is equal to the decoded parent hash
-            for j in 0..HASH_SIZE {
-                let mut bits = self.split_le(decoded_header.parent_hash.0[j], 8);
-
-                // Needs to be in bit big endian order for the blake2b verification circuit
-                bits.reverse();
-                for k in 0..8 {
-                    if i == 0 {
-                        let mut head_block_bits = self.split_le(subchain.head_block_hash.0[j], 8);
-                        head_block_bits.reverse();
-                        // For the first header in the subchain, verify equality to the head block hash public input.
-                        self.connect(head_block_bits[k].target, bits[k].target);
-                    } else {
-                        // For other headers, verify equality to the previous block's calculated header hash
-                        self.connect(calculated_hashes[i - 1][j * 8 + k].target, bits[k].target);
-                    }
-                }
-            }
-
-            calculated_hashes.push(hash_circuit.digest.clone());
-
-            // Convert hash digest into bytes
-            for bits in hash_circuit.digest.chunks(8) {
-                // These bits are in big endian order
-                public_inputs_hash_input.append(&mut bits.to_vec());
-            }
-
-            // Verify that the block numbers are sequential
-            let one = self.one();
-            if i == 0 {
-                let expected_block_num = self.add(subchain.head_block_num, one);
-                self.connect(expected_block_num, decoded_header.block_number);
-            } else {
-                let expected_block_num = self.add(decoded_block_nums[i - 1], one);
-                self.connect(expected_block_num, decoded_header.block_number);
-            }
-
-            decoded_block_nums.push(decoded_header.block_number);
-        }
-
-        let last_calculated_hash = calculated_hashes.last().unwrap();
-        let mut last_calculated_hash_bytes = Vec::new();
-        // Convert the last calculated hash into bytes
-        // The bits in the calculated hash are in bit big endian format
-        for i in 0..HASH_SIZE {
-            last_calculated_hash_bytes
-                .push(self.le_sum(last_calculated_hash[i * 8..i * 8 + 8].to_vec().iter().rev()));
-        }
-
-        // Now verify the grandpa justification
-        self.verify_justification::<Config, E>(
-            signed_precommits,
-            authority_set_signers,
-            &FinalizedBlockTarget {
-                num: *decoded_block_nums.last().unwrap(),
-                hash: AvailHashTarget(last_calculated_hash_bytes.try_into().unwrap()),
-            },
-        );
-
-        // The input digest is 1356 bytes (for 20 headers).  Need to pad that so that the result
-        // is divisible by CHUNK_128_BYTES.  That result is 1408 bytes
-        const PUBLIC_INPUTS_MAX_SIZE: usize = 1408;
+        // The input digest is 240 bytes.  So padded input length would be 256.
+        const PUBLIC_INPUTS_MAX_SIZE: usize = 256;
         let public_inputs_hash_circuit = blake2b::<F, D, PUBLIC_INPUTS_MAX_SIZE, HASH_SIZE>(self);
 
         for (i, bit) in public_inputs_hash_input.iter().enumerate() {
@@ -216,12 +146,28 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 );
             }
         }
+
+        let inner_cd = self.header_verification_ivc_common_data();
+        let inner_vd = self.header_verification_ivc_verifier_data::<Config>();
+        let inner_vd_t = self.constant_verifier_data(&inner_vd);
+
+        self.verify_proof::<Config>(header_verification_proof, &inner_vd_t, &inner_cd);
+
+        // Now verify the grandpa justification
+        self.verify_justification::<Config, E>(
+            signed_precommits,
+            authority_set_signers,
+            &FinalizedBlockTarget {
+                num: header_verification_proof_pis.latest_block_num,
+                hash: header_verification_proof_pis.latest_block_hash,
+            },
+        );
     }
 }
 
 #[derive(Clone)]
-pub struct StepTarget<C: Curve> {
-    pub subchain_target: VerifySubchainTarget,
+pub struct StepTarget<const D: usize, C: Curve> {
+    pub subchain_target: ProofWithPublicInputsTarget<D>,
     pub precommits: [PrecommitTarget<C>; QUORUM_SIZE],
     pub authority_set: AuthoritySetSignersTarget<C>,
     pub public_inputs_hash: AvailHashTarget,
@@ -235,20 +181,12 @@ pub fn make_step_circuit<
     E: CubicParameters<F>,
 >(
     builder: &mut CircuitBuilder<F, D>,
-) -> StepTarget<C>
+) -> StepTarget<D, C>
 where
     Config::Hasher: AlgebraicHasher<F>,
 {
-    let head_block_hash_target = builder.add_virtual_avail_hash_target_safe(false);
-
-    let head_block_num_target = builder.add_virtual_target();
-    // The head block number is a 32 bit number
-    builder.range_check(head_block_num_target, 32);
-
-    let mut header_targets = Vec::new();
-    for _i in 0..MAX_NUM_HEADERS_PER_STEP {
-        header_targets.push(builder.add_virtual_encoded_header_target_safe());
-    }
+    let cd = builder.header_verification_ivc_common_data();
+    let header_verification_proof = builder.add_virtual_proof_with_pis(&cd);
 
     let mut precommit_targets = Vec::new();
     for _i in 0..QUORUM_SIZE {
@@ -261,23 +199,17 @@ where
         D,
     >>::add_virtual_authority_set_signers_target_safe(builder);
 
-    let verify_subchain_target = VerifySubchainTarget {
-        head_block_hash: head_block_hash_target,
-        head_block_num: head_block_num_target,
-        encoded_headers: header_targets,
-    };
-
     let public_inputs_hash = builder.add_virtual_avail_hash_target_safe(true);
 
     builder.step::<Config, E>(
-        &verify_subchain_target,
+        &header_verification_proof,
         precommit_targets.clone(),
         &authority_set,
         &public_inputs_hash,
     );
 
     StepTarget {
-        subchain_target: verify_subchain_target,
+        subchain_target: header_verification_proof,
         precommits: precommit_targets.try_into().unwrap(),
         authority_set,
         public_inputs_hash,

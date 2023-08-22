@@ -5,9 +5,9 @@ use codec::{Decode, Encode};
 use serde::de::Error;
 use serde::Deserialize;
 use sp_core::{
-	blake2_256, bytes,
-	ed25519::{self, Public as EdPublic, Signature},
-	Pair, H256,
+    blake2_256, bytes,
+    ed25519::{self, Public as EdPublic, Signature},
+    Pair, H256,
 };
 use subxt::rpc::RpcParams;
 // use anyhow::Result;
@@ -110,7 +110,15 @@ pub async fn main() {
 
         // Get current authority set ID
         let set_id_key = api::storage().grandpa().current_set_id();
-        let set_id = c.storage().at(None).await.unwrap().fetch(&set_id_key).await.unwrap().unwrap();
+        let set_id = c
+            .storage()
+            .at(None)
+            .await
+            .unwrap()
+            .fetch(&set_id_key)
+            .await
+            .unwrap()
+            .unwrap();
 
         // Form a message which is signed in the justification
         let signed_message = Encode::encode(&(
@@ -136,8 +144,8 @@ pub async fn main() {
                     None
                 }
             })
-            .filter(|signer| {signer.is_some()})
-            .map(|some_signer| {hex::encode(some_signer.unwrap())})
+            .filter(|signer| signer.is_some())
+            .map(|some_signer| hex::encode(some_signer.unwrap()))
             .collect::<Vec<_>>();
 
         sig_owners.sort();
@@ -146,7 +154,10 @@ pub async fn main() {
             continue;
         }
 
-        println!("justification block number: {}", justification.commit.target_number);
+        println!(
+            "justification block number: {}",
+            justification.commit.target_number
+        );
         println!("justification set id: {}", set_id);
         println!("justification signers: {:?}", sig_owners);
         println!("\n\n\n");

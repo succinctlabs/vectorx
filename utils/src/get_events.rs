@@ -1,11 +1,10 @@
 //mod gen_avail_event_types;
 
-use avail_subxt::{build_client, api::runtime_types::sp_runtime::traits::BlakeTwo256};
 use avail_subxt::primitives::Header;
+use avail_subxt::{api::runtime_types::sp_runtime::traits::BlakeTwo256, build_client};
 use primitive_types::H256;
-use sp_core::{twox_128, storage::StorageKey};
+use sp_core::{storage::StorageKey, twox_128};
 use sp_state_machine::{read_proof_check, StorageProof};
-
 
 #[tokio::main]
 pub async fn main() {
@@ -13,7 +12,8 @@ pub async fn main() {
 
     let c = build_client(url, false).await.unwrap();
 
-    let block_hash_vec = hex::decode("c63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f").unwrap();
+    let block_hash_vec =
+        hex::decode("c63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f").unwrap();
     let mut block_hash_array: [u8; 32] = [0; 32];
     for i in 0..block_hash_vec.len() {
         block_hash_array[i] = block_hash_vec[i];
@@ -29,8 +29,16 @@ pub async fn main() {
         let event = e.unwrap();
         let name = event.variant_name();
         println!("event is {:?}\n\n\n", name);
-        println!("event pallet is {:?}({:?})\n\n\n", event.pallet_name(), event.pallet_index());
-        println!("event variant is {:?}({:?})\n\n\n", event.variant_name(), event.variant_index());
+        println!(
+            "event pallet is {:?}({:?})\n\n\n",
+            event.pallet_name(),
+            event.pallet_index()
+        );
+        println!(
+            "event variant is {:?}({:?})\n\n\n",
+            event.variant_name(),
+            event.variant_index()
+        );
         println!("event byte data is {:?}\n\n\n", event.bytes());
     }
 
@@ -64,7 +72,10 @@ pub async fn main() {
     }
     let sp = StorageProof::new(sp_vec);
 
-    println!("storage proof is {:?}\n\n\n", sp.into_nodes().iter().map(hex::encode).collect::<Vec<_>>());
+    println!(
+        "storage proof is {:?}\n\n\n",
+        sp.into_nodes().iter().map(hex::encode).collect::<Vec<_>>()
+    );
 
     /*
     // Can also check proof here:  https://github.com/polytope-labs/solidity-merkle-trees/blob/main/src/MerklePatricia.sol#L31

@@ -280,11 +280,12 @@ mod tests {
 
         let step_target = make_step_circuit::<F, D, Curve, C, E>(&mut builder);
 
-        let header_verification_proof =
+        let subchain_verification_proof =
             retrieve_subchain_verification_proof().expect("subchain proof generation failed");
+
         pw.set_proof_with_pis_target(
             &step_target.subchain_verification_proof,
-            &header_verification_proof,
+            &subchain_verification_proof,
         );
 
         pw.set_avail_hash_target(
@@ -320,6 +321,7 @@ mod tests {
             hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
+        println!("building the step circuit");
         let inner_data = builder.build();
         let inner_proof = gen_step_proof::<F, C, D>(&inner_data, &pw);
         inner_data.verify(inner_proof.clone()).unwrap();

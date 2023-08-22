@@ -888,6 +888,21 @@ pub(crate) mod tests {
     pub const BLOCK_530527_AUTHORITY_SET_COMMITMENT: &str =
         "0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6";
 
+    // concatenation of:
+    // orig head hash:  2f6566c7411edfeba04ebcd68c5ecdbc8e95bf65da47ef553d6d8537200b74fa
+    // updated head hash:  62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065
+    // orig data root commitment: 0101010101010101010101010101010101010101010101010101010101010101
+    // updated data root commitment: 41e5e320601ce999c1cdbdeda6571f16b4950fa5189b36929aa6d1ca7c459ae0
+    // validator commitment:  0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6
+    // validator set id: 00000000000001f0
+    // orig header num: 0008184b
+    // updated header num: 0008185f
+    //
+    // Calculated hash by using the python lines:
+    // >>> import hashlib
+    // >>> hasher = hashlib.blake2b(digest_size = 32)
+    // >>> hasher.update(bytes.fromhex("2f6566c7411edfeba04ebcd68c5ecdbc8e95bf65da47ef553d6d8537200b74fa62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065010101010101010101010101010101010101010101010101010101010101010141e5e320601ce999c1cdbdeda6571f16b4950fa5189b36929aa6d1ca7c459ae00c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f600000000000001f00008184b0008185f"))
+    // >>> hasher.digest().hex()
     pub const BLOCK_530527_PUBLIC_INPUTS_HASH: &str =
-        "e9a1c86ce12af878fcf5953acf98233207ac109e3ab381b3306de42b399de41a";
+        "52feccd04afa7419665ca885b901f4cd7d0f693b3d72f50a16dd3c623713bc1c";
 }

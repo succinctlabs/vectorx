@@ -74,7 +74,7 @@ pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D
     where
         C::Hasher: AlgebraicHasher<F>;
 
-    fn parse_public_inputs(&mut self, public_inputs: &Vec<Target>) -> PublicInputsElements;
+    fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElements;
 }
 
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerification<F, D>
@@ -193,6 +193,11 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         let previous_proof_elements =
             self.parse_public_inputs(&previous_header_verification_proof_with_pis.public_inputs);
 
+        // Set the initial elements to be public inputs
+        self.register_public_inputs(&previous_proof_elements.initial_block_hash.0);
+        self.register_public_input(previous_proof_elements.initial_block_num);
+        self.register_public_inputs(&previous_proof_elements.initial_data_root_accumulator.0);
+
         let previous_block_hash = self.random_access_avail_hash(
             condition.target,
             vec![
@@ -200,7 +205,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 previous_proof_elements.latest_block_hash,
             ],
         );
-        self.register_public_inputs(&previous_block_hash.0);
 
         let previous_block_num = self.random_access(
             condition.target,
@@ -209,7 +213,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 previous_proof_elements.latest_block_num,
             ],
         );
-        self.register_public_input(previous_block_num);
 
         let previous_data_root_accumulator = self.random_access_avail_hash(
             condition.target,
@@ -218,7 +221,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 previous_proof_elements.latest_data_root_accumulator,
             ],
         );
-        self.register_public_inputs(&previous_data_root_accumulator.0);
 
         // Create inputs for the current encoded block;
         let encoded_block_input = self.add_virtual_encoded_header_target_safe();
@@ -470,145 +472,145 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             constants_sigmas_cap: MerkleCap(vec![
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(8535618336891168569),
-                        F::from_canonical_u64(7056391141780351855),
-                        F::from_canonical_u64(16745120269907101226),
-                        F::from_canonical_u64(959239797874077894),
+                        F::from_canonical_u64(6893720534254420556),
+                        F::from_canonical_u64(9869054201206402635),
+                        F::from_canonical_u64(3358764550157965550),
+                        F::from_canonical_u64(6675137039753538583),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(13183330569845918278),
-                        F::from_canonical_u64(10658568970951062939),
-                        F::from_canonical_u64(8737429335529379866),
-                        F::from_canonical_u64(12797471988048154057),
+                        F::from_canonical_u64(9318131052852035840),
+                        F::from_canonical_u64(14659927684923102740),
+                        F::from_canonical_u64(3784472940063110559),
+                        F::from_canonical_u64(16784635435692189864),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(2930257631698998588),
-                        F::from_canonical_u64(7715658936488527782),
-                        F::from_canonical_u64(12148002725933622411),
-                        F::from_canonical_u64(14716481693988035349),
+                        F::from_canonical_u64(11397923598101180517),
+                        F::from_canonical_u64(3443949465444487309),
+                        F::from_canonical_u64(310356847864724848),
+                        F::from_canonical_u64(13458374281624371795),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(173163140734733625),
-                        F::from_canonical_u64(12332398129789867913),
-                        F::from_canonical_u64(5405501519526388841),
-                        F::from_canonical_u64(14577725013586191639),
+                        F::from_canonical_u64(18085161840372940135),
+                        F::from_canonical_u64(7892209763543399901),
+                        F::from_canonical_u64(6082261755853580677),
+                        F::from_canonical_u64(1568884689200641943),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(18344950255136979212),
-                        F::from_canonical_u64(15080451156791430414),
-                        F::from_canonical_u64(8851003831501012616),
-                        F::from_canonical_u64(9346281722905787710),
+                        F::from_canonical_u64(2590041485672371550),
+                        F::from_canonical_u64(3356466597987899279),
+                        F::from_canonical_u64(5531330291860805498),
+                        F::from_canonical_u64(14582277832861805436),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(5639738308635920117),
-                        F::from_canonical_u64(1698274125900894480),
-                        F::from_canonical_u64(7229713015147891331),
-                        F::from_canonical_u64(12424125675591136003),
+                        F::from_canonical_u64(2734120159474797714),
+                        F::from_canonical_u64(1691743372901094773),
+                        F::from_canonical_u64(5382663207442631785),
+                        F::from_canonical_u64(3511306326001178864),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(9912275338338373902),
-                        F::from_canonical_u64(6862415469516103485),
-                        F::from_canonical_u64(3964836728593296634),
-                        F::from_canonical_u64(9247716882742615835),
+                        F::from_canonical_u64(3696427309811613410),
+                        F::from_canonical_u64(16540559545728973044),
+                        F::from_canonical_u64(16141756920172504578),
+                        F::from_canonical_u64(6217238375257484964),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(11578846510680398018),
-                        F::from_canonical_u64(5227208038627235614),
-                        F::from_canonical_u64(5443913552556887326),
-                        F::from_canonical_u64(6423591282687707694),
+                        F::from_canonical_u64(17293630180144692949),
+                        F::from_canonical_u64(8414769978449101600),
+                        F::from_canonical_u64(3443174534402031709),
+                        F::from_canonical_u64(16391976540590050956),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(12582609204097084474),
-                        F::from_canonical_u64(6635312255037530622),
-                        F::from_canonical_u64(8890455314045908589),
-                        F::from_canonical_u64(4758476761619164564),
+                        F::from_canonical_u64(8068533027332123430),
+                        F::from_canonical_u64(1314530871443210915),
+                        F::from_canonical_u64(2940206156759058344),
+                        F::from_canonical_u64(3822058680787933664),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(4429833069634825640),
-                        F::from_canonical_u64(9134839747632706945),
-                        F::from_canonical_u64(63559508828941391),
-                        F::from_canonical_u64(1836159193782694737),
+                        F::from_canonical_u64(17369262077311455804),
+                        F::from_canonical_u64(10215356053836114628),
+                        F::from_canonical_u64(129878469886448921),
+                        F::from_canonical_u64(16654904064191771284),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(14436819337146251297),
-                        F::from_canonical_u64(16533752621035392010),
-                        F::from_canonical_u64(7602250127155878409),
-                        F::from_canonical_u64(44441169431509306),
+                        F::from_canonical_u64(18265920119281374126),
+                        F::from_canonical_u64(9725380710897336879),
+                        F::from_canonical_u64(4266829456287036759),
+                        F::from_canonical_u64(8411062113742938734),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(9436157183778269426),
-                        F::from_canonical_u64(11327594106964466524),
-                        F::from_canonical_u64(15169922964559285686),
-                        F::from_canonical_u64(9243746699989571237),
+                        F::from_canonical_u64(16053311469103636805),
+                        F::from_canonical_u64(17571710357177248136),
+                        F::from_canonical_u64(16078712453291616059),
+                        F::from_canonical_u64(12047202881998658277),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(1607921944250921729),
-                        F::from_canonical_u64(3018454756028817094),
-                        F::from_canonical_u64(3765972117481335138),
-                        F::from_canonical_u64(12363582334881570094),
+                        F::from_canonical_u64(8563327907016317907),
+                        F::from_canonical_u64(17772250373900712080),
+                        F::from_canonical_u64(16928341334553613595),
+                        F::from_canonical_u64(9201354879858974391),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(17818510845944219042),
-                        F::from_canonical_u64(3769237202217187100),
-                        F::from_canonical_u64(2943002051349677641),
-                        F::from_canonical_u64(15230627814497988928),
+                        F::from_canonical_u64(10160488212967830942),
+                        F::from_canonical_u64(6610201163933124212),
+                        F::from_canonical_u64(15616704182486088003),
+                        F::from_canonical_u64(2872964065949267424),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(13972764077991870151),
-                        F::from_canonical_u64(10922736073406839468),
-                        F::from_canonical_u64(6215255606113681177),
-                        F::from_canonical_u64(10526127010286938420),
+                        F::from_canonical_u64(14521846623774124579),
+                        F::from_canonical_u64(13070295758220160172),
+                        F::from_canonical_u64(16086946402741816526),
+                        F::from_canonical_u64(14746700217644244250),
                     ],
                 },
                 HashOut {
                     elements: [
-                        F::from_canonical_u64(9915723263000334775),
-                        F::from_canonical_u64(1480109254979946206),
-                        F::from_canonical_u64(2466466909134478053),
-                        F::from_canonical_u64(12306737890316790231),
+                        F::from_canonical_u64(1526764342355135675),
+                        F::from_canonical_u64(2246058144923642203),
+                        F::from_canonical_u64(9172708044764903231),
+                        F::from_canonical_u64(14524488702222024842),
                     ],
                 },
             ]),
             circuit_digest: HashOut {
                 elements: [
-                    F::from_canonical_u64(7562278273103546877),
-                    F::from_canonical_u64(4574165718658290940),
-                    F::from_canonical_u64(2147282711957141109),
-                    F::from_canonical_u64(10917733609245220867),
+                    F::from_canonical_u64(7368954165088992480),
+                    F::from_canonical_u64(1272539449903483734),
+                    F::from_canonical_u64(15167093575070754927),
+                    F::from_canonical_u64(3216329643681779426),
                 ],
             },
         }
     }
 
-    fn parse_public_inputs(&mut self, public_inputs: &Vec<Target>) -> PublicInputsElements {
+    fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElements {
         let mut public_inputs_iter = public_inputs.iter();
 
         PublicInputsElements {
@@ -697,11 +699,6 @@ pub mod tests {
     type F = <C as GenericConfig<D>>::F;
 
     pub fn retrieve_subchain_verification_proof() -> Result<ProofWithPublicInputs<F, C, D>> {
-        let mut builder_logger = env_logger::Builder::from_default_env();
-        builder_logger.format_timestamp(None);
-        builder_logger.filter_level(log::LevelFilter::Trace);
-        builder_logger.try_init()?;
-
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
@@ -716,8 +713,6 @@ pub mod tests {
         ) = builder.verify_header_ivc::<C>();
 
         let cyclic_circuit_data = builder.build::<C>();
-
-        println!("{:?}", cyclic_circuit_data.verifier_only);
 
         let headers = vec![
             BLOCK_530508_HEADER.to_vec(),
@@ -820,6 +815,11 @@ pub mod tests {
 
     #[test]
     fn test_verify_subchain() -> Result<()> {
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
         let proof = retrieve_subchain_verification_proof();
 
         if proof.is_err() {

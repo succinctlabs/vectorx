@@ -26,14 +26,13 @@ use plonky2::{
 };
 use plonky2x::{hash::blake2::blake2b::blake2b, num::u32::gates::add_many_u32::U32AddManyGate};
 
+use crate::utils::MAX_HEADER_SIZE;
 use crate::{
     decoder::CircuitBuilderHeaderDecoder,
     utils::{
         AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, CHUNK_128_BYTES, HASH_SIZE,
     },
 };
-
-pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 16; // 2048 bytes
 
 pub struct PublicInputsElements {
     pub initial_block_hash: AvailHashTarget,
@@ -664,17 +663,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
 pub mod tests {
     use crate::{
         subchain_verification::CircuitBuilderHeaderVerification,
-        utils::{
-            tests::{
-                BLOCK_530508_HEADER, BLOCK_530508_PARENT_HASH, BLOCK_530509_HEADER,
-                BLOCK_530510_HEADER, BLOCK_530511_HEADER, BLOCK_530512_HEADER, BLOCK_530513_HEADER,
-                BLOCK_530514_HEADER, BLOCK_530515_HEADER, BLOCK_530516_HEADER, BLOCK_530517_HEADER,
-                BLOCK_530518_HEADER, BLOCK_530519_HEADER, BLOCK_530520_HEADER, BLOCK_530521_HEADER,
-                BLOCK_530522_HEADER, BLOCK_530523_HEADER, BLOCK_530524_HEADER, BLOCK_530525_HEADER,
-                BLOCK_530526_HEADER, BLOCK_530527_HEADER,
-            },
-            WitnessEncodedHeader,
-        },
+        testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM},
+        utils::WitnessEncodedHeader,
     };
     use anyhow::Result;
     use log::Level;
@@ -714,44 +704,24 @@ pub mod tests {
 
         let cyclic_circuit_data = builder.build::<C>();
 
-        let headers = vec![
-            BLOCK_530508_HEADER.to_vec(),
-            BLOCK_530509_HEADER.to_vec(),
-            BLOCK_530510_HEADER.to_vec(),
-            BLOCK_530511_HEADER.to_vec(),
-            BLOCK_530512_HEADER.to_vec(),
-            BLOCK_530513_HEADER.to_vec(),
-            BLOCK_530514_HEADER.to_vec(),
-            BLOCK_530515_HEADER.to_vec(),
-            BLOCK_530516_HEADER.to_vec(),
-            BLOCK_530517_HEADER.to_vec(),
-            BLOCK_530518_HEADER.to_vec(),
-            BLOCK_530519_HEADER.to_vec(),
-            BLOCK_530520_HEADER.to_vec(),
-            BLOCK_530521_HEADER.to_vec(),
-            BLOCK_530522_HEADER.to_vec(),
-            BLOCK_530523_HEADER.to_vec(),
-            BLOCK_530524_HEADER.to_vec(),
-            BLOCK_530525_HEADER.to_vec(),
-            BLOCK_530526_HEADER.to_vec(),
-            BLOCK_530527_HEADER.to_vec(),
-        ];
-        let initial_block_hash_val = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
-        let initial_block_num_val = 530507;
+        let initial_block_hash_val = hex::decode(BLOCK_HASHES[0]).unwrap();
+        let initial_block_num_val = HEAD_BLOCK_NUM;
         let initial_data_root_accumulator_val = [1u8; 32];
 
         let mut use_prev_proof = false;
         let mut prev_proof: Option<ProofWithPublicInputs<F, C, D>> = None;
         let mut header_num = initial_block_num_val + 1;
 
-        for header in headers.iter() {
+        // The first encoded header is the HEAD header.  We assume that is already verified.
+        for header in ENCODED_HEADERS[1..].iter() {
             println!("Generating proof for header: {}", header_num);
             let mut pw = PartialWitness::new();
+            let header_bytes = hex::decode(header).expect("Expect a valid hex string");
             pw.set_bool_target(condition, use_prev_proof);
-            pw.set_encoded_header_target(&encoded_block_input, header.clone());
+            pw.set_encoded_header_target(&encoded_block_input, header_bytes.clone());
             pw.set_target(
                 encoded_block_size,
-                F::from_canonical_u64(header.len() as u64),
+                F::from_canonical_u64(header_bytes.len() as u64),
             );
 
             if !use_prev_proof {
@@ -761,7 +731,7 @@ pub mod tests {
                         .iter()
                         .map(|b| F::from_canonical_u64(*b as u64)),
                 );
-                initial_pi.push(F::from_canonical_u64(initial_block_num_val));
+                initial_pi.push(F::from_canonical_u64(initial_block_num_val.into()));
                 initial_pi.extend(
                     initial_data_root_accumulator_val
                         .iter()
@@ -804,6 +774,7 @@ pub mod tests {
             )?;
 
             cyclic_circuit_data.verify(proof.clone())?;
+            println!("proof for block {} is valid", header_num);
 
             prev_proof = Some(proof);
             use_prev_proof = true;

@@ -1,8 +1,8 @@
-use crate::header_verification::CircuitBuilderHeaderVerification;
 use crate::justification::{
     AuthoritySetSignersTarget, CircuitBuilderGrandpaJustificationVerifier, FinalizedBlockTarget,
     PrecommitTarget,
 };
+use crate::subchain_verification::CircuitBuilderHeaderVerification;
 use crate::utils::HASH_SIZE;
 use crate::utils::{AvailHashTarget, CircuitBuilderUtils, QUORUM_SIZE};
 use curta::plonky2::field::CubicParameters;
@@ -17,7 +17,7 @@ use plonky2x::hash::blake2::blake2b::blake2b;
 pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Curve> {
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
         &mut self,
-        header_verification_proof: &ProofWithPublicInputsTarget<D>,
+        subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget<C>,
         public_inputs_hash: &AvailHashTarget,
@@ -30,7 +30,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 {
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
         &mut self,
-        header_verification_proof: &ProofWithPublicInputsTarget<D>,
+        subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
         signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget<C>,
         public_inputs_hash: &AvailHashTarget,
@@ -41,12 +41,13 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         // Need to store each byte as BE bits
         let mut public_inputs_hash_input = Vec::new();
 
-        let header_verification_proof_pis =
-            self.parse_public_inputs(&header_verification_proof.public_inputs);
+        let subchain_verification_proof_pis =
+            self.parse_public_inputs(&subchain_verification_proof.public_inputs);
 
         // Input the initial head head hash into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(header_verification_proof_pis.initial_block_hash.0[i], 8);
+            let mut bits =
+                self.split_le(subchain_verification_proof_pis.initial_block_hash.0[i], 8);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
@@ -55,7 +56,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Input the updated head hash into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(header_verification_proof_pis.latest_block_hash.0[i], 8);
+            let mut bits = self.split_le(subchain_verification_proof_pis.latest_block_hash.0[i], 8);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
@@ -65,7 +66,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         // Input the initial data root commitment into the public inputs hasher
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(
-                header_verification_proof_pis
+                subchain_verification_proof_pis
                     .initial_data_root_accumulator
                     .0[i],
                 8,
@@ -79,7 +80,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         // Input the updated data root commitment into the public inputs hasher
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(
-                header_verification_proof_pis.latest_data_root_accumulator.0[i],
+                subchain_verification_proof_pis
+                    .latest_data_root_accumulator
+                    .0[i],
                 8,
             );
 
@@ -102,13 +105,13 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Input the initial block number into the public inputs hasher
         let mut initial_block_num_bits =
-            self.split_le(header_verification_proof_pis.initial_block_num, 32);
+            self.split_le(subchain_verification_proof_pis.initial_block_num, 32);
         initial_block_num_bits.reverse();
         public_inputs_hash_input.append(&mut initial_block_num_bits);
 
         // Input the updated block number into the public inputs hasher
         let mut latest_block_num_bits =
-            self.split_le(header_verification_proof_pis.latest_block_num, 32);
+            self.split_le(subchain_verification_proof_pis.latest_block_num, 32);
         latest_block_num_bits.reverse();
         public_inputs_hash_input.append(&mut latest_block_num_bits);
 
@@ -147,19 +150,19 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             }
         }
 
-        let inner_cd = self.header_verification_ivc_common_data();
-        let inner_vd = self.header_verification_ivc_verifier_data::<Config>();
+        let inner_cd = self.verify_header_ivc_cd();
+        let inner_vd = self.verify_header_ivc_vd::<Config>();
         let inner_vd_t = self.constant_verifier_data(&inner_vd);
 
-        self.verify_proof::<Config>(header_verification_proof, &inner_vd_t, &inner_cd);
+        self.verify_proof::<Config>(subchain_verification_proof, &inner_vd_t, &inner_cd);
 
         // Now verify the grandpa justification
         self.verify_justification::<Config, E>(
             signed_precommits,
             authority_set_signers,
             &FinalizedBlockTarget {
-                num: header_verification_proof_pis.latest_block_num,
-                hash: header_verification_proof_pis.latest_block_hash,
+                num: subchain_verification_proof_pis.latest_block_num,
+                hash: subchain_verification_proof_pis.latest_block_hash,
             },
         );
     }
@@ -167,7 +170,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
 #[derive(Clone)]
 pub struct StepTarget<const D: usize, C: Curve> {
-    pub subchain_target: ProofWithPublicInputsTarget<D>,
+    pub subchain_verification_proof: ProofWithPublicInputsTarget<D>,
     pub precommits: [PrecommitTarget<C>; QUORUM_SIZE],
     pub authority_set: AuthoritySetSignersTarget<C>,
     pub public_inputs_hash: AvailHashTarget,
@@ -185,8 +188,8 @@ pub fn make_step_circuit<
 where
     Config::Hasher: AlgebraicHasher<F>,
 {
-    let cd = builder.header_verification_ivc_common_data();
-    let header_verification_proof = builder.add_virtual_proof_with_pis(&cd);
+    let cd = builder.verify_header_ivc_cd();
+    let subchain_verification_proof = builder.add_virtual_proof_with_pis(&cd);
 
     let mut precommit_targets = Vec::new();
     for _i in 0..QUORUM_SIZE {
@@ -202,14 +205,14 @@ where
     let public_inputs_hash = builder.add_virtual_avail_hash_target_safe(true);
 
     builder.step::<Config, E>(
-        &header_verification_proof,
+        &subchain_verification_proof,
         precommit_targets.clone(),
         &authority_set,
         &public_inputs_hash,
     );
 
     StepTarget {
-        subchain_target: header_verification_proof,
+        subchain_verification_proof,
         precommits: precommit_targets.try_into().unwrap(),
         authority_set,
         public_inputs_hash,
@@ -224,7 +227,7 @@ mod tests {
     use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
     use log::Level;
     use plonky2::field::extension::Extendable;
-    use plonky2::field::types::{Field, PrimeField64};
+    use plonky2::field::types::PrimeField64;
     use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -238,18 +241,13 @@ mod tests {
     use crate::justification::{set_authority_set_pw, set_precommits_pw};
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::step::make_step_circuit;
+    use crate::subchain_verification::tests::retrieve_subchain_verification_proof;
     use crate::utils::tests::{
-        BLOCK_530508_HEADER, BLOCK_530508_PARENT_HASH, BLOCK_530509_HEADER, BLOCK_530510_HEADER,
-        BLOCK_530511_HEADER, BLOCK_530512_HEADER, BLOCK_530513_HEADER, BLOCK_530514_HEADER,
-        BLOCK_530515_HEADER, BLOCK_530516_HEADER, BLOCK_530517_HEADER, BLOCK_530518_HEADER,
-        BLOCK_530519_HEADER, BLOCK_530520_HEADER, BLOCK_530521_HEADER, BLOCK_530522_HEADER,
-        BLOCK_530523_HEADER, BLOCK_530524_HEADER, BLOCK_530525_HEADER, BLOCK_530526_HEADER,
         BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_COMMITMENT,
-        BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_HEADER,
-        BLOCK_530527_PRECOMMIT_MESSAGE, BLOCK_530527_PUBLIC_INPUTS_HASH,
-        BLOCK_530527_PUB_KEY_INDICES,
+        BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PRECOMMIT_MESSAGE,
+        BLOCK_530527_PUBLIC_INPUTS_HASH, BLOCK_530527_PUB_KEY_INDICES,
     };
-    use crate::utils::{WitnessAvailHash, WitnessEncodedHeader, QUORUM_SIZE};
+    use crate::utils::{WitnessAvailHash, QUORUM_SIZE};
 
     fn gen_step_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
         cd: &CircuitData<F, C, D>,
@@ -270,31 +268,6 @@ mod tests {
         type E = GoldilocksCubicParameters;
         type Curve = Ed25519;
 
-        let headers = vec![
-            BLOCK_530508_HEADER.to_vec(),
-            BLOCK_530509_HEADER.to_vec(),
-            BLOCK_530510_HEADER.to_vec(),
-            BLOCK_530511_HEADER.to_vec(),
-            BLOCK_530512_HEADER.to_vec(),
-            BLOCK_530513_HEADER.to_vec(),
-            BLOCK_530514_HEADER.to_vec(),
-            BLOCK_530515_HEADER.to_vec(),
-            BLOCK_530516_HEADER.to_vec(),
-            BLOCK_530517_HEADER.to_vec(),
-            BLOCK_530518_HEADER.to_vec(),
-            BLOCK_530519_HEADER.to_vec(),
-            BLOCK_530520_HEADER.to_vec(),
-            BLOCK_530521_HEADER.to_vec(),
-            BLOCK_530522_HEADER.to_vec(),
-            BLOCK_530523_HEADER.to_vec(),
-            BLOCK_530524_HEADER.to_vec(),
-            BLOCK_530525_HEADER.to_vec(),
-            BLOCK_530526_HEADER.to_vec(),
-            BLOCK_530527_HEADER.to_vec(),
-        ];
-        let head_block_hash = hex::decode(BLOCK_530508_PARENT_HASH).unwrap();
-        let head_block_num = 530507;
-
         let public_inputs_hash = hex::decode(BLOCK_530527_PUBLIC_INPUTS_HASH).unwrap();
 
         let mut builder_logger = env_logger::Builder::from_default_env();
@@ -307,20 +280,12 @@ mod tests {
 
         let step_target = make_step_circuit::<F, D, Curve, C, E>(&mut builder);
 
-        pw.set_avail_hash_target(
-            &step_target.subchain_target.head_block_hash,
-            &(head_block_hash.try_into().unwrap()),
+        let header_verification_proof =
+            retrieve_subchain_verification_proof().expect("subchain proof generation failed");
+        pw.set_proof_with_pis_target(
+            &step_target.subchain_verification_proof,
+            &header_verification_proof,
         );
-        pw.set_target(
-            step_target.subchain_target.head_block_num,
-            F::from_canonical_u64(head_block_num),
-        );
-        for (i, header) in headers.iter().enumerate() {
-            pw.set_encoded_header_target(
-                &step_target.subchain_target.encoded_headers[i],
-                header.clone(),
-            );
-        }
 
         pw.set_avail_hash_target(
             &step_target.public_inputs_hash,

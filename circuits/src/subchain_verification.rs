@@ -66,9 +66,9 @@ pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D
     where
         C::Hasher: AlgebraicHasher<F>;
 
-    fn header_verification_ivc_common_data(&mut self) -> CommonCircuitData<F, D>;
+    fn verify_header_ivc_cd(&mut self) -> CommonCircuitData<F, D>;
 
-    fn header_verification_ivc_verifier_data<C: GenericConfig<D, F = F> + 'static>(
+    fn verify_header_ivc_vd<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
     ) -> VerifierOnlyCircuitData<C, D>
     where
@@ -185,7 +185,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         // False for the base case, true otherwise
         let condition = self.add_virtual_bool_target_safe();
 
-        let common_data = self.header_verification_ivc_common_data();
+        let common_data = self.verify_header_ivc_cd();
 
         // Unpack inner proof's public inputs.
         let previous_header_verification_proof_with_pis =
@@ -250,7 +250,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         )
     }
 
-    fn header_verification_ivc_common_data(&mut self) -> CommonCircuitData<F, D> {
+    fn verify_header_ivc_cd(&mut self) -> CommonCircuitData<F, D> {
         let k_is = vec![
             1,
             7,
@@ -460,7 +460,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         }
     }
 
-    fn header_verification_ivc_verifier_data<C: GenericConfig<D, F = F> + 'static>(
+    fn verify_header_ivc_vd<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
     ) -> VerifierOnlyCircuitData<C, D>
     where
@@ -609,14 +609,14 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
     }
 
     fn parse_public_inputs(&mut self, public_inputs: &Vec<Target>) -> PublicInputsElements {
-        let mut public_inputs_iter = public_inputs.into_iter();
+        let mut public_inputs_iter = public_inputs.iter();
 
         PublicInputsElements {
             initial_block_hash: AvailHashTarget(
                 public_inputs_iter
                     .by_ref()
                     .take(HASH_SIZE)
-                    .map(|x| *x)
+                    .copied()
                     .collect_vec()
                     .as_slice()
                     .try_into()
@@ -627,7 +627,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 public_inputs_iter
                     .by_ref()
                     .take(HASH_SIZE)
-                    .map(|x| *x)
+                    .copied()
                     .collect_vec()
                     .as_slice()
                     .try_into()
@@ -637,7 +637,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 public_inputs_iter
                     .by_ref()
                     .take(HASH_SIZE)
-                    .map(|x| *x)
+                    .copied()
                     .collect_vec()
                     .as_slice()
                     .try_into()
@@ -648,7 +648,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                 public_inputs_iter
                     .take(HASH_SIZE)
                     .by_ref()
-                    .map(|x| *x)
+                    .copied()
                     .collect_vec()
                     .as_slice()
                     .try_into()
@@ -659,9 +659,9 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use crate::{
-        header_verification::CircuitBuilderHeaderVerification,
+        subchain_verification::CircuitBuilderHeaderVerification,
         utils::{
             tests::{
                 BLOCK_530508_HEADER, BLOCK_530508_PARENT_HASH, BLOCK_530509_HEADER,
@@ -692,12 +692,11 @@ mod tests {
         util::timing::TimingTree,
     };
 
-    #[test]
-    fn test_verify_headers_ivc() -> Result<()> {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
+    const D: usize = 2;
+    type C = PoseidonGoldilocksConfig;
+    type F = <C as GenericConfig<D>>::F;
 
+    pub fn retrieve_subchain_verification_proof() -> Result<ProofWithPublicInputs<F, C, D>> {
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
         builder_logger.filter_level(log::LevelFilter::Trace);
@@ -706,7 +705,7 @@ mod tests {
         let config = CircuitConfig::standard_recursion_config();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let common_data = builder.header_verification_ivc_common_data();
+        let common_data = builder.verify_header_ivc_cd();
 
         let (
             condition,
@@ -816,6 +815,17 @@ mod tests {
             header_num += 1;
         }
 
-        Ok(())
+        Ok(prev_proof.expect("prev_proof must be a Some value"))
+    }
+
+    #[test]
+    fn test_verify_subchain() -> Result<()> {
+        let proof = retrieve_subchain_verification_proof();
+
+        if proof.is_err() {
+            Err(anyhow::anyhow!("proof generation failed"))
+        } else {
+            Ok(())
+        }
     }
 }

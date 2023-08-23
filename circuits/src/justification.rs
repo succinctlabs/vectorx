@@ -410,7 +410,7 @@ pub(crate) mod tests {
         set_authority_set_pw, set_precommits_pw, AuthoritySetSignersTarget,
         CircuitBuilderGrandpaJustificationVerifier, FinalizedBlockTarget, PrecommitTarget,
     };
-    use crate::testing_utils::tests::{BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGS, BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_SET_COMMITMENT, BLOCK_HASHES, BLOCK_272515_SIGNERS};
+    use crate::testing_utils::tests::{BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGS, BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_SET_COMMITMENT, BLOCK_HASHES, BLOCK_272515_SIGNERS, HEAD_BLOCK_NUM, NUM_BLOCKS};
     use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, QUORUM_SIZE};
 
     pub struct JustificationTarget<C: Curve> {
@@ -606,7 +606,7 @@ pub(crate) mod tests {
         );
         pw.set_target(
             justification_target.finalized_block.num,
-            F::from_canonical_u32(530527u32),
+            F::from_canonical_u32(HEAD_BLOCK_NUM + (NUM_BLOCKS as u32)),
         );
 
         let data = builder.build::<C>();

@@ -1,4 +1,4 @@
-use curta::plonky2::field::CubicParameters;
+use curta::math::prelude::CubicParameters;
 use num::BigUint;
 
 use plonky2::field::extension::Extendable;
@@ -135,7 +135,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
     ) where
         Config::Hasher: AlgebraicHasher<F>,
     {
-        /*
         // First check to see that we have the right authority set
         // Calculate the hash for the authority set
         // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
@@ -187,7 +186,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 self.connect(hash_circuit.digest[i * 8 + j].target, bit.target);
             }
         }
-        */
 
         // First verify that each signed precommit is using a pub key from the authority set and that there are QUORUM_SIZE signed precommits
         let mut num_signers = self.zero();
@@ -390,7 +388,7 @@ pub(crate) mod tests {
 
     use anyhow::Result;
     use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
-    use curta::plonky2::field::CubicParameters;
+    use curta::math::prelude::CubicParameters;
     use log::Level;
     use num::BigUint;
     use plonky2::field::extension::Extendable;

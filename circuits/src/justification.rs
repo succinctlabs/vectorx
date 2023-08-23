@@ -135,6 +135,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
     ) where
         Config::Hasher: AlgebraicHasher<F>,
     {
+        /*
         // First check to see that we have the right authority set
         // Calculate the hash for the authority set
         // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
@@ -145,7 +146,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             AUTHORITIES_INPUT_LENGTH + AUTHORITIES_INPUT_PADDING;
         let hash_circuit = blake2b::<F, D, AUTHORITIES_INPUT_PADDED_LENGTH, HASH_SIZE>(self);
 
-        /*
         // Input the pub keys into the hasher
         for i in 0..NUM_AUTHORITIES {
             let mut compressed_pub_key = self.compress_point(&authority_set_signers.pub_keys[i]);
@@ -189,8 +189,9 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         }
         */
 
-        /*
-        // First verify that each signed precommit is using a pub key from the authority set
+        // First verify that each signed precommit is using a pub key from the authority set and that there are QUORUM_SIZE signed precommits
+        let mut num_signers = self.zero();
+        let one = self.one();
         for signed_precommit in signed_precommits.iter() {
             let mut is_valid_pub_key = self._false();
             let true_t = self._true();
@@ -200,7 +201,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             }
 
             self.assert_one(is_valid_pub_key.target);
+            num_signers = self.add(num_signers, one);
         }
+        let quorum_size = self.constant(F::from_canonical_usize(QUORUM_SIZE));
+        self.connect(num_signers, quorum_size);
 
         // Verify there are no duplicate pub key within the signed_precommits
         for i in 0..QUORUM_SIZE {
@@ -212,7 +216,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 self.assert_zero(is_equal.target);
             }
         }
-        */
 
         let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
             self,

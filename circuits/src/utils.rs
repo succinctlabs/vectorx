@@ -14,7 +14,6 @@ use plonky2::{
 use std::marker::PhantomData;
 
 pub const NUM_AUTHORITIES: usize = 76;
-pub const NUM_AUTHORITIES_PADDED: usize = 128; // The random access gadget requires a power of 2, so we pad the authority set to 128
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
 
 pub const CHUNK_128_BYTES: usize = 128;

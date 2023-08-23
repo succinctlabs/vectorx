@@ -21,7 +21,7 @@ use plonky2x::num::nonnative::nonnative::CircuitBuilderNonNative;
 use crate::decoder::{CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget};
 use crate::utils::{
     to_bits, AvailHashTarget, CircuitBuilderUtils, CHUNK_128_BYTES, ENCODED_PRECOMMIT_LENGTH,
-    HASH_SIZE, NUM_AUTHORITIES, NUM_AUTHORITIES_PADDED, PUB_KEY_SIZE, QUORUM_SIZE,
+    HASH_SIZE, NUM_AUTHORITIES, PUB_KEY_SIZE, QUORUM_SIZE,
 };
 
 #[derive(Clone, Debug)]
@@ -145,6 +145,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             AUTHORITIES_INPUT_LENGTH + AUTHORITIES_INPUT_PADDING;
         let hash_circuit = blake2b::<F, D, AUTHORITIES_INPUT_PADDED_LENGTH, HASH_SIZE>(self);
 
+        /*
         // Input the pub keys into the hasher
         for i in 0..NUM_AUTHORITIES {
             let mut compressed_pub_key = self.compress_point(&authority_set_signers.pub_keys[i]);
@@ -186,8 +187,9 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 self.connect(hash_circuit.digest[i * 8 + j].target, bit.target);
             }
         }
+        */
 
-
+        /*
         // First verify that each signed precommit is using a pub key from the authority set
         for signed_precommit in signed_precommits.iter() {
             let mut is_valid_pub_key = self._false();
@@ -210,24 +212,13 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 self.assert_zero(is_equal.target);
             }
         }
+        */
 
         let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
             self,
             QUORUM_SIZE,
             ENCODED_PRECOMMIT_LENGTH as u128,
         );
-
-        // Generate a padded array of the pub keys.  The random access affine point requires that the array be a power of 2.
-        let dummy_pub_key = C::GENERATOR_AFFINE;
-        let dummy_pub_key_t = self.constant_affine_point(dummy_pub_key);
-        let mut authority_set_padded = Vec::new();
-        for i in 0..NUM_AUTHORITIES_PADDED {
-            if i < NUM_AUTHORITIES {
-                authority_set_padded.push(authority_set_signers.pub_keys[i].clone());
-            } else {
-                authority_set_padded.push(dummy_pub_key_t.clone());
-            }
-        }
 
         // Now verify all of the signatures
         for (i, signed_precommit) in signed_precommits.iter().enumerate().take(QUORUM_SIZE) {

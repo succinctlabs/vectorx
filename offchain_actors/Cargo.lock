@@ -13,6 +13,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "addchain"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b2e69442aa5628ea6951fa33e24efe8313f4321a91bd729fc2f75bdfc858570"
+dependencies = [
+ "num-bigint 0.3.3",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -133,6 +144,12 @@ checksum = "23589ecb866b460d3a0f1278834750268c607e8e28a1b982c907219f3178cd72"
 dependencies = [
  "nodrop",
 ]
+
+[[package]]
+name = "array-macro"
+version = "2.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "457661fa6716c30b73d7c41400a8a78780d20523b83a9441dabec28e93f27cf4"
 
 [[package]]
 name = "arrayref"
@@ -1133,6 +1150,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1314,7 +1337,11 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
 dependencies = [
+ "atty",
+ "humantime",
  "log",
+ "regex",
+ "termcolor",
 ]
 
 [[package]]
@@ -1719,6 +1746,9 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ded41244b729663b1e574f1b4fb731469f69f79c17667b5d776b16cda0479449"
 dependencies = [
+ "bitvec 1.0.1",
+ "byteorder",
+ "ff_derive",
  "rand_core 0.6.4",
  "subtle",
 ]
@@ -1733,6 +1763,22 @@ dependencies = [
  "ff_derive_ce",
  "hex",
  "rand 0.4.6",
+]
+
+[[package]]
+name = "ff_derive"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f54704be45ed286151c5e11531316eaef5b8f5af7d597b806fdb8af108d84a"
+dependencies = [
+ "addchain",
+ "cfg-if",
+ "num-bigint 0.3.3",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -2502,6 +2548,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyper-tls"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
+dependencies = [
+ "bytes",
+ "hyper",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3261,6 +3320,17 @@ dependencies = [
 
 [[package]]
 name = "num-bigint"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f6f7833f2cbf2360a6cfd58cd41a53aa7a90bd4c202f5b1c7dd2ed73c57b2c3"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
@@ -3974,6 +4044,37 @@ checksum = "5696e2e2a6bb5c48a6e33fb0dd4d20d0a9472784b709964f337f224e99bd6d06"
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
+source = "git+https://github.com/succinctlabs/sdk.git?branch=kevjue/affine_point_equal#46169d8108262d06ceee6ef8b39abd435f24a36c"
+dependencies = [
+ "anyhow",
+ "array-macro",
+ "curta",
+ "curve25519-dalek 4.0.0",
+ "digest 0.10.7",
+ "dotenv",
+ "env_logger",
+ "ethers",
+ "eyre",
+ "ff",
+ "hex",
+ "itertools 0.10.5",
+ "lazy_static",
+ "log",
+ "num",
+ "plonky2",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.7",
+ "subtle-encoding",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "plonky2x"
+version = "0.1.0"
 source = "git+https://github.com/succinctlabs/sdk.git#7f308df1cad70ce7e7c07a0d7c34b634558e7875"
 dependencies = [
  "anyhow",
@@ -4396,10 +4497,12 @@ dependencies = [
  "http-body",
  "hyper",
  "hyper-rustls 0.24.1",
+ "hyper-tls",
  "ipnet",
  "js-sys",
  "log",
  "mime",
+ "native-tls",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -4409,6 +4512,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "tokio",
+ "tokio-native-tls",
  "tokio-rustls 0.24.1",
  "tower-service",
  "url",
@@ -6402,7 +6506,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/sdk.git?branch=kevjue/affine_point_equal)",
  "rand 0.4.6",
  "serde",
  "serde_json",
@@ -6428,7 +6532,7 @@ dependencies = [
  "pallet-grandpa",
  "parity-scale-codec",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/sdk.git)",
  "serde",
  "serde_json",
  "sp-core 16.0.0",

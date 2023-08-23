@@ -2556,6 +2556,7 @@ checksum = "5696e2e2a6bb5c48a6e33fb0dd4d20d0a9472784b709964f337f224e99bd6d06"
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
+source = "git+https://github.com/succinctlabs/sdk.git?branch=kevjue/affine_point_equal#46169d8108262d06ceee6ef8b39abd435f24a36c"
 dependencies = [
  "anyhow",
  "array-macro",

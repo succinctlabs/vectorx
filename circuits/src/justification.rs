@@ -568,7 +568,7 @@ pub(crate) mod tests {
         builder_logger.filter_level(log::LevelFilter::Trace);
         builder_logger.try_init()?;
 
-        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config2());
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw = PartialWitness::new();
 
         let justification_target = make_justification_circuit::<F, D, Curve, C, E>(&mut builder);

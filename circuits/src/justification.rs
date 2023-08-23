@@ -606,7 +606,7 @@ pub(crate) mod tests {
         );
         pw.set_target(
             justification_target.finalized_block.num,
-            F::from_canonical_u32(HEAD_BLOCK_NUM + (NUM_BLOCKS as u32)),
+            F::from_canonical_u32(HEAD_BLOCK_NUM + (NUM_BLOCKS as u32) - 1),
         );
 
         let data = builder.build::<C>();

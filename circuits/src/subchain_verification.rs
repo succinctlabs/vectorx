@@ -874,8 +874,6 @@ pub mod tests {
         // Verify all of the final proof's public inputs are expected.
         let proof_pis = parse_public_inputs::<C, F, D>(final_proof.clone().public_inputs);
 
-        println!("proof_pis is {:?}", proof_pis);
-
         assert!(proof_pis.initial_block_hash == hex::decode(BLOCK_HASHES[0]).unwrap().as_slice());
         assert!(proof_pis.initial_block_num == HEAD_BLOCK_NUM);
         assert!(proof_pis.initial_data_root_accumulator == [1u8; 32]);

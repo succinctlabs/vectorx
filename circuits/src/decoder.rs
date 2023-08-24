@@ -15,6 +15,8 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::{circuit_builder::CircuitBuilder, plonk_common::reduce_with_powers_circuit};
 
+const DATA_ROOT_OFFSET_FROM_END: usize = 132;
+
 trait CircuitBuilderScaleDecoder {
     fn decode_compact_int(&mut self, compact_bytes: Vec<Target>) -> (Target, Target, Target);
 
@@ -161,9 +163,12 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
         challenger.observe_elements(&seed);
 
         for _i in 0..2 {
-            let challenges = challenger.get_n_challenges(self, 32);
-            let data_root_size = self.constant(F::from_canonical_usize(32));
-            let data_root_start_idx = self.sub(header.header_size, data_root_size);
+            let challenges = challenger.get_n_challenges(self, HASH_SIZE);
+            let data_root_size = self.constant(F::from_canonical_usize(HASH_SIZE));
+            let data_root_offset =
+                self.constant(F::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
+            let data_root_start_idx = self.sub(header.header_size, data_root_offset);
+            let data_root_end_idx = self.add(data_root_start_idx, data_root_size);
             let mut within_sub_array = self.zero();
             let one = self.one();
 
@@ -172,7 +177,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
             for j in 0..MAX_HEADER_SIZE {
                 let at_start_idx = self.is_equal(j_target, data_root_start_idx);
                 within_sub_array = self.add(within_sub_array, at_start_idx.target);
-                let at_end_idx = self.is_equal(j_target, header.header_size);
+                let at_end_idx = self.is_equal(j_target, data_root_end_idx);
                 within_sub_array = self.sub(within_sub_array, at_end_idx.target);
 
                 let mut subarray_idx = self.sub(j_target, data_root_start_idx);
@@ -240,9 +245,10 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
         let header_length = witness
             .get_target(self.encoded_header.header_size)
             .to_canonical_u64() as usize;
-        let data_root_start_idx = header_length - HASH_SIZE;
+        let data_root_start_idx = header_length - DATA_ROOT_OFFSET_FROM_END;
+        let data_root_end_idx = data_root_start_idx + HASH_SIZE;
 
-        for i in data_root_start_idx..data_root_start_idx + HASH_SIZE {
+        for i in data_root_start_idx..data_root_end_idx {
             let byte = witness.get_target(self.encoded_header.header_bytes[i]);
             out_buffer.set_target(self.data_root[i - data_root_start_idx], byte);
         }
@@ -298,14 +304,14 @@ mod tests {
     use crate::decoder::{
         CircuitBuilderHeaderDecoder, CircuitBuilderScaleDecoder, EncodedHeaderTarget,
     };
-    use crate::utils::tests::{
-        BLOCK_576728_BLOCK_HASH, BLOCK_576728_HEADER, BLOCK_576728_PARENT_HASH,
-        BLOCK_576728_STATE_ROOT, BLOCK_576729_DATA_ROOT,
+    use crate::testing_utils::tests::{
+        BLOCK_HASHES, DATA_ROOTS, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
+        STATE_ROOTS,
     };
-    use crate::utils::{AvailHashTarget, CircuitBuilderUtils, MAX_HEADER_SIZE};
-    use anyhow::Result;
+    use crate::utils::{CircuitBuilderUtils, WitnessAvailHash, MAX_HEADER_SIZE};
+    use anyhow::{Ok, Result};
     use plonky2::field::types::Field;
-    use plonky2::iop::witness::PartialWitness;
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -400,74 +406,106 @@ mod tests {
         builder_logger.try_init()?;
 
         let config = CircuitConfig::standard_recursion_config();
-        let pw = PartialWitness::new();
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
-        let mut header_bytes_target = BLOCK_576728_HEADER
-            .iter()
-            .map(|b| builder.constant(F::from_canonical_u8(*b)))
-            .collect::<Vec<_>>();
-        let header_size = builder.constant(F::from_canonical_usize(BLOCK_576728_HEADER.len()));
-
-        // pad the header bytes
-        for _ in BLOCK_576728_HEADER.len()..MAX_HEADER_SIZE {
-            header_bytes_target.push(builder.zero());
+        let mut header_bytes = Vec::new();
+        for _i in 0..MAX_HEADER_SIZE {
+            header_bytes.push(builder.add_virtual_target());
         }
 
-        let block_hash = hex::decode(BLOCK_576728_BLOCK_HASH).unwrap();
-        let block_hash_target = AvailHashTarget(
-            block_hash
-                .iter()
-                .map(|b| builder.constant(F::from_canonical_u8(*b)))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-        );
+        let header_size = builder.add_virtual_target();
+
+        let block_hash = builder.add_virtual_avail_hash_target_safe(false);
 
         let decoded_header = builder.decode_header(
             &EncodedHeaderTarget {
-                header_bytes: header_bytes_target.try_into().unwrap(),
+                header_bytes: header_bytes.as_slice().try_into().unwrap(),
                 header_size,
             },
-            block_hash_target,
+            block_hash.clone(),
         );
 
-        let expected_block_number = builder.constant(F::from_canonical_u64(576728));
+        let expected_block_number = builder.add_virtual_target();
         builder.connect(decoded_header.block_number, expected_block_number);
 
-        let expected_parent_hash = hex::decode(BLOCK_576728_PARENT_HASH).unwrap();
-        for (i, byte) in expected_parent_hash.iter().enumerate() {
-            let expected_parent_hash_byte = builder.constant(F::from_canonical_u8(*byte));
-            builder.connect(decoded_header.parent_hash.0[i], expected_parent_hash_byte);
-        }
+        let expected_parent_hash = builder.add_virtual_avail_hash_target_safe(false);
+        builder.connect_avail_hash(decoded_header.parent_hash, expected_parent_hash.clone());
 
-        let expected_state_root = hex::decode(BLOCK_576728_STATE_ROOT).unwrap();
-        let expected_state_root_target = AvailHashTarget(
-            expected_state_root
-                .iter()
-                .map(|b| builder.constant(F::from_canonical_u8(*b)))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-        );
+        let expected_state_root = builder.add_virtual_avail_hash_target_safe(false);
+        builder.connect_avail_hash(decoded_header.state_root, expected_state_root.clone());
 
-        let expected_data_root = hex::decode(BLOCK_576729_DATA_ROOT).unwrap();
-        let expected_data_root_target = AvailHashTarget(
-            expected_data_root
-                .iter()
-                .map(|b| builder.constant(F::from_canonical_u8(*b)))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap(),
-        );
-
-        builder.connect_avail_hash(decoded_header.data_root, expected_data_root_target);
-
-        builder.connect_avail_hash(decoded_header.state_root, expected_state_root_target);
+        let expected_data_root = builder.add_virtual_avail_hash_target_safe(false);
+        builder.connect_avail_hash(decoded_header.data_root, expected_data_root.clone());
 
         let data = builder.build::<C>();
-        let proof = data.prove(pw)?;
 
-        data.verify(proof)
+        for i in 0..NUM_BLOCKS {
+            let block_num = HEAD_BLOCK_NUM + i as u32;
+            println!("decoding block {}", block_num);
+
+            let mut pw = PartialWitness::new();
+
+            let encoded_header_bytes = hex::decode(ENCODED_HEADERS[i]).unwrap();
+            for j in 0..encoded_header_bytes.len() {
+                pw.set_target(
+                    header_bytes[j],
+                    F::from_canonical_u8(encoded_header_bytes[j]),
+                );
+            }
+
+            // pad the rest of the header bytes with 0s
+            for j in encoded_header_bytes.len()..MAX_HEADER_SIZE {
+                pw.set_target(header_bytes[j], F::ZERO);
+            }
+
+            pw.set_target(
+                header_size,
+                F::from_canonical_usize(encoded_header_bytes.len()),
+            );
+
+            pw.set_avail_hash_target(
+                &block_hash,
+                hex::decode(BLOCK_HASHES[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
+
+            pw.set_target(expected_block_number, F::from_canonical_u32(block_num));
+
+            pw.set_avail_hash_target(
+                &expected_parent_hash,
+                hex::decode(PARENT_HASHES[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
+
+            pw.set_avail_hash_target(
+                &expected_state_root,
+                hex::decode(STATE_ROOTS[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
+
+            pw.set_avail_hash_target(
+                &expected_data_root,
+                hex::decode(DATA_ROOTS[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
+
+            let proof = data.prove(pw)?;
+
+            let _ = data.verify(proof);
+        }
+
+        Ok(())
     }
 }

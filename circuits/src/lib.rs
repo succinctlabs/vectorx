@@ -5,6 +5,7 @@ pub mod poseidon_bn128;
 mod poseidon_bn128_constants;
 pub mod step;
 pub mod subchain_verification;
+mod testing_utils;
 pub mod utils;
 
 extern crate ff;

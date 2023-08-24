@@ -2,10 +2,12 @@ use crate::justification::{
     AuthoritySetSignersTarget, CircuitBuilderGrandpaJustificationVerifier, FinalizedBlockTarget,
     PrecommitTarget,
 };
-use crate::subchain_verification::CircuitBuilderHeaderVerification;
+use crate::subchain_verification::{
+    verify_header_ivc_cd, verify_header_ivc_vd, CircuitBuilderHeaderVerification,
+};
 use crate::utils::HASH_SIZE;
 use crate::utils::{AvailHashTarget, CircuitBuilderUtils, QUORUM_SIZE};
-use curta::plonky2::field::CubicParameters;
+use curta::math::prelude::CubicParameters;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -150,8 +152,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             }
         }
 
-        let inner_cd = self.verify_header_ivc_cd();
-        let inner_vd = self.verify_header_ivc_vd::<Config>();
+        let inner_cd = verify_header_ivc_cd();
+        let inner_vd = verify_header_ivc_vd::<Config, F, D>();
         let inner_vd_t = self.constant_verifier_data(&inner_vd);
 
         self.verify_proof::<Config>(subchain_verification_proof, &inner_vd_t, &inner_cd);
@@ -188,7 +190,7 @@ pub fn make_step_circuit<
 where
     Config::Hasher: AlgebraicHasher<F>,
 {
-    let cd = builder.verify_header_ivc_cd();
+    let cd = verify_header_ivc_cd();
     let subchain_verification_proof = builder.add_virtual_proof_with_pis(&cd);
 
     let mut precommit_targets = Vec::new();
@@ -242,10 +244,10 @@ mod tests {
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::step::make_step_circuit;
     use crate::subchain_verification::tests::retrieve_subchain_verification_proof;
-    use crate::utils::tests::{
-        BLOCK_530527_AUTHORITY_SET, BLOCK_530527_AUTHORITY_SET_COMMITMENT,
-        BLOCK_530527_AUTHORITY_SET_ID, BLOCK_530527_AUTHORITY_SIGS, BLOCK_530527_PRECOMMIT_MESSAGE,
-        BLOCK_530527_PUBLIC_INPUTS_HASH, BLOCK_530527_PUB_KEY_INDICES,
+    use crate::testing_utils::tests::{
+        BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
+        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_PRECOMMIT_MESSAGE,
+        BLOCK_272515_PUBLIC_INPUTS_HASH, BLOCK_272515_SIGNERS, BLOCK_272515_SIGS,
     };
     use crate::utils::{WitnessAvailHash, QUORUM_SIZE};
 
@@ -268,7 +270,7 @@ mod tests {
         type E = GoldilocksCubicParameters;
         type Curve = Ed25519;
 
-        let public_inputs_hash = hex::decode(BLOCK_530527_PUBLIC_INPUTS_HASH).unwrap();
+        let public_inputs_hash = hex::decode(BLOCK_272515_PUBLIC_INPUTS_HASH).unwrap();
 
         let mut builder_logger = env_logger::Builder::from_default_env();
         builder_logger.format_timestamp(None);
@@ -297,14 +299,17 @@ mod tests {
             &mut pw,
             step_target.precommits.to_vec(),
             (0..QUORUM_SIZE)
-                .map(|_| BLOCK_530527_PRECOMMIT_MESSAGE.clone().to_vec())
+                .map(|_| hex::decode(BLOCK_272515_PRECOMMIT_MESSAGE).unwrap())
                 .collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_SIGS
+            BLOCK_272515_SIGS
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
-            BLOCK_530527_PUB_KEY_INDICES.to_vec(),
-            BLOCK_530527_AUTHORITY_SET
+            BLOCK_272515_SIGNERS
+                .iter()
+                .map(|x| hex::decode(x).unwrap())
+                .collect::<Vec<_>>(),
+            BLOCK_272515_AUTHORITY_SET
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
@@ -313,12 +318,12 @@ mod tests {
         set_authority_set_pw::<F, D, Curve>(
             &mut pw,
             &step_target.authority_set,
-            BLOCK_530527_AUTHORITY_SET
+            BLOCK_272515_AUTHORITY_SET
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
-            BLOCK_530527_AUTHORITY_SET_ID,
-            hex::decode(BLOCK_530527_AUTHORITY_SET_COMMITMENT).unwrap(),
+            BLOCK_272515_AUTHORITY_SET_ID,
+            hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 
         println!("building the step circuit");
@@ -372,7 +377,7 @@ mod tests {
                 .iter()
                 .map(|element| u8::try_from(element.to_canonical_u64()).unwrap())
                 .collect::<Vec<_>>(),
-            hex::decode(BLOCK_530527_PUBLIC_INPUTS_HASH).unwrap(),
+            hex::decode(BLOCK_272515_PUBLIC_INPUTS_HASH).unwrap(),
         );
 
         /*  TODO:  It appears that the circuit digest changes after every different run, even if none of the code changes.  Need to find out why.

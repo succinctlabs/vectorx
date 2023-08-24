@@ -888,7 +888,7 @@ pub mod tests {
         assert!(proof_pis.latest_block_num == HEAD_BLOCK_NUM + ENCODED_HEADERS.len() as u32 - 1);
         assert!(
             proof_pis.latest_data_root_accumulator
-                == hex::decode("b7200702f3bd78ab4f99d1877ff923a706f10de475aeda08f0418bc481c0c4d4")
+                == hex::decode("feca63bd2df984e9b737f8b58e914cbe6bb0c8dac7fb1b5c5a13c8a9ca952718")
                     .unwrap()
                     .as_slice()
         );

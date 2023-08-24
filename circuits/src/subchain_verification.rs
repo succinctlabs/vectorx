@@ -716,8 +716,8 @@ pub mod tests {
             cyclic_circuit_data.verifier_only,
         );
 
-        let initial_block_hash_val = hex::decode(BLOCK_HASHES[19]).unwrap();
-        let initial_block_num_val = HEAD_BLOCK_NUM + 20 - 1;
+        let initial_block_hash_val = hex::decode(BLOCK_HASHES[0]).unwrap();
+        let initial_block_num_val = HEAD_BLOCK_NUM;
         let initial_data_root_accumulator_val = [1u8; 32];
 
         let mut use_prev_proof = false;
@@ -725,7 +725,7 @@ pub mod tests {
         let mut header_num = initial_block_num_val + 1;
 
         // The first encoded header is the HEAD header.  We assume that is already verified.
-        for header in ENCODED_HEADERS[20..].iter() {
+        for header in ENCODED_HEADERS[1..].iter() {
             println!("Generating proof for header: {}", header_num);
             let mut pw = PartialWitness::new();
             let header_bytes = hex::decode(header).expect("Expect a valid hex string");

@@ -2,7 +2,9 @@ use crate::justification::{
     AuthoritySetSignersTarget, CircuitBuilderGrandpaJustificationVerifier, FinalizedBlockTarget,
     PrecommitTarget,
 };
-use crate::subchain_verification::CircuitBuilderHeaderVerification;
+use crate::subchain_verification::{
+    verify_header_ivc_cd, verify_header_ivc_vd, CircuitBuilderHeaderVerification,
+};
 use crate::utils::HASH_SIZE;
 use crate::utils::{AvailHashTarget, CircuitBuilderUtils, QUORUM_SIZE};
 use curta::math::prelude::CubicParameters;
@@ -150,8 +152,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             }
         }
 
-        let inner_cd = self.verify_header_ivc_cd();
-        let inner_vd = self.verify_header_ivc_vd::<Config>();
+        let inner_cd = verify_header_ivc_cd();
+        let inner_vd = verify_header_ivc_vd::<Config, F, D>();
         let inner_vd_t = self.constant_verifier_data(&inner_vd);
 
         self.verify_proof::<Config>(subchain_verification_proof, &inner_vd_t, &inner_cd);
@@ -188,7 +190,7 @@ pub fn make_step_circuit<
 where
     Config::Hasher: AlgebraicHasher<F>,
 {
-    let cd = builder.verify_header_ivc_cd();
+    let cd = verify_header_ivc_cd();
     let subchain_verification_proof = builder.add_virtual_proof_with_pis(&cd);
 
     let mut precommit_targets = Vec::new();

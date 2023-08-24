@@ -18,7 +18,7 @@ pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
 
 pub const CHUNK_128_BYTES: usize = 128;
 //pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 103; // 2048 bytes
-pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 51; // 2048 bytes
+pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 52; // 2048 bytes
 pub const HASH_SIZE: usize = 32; // in bytes
 pub const PUB_KEY_SIZE: usize = 32; // in bytes
 

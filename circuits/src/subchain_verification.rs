@@ -405,48 +405,73 @@ where
     }
 }
 
-fn parse_public_inputs<F: RichField + Extendable<D>, const D: usize>(
+fn parse_public_inputs<
+    C: GenericConfig<D, F = F> + 'static,
+    F: RichField + Extendable<D>,
+    const D: usize,
+>(
     public_inputs: Vec<F>,
-) -> PublicInputsElements {
-    // 4 hashes and 2 block numbers
-    assert!(public_inputs.len() == 4 * HASH_SIZE + 2);
+) -> PublicInputsElements
+where
+    C::Hasher: AlgebraicHasher<F>,
+{
+    let vd = verify_header_ivc_vd::<C, F, D>();
 
-    let public_inputs_iter = public_inputs.iter().map(|x| {
-        u32::try_from(F::to_canonical_u64(&x)).expect("element in public inputs is not a u32")
-    });
+    // 4 hashes and 2 block numbers and the circuit digest and sigma contants cap
+    let public_inputs_len = 4 * HASH_SIZE + 2;
+
+    assert!(
+        public_inputs.len()
+            == public_inputs_len
+                + vd.circuit_digest.elements.len()
+                + vd.constants_sigmas_cap
+                    .0
+                    .iter()
+                    .map(|x| x.elements.len())
+                    .sum::<usize>()
+    );
+
+    let canonical_public_inputs = public_inputs
+        .iter()
+        .take(public_inputs_len)
+        .map(|x| {
+            u32::try_from(F::to_canonical_u64(x)).expect("element in public inputs is not a u32")
+        })
+        .collect_vec();
+    let mut public_inputs_iter = canonical_public_inputs.iter();
 
     PublicInputsElements {
         initial_block_hash:
                 public_inputs_iter
-                .clone()
+                .by_ref()
                 .take(HASH_SIZE)
-                .map(|x| u8::try_from(x).expect("element in public inputs is not a u8"))
+                .map(|x| u8::try_from(*x).expect("element in public inputs is not a u8"))
                 .collect_vec()
                 .as_slice()
                 .try_into()
                 .expect("can't take HASH_SIZE elements from public inputs for initial block hash"),
-        initial_block_num: public_inputs_iter.clone().take(1).collect_vec()[0],
+        initial_block_num: *public_inputs_iter.by_ref().take(1).collect_vec()[0],
         initial_data_root_accumulator: public_inputs_iter
-                .clone()
+                .by_ref()
                 .take(HASH_SIZE)
-                .map(|x| u8::try_from(x).expect("element in public inputs is not a u8"))
+                .map(|x| u8::try_from(*x).expect("element in public inputs is not a u8"))
                 .collect_vec()
                 .as_slice()
                 .try_into()
                 .expect("can't take HASH_SIZE elements from public inputs for initial data root accumulator"),
         latest_block_hash: public_inputs_iter
-                .clone()
-                .take(HASH_SIZE)
-                .map(|x| u8::try_from(x).expect("element in public inputs is not a u8"))
+                .by_ref().
+                take(HASH_SIZE)
+                .map(|x| u8::try_from(*x).expect("element in public inputs is not a u8"))
                 .collect_vec()
                 .as_slice()
                 .try_into()
                 .expect("can't take HASH_SIZE elements from public inputs for latest block hash"),
-        latest_block_num: public_inputs_iter.clone().take(1).collect_vec()[0],
+        latest_block_num: *public_inputs_iter.by_ref().take(1).collect_vec()[0],
         latest_data_root_accumulator: public_inputs_iter
-                .clone()
+                .by_ref()
                 .take(HASH_SIZE)
-                .map(|x| u8::try_from(x).expect("element in public inputs is not a u8"))
+                .map(|x| u8::try_from(*x).expect("element in public inputs is not a u8"))
                 .collect_vec()
                 .as_slice()
                 .try_into()
@@ -767,8 +792,8 @@ pub mod tests {
 
         assert_eq!(verifier_data, cyclic_circuit_data.verifier_only,);
 
-        let initial_block_hash_val = hex::decode(BLOCK_HASHES[0]).unwrap();
-        let initial_block_num_val = HEAD_BLOCK_NUM;
+        let initial_block_hash_val = hex::decode(BLOCK_HASHES[19]).unwrap();
+        let initial_block_num_val = HEAD_BLOCK_NUM + 20 - 1;
         let initial_data_root_accumulator_val = [1u8; 32];
 
         let mut use_prev_proof = false;
@@ -776,7 +801,7 @@ pub mod tests {
         let mut header_num = initial_block_num_val + 1;
 
         // The first encoded header is the HEAD header.  We assume that is already verified.
-        for header in ENCODED_HEADERS[1..].iter() {
+        for header in ENCODED_HEADERS[20..].iter() {
             println!("Generating proof for header: {}", header_num);
             let mut pw = PartialWitness::new();
             let header_bytes = hex::decode(header).expect("Expect a valid hex string");
@@ -847,7 +872,7 @@ pub mod tests {
         let final_proof = prev_proof.expect("prev_proof must be a Some value");
 
         // Verify all of the final proof's public inputs are expected.
-        let proof_pis = parse_public_inputs::<F, D>(final_proof.clone().public_inputs);
+        let proof_pis = parse_public_inputs::<C, F, D>(final_proof.clone().public_inputs);
 
         println!("proof_pis is {:?}", proof_pis);
 

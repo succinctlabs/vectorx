@@ -242,20 +242,20 @@ pub(crate) mod tests {
         "e786491aaeec8777b3f5c3fe5d1ca1292fb38cc7d4250b19763fd931a9757b12";
 
     // concatenation of:
-    // orig head hash:  2f6566c7411edfeba04ebcd68c5ecdbc8e95bf65da47ef553d6d8537200b74fa
-    // updated head hash:  62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065
+    // orig head hash:  7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118f
+    // updated head hash:  c63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f
     // orig data root commitment: 0101010101010101010101010101010101010101010101010101010101010101
     // updated data root commitment: 41e5e320601ce999c1cdbdeda6571f16b4950fa5189b36929aa6d1ca7c459ae0
-    // validator commitment:  0c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f6
-    // validator set id: 00000000000001f0
-    // orig header num: 0008184b
-    // updated header num: 0008185f
+    // validator commitment:  e786491aaeec8777b3f5c3fe5d1ca1292fb38cc7d4250b19763fd931a9757b12
+    // validator set id: 0000000000000100
+    // orig header num: 00042883
+    // updated header num: 00042897
     //
     // Calculated hash by using the python lines:
     // >>> import hashlib
     // >>> hasher = hashlib.blake2b(digest_size = 32)
-    // >>> hasher.update(bytes.fromhex("2f6566c7411edfeba04ebcd68c5ecdbc8e95bf65da47ef553d6d8537200b74fa62f1aaf6297b86b3749448d66cc43deada49940c3912a4ec4916344058e8f065010101010101010101010101010101010101010101010101010101010101010141e5e320601ce999c1cdbdeda6571f16b4950fa5189b36929aa6d1ca7c459ae00c076c231c5a3e15b03288bafbfe10ee86bd0ad23f9fecc86ee03fb439e045f600000000000001f00008184b0008185f"))
+    // >>> hasher.update(bytes.fromhex("7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118fc63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f010101010101010101010101010101010101010101010101010101010101010141e5e320601ce999c1cdbdeda6571f16b4950fa5189b36929aa6d1ca7c459ae0e786491aaeec8777b3f5c3fe5d1ca1292fb38cc7d4250b19763fd931a9757b1200000000000001000004288300042897"))
     // >>> hasher.digest().hex()
-    pub const BLOCK_530527_PUBLIC_INPUTS_HASH: &str =
-        "52feccd04afa7419665ca885b901f4cd7d0f693b3d72f50a16dd3c623713bc1c";
+    pub const BLOCK_272515_PUBLIC_INPUTS_HASH: &str =
+        "e08ecbce267f4028264fdcd93d6509de3b451f8095310b1a810eab0cb430b6d3";
 }

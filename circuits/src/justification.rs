@@ -4,7 +4,7 @@ use num::BigUint;
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::{Field, PrimeField};
 use plonky2::hash::hash_types::RichField;
-use plonky2::iop::target::{Target, BoolTarget};
+use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
@@ -195,7 +195,11 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             let true_t = self._true();
             for auth_key in authority_set_signers.pub_keys.iter() {
                 let is_equal = self.is_equal_affine_point(auth_key, &signed_precommit.pub_key);
-                is_valid_pub_key = BoolTarget::new_unsafe(self.select(is_equal, true_t.target, is_valid_pub_key.target));
+                is_valid_pub_key = BoolTarget::new_unsafe(self.select(
+                    is_equal,
+                    true_t.target,
+                    is_valid_pub_key.target,
+                ));
             }
 
             self.assert_one(is_valid_pub_key.target);
@@ -269,7 +273,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 &verify_sigs_targets.sigs[i].s,
                 &signed_precommits[i].signature.s,
             );
-            self.connect_affine_point(&verify_sigs_targets.pub_keys[i].0, &signed_precommit.pub_key);
+            self.connect_affine_point(
+                &verify_sigs_targets.pub_keys[i].0,
+                &signed_precommit.pub_key,
+            );
         }
     }
 }
@@ -411,7 +418,11 @@ pub(crate) mod tests {
         set_authority_set_pw, set_precommits_pw, AuthoritySetSignersTarget,
         CircuitBuilderGrandpaJustificationVerifier, FinalizedBlockTarget, PrecommitTarget,
     };
-    use crate::testing_utils::tests::{BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGS, BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_SET_COMMITMENT, BLOCK_HASHES, BLOCK_272515_SIGNERS, HEAD_BLOCK_NUM, NUM_BLOCKS};
+    use crate::testing_utils::tests::{
+        BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
+        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGNERS,
+        BLOCK_272515_SIGS, BLOCK_HASHES, HEAD_BLOCK_NUM, NUM_BLOCKS,
+    };
     use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, QUORUM_SIZE};
 
     pub struct JustificationTarget<C: Curve> {
@@ -578,11 +589,14 @@ pub(crate) mod tests {
             (0..QUORUM_SIZE)
                 .map(|_| hex::decode(BLOCK_272515_PRECOMMIT_MESSAGE).unwrap())
                 .collect::<Vec<_>>(),
-                BLOCK_272515_SIGS
+            BLOCK_272515_SIGS
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
-            BLOCK_272515_SIGNERS.iter().map(|x| hex::decode(x).unwrap()).collect::<Vec<_>>(),
+            BLOCK_272515_SIGNERS
+                .iter()
+                .map(|x| hex::decode(x).unwrap())
+                .collect::<Vec<_>>(),
             BLOCK_272515_AUTHORITY_SET
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
@@ -596,7 +610,7 @@ pub(crate) mod tests {
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
-                BLOCK_272515_AUTHORITY_SET_ID,
+            BLOCK_272515_AUTHORITY_SET_ID,
             hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
         );
 

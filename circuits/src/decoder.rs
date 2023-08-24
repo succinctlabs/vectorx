@@ -165,7 +165,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
         for _i in 0..2 {
             let challenges = challenger.get_n_challenges(self, HASH_SIZE);
             let data_root_size = self.constant(F::from_canonical_usize(HASH_SIZE));
-            let data_root_offset = self.constant(F::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
+            let data_root_offset =
+                self.constant(F::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
             let data_root_start_idx = self.sub(header.header_size, data_root_offset);
             let data_root_end_idx = self.add(data_root_start_idx, data_root_size);
             let mut within_sub_array = self.zero();
@@ -303,9 +304,12 @@ mod tests {
     use crate::decoder::{
         CircuitBuilderHeaderDecoder, CircuitBuilderScaleDecoder, EncodedHeaderTarget,
     };
-    use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES, STATE_ROOTS, DATA_ROOTS};
-    use crate::utils::{CircuitBuilderUtils, MAX_HEADER_SIZE, WitnessAvailHash};
-    use anyhow::{Result, Ok};
+    use crate::testing_utils::tests::{
+        BLOCK_HASHES, DATA_ROOTS, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
+        STATE_ROOTS,
+    };
+    use crate::utils::{CircuitBuilderUtils, WitnessAvailHash, MAX_HEADER_SIZE};
+    use anyhow::{Ok, Result};
     use plonky2::field::types::Field;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -443,7 +447,10 @@ mod tests {
 
             let encoded_header_bytes = hex::decode(ENCODED_HEADERS[i]).unwrap();
             for j in 0..encoded_header_bytes.len() {
-                pw.set_target(header_bytes[j], F::from_canonical_u8(encoded_header_bytes[j]));
+                pw.set_target(
+                    header_bytes[j],
+                    F::from_canonical_u8(encoded_header_bytes[j]),
+                );
             }
 
             // pad the rest of the header bytes with 0s
@@ -451,17 +458,48 @@ mod tests {
                 pw.set_target(header_bytes[j], F::ZERO);
             }
 
-            pw.set_target(header_size, F::from_canonical_usize(encoded_header_bytes.len()));
+            pw.set_target(
+                header_size,
+                F::from_canonical_usize(encoded_header_bytes.len()),
+            );
 
-            pw.set_avail_hash_target(&block_hash, hex::decode(BLOCK_HASHES[i]).unwrap().as_slice().try_into().unwrap());
+            pw.set_avail_hash_target(
+                &block_hash,
+                hex::decode(BLOCK_HASHES[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
 
             pw.set_target(expected_block_number, F::from_canonical_u32(block_num));
 
-            pw.set_avail_hash_target(&expected_parent_hash, hex::decode(PARENT_HASHES[i]).unwrap().as_slice().try_into().unwrap());
+            pw.set_avail_hash_target(
+                &expected_parent_hash,
+                hex::decode(PARENT_HASHES[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
 
-            pw.set_avail_hash_target(&expected_state_root, hex::decode(STATE_ROOTS[i]).unwrap().as_slice().try_into().unwrap());
+            pw.set_avail_hash_target(
+                &expected_state_root,
+                hex::decode(STATE_ROOTS[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
 
-            pw.set_avail_hash_target(&expected_data_root, hex::decode(DATA_ROOTS[i]).unwrap().as_slice().try_into().unwrap());
+            pw.set_avail_hash_target(
+                &expected_data_root,
+                hex::decode(DATA_ROOTS[i])
+                    .unwrap()
+                    .as_slice()
+                    .try_into()
+                    .unwrap(),
+            );
 
             let proof = data.prove(pw)?;
 

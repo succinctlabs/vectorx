@@ -4044,7 +4044,7 @@ checksum = "5696e2e2a6bb5c48a6e33fb0dd4d20d0a9472784b709964f337f224e99bd6d06"
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sdk.git?branch=kevjue/affine_point_equal#46169d8108262d06ceee6ef8b39abd435f24a36c"
+source = "git+https://github.com/succinctlabs/sdk.git?branch=kevjue/blake2b_bugfix#bde68fd5d8c8f44f3df74c2189de24bf204b2a2e"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -6506,7 +6506,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x 0.1.0 (git+https://github.com/succinctlabs/sdk.git?branch=kevjue/affine_point_equal)",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/sdk.git?branch=kevjue/blake2b_bugfix)",
  "rand 0.4.6",
  "serde",
  "serde_json",

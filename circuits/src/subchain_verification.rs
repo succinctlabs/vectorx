@@ -693,6 +693,7 @@ pub mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(config);
 
         let common_data = builder.verify_header_ivc_cd();
+        let verifier_data = builder.verify_header_ivc_vd();
 
         let (
             condition,
@@ -703,6 +704,17 @@ pub mod tests {
         ) = builder.verify_header_ivc::<C>();
 
         let cyclic_circuit_data = builder.build::<C>();
+
+        // Assert that the circuit's common data nd verifier data matches what is expected
+        assert_eq!(
+            common_data,
+            cyclic_circuit_data.common
+        );
+
+        assert_eq!(
+            verifier_data,
+            cyclic_circuit_data.verifier_only,
+        );
 
         let initial_block_hash_val = hex::decode(BLOCK_HASHES[19]).unwrap();
         let initial_block_num_val = HEAD_BLOCK_NUM + 20 - 1;

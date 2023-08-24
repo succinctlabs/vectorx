@@ -389,7 +389,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
                     num_query_rounds: 28,
                 },
                 hiding: false,
-                degree_bits: 18,
+                degree_bits: 20,
                 reduction_arity_bits: vec![4, 4, 4, 4],
             },
             gates: vec![

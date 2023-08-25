@@ -2,7 +2,7 @@ use itertools::Itertools;
 use plonky2::gates::selectors::SelectorsInfo;
 use plonky2::hash::hash_types::HashOut;
 use plonky2::hash::merkle_tree::MerkleCap;
-use plonky2::plonk::circuit_data::{CircuitData, VerifierOnlyCircuitData};
+use plonky2::plonk::circuit_data::{CircuitData, VerifierCircuitTarget, VerifierOnlyCircuitData};
 use plonky2::{
     field::extension::Extendable,
     fri::{reduction_strategies::FriReductionStrategy, FriConfig, FriParams},
@@ -38,6 +38,7 @@ struct HeaderIVCTargets<const D: usize> {
     is_small_header: BoolTarget,
     small_header_proof: ProofWithPublicInputsTarget<D>,
     large_header_proof: ProofWithPublicInputsTarget<D>,
+    verifier_circuit_target: VerifierCircuitTarget,
 }
 
 fn create_header_ivc_circuit<
@@ -63,7 +64,7 @@ where
     let large_header_proof =
         header_ivc_builder.add_virtual_proof_with_pis(&process_large_header_cd());
 
-    header_ivc_builder.verify_header_ivc::<C>(
+    let verifier_circuit_target = header_ivc_builder.verify_header_ivc::<C>(
         ivc_base_case,
         &ivc_prev_proof,
         is_small_header,
@@ -74,7 +75,7 @@ where
     let header_ivc_data = header_ivc_builder.build::<C>();
 
     assert_eq!(header_ivc_data_cd, header_ivc_data.common);
-    assert_eq!(header_ivc_data_vd, header_ivc_data.verifier_only,);
+    assert_eq!(header_ivc_data_vd, header_ivc_data.verifier_only);
 
     (
         HeaderIVCTargets {
@@ -83,6 +84,7 @@ where
             is_small_header,
             small_header_proof,
             large_header_proof,
+            verifier_circuit_target,
         },
         header_ivc_data,
     )
@@ -320,139 +322,139 @@ where
         constants_sigmas_cap: MerkleCap(vec![
             HashOut {
                 elements: [
-                    F::from_canonical_u64(14279925247335401071),
-                    F::from_canonical_u64(3583580480101461931),
-                    F::from_canonical_u64(16536002908860857775),
-                    F::from_canonical_u64(6379011898590097254),
+                    F::from_canonical_u64(13719139148739964809),
+                    F::from_canonical_u64(3985397077093140875),
+                    F::from_canonical_u64(773757932482375232),
+                    F::from_canonical_u64(8637618966119583773),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8732164097790799892),
-                    F::from_canonical_u64(6151513101891070743),
-                    F::from_canonical_u64(1404140543879842872),
-                    F::from_canonical_u64(1186760377589587695),
+                    F::from_canonical_u64(2656020757760353093),
+                    F::from_canonical_u64(14686348016219292686),
+                    F::from_canonical_u64(17770147950708789167),
+                    F::from_canonical_u64(1850510006545369410),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(4659367829642659994),
-                    F::from_canonical_u64(12964625556265386253),
-                    F::from_canonical_u64(15874664631145335428),
-                    F::from_canonical_u64(792879913970014316),
+                    F::from_canonical_u64(1090170580786137082),
+                    F::from_canonical_u64(12030120322367455319),
+                    F::from_canonical_u64(6693889947032175223),
+                    F::from_canonical_u64(4742544349390995199),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(5060056232339645809),
-                    F::from_canonical_u64(7579074518106734870),
-                    F::from_canonical_u64(13396451108061219118),
-                    F::from_canonical_u64(6431550535925716133),
+                    F::from_canonical_u64(5967148472721089790),
+                    F::from_canonical_u64(521240221714532128),
+                    F::from_canonical_u64(15113222525508286174),
+                    F::from_canonical_u64(18101070528724371009),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(4772976151813849053),
-                    F::from_canonical_u64(5019224891998960239),
-                    F::from_canonical_u64(856022066557676709),
-                    F::from_canonical_u64(13050201476718469703),
+                    F::from_canonical_u64(2179402085063084374),
+                    F::from_canonical_u64(1324738038116675393),
+                    F::from_canonical_u64(15639935564811592268),
+                    F::from_canonical_u64(14110330424342799321),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2487290536140898141),
-                    F::from_canonical_u64(4174181341619288417),
-                    F::from_canonical_u64(14982911265678359885),
-                    F::from_canonical_u64(13893519756166789652),
+                    F::from_canonical_u64(5085493671857677834),
+                    F::from_canonical_u64(3163465376487088930),
+                    F::from_canonical_u64(446859572954146329),
+                    F::from_canonical_u64(562431090586488276),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(12757396429388144395),
-                    F::from_canonical_u64(11991974417901135198),
-                    F::from_canonical_u64(13917361533990408017),
-                    F::from_canonical_u64(14414676336513742857),
+                    F::from_canonical_u64(633852943748649501),
+                    F::from_canonical_u64(14898532295077885214),
+                    F::from_canonical_u64(12860999273626228119),
+                    F::from_canonical_u64(6450279647528044710),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(13525073521029784592),
-                    F::from_canonical_u64(12386677733145181517),
-                    F::from_canonical_u64(14957654821266202593),
-                    F::from_canonical_u64(8110540373850920504),
+                    F::from_canonical_u64(16088316488449644138),
+                    F::from_canonical_u64(7516367299025720302),
+                    F::from_canonical_u64(14612406540018789082),
+                    F::from_canonical_u64(309571978577453448),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8132364512809958997),
-                    F::from_canonical_u64(812601146402104015),
-                    F::from_canonical_u64(18271575082902528502),
-                    F::from_canonical_u64(16551916704520327064),
+                    F::from_canonical_u64(11032371094331043424),
+                    F::from_canonical_u64(12897008859105511198),
+                    F::from_canonical_u64(10280412945954997874),
+                    F::from_canonical_u64(4638235353211685583),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(14221641715425497611),
-                    F::from_canonical_u64(12623299214957053833),
-                    F::from_canonical_u64(13078306607384483897),
-                    F::from_canonical_u64(15630241381614775121),
+                    F::from_canonical_u64(4336604884965786914),
+                    F::from_canonical_u64(10521862303181130403),
+                    F::from_canonical_u64(8198530657707600836),
+                    F::from_canonical_u64(862832117634404501),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(9511367709381189559),
-                    F::from_canonical_u64(1864191245331275275),
-                    F::from_canonical_u64(17658721473363737448),
-                    F::from_canonical_u64(7877250233373704416),
+                    F::from_canonical_u64(8764447427652359863),
+                    F::from_canonical_u64(140806324180441725),
+                    F::from_canonical_u64(2124360974791376117),
+                    F::from_canonical_u64(1157920850574243235),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(7066539818341181594),
-                    F::from_canonical_u64(15011388141196267991),
-                    F::from_canonical_u64(5040531198568509574),
-                    F::from_canonical_u64(10697356820270951727),
+                    F::from_canonical_u64(11971173263666324029),
+                    F::from_canonical_u64(11626208458821757341),
+                    F::from_canonical_u64(12510683023519432739),
+                    F::from_canonical_u64(628223843945421854),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2293756880236203641),
-                    F::from_canonical_u64(2665884223398335517),
-                    F::from_canonical_u64(13736438034327644166),
-                    F::from_canonical_u64(5669853307172626816),
+                    F::from_canonical_u64(4649190021658144552),
+                    F::from_canonical_u64(8769951343905798523),
+                    F::from_canonical_u64(2040244381547316143),
+                    F::from_canonical_u64(5468458054821461752),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2856730570195234907),
-                    F::from_canonical_u64(18316577759665185535),
-                    F::from_canonical_u64(16427081493093691001),
-                    F::from_canonical_u64(4647791340002963359),
+                    F::from_canonical_u64(9446091277615157237),
+                    F::from_canonical_u64(11272874009298949758),
+                    F::from_canonical_u64(12636611450938436722),
+                    F::from_canonical_u64(8361652884955591133),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(17467181932095298266),
-                    F::from_canonical_u64(10201010735740812763),
-                    F::from_canonical_u64(7898132404335443927),
-                    F::from_canonical_u64(14480769791743578824),
+                    F::from_canonical_u64(17026774536457495032),
+                    F::from_canonical_u64(1702526204064302965),
+                    F::from_canonical_u64(4668331712793734099),
+                    F::from_canonical_u64(6571179310180709525),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(5245849465894255747),
-                    F::from_canonical_u64(8864305202869869746),
-                    F::from_canonical_u64(5467314423136200158),
-                    F::from_canonical_u64(3072797568720766929),
+                    F::from_canonical_u64(13236748600385133155),
+                    F::from_canonical_u64(596261182024546888),
+                    F::from_canonical_u64(1586674165004293151),
+                    F::from_canonical_u64(16144280193924284642),
                 ],
             },
         ]),
         circuit_digest: HashOut {
             elements: [
-                F::from_canonical_u64(18220935880225098234),
-                F::from_canonical_u64(9421693311425457359),
-                F::from_canonical_u64(5950288396293546789),
-                F::from_canonical_u64(5499183684015304306),
+                F::from_canonical_u64(16839424014964235289),
+                F::from_canonical_u64(7920165497178828214),
+                F::from_canonical_u64(13857837247028786633),
+                F::from_canonical_u64(3825363243085304393),
             ],
         },
     }
@@ -564,7 +566,8 @@ pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D
         is_small_header: BoolTarget,
         small_header_proof: &ProofWithPublicInputsTarget<D>,
         large_header_proof: &ProofWithPublicInputsTarget<D>,
-    ) where
+    ) -> VerifierCircuitTarget
+    where
         C::Hasher: AlgebraicHasher<F>;
 
     fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElementsTarget;
@@ -667,7 +670,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         is_small_header: BoolTarget,
         small_header_proof: &ProofWithPublicInputsTarget<D>,
         large_header_proof: &ProofWithPublicInputsTarget<D>,
-    ) where
+    ) -> VerifierCircuitTarget
+    where
         C::Hasher: AlgebraicHasher<F>,
     {
         let previous_proof_elements = self.parse_public_inputs(&ivc_prev_proof.public_inputs);
@@ -763,9 +767,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         }
 
         let ivc_verifier_data = self.add_verifier_data_public_inputs();
-        let constant_ivc_verifier_data =
-            self.constant_verifier_data(&verify_header_ivc_vd::<C, F, D>());
-        self.connect_verifier_data(&ivc_verifier_data, &constant_ivc_verifier_data);
 
         // verify the previous proof
         self.conditionally_verify_cyclic_proof_or_dummy::<C>(
@@ -774,6 +775,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             &verify_header_ivc_cd(),
         )
         .expect("generation of cyclic proof circuit failed");
+
+        ivc_verifier_data
     }
 
     fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElementsTarget {
@@ -833,7 +836,9 @@ pub mod tests {
             create_header_circuit, process_large_header_cd, process_large_header_vd,
             process_small_header_cd, process_small_header_vd,
         },
-        subchain_verification::{create_header_ivc_circuit, parse_public_inputs},
+        subchain_verification::{
+            create_header_ivc_circuit, parse_public_inputs, verify_header_ivc_vd,
+        },
         testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM},
         utils::{WitnessEncodedHeader, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE},
     };
@@ -880,30 +885,32 @@ pub mod tests {
 
         // The first encoded header is the HEAD header.  We assume that is already verified.
         for header in ENCODED_HEADERS[1..].iter() {
-            println!("Generating proof for header: {}", header_num);
-
             // First generate the individual header proof
             let mut header_pw = PartialWitness::new();
             let header_bytes = hex::decode(header).expect("Expect a valid hex string");
+            let is_small_header = header_bytes.len() <= MAX_SMALL_HEADER_SIZE;
+
+            println!("Generating proof for header: {}, is_small_header: {}", header_num, is_small_header);
 
             let mut small_header_proof = dummy_small_proof.clone();
             let mut large_header_proof = dummy_large_proof.clone();
-            let is_small_header: bool;
-            if header_bytes.len() <= MAX_SMALL_HEADER_SIZE {
-                is_small_header = true;
-                header_pw.set_encoded_header_target(
+            if is_small_header {
+               header_pw.set_encoded_header_target(
                     &small_header_encoded_header_target,
                     header_bytes.clone(),
                 );
-                small_header_proof = process_small_header_data.prove(header_pw)?;
+                let mut small_header_timing = TimingTree::new("small header proof gen", Level::Info);
+                small_header_proof = prove::<F, C, D>(&process_small_header_data.prover_only, &process_small_header_data.common, header_pw, &mut small_header_timing)?;
+                small_header_timing.print();
                 process_small_header_data.verify(small_header_proof.clone())?;
             } else {
-                is_small_header = false;
                 header_pw.set_encoded_header_target(
                     &large_header_encoded_header_target,
                     header_bytes.clone(),
                 );
-                large_header_proof = process_large_header_data.prove(header_pw)?;
+                let mut large_header_timing = TimingTree::new("large header proof gen", Level::Info);
+                large_header_proof = prove::<F, C, D>(&process_large_header_data.prover_only, &process_large_header_data.common, header_pw, &mut large_header_timing)?;
+                large_header_timing.print();
                 process_large_header_data.verify(large_header_proof.clone())?;
             }
 
@@ -954,14 +961,19 @@ pub mod tests {
                 );
             }
 
-            let mut timing1 = TimingTree::new("proof gen", Level::Info);
+            header_ivc_pw.set_verifier_data_target(
+                &header_ivc_targets.verifier_circuit_target,
+                &verify_header_ivc_vd::<C, F, D>(),
+            );
+
+            let mut ivc_timing = TimingTree::new("ivc proof gen", Level::Info);
             let proof = prove::<F, C, D>(
                 &header_ivc_data.prover_only,
                 &header_ivc_data.common,
                 header_ivc_pw,
-                &mut timing1,
+                &mut ivc_timing,
             )?;
-            timing1.print();
+            ivc_timing.print();
 
             check_cyclic_proof_verifier_data(
                 &proof,

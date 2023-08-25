@@ -1,12 +1,15 @@
-pub mod decoder;
-pub mod justification;
-pub mod plonky2_config;
-pub mod poseidon_bn128;
+#![allow(clippy::too_many_arguments)]
+
+mod decoder;
+mod header;
+mod justification;
+mod plonky2_config;
+mod poseidon_bn128;
 mod poseidon_bn128_constants;
-pub mod step;
-pub mod subchain_verification;
+//pub mod step;
+//mod subchain_verification;
 mod testing_utils;
-pub mod utils;
+mod utils;
 
 extern crate ff;
 extern crate rand;

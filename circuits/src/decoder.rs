@@ -7,9 +7,7 @@ use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, IoResult};
 
-use crate::utils::{
-    AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, HASH_SIZE, MAX_HEADER_SIZE,
-};
+use crate::utils::{AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, HASH_SIZE};
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::target::Target;
@@ -90,9 +88,9 @@ pub struct HeaderTarget {
 }
 
 pub trait CircuitBuilderHeaderDecoder {
-    fn decode_header(
+    fn decode_header<const S: usize>(
         &mut self,
-        header: &EncodedHeaderTarget,
+        header: &EncodedHeaderTarget<S>,
         header_hash: AvailHashTarget,
     ) -> HeaderTarget;
 }
@@ -101,9 +99,9 @@ pub trait CircuitBuilderHeaderDecoder {
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
     for CircuitBuilder<F, D>
 {
-    fn decode_header(
+    fn decode_header<const S: usize>(
         &mut self,
-        header: &EncodedHeaderTarget,
+        header: &EncodedHeaderTarget<S>,
         header_hash: AvailHashTarget,
     ) -> HeaderTarget {
         // The first 32 bytes are the parent hash
@@ -138,7 +136,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
             data_root_target.push(self.add_virtual_target());
         }
 
-        self.add_simple_generator(DataRootFieldExtractor::<F, D> {
+        self.add_simple_generator(DataRootFieldExtractor::<F, D, S> {
             encoded_header: header.clone(),
             data_root: data_root_target.as_slice().try_into().unwrap(),
             _marker: PhantomData,
@@ -174,7 +172,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
 
             let mut accumulator1 = self.zero();
             let mut j_target = self.zero();
-            for j in 0..MAX_HEADER_SIZE {
+            for j in 0..S {
                 let at_start_idx = self.is_equal(j_target, data_root_start_idx);
                 within_sub_array = self.add(within_sub_array, at_start_idx.target);
                 let at_end_idx = self.is_equal(j_target, data_root_end_idx);
@@ -209,14 +207,14 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
 }
 
 #[derive(Debug)]
-struct DataRootFieldExtractor<F: RichField + Extendable<D>, const D: usize> {
-    encoded_header: EncodedHeaderTarget,
+struct DataRootFieldExtractor<F: RichField + Extendable<D>, const D: usize, const S: usize> {
+    encoded_header: EncodedHeaderTarget<S>,
     data_root: [Target; 32],
     _marker: PhantomData<F>,
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
-    for DataRootFieldExtractor<F, D>
+impl<F: RichField + Extendable<D>, const D: usize, const S: usize> SimpleGenerator<F, D>
+    for DataRootFieldExtractor<F, D, S>
 {
     fn id(&self) -> String {
         "DataRootFieldExtractor".to_string()
@@ -301,17 +299,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 
 #[cfg(test)]
 mod tests {
-    use crate::decoder::{
-        CircuitBuilderHeaderDecoder, CircuitBuilderScaleDecoder, EncodedHeaderTarget,
-    };
-    use crate::testing_utils::tests::{
-        BLOCK_HASHES, DATA_ROOTS, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
-        STATE_ROOTS,
-    };
-    use crate::utils::{CircuitBuilderUtils, WitnessAvailHash, MAX_HEADER_SIZE};
-    use anyhow::{Ok, Result};
+    use crate::decoder::CircuitBuilderScaleDecoder;
+    use anyhow::Result;
     use plonky2::field::types::Field;
-    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
@@ -392,120 +383,5 @@ mod tests {
         let encoded_bytes = [3, 0, 0, 0, 64];
         let expected_value = 1073741824;
         test_compact_int(encoded_bytes, expected_value, 3, 5)
-    }
-
-    #[test]
-    fn test_decode_block() -> Result<()> {
-        const D: usize = 2;
-        type C = PoseidonGoldilocksConfig;
-        type F = <C as GenericConfig<D>>::F;
-
-        let mut builder_logger = env_logger::Builder::from_default_env();
-        builder_logger.format_timestamp(None);
-        builder_logger.filter_level(log::LevelFilter::Trace);
-        builder_logger.try_init()?;
-
-        let config = CircuitConfig::standard_recursion_config();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
-
-        let mut header_bytes = Vec::new();
-        for _i in 0..MAX_HEADER_SIZE {
-            header_bytes.push(builder.add_virtual_target());
-        }
-
-        let header_size = builder.add_virtual_target();
-
-        let block_hash = builder.add_virtual_avail_hash_target_safe(false);
-
-        let decoded_header = builder.decode_header(
-            &EncodedHeaderTarget {
-                header_bytes: header_bytes.as_slice().try_into().unwrap(),
-                header_size,
-            },
-            block_hash.clone(),
-        );
-
-        let expected_block_number = builder.add_virtual_target();
-        builder.connect(decoded_header.block_number, expected_block_number);
-
-        let expected_parent_hash = builder.add_virtual_avail_hash_target_safe(false);
-        builder.connect_avail_hash(decoded_header.parent_hash, expected_parent_hash.clone());
-
-        let expected_state_root = builder.add_virtual_avail_hash_target_safe(false);
-        builder.connect_avail_hash(decoded_header.state_root, expected_state_root.clone());
-
-        let expected_data_root = builder.add_virtual_avail_hash_target_safe(false);
-        builder.connect_avail_hash(decoded_header.data_root, expected_data_root.clone());
-
-        let data = builder.build::<C>();
-
-        for i in 0..NUM_BLOCKS {
-            let block_num = HEAD_BLOCK_NUM + i as u32;
-            println!("decoding block {}", block_num);
-
-            let mut pw = PartialWitness::new();
-
-            let encoded_header_bytes = hex::decode(ENCODED_HEADERS[i]).unwrap();
-            for j in 0..encoded_header_bytes.len() {
-                pw.set_target(
-                    header_bytes[j],
-                    F::from_canonical_u8(encoded_header_bytes[j]),
-                );
-            }
-
-            // pad the rest of the header bytes with 0s
-            for j in encoded_header_bytes.len()..MAX_HEADER_SIZE {
-                pw.set_target(header_bytes[j], F::ZERO);
-            }
-
-            pw.set_target(
-                header_size,
-                F::from_canonical_usize(encoded_header_bytes.len()),
-            );
-
-            pw.set_avail_hash_target(
-                &block_hash,
-                hex::decode(BLOCK_HASHES[i])
-                    .unwrap()
-                    .as_slice()
-                    .try_into()
-                    .unwrap(),
-            );
-
-            pw.set_target(expected_block_number, F::from_canonical_u32(block_num));
-
-            pw.set_avail_hash_target(
-                &expected_parent_hash,
-                hex::decode(PARENT_HASHES[i])
-                    .unwrap()
-                    .as_slice()
-                    .try_into()
-                    .unwrap(),
-            );
-
-            pw.set_avail_hash_target(
-                &expected_state_root,
-                hex::decode(STATE_ROOTS[i])
-                    .unwrap()
-                    .as_slice()
-                    .try_into()
-                    .unwrap(),
-            );
-
-            pw.set_avail_hash_target(
-                &expected_data_root,
-                hex::decode(DATA_ROOTS[i])
-                    .unwrap()
-                    .as_slice()
-                    .try_into()
-                    .unwrap(),
-            );
-
-            let proof = data.prove(pw)?;
-
-            let _ = data.verify(proof);
-        }
-
-        Ok(())
     }
 }

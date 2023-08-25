@@ -17,8 +17,8 @@ pub const NUM_AUTHORITIES: usize = 76;
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
 
 pub const CHUNK_128_BYTES: usize = 128;
-//pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 103; // 2048 bytes
-pub const MAX_HEADER_SIZE: usize = CHUNK_128_BYTES * 52; // 2048 bytes
+pub const MAX_LARGE_HEADER_SIZE: usize = CHUNK_128_BYTES * 52;
+pub const MAX_SMALL_HEADER_SIZE: usize = CHUNK_128_BYTES * 10;
 pub const HASH_SIZE: usize = 32; // in bytes
 pub const PUB_KEY_SIZE: usize = 32; // in bytes
 
@@ -69,18 +69,18 @@ impl<F: PrimeField> GeneratedValuesAvailHash<F> for GeneratedValues<F> {
 }
 
 #[derive(Clone, Debug)]
-pub struct EncodedHeaderTarget {
-    pub header_bytes: [Target; MAX_HEADER_SIZE],
+pub struct EncodedHeaderTarget<const S: usize> {
+    pub header_bytes: [Target; S],
     pub header_size: Target,
 }
 
-pub trait WitnessEncodedHeader<F: PrimeField64>: Witness<F> {
-    fn get_encoded_header_target(&self, target: EncodedHeaderTarget) -> Vec<u8>;
-    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>);
+pub trait WitnessEncodedHeader<F: PrimeField64, const S: usize>: Witness<F> {
+    fn get_encoded_header_target(&self, target: EncodedHeaderTarget<S>) -> Vec<u8>;
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget<S>, value: Vec<u8>);
 }
 
-impl<T: Witness<F>, F: PrimeField64> WitnessEncodedHeader<F> for T {
-    fn get_encoded_header_target(&self, target: EncodedHeaderTarget) -> Vec<u8> {
+impl<T: Witness<F>, F: PrimeField64, const S: usize> WitnessEncodedHeader<F, S> for T {
+    fn get_encoded_header_target(&self, target: EncodedHeaderTarget<S>) -> Vec<u8> {
         let header_size = self.get_target(target.header_size).to_canonical_u64();
         target
             .header_bytes
@@ -90,7 +90,7 @@ impl<T: Witness<F>, F: PrimeField64> WitnessEncodedHeader<F> for T {
             .collect::<Vec<u8>>()
     }
 
-    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>) {
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget<S>, value: Vec<u8>) {
         let header_size = value.len();
         self.set_target(
             target.header_size,
@@ -100,18 +100,18 @@ impl<T: Witness<F>, F: PrimeField64> WitnessEncodedHeader<F> for T {
             self.set_target(target.header_bytes[i], F::from_canonical_u8(*byte));
         }
 
-        for i in header_size..MAX_HEADER_SIZE {
+        for i in header_size..S {
             self.set_target(target.header_bytes[i], F::from_canonical_u8(0));
         }
     }
 }
 
-pub trait GeneratedValuesEncodedHeader<F: PrimeField> {
-    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>);
+pub trait GeneratedValuesEncodedHeader<F: PrimeField, const S: usize> {
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget<S>, value: Vec<u8>);
 }
 
-impl<F: PrimeField> GeneratedValuesEncodedHeader<F> for GeneratedValues<F> {
-    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget, value: Vec<u8>) {
+impl<F: PrimeField, const S: usize> GeneratedValuesEncodedHeader<F, S> for GeneratedValues<F> {
+    fn set_encoded_header_target(&mut self, target: &EncodedHeaderTarget<S>, value: Vec<u8>) {
         let header_size = value.len();
         self.set_target(
             target.header_size,
@@ -121,7 +121,7 @@ impl<F: PrimeField> GeneratedValuesEncodedHeader<F> for GeneratedValues<F> {
             self.set_target(target.header_bytes[i], F::from_canonical_u8(*byte));
         }
 
-        for i in header_size..MAX_HEADER_SIZE {
+        for i in header_size..S {
             self.set_target(target.header_bytes[i], F::from_canonical_u8(0));
         }
     }
@@ -130,7 +130,7 @@ impl<F: PrimeField> GeneratedValuesEncodedHeader<F> for GeneratedValues<F> {
 pub trait CircuitBuilderUtils {
     fn add_virtual_avail_hash_target_safe(&mut self, set_as_public: bool) -> AvailHashTarget;
 
-    fn add_virtual_encoded_header_target_safe(&mut self) -> EncodedHeaderTarget;
+    fn add_virtual_encoded_header_target_safe<const S: usize>(&mut self) -> EncodedHeaderTarget<S>;
 
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
 
@@ -143,7 +143,7 @@ pub trait CircuitBuilderUtils {
     ) -> AvailHashTarget;
 }
 
-impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for CircuitBuilder<F, D> {
+impl<F: RichField + Extendable<D>, const D: usize,> CircuitBuilderUtils for CircuitBuilder<F, D> {
     fn add_virtual_avail_hash_target_safe(&mut self, set_as_public: bool) -> AvailHashTarget {
         let mut hash_target = Vec::new();
         for _ in 0..HASH_SIZE {
@@ -158,9 +158,9 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         AvailHashTarget(hash_target.try_into().unwrap())
     }
 
-    fn add_virtual_encoded_header_target_safe(&mut self) -> EncodedHeaderTarget {
+    fn add_virtual_encoded_header_target_safe<const S: usize>(&mut self) -> EncodedHeaderTarget<S> {
         let mut header_bytes = Vec::new();
-        for _j in 0..MAX_HEADER_SIZE {
+        for _j in 0..S {
             let byte = self.add_virtual_target();
             self.range_check(byte, 8);
             header_bytes.push(byte);

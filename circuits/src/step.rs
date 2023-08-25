@@ -244,11 +244,6 @@ mod tests {
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::step::make_step_circuit;
     use crate::subchain_verification::tests::retrieve_subchain_verification_proof;
-    use crate::testing_utils::tests::{
-        BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
-        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_PRECOMMIT_MESSAGE,
-        BLOCK_272515_PUBLIC_INPUTS_HASH, BLOCK_272515_SIGNERS, BLOCK_272515_SIGS,
-    };
     use crate::utils::{WitnessAvailHash, QUORUM_SIZE};
 
     fn gen_step_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(

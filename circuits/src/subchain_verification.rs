@@ -19,13 +19,14 @@ use plonky2::{
     iop::target::{BoolTarget, Target},
     plonk::{
         circuit_builder::CircuitBuilder,
-        circuit_data::{CircuitConfig, CommonCircuitData, VerifierCircuitTarget},
+        circuit_data::{CircuitConfig, CommonCircuitData},
         config::{AlgebraicHasher, GenericConfig},
         proof::ProofWithPublicInputsTarget,
     },
 };
 use plonky2x::{hash::blake2::blake2b::blake2b, num::u32::gates::add_many_u32::U32AddManyGate};
 
+use crate::header::CircuitBuilderHeader;
 use crate::utils::MAX_HEADER_SIZE;
 use crate::{
     decoder::CircuitBuilderHeaderDecoder,
@@ -489,25 +490,29 @@ pub struct PublicInputsElementsTarget {
 }
 
 pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D: usize> {
-    fn verify_header(
+    fn recursive_verify_header<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
-        encoded_header: &EncodedHeaderTarget,
-        encoded_header_size: Target,
-        parent_block_num: Target,
-        parent_hash: &AvailHashTarget,
-        data_root_acc: &AvailHashTarget,
-    );
+        small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) -> (
+        AvailHashTarget,
+        Target,
+        AvailHashTarget,
+        AvailHashTarget,
+        AvailHashTarget,
+    )
+    where
+        C::Hasher: AlgebraicHasher<F>;
 
     fn verify_header_ivc<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
-    ) -> (
-        BoolTarget,
-        EncodedHeaderTarget,
-        Target,
-        VerifierCircuitTarget,
-        ProofWithPublicInputsTarget<D>,
-    )
-    where
+        ivc_base_case: BoolTarget,
+        ivc_prev_proof: &ProofWithPublicInputsTarget<D>,
+        is_small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) where
         C::Hasher: AlgebraicHasher<F>;
 
     fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElementsTarget;
@@ -516,60 +521,160 @@ pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerification<F, D>
     for CircuitBuilder<F, D>
 {
-    fn verify_header(
+    fn recursive_verify_header<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
-        encoded_header: &EncodedHeaderTarget,
-        encoded_header_size: Target,
-        parent_block_num: Target,
-        parent_hash_target: &AvailHashTarget,
-        data_root_acc: &AvailHashTarget,
-    ) {
-        // Calculate the hash for the current header
-        let header_hasher = blake2b::<F, D, MAX_HEADER_SIZE, HASH_SIZE>(self);
+        small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) -> (
+        AvailHashTarget,
+        Target,
+        AvailHashTarget,
+        AvailHashTarget,
+        AvailHashTarget,
+    )
+    where
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        self.conditionally_verify_proof_or_dummy::<C>(
+            small_header,
+            small_header_proof,
+            small_header_vd,
+            &small_header_cd,
+        )
+        .expect("Failed in generating small header verification conditional circuit");
 
-        // Input the encoded header bytes into the hasher
-        for i in 0..MAX_HEADER_SIZE {
-            // Need to split the bytes into bits
-            let mut bits = self.split_le(encoded_header.header_bytes[i], 8);
+        let large_header = self.not(small_header);
 
-            // Needs to be in bit big endian order for the EDDSA verification circuit
-            bits.reverse();
-            for (j, bit) in bits.iter().enumerate().take(8) {
-                self.connect(header_hasher.message[i * 8 + j].target, bit.target);
-            }
-        }
+        self.conditionally_verify_proof_or_dummy::<C>(
+            large_header,
+            large_header_proof,
+            large_header_vd,
+            &large_header_cd,
+        )
+        .expect("Failed in generating header header verification conditional circuit");
 
-        self.connect(header_hasher.message_len, encoded_header_size);
+        let small_header_public_inputs = self.parse_header_pi(&small_header_proof.public_inputs);
 
-        // Convert the digest (vector of bits) to bytes
-        let mut header_hash_bytes = Vec::new();
-        for byte_chunk in header_hasher.digest.chunks(8) {
-            let byte = self.le_sum(byte_chunk.to_vec().iter().rev());
-            self.register_public_input(byte);
-            header_hash_bytes.push(byte);
-        }
+        let large_header_public_inputs = self.parse_header_pi(&large_header_proof.public_inputs);
 
-        // Get the decoded_header object to retrieve the block numbers and parent hashes
-        let decoded_header = self.decode_header(
-            encoded_header,
-            AvailHashTarget(header_hash_bytes.as_slice().try_into().unwrap()),
+        let block_hash = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.block_hash,
+                small_header_public_inputs.block_hash,
+            ],
         );
+
+        let block_num = self.random_access(
+            small_header.target,
+            vec![
+                large_header_public_inputs.block_num,
+                small_header_public_inputs.block_num,
+            ],
+        );
+
+        let parent_hash = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.parent_hash,
+                small_header_public_inputs.parent_hash,
+            ],
+        );
+
+        let state_root = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.state_root,
+                small_header_public_inputs.state_root,
+            ],
+        );
+
+        let data_root = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.data_root,
+                small_header_public_inputs.data_root,
+            ],
+        );
+
+        return (block_hash, block_num, parent_hash, state_root, data_root);
+    }
+
+    fn verify_header_ivc<C: GenericConfig<D, F = F> + 'static>(
+        &mut self,
+        ivc_base_case: BoolTarget,
+        ivc_prev_proof: &ProofWithPublicInputsTarget<D>,
+        is_small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) where
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        let vh_ivc_common_data = verify_header_ivc_cd();
+
+        // Unpack previous proof's public inputs.
+        let previous_header_verification_proof_with_pis =
+            self.add_virtual_proof_with_pis(&vh_ivc_common_data);
+        let previous_proof_elements =
+            self.parse_public_inputs(&previous_header_verification_proof_with_pis.public_inputs);
+
+        // Set the initial elements to be public inputs
+        self.register_public_inputs(&previous_proof_elements.initial_block_hash.0);
+        self.register_public_input(previous_proof_elements.initial_block_num);
+        self.register_public_inputs(&previous_proof_elements.initial_data_root_accumulator.0);
+
+        let previous_block_hash = self.random_access_avail_hash(
+            ivc_base_case.target,
+            vec![
+                previous_proof_elements.initial_block_hash,
+                previous_proof_elements.latest_block_hash,
+            ],
+        );
+
+        let previous_block_num = self.random_access(
+            ivc_base_case.target,
+            vec![
+                previous_proof_elements.initial_block_num,
+                previous_proof_elements.latest_block_num,
+            ],
+        );
+
+        let previous_data_root_accumulator = self.random_access_avail_hash(
+            ivc_base_case.target,
+            vec![
+                previous_proof_elements.initial_data_root_accumulator,
+                previous_proof_elements.latest_data_root_accumulator,
+            ],
+        );
+
+        let vh_cd = verify_header_ivc_cd();
+        let vh_vd = verify_header_ivc_vd::<C, F, D>();
+        let verify_header_proof_with_pis = self.add_virtual_proof_with_pis(&vh_cd);
+        let verify_header_proof_vd = self.constant_verifier_data(&vh_vd);
+        self.verify_proof::<C>(
+            &verify_header_proof_with_pis,
+            &verify_header_proof_vd,
+            &vh_cd,
+        );
+
+        let (block_hash, block_num, parent_hash, state_root, data_root) = self
+            .recursive_verify_header::<C>(is_small_header, small_header_proof, large_header_proof);
 
         // Verify that this header's block number is one greater than the previous header's block number
         let one = self.one();
-        let expected_block_num = self.add(parent_block_num, one);
-        self.connect(expected_block_num, decoded_header.block_number);
-        self.register_public_input(decoded_header.block_number);
+        let expected_block_num = self.add(previous_block_num, one);
+        self.connect(expected_block_num, block_num);
 
         // Verify that the parent hash is equal to the decoded parent hash
-        self.connect_avail_hash(parent_hash_target.clone(), decoded_header.parent_hash);
+        self.connect_avail_hash(previous_block_hash, parent_hash);
 
         // Calculate the hash of the extracted fields and add them into the accumulator
         let data_root_acc_hasher = blake2b::<F, D, CHUNK_128_BYTES, HASH_SIZE>(self);
 
         let mut hasher_idx = 0;
         // Input the accumulator
-        for hash_byte in data_root_acc.0.iter() {
+        for hash_byte in previous_data_root_accumulator.0.iter() {
             let mut bits = self.split_le(*hash_byte, 8);
 
             bits.reverse();
@@ -581,7 +686,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         }
 
         // Input the data root
-        for byte in decoded_header.data_root.0.iter() {
+        for byte in data_root.0.iter() {
             let mut bits = self.split_le(*byte, 8);
 
             bits.reverse();
@@ -600,92 +705,14 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         let input_len = self.constant(F::from_canonical_usize(hasher_idx / 8));
         self.connect(data_root_acc_hasher.message_len, input_len);
 
+        // Register the current header's fields as public inputs
+        self.register_public_inputs(&block_hash.0);
+        self.register_public_input(block_num);
+
         for byte_chunk in data_root_acc_hasher.digest.chunks(8) {
             let byte = self.le_sum(byte_chunk.to_vec().iter().rev());
             self.register_public_input(byte);
         }
-    }
-
-    fn verify_header_ivc<C: GenericConfig<D, F = F> + 'static>(
-        &mut self,
-    ) -> (
-        BoolTarget,
-        EncodedHeaderTarget,
-        Target,
-        VerifierCircuitTarget,
-        ProofWithPublicInputsTarget<D>,
-    )
-    where
-        C::Hasher: AlgebraicHasher<F>,
-    {
-        // False for the base case, true otherwise
-        let condition = self.add_virtual_bool_target_safe();
-
-        let common_data = verify_header_ivc_cd();
-
-        // Unpack inner proof's public inputs.
-        let previous_header_verification_proof_with_pis =
-            self.add_virtual_proof_with_pis(&common_data);
-        let previous_proof_elements =
-            self.parse_public_inputs(&previous_header_verification_proof_with_pis.public_inputs);
-
-        // Set the initial elements to be public inputs
-        self.register_public_inputs(&previous_proof_elements.initial_block_hash.0);
-        self.register_public_input(previous_proof_elements.initial_block_num);
-        self.register_public_inputs(&previous_proof_elements.initial_data_root_accumulator.0);
-
-        let previous_block_hash = self.random_access_avail_hash(
-            condition.target,
-            vec![
-                previous_proof_elements.initial_block_hash,
-                previous_proof_elements.latest_block_hash,
-            ],
-        );
-
-        let previous_block_num = self.random_access(
-            condition.target,
-            vec![
-                previous_proof_elements.initial_block_num,
-                previous_proof_elements.latest_block_num,
-            ],
-        );
-
-        let previous_data_root_accumulator = self.random_access_avail_hash(
-            condition.target,
-            vec![
-                previous_proof_elements.initial_data_root_accumulator,
-                previous_proof_elements.latest_data_root_accumulator,
-            ],
-        );
-
-        // Create inputs for the current encoded block;
-        let encoded_block_input = self.add_virtual_encoded_header_target_safe();
-        let encoded_block_size = self.add_virtual_target();
-
-        self.verify_header(
-            &encoded_block_input,
-            encoded_block_size,
-            previous_block_num,
-            &previous_block_hash,
-            &previous_data_root_accumulator,
-        );
-
-        let verifier_data_target = self.add_verifier_data_public_inputs();
-
-        self.conditionally_verify_cyclic_proof_or_dummy::<C>(
-            condition,
-            &previous_header_verification_proof_with_pis,
-            &common_data,
-        )
-        .expect("generation of cyclic proof circuit failed");
-
-        (
-            condition,
-            encoded_block_input,
-            encoded_block_size,
-            verifier_data_target,
-            previous_header_verification_proof_with_pis,
-        )
     }
 
     fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElementsTarget {
@@ -746,7 +773,7 @@ pub mod tests {
             CircuitBuilderHeaderVerification,
         },
         testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM},
-        utils::WitnessEncodedHeader,
+        utils::{CircuitBuilderUtils, WitnessEncodedHeader, CHUNK_128_BYTES},
     };
     use anyhow::Result;
     use log::Level;
@@ -908,5 +935,22 @@ pub mod tests {
         } else {
             Ok(())
         }
+    }
+
+    #[test]
+    fn test_verify_small_header() -> Result<()> {
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config);
+
+        let encoded_block_input = builder.add_virtual_encoded_header_target_safe();
+        let encoded_block_size = builder.add_virtual_target();
+
+        const SMALL_HEADER_SIZE: usize = 5 * CHUNK_128_BYTES;
+        builder.verify_header::<SMALL_HEADER_SIZE>(&encoded_block_input, encoded_block_size);
     }
 }

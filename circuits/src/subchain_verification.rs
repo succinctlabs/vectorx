@@ -890,17 +890,26 @@ pub mod tests {
             let header_bytes = hex::decode(header).expect("Expect a valid hex string");
             let is_small_header = header_bytes.len() <= MAX_SMALL_HEADER_SIZE;
 
-            println!("Generating proof for header: {}, is_small_header: {}", header_num, is_small_header);
+            println!(
+                "Generating proof for header: {}, is_small_header: {}",
+                header_num, is_small_header
+            );
 
             let mut small_header_proof = dummy_small_proof.clone();
             let mut large_header_proof = dummy_large_proof.clone();
             if is_small_header {
-               header_pw.set_encoded_header_target(
+                header_pw.set_encoded_header_target(
                     &small_header_encoded_header_target,
                     header_bytes.clone(),
                 );
-                let mut small_header_timing = TimingTree::new("small header proof gen", Level::Info);
-                small_header_proof = prove::<F, C, D>(&process_small_header_data.prover_only, &process_small_header_data.common, header_pw, &mut small_header_timing)?;
+                let mut small_header_timing =
+                    TimingTree::new("small header proof gen", Level::Info);
+                small_header_proof = prove::<F, C, D>(
+                    &process_small_header_data.prover_only,
+                    &process_small_header_data.common,
+                    header_pw,
+                    &mut small_header_timing,
+                )?;
                 small_header_timing.print();
                 process_small_header_data.verify(small_header_proof.clone())?;
             } else {
@@ -908,8 +917,14 @@ pub mod tests {
                     &large_header_encoded_header_target,
                     header_bytes.clone(),
                 );
-                let mut large_header_timing = TimingTree::new("large header proof gen", Level::Info);
-                large_header_proof = prove::<F, C, D>(&process_large_header_data.prover_only, &process_large_header_data.common, header_pw, &mut large_header_timing)?;
+                let mut large_header_timing =
+                    TimingTree::new("large header proof gen", Level::Info);
+                large_header_proof = prove::<F, C, D>(
+                    &process_large_header_data.prover_only,
+                    &process_large_header_data.common,
+                    header_pw,
+                    &mut large_header_timing,
+                )?;
                 large_header_timing.print();
                 process_large_header_data.verify(large_header_proof.clone())?;
             }

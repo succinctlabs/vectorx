@@ -6,7 +6,7 @@ mod justification;
 mod plonky2_config;
 mod poseidon_bn128;
 mod poseidon_bn128_constants;
-//pub mod step;
+pub mod step;
 mod subchain_verification;
 mod testing_utils;
 mod utils;

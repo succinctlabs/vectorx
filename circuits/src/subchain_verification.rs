@@ -2,7 +2,7 @@ use itertools::Itertools;
 use plonky2::gates::selectors::SelectorsInfo;
 use plonky2::hash::hash_types::HashOut;
 use plonky2::hash::merkle_tree::MerkleCap;
-use plonky2::plonk::circuit_data::VerifierOnlyCircuitData;
+use plonky2::plonk::circuit_data::{CircuitData, VerifierOnlyCircuitData};
 use plonky2::{
     field::extension::Extendable,
     fri::{reduction_strategies::FriReductionStrategy, FriConfig, FriParams},
@@ -32,6 +32,61 @@ use crate::header::{
 };
 use crate::utils::{AvailHashTarget, CircuitBuilderUtils, CHUNK_128_BYTES, HASH_SIZE};
 
+struct HeaderIVCTargets<const D: usize> {
+    ivc_base_case: BoolTarget,
+    ivc_prev_proof: ProofWithPublicInputsTarget<D>,
+    is_small_header: BoolTarget,
+    small_header_proof: ProofWithPublicInputsTarget<D>,
+    large_header_proof: ProofWithPublicInputsTarget<D>,
+}
+
+fn create_header_ivc_circuit<
+    C: GenericConfig<D, F = F> + 'static,
+    F: RichField + Extendable<D>,
+    const D: usize,
+>() -> (HeaderIVCTargets<D>, CircuitData<F, C, D>)
+where
+    C::Hasher: AlgebraicHasher<F>,
+{
+    // Build the IVC circuit
+    let config = CircuitConfig::standard_recursion_config();
+    let mut header_ivc_builder = CircuitBuilder::<F, D>::new(config);
+
+    let header_ivc_data_cd = verify_header_ivc_cd();
+    let header_ivc_data_vd = verify_header_ivc_vd::<C, F, D>();
+
+    let ivc_base_case = header_ivc_builder.add_virtual_bool_target_safe();
+    let ivc_prev_proof = header_ivc_builder.add_virtual_proof_with_pis(&header_ivc_data_cd);
+    let is_small_header = header_ivc_builder.add_virtual_bool_target_safe();
+    let small_header_proof =
+        header_ivc_builder.add_virtual_proof_with_pis(&process_small_header_cd());
+    let large_header_proof =
+        header_ivc_builder.add_virtual_proof_with_pis(&process_large_header_cd());
+
+    header_ivc_builder.verify_header_ivc::<C>(
+        ivc_base_case,
+        &ivc_prev_proof,
+        is_small_header,
+        &small_header_proof,
+        &large_header_proof,
+    );
+
+    let header_ivc_data = header_ivc_builder.build::<C>();
+
+    assert_eq!(header_ivc_data_cd, header_ivc_data.common);
+    assert_eq!(header_ivc_data_vd, header_ivc_data.verifier_only,);
+
+    (
+        HeaderIVCTargets {
+            ivc_base_case,
+            ivc_prev_proof,
+            is_small_header,
+            small_header_proof,
+            large_header_proof,
+        },
+        header_ivc_data,
+    )
+}
 #[derive(Debug)]
 pub struct PublicInputsElements {
     pub initial_block_hash: [u8; HASH_SIZE],
@@ -181,8 +236,8 @@ pub(crate) fn verify_header_ivc_cd<F: RichField + Extendable<D>, const D: usize>
                 num_query_rounds: 28,
             },
             hiding: false,
-            degree_bits: 20,
-            reduction_arity_bits: vec![4, 4, 4, 4],
+            degree_bits: 15,
+            reduction_arity_bits: vec![4, 4, 4],
         },
         gates: vec![
             GateRef::new(NoopGate {}),
@@ -602,7 +657,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             ],
         );
 
-        return (block_hash, block_num, parent_hash, state_root, data_root);
+        (block_hash, block_num, parent_hash, state_root, data_root)
     }
 
     fn verify_header_ivc<C: GenericConfig<D, F = F> + 'static>(
@@ -615,19 +670,14 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
     ) where
         C::Hasher: AlgebraicHasher<F>,
     {
-        let vh_ivc_common_data = verify_header_ivc_cd();
-
-        // Unpack previous proof's public inputs.
-        let previous_header_verification_proof_with_pis =
-            self.add_virtual_proof_with_pis(&vh_ivc_common_data);
-        let previous_proof_elements =
-            self.parse_public_inputs(&previous_header_verification_proof_with_pis.public_inputs);
+        let previous_proof_elements = self.parse_public_inputs(&ivc_prev_proof.public_inputs);
 
         // Set the initial elements to be public inputs
         self.register_public_inputs(&previous_proof_elements.initial_block_hash.0);
         self.register_public_input(previous_proof_elements.initial_block_num);
         self.register_public_inputs(&previous_proof_elements.initial_data_root_accumulator.0);
 
+        // For the base case, the previous block is the initial block
         let previous_block_hash = self.random_access_avail_hash(
             ivc_base_case.target,
             vec![
@@ -652,18 +702,12 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             ],
         );
 
-        let vh_cd = verify_header_ivc_cd();
-        let vh_vd = verify_header_ivc_vd::<C, F, D>();
-        let verify_header_proof_with_pis = self.add_virtual_proof_with_pis(&vh_cd);
-        let verify_header_proof_vd = self.constant_verifier_data(&vh_vd);
-        self.verify_proof::<C>(
-            &verify_header_proof_with_pis,
-            &verify_header_proof_vd,
-            &vh_cd,
+        // Verify the header proof
+        let (block_hash, block_num, parent_hash, _, data_root) = self.recursive_verify_header::<C>(
+            is_small_header,
+            small_header_proof,
+            large_header_proof,
         );
-
-        let (block_hash, block_num, parent_hash, state_root, data_root) = self
-            .recursive_verify_header::<C>(is_small_header, small_header_proof, large_header_proof);
 
         // Verify that this header's block number is one greater than the previous header's block number
         let one = self.one();
@@ -717,6 +761,19 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
             let byte = self.le_sum(byte_chunk.to_vec().iter().rev());
             self.register_public_input(byte);
         }
+
+        let ivc_verifier_data = self.add_verifier_data_public_inputs();
+        let constant_ivc_verifier_data =
+            self.constant_verifier_data(&verify_header_ivc_vd::<C, F, D>());
+        self.connect_verifier_data(&ivc_verifier_data, &constant_ivc_verifier_data);
+
+        // verify the previous proof
+        self.conditionally_verify_cyclic_proof_or_dummy::<C>(
+            ivc_base_case,
+            ivc_prev_proof,
+            &verify_header_ivc_cd(),
+        )
+        .expect("generation of cyclic proof circuit failed");
     }
 
     fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElementsTarget {
@@ -774,17 +831,11 @@ pub mod tests {
     use crate::{
         header::{
             create_header_circuit, process_large_header_cd, process_large_header_vd,
-            process_small_header_cd, process_small_header_vd, CircuitBuilderHeader,
+            process_small_header_cd, process_small_header_vd,
         },
-        subchain_verification::{
-            parse_public_inputs, verify_header_ivc_cd, verify_header_ivc_vd,
-            CircuitBuilderHeaderVerification,
-        },
+        subchain_verification::{create_header_ivc_circuit, parse_public_inputs},
         testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM},
-        utils::{
-            CircuitBuilderUtils, EncodedHeaderTarget, WitnessEncodedHeader, CHUNK_128_BYTES,
-            MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE,
-        },
+        utils::{WitnessEncodedHeader, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE},
     };
     use anyhow::Result;
     use log::Level;
@@ -792,8 +843,6 @@ pub mod tests {
     use plonky2::{
         iop::witness::{PartialWitness, WitnessWrite},
         plonk::{
-            circuit_builder::CircuitBuilder,
-            circuit_data::CircuitConfig,
             config::{GenericConfig, PoseidonGoldilocksConfig},
             proof::ProofWithPublicInputs,
             prover::prove,
@@ -819,24 +868,7 @@ pub mod tests {
         assert!(process_large_header_data.common == process_large_header_cd());
         assert!(process_large_header_data.verifier_only == process_large_header_vd());
 
-        /*
-        let config = CircuitConfig::standard_recursion_config();
-        let mut header_ivc_builder = CircuitBuilder::<F, D>::new(config);
-
-        let common_data = verify_header_ivc_cd();
-        let verifier_data = verify_header_ivc_vd();
-
-        let ivc_base_case = header_ivc_builder.add_virtual_bool_target_safe();
-
-
-        header_ivc_builder.verify_header_ivc::<C>();
-
-        let cyclic_circuit_data = builder.build::<C>();
-
-        // Assert that the circuit's common data nd verifier data matches what is expected
-        assert_eq!(common_data, cyclic_circuit_data.common);
-
-        assert_eq!(verifier_data, cyclic_circuit_data.verifier_only,);
+        let (header_ivc_targets, header_ivc_data) = create_header_ivc_circuit();
 
         let initial_block_hash_val = hex::decode(BLOCK_HASHES[0]).unwrap();
         let initial_block_num_val = HEAD_BLOCK_NUM;
@@ -849,13 +881,45 @@ pub mod tests {
         // The first encoded header is the HEAD header.  We assume that is already verified.
         for header in ENCODED_HEADERS[1..].iter() {
             println!("Generating proof for header: {}", header_num);
-            let mut pw = PartialWitness::new();
+
+            // First generate the individual header proof
+            let mut header_pw = PartialWitness::new();
             let header_bytes = hex::decode(header).expect("Expect a valid hex string");
-            pw.set_bool_target(condition, use_prev_proof);
-            pw.set_encoded_header_target(&encoded_block_input, header_bytes.clone());
-            pw.set_target(
-                encoded_block_size,
-                F::from_canonical_u64(header_bytes.len() as u64),
+
+            let mut small_header_proof = dummy_small_proof.clone();
+            let mut large_header_proof = dummy_large_proof.clone();
+            let is_small_header: bool;
+            if header_bytes.len() <= MAX_SMALL_HEADER_SIZE {
+                is_small_header = true;
+                header_pw.set_encoded_header_target(
+                    &small_header_encoded_header_target,
+                    header_bytes.clone(),
+                );
+                small_header_proof = process_small_header_data.prove(header_pw)?;
+                process_small_header_data.verify(small_header_proof.clone())?;
+            } else {
+                is_small_header = false;
+                header_pw.set_encoded_header_target(
+                    &large_header_encoded_header_target,
+                    header_bytes.clone(),
+                );
+                large_header_proof = process_large_header_data.prove(header_pw)?;
+                process_large_header_data.verify(large_header_proof.clone())?;
+            }
+
+            let mut header_ivc_pw = PartialWitness::new();
+            header_ivc_pw.set_bool_target(header_ivc_targets.ivc_base_case, use_prev_proof);
+
+            header_ivc_pw.set_bool_target(header_ivc_targets.is_small_header, is_small_header);
+
+            header_ivc_pw.set_proof_with_pis_target(
+                &header_ivc_targets.small_header_proof,
+                &small_header_proof,
+            );
+
+            header_ivc_pw.set_proof_with_pis_target(
+                &header_ivc_targets.large_header_proof,
+                &large_header_proof,
             );
 
             if !use_prev_proof {
@@ -874,40 +938,38 @@ pub mod tests {
                 let initial_pi_map = initial_pi.into_iter().enumerate().collect();
 
                 let base_proof = cyclic_base_proof(
-                    &common_data,
-                    &cyclic_circuit_data.verifier_only,
+                    &header_ivc_data.common,
+                    &header_ivc_data.verifier_only,
                     initial_pi_map,
                 );
 
-                pw.set_proof_with_pis_target::<C, D>(
-                    &previous_header_verification_proof_with_pis,
+                header_ivc_pw.set_proof_with_pis_target::<C, D>(
+                    &header_ivc_targets.ivc_prev_proof,
                     &base_proof,
                 );
             } else {
-                pw.set_proof_with_pis_target::<C, D>(
-                    &previous_header_verification_proof_with_pis,
+                header_ivc_pw.set_proof_with_pis_target::<C, D>(
+                    &header_ivc_targets.ivc_prev_proof,
                     &prev_proof.expect("some be a Some value"),
                 );
             }
 
-            pw.set_verifier_data_target(&verifier_data_target, &cyclic_circuit_data.verifier_only);
-
             let mut timing1 = TimingTree::new("proof gen", Level::Info);
             let proof = prove::<F, C, D>(
-                &cyclic_circuit_data.prover_only,
-                &cyclic_circuit_data.common,
-                pw,
+                &header_ivc_data.prover_only,
+                &header_ivc_data.common,
+                header_ivc_pw,
                 &mut timing1,
             )?;
             timing1.print();
 
             check_cyclic_proof_verifier_data(
                 &proof,
-                &cyclic_circuit_data.verifier_only,
-                &cyclic_circuit_data.common,
+                &header_ivc_data.verifier_only,
+                &header_ivc_data.common,
             )?;
 
-            cyclic_circuit_data.verify(proof.clone())?;
+            header_ivc_data.verify(proof.clone())?;
             println!("proof for block {} is valid", header_num);
 
             prev_proof = Some(proof);
@@ -938,9 +1000,6 @@ pub mod tests {
         );
 
         Ok(final_proof)
-        */
-
-        Err(anyhow::anyhow!("not implemented"))
     }
 
     #[test]

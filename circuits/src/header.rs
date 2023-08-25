@@ -59,6 +59,8 @@ where
 
     process_header_builder.process_header(&encoded_header_target);
 
+    process_header_builder.add_gate(ConstantGate::new(2), Vec::new());
+
     let process_header_data = process_header_builder.build::<C>();
 
     let dummy_proof = cyclic_base_proof::<F, C, D>(
@@ -67,6 +69,7 @@ where
         HashMap::<usize, F>::new(),
     );
 
+    // TODO: Return dummy_proof as a reference type
     (encoded_header_target, process_header_data, dummy_proof)
 }
 
@@ -314,139 +317,140 @@ where
         constants_sigmas_cap: MerkleCap(vec![
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8711776516590847690),
-                    F::from_canonical_u64(6689337593265916366),
-                    F::from_canonical_u64(8475850867895631531),
-                    F::from_canonical_u64(40682170367083097),
+                    F::from_canonical_u64(2225237877069907407),
+                    F::from_canonical_u64(10674148293308845336),
+                    F::from_canonical_u64(14823520364480047584),
+                    F::from_canonical_u64(13041944328210437542),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8132744300691276554),
-                    F::from_canonical_u64(7033745181140593623),
-                    F::from_canonical_u64(13077842940465272446),
-                    F::from_canonical_u64(15599450899648253655),
+                    F::from_canonical_u64(18130325122772056688),
+                    F::from_canonical_u64(10297034932705946583),
+                    F::from_canonical_u64(7831131987745788328),
+                    F::from_canonical_u64(5433367898224201257),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(16453775900251790654),
-                    F::from_canonical_u64(16197696523919300452),
-                    F::from_canonical_u64(6251405225011934775),
-                    F::from_canonical_u64(18232359980231045909),
+                    F::from_canonical_u64(9738602811857454652),
+                    F::from_canonical_u64(11915363904116586060),
+                    F::from_canonical_u64(6099863057817048289),
+                    F::from_canonical_u64(4493606437809735588),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(1504463206181608874),
-                    F::from_canonical_u64(16046278584711003528),
-                    F::from_canonical_u64(6430230359719217949),
-                    F::from_canonical_u64(6322189192537315287),
+                    F::from_canonical_u64(12883310535079161837),
+                    F::from_canonical_u64(10618991311810071630),
+                    F::from_canonical_u64(2137473946644807275),
+                    F::from_canonical_u64(3726556069812201864),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(6445651932566296820),
-                    F::from_canonical_u64(17703725366866678889),
-                    F::from_canonical_u64(13995775945532477794),
-                    F::from_canonical_u64(9696897253618194004),
+                    F::from_canonical_u64(177697818080834357),
+                    F::from_canonical_u64(6652567672576424474),
+                    F::from_canonical_u64(6494613222534332869),
+                    F::from_canonical_u64(301143041642317549),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8123364066376701516),
-                    F::from_canonical_u64(18278562286209858720),
-                    F::from_canonical_u64(8043870000048164270),
-                    F::from_canonical_u64(13159417434636915726),
+                    F::from_canonical_u64(8013085152330762386),
+                    F::from_canonical_u64(7648899628547953161),
+                    F::from_canonical_u64(4893911320366126652),
+                    F::from_canonical_u64(6974030436586719837),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(3384363148650751962),
-                    F::from_canonical_u64(776596387166343445),
-                    F::from_canonical_u64(10899997266973042165),
-                    F::from_canonical_u64(13946609561928543450),
+                    F::from_canonical_u64(2616622367600487982),
+                    F::from_canonical_u64(12564975857666574394),
+                    F::from_canonical_u64(13069634195342495102),
+                    F::from_canonical_u64(6665617880637771057),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(10393064240259753619),
-                    F::from_canonical_u64(8210797836965271205),
-                    F::from_canonical_u64(3074514415068555075),
-                    F::from_canonical_u64(17434677342129006807),
+                    F::from_canonical_u64(12061485440385284766),
+                    F::from_canonical_u64(13378781476401091706),
+                    F::from_canonical_u64(2420318842101159779),
+                    F::from_canonical_u64(11391172263349925942),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(1076908457798007406),
-                    F::from_canonical_u64(18085980942810609336),
-                    F::from_canonical_u64(14716417055994859554),
-                    F::from_canonical_u64(15285608525742490274),
+                    F::from_canonical_u64(15874928324721359140),
+                    F::from_canonical_u64(13032855244244535357),
+                    F::from_canonical_u64(8488223230767028880),
+                    F::from_canonical_u64(15511313247887978135),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(11305355795159786594),
-                    F::from_canonical_u64(10563989663047664457),
-                    F::from_canonical_u64(15605218500335408058),
-                    F::from_canonical_u64(7352604774252389427),
+                    F::from_canonical_u64(12845646395689872757),
+                    F::from_canonical_u64(9870847263694311800),
+                    F::from_canonical_u64(14722705793325867125),
+                    F::from_canonical_u64(8089006096019652991),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8345057542944899170),
-                    F::from_canonical_u64(5832931401799754626),
-                    F::from_canonical_u64(5204992508845059354),
-                    F::from_canonical_u64(893684633686180944),
+                    F::from_canonical_u64(609811383094099811),
+                    F::from_canonical_u64(17323219303386865394),
+                    F::from_canonical_u64(7068726368880957562),
+                    F::from_canonical_u64(15440481346744611180),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(15909215196558967994),
-                    F::from_canonical_u64(5814589981288843625),
-                    F::from_canonical_u64(10561388689924585156),
-                    F::from_canonical_u64(2632453557586503482),
+                    F::from_canonical_u64(15628875462818780756),
+                    F::from_canonical_u64(1669344533290409107),
+                    F::from_canonical_u64(13965878162152564127),
+                    F::from_canonical_u64(10764686370266574853),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(1365314270606219843),
-                    F::from_canonical_u64(8856919480624818749),
-                    F::from_canonical_u64(13409881616246528546),
-                    F::from_canonical_u64(5997592209262528913),
+                    F::from_canonical_u64(7481612714048488488),
+                    F::from_canonical_u64(8993085354947915990),
+                    F::from_canonical_u64(11936995863388761142),
+                    F::from_canonical_u64(14612448567197222172),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(17593511723426799142),
-                    F::from_canonical_u64(6922058928752112047),
-                    F::from_canonical_u64(2223120864170750809),
-                    F::from_canonical_u64(11041452708798138401),
+                    F::from_canonical_u64(15727726741168328527),
+                    F::from_canonical_u64(10760001756989711346),
+                    F::from_canonical_u64(10578654710127104478),
+                    F::from_canonical_u64(16726302363698099222),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(18105556238942927787),
-                    F::from_canonical_u64(17592963491794876444),
-                    F::from_canonical_u64(10202105524208304032),
-                    F::from_canonical_u64(6279499652370770965),
+                    F::from_canonical_u64(2303016756715619913),
+                    F::from_canonical_u64(16742196886787181724),
+                    F::from_canonical_u64(999047734543514106),
+                    F::from_canonical_u64(4464180999797409736),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2235770242976949206),
-                    F::from_canonical_u64(2276324456813312040),
-                    F::from_canonical_u64(15128151491866380512),
-                    F::from_canonical_u64(16791665378812967109),
+                    F::from_canonical_u64(6349785910978155683),
+                    F::from_canonical_u64(10755169522529422692),
+                    F::from_canonical_u64(10700931298708442328),
+                    F::from_canonical_u64(2457890654590200256),
                 ],
             },
         ]),
+
         circuit_digest: HashOut {
             elements: [
-                F::from_canonical_u64(5036480820287603163),
-                F::from_canonical_u64(8836813599719692297),
-                F::from_canonical_u64(9740369935713788688),
-                F::from_canonical_u64(17081157849138175389),
+                F::from_canonical_u64(16543068341236581582),
+                F::from_canonical_u64(13290864990913383358),
+                F::from_canonical_u64(1626855543267329516),
+                F::from_canonical_u64(15071333207764330239),
             ],
         },
     }
@@ -626,139 +630,139 @@ where
         constants_sigmas_cap: MerkleCap(vec![
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2916506838420528258),
-                    F::from_canonical_u64(2320934456167974730),
-                    F::from_canonical_u64(3080705498343833603),
-                    F::from_canonical_u64(17919935677369988721),
+                    F::from_canonical_u64(14661796354882620617),
+                    F::from_canonical_u64(12445062506583636561),
+                    F::from_canonical_u64(2309818448300437890),
+                    F::from_canonical_u64(8059997968192733063),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(3743919344105588164),
-                    F::from_canonical_u64(5362874409438510562),
-                    F::from_canonical_u64(9559026330146210697),
-                    F::from_canonical_u64(8204292728374690960),
+                    F::from_canonical_u64(17727999767334204722),
+                    F::from_canonical_u64(18115716908813330362),
+                    F::from_canonical_u64(10649768514979183632),
+                    F::from_canonical_u64(15494126047430098110),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(7656803409610104741),
-                    F::from_canonical_u64(9552965662154114951),
-                    F::from_canonical_u64(15087539475410227350),
-                    F::from_canonical_u64(15271881324122222793),
+                    F::from_canonical_u64(5301421276083589236),
+                    F::from_canonical_u64(12188105848661816489),
+                    F::from_canonical_u64(14727217223135707740),
+                    F::from_canonical_u64(3553453398074752873),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(11248967163765756871),
-                    F::from_canonical_u64(7893680784586735374),
-                    F::from_canonical_u64(8709339270421946590),
-                    F::from_canonical_u64(12487830521705750437),
+                    F::from_canonical_u64(15798062677231300933),
+                    F::from_canonical_u64(10033491924330427181),
+                    F::from_canonical_u64(7441012014916954813),
+                    F::from_canonical_u64(6688606264537782107),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(15767620760375553480),
-                    F::from_canonical_u64(11972496133714303629),
-                    F::from_canonical_u64(7817927340578460619),
-                    F::from_canonical_u64(8835663807225447279),
+                    F::from_canonical_u64(1810000525154411085),
+                    F::from_canonical_u64(12402970935917922763),
+                    F::from_canonical_u64(15362112929834649564),
+                    F::from_canonical_u64(15057877332800617307),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2539742860236534874),
-                    F::from_canonical_u64(1027162961628274349),
-                    F::from_canonical_u64(17607312894015084729),
-                    F::from_canonical_u64(8233404176617845083),
+                    F::from_canonical_u64(9850858648768805587),
+                    F::from_canonical_u64(1802135345259886188),
+                    F::from_canonical_u64(1906395405558122904),
+                    F::from_canonical_u64(7246805658530012513),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(14462483373475933319),
-                    F::from_canonical_u64(11930481353067841407),
-                    F::from_canonical_u64(15391037352906179979),
-                    F::from_canonical_u64(6234639378728843941),
+                    F::from_canonical_u64(6269072496513204232),
+                    F::from_canonical_u64(9990047000135906072),
+                    F::from_canonical_u64(6649971609635253076),
+                    F::from_canonical_u64(171737386510219015),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(15164679448607890595),
-                    F::from_canonical_u64(11500254393842867751),
-                    F::from_canonical_u64(18342394242042110877),
-                    F::from_canonical_u64(13524070048187672653),
+                    F::from_canonical_u64(2595078383499676997),
+                    F::from_canonical_u64(6809009889044672602),
+                    F::from_canonical_u64(5400745440235262322),
+                    F::from_canonical_u64(15481799715896649956),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2609040372020847144),
-                    F::from_canonical_u64(5447251298987659918),
-                    F::from_canonical_u64(14996630094406026909),
-                    F::from_canonical_u64(10674441719597356061),
+                    F::from_canonical_u64(5006035455749893123),
+                    F::from_canonical_u64(17152535856791096703),
+                    F::from_canonical_u64(16829865367806989433),
+                    F::from_canonical_u64(1143895198204273937),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(15946742519239705635),
-                    F::from_canonical_u64(10087614811792732896),
-                    F::from_canonical_u64(8411200178077432139),
-                    F::from_canonical_u64(9219284605954729278),
+                    F::from_canonical_u64(4473582809915808426),
+                    F::from_canonical_u64(3486471219046889438),
+                    F::from_canonical_u64(18269699385591255747),
+                    F::from_canonical_u64(3464634817742627425),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(14627614106482101284),
-                    F::from_canonical_u64(16599861286184885049),
-                    F::from_canonical_u64(7632806206315151451),
-                    F::from_canonical_u64(4062893097071907486),
+                    F::from_canonical_u64(9278685920993126229),
+                    F::from_canonical_u64(639041725189615739),
+                    F::from_canonical_u64(3953600378196575628),
+                    F::from_canonical_u64(7019856200862742323),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(10467505589862248747),
-                    F::from_canonical_u64(7863670263691743468),
-                    F::from_canonical_u64(2990655735464746347),
-                    F::from_canonical_u64(4808153379266177036),
+                    F::from_canonical_u64(7590307919683133237),
+                    F::from_canonical_u64(14942737493850707882),
+                    F::from_canonical_u64(15340172284853970150),
+                    F::from_canonical_u64(9630829890419662772),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(1960004200043945152),
-                    F::from_canonical_u64(14029854479581292961),
-                    F::from_canonical_u64(1632636849053368813),
-                    F::from_canonical_u64(9588798835294527857),
+                    F::from_canonical_u64(15307467502834365803),
+                    F::from_canonical_u64(12679866560206714589),
+                    F::from_canonical_u64(3432285442637758223),
+                    F::from_canonical_u64(3932981594259069122),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(6180083795859083822),
-                    F::from_canonical_u64(17363179284662966104),
-                    F::from_canonical_u64(5492964616166921857),
-                    F::from_canonical_u64(3291666679571504240),
+                    F::from_canonical_u64(6597905450374772126),
+                    F::from_canonical_u64(15251469694413996654),
+                    F::from_canonical_u64(5507012072752181856),
+                    F::from_canonical_u64(3161268596544157086),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(17477553455529941962),
-                    F::from_canonical_u64(7407023775976379582),
-                    F::from_canonical_u64(4559214944083897332),
-                    F::from_canonical_u64(7754156744169744965),
+                    F::from_canonical_u64(18254395526960786209),
+                    F::from_canonical_u64(7756845751261062747),
+                    F::from_canonical_u64(11221092307283610329),
+                    F::from_canonical_u64(652300524684955646),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(16713142606743868705),
-                    F::from_canonical_u64(17556117177175217316),
-                    F::from_canonical_u64(15806488347580783316),
-                    F::from_canonical_u64(14317904094363612523),
+                    F::from_canonical_u64(12434401119237801195),
+                    F::from_canonical_u64(15519798846113569664),
+                    F::from_canonical_u64(423402063834367275),
+                    F::from_canonical_u64(4101774627721266630),
                 ],
             },
         ]),
         circuit_digest: HashOut {
             elements: [
-                F::from_canonical_u64(3924152851894677722),
-                F::from_canonical_u64(13818047069862419455),
-                F::from_canonical_u64(7141065522426245206),
-                F::from_canonical_u64(11958697800088054378),
+                F::from_canonical_u64(5987405960598249402),
+                F::from_canonical_u64(12794870433248054655),
+                F::from_canonical_u64(15987930887553177889),
+                F::from_canonical_u64(12375253152617882572),
             ],
         },
     }

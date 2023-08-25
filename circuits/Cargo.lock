@@ -71,6 +71,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "allocator-api2"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
+
+[[package]]
 name = "android-tzdata"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1614,6 +1620,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
 dependencies = [
  "ahash",
+ "allocator-api2",
  "rayon",
  "serde",
 ]
@@ -2621,10 +2628,11 @@ checksum = "5696e2e2a6bb5c48a6e33fb0dd4d20d0a9472784b709964f337f224e99bd6d06"
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/sdk.git?branch=kevjue/blake2b_bugfix#bde68fd5d8c8f44f3df74c2189de24bf204b2a2e"
+source = "git+https://github.com/succinctlabs/sdk.git#a75b370dd0937b23b619a95aa504b6004e659a34"
 dependencies = [
  "anyhow",
  "array-macro",
+ "base64 0.13.1",
  "curta",
  "curve25519-dalek 4.0.0",
  "digest 0.10.7",
@@ -2633,6 +2641,7 @@ dependencies = [
  "ethers",
  "eyre",
  "ff",
+ "futures",
  "hex",
  "itertools 0.10.5",
  "lazy_static",
@@ -3571,6 +3580,7 @@ dependencies = [
  "env_logger",
  "ff_ce",
  "futures-util",
+ "hashbrown 0.14.0",
  "hex",
  "itertools 0.10.5",
  "lazy_static",

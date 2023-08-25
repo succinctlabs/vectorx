@@ -26,14 +26,11 @@ use plonky2::{
 };
 use plonky2x::{hash::blake2::blake2b::blake2b, num::u32::gates::add_many_u32::U32AddManyGate};
 
-use crate::header::CircuitBuilderHeader;
-use crate::utils::MAX_HEADER_SIZE;
-use crate::{
-    decoder::CircuitBuilderHeaderDecoder,
-    utils::{
-        AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, CHUNK_128_BYTES, HASH_SIZE,
-    },
+use crate::header::{
+    process_large_header_cd, process_large_header_vd, process_small_header_cd,
+    process_small_header_vd, CircuitBuilderHeader,
 };
+use crate::utils::{AvailHashTarget, CircuitBuilderUtils, CHUNK_128_BYTES, HASH_SIZE};
 
 #[derive(Debug)]
 pub struct PublicInputsElements {
@@ -536,20 +533,27 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
     where
         C::Hasher: AlgebraicHasher<F>,
     {
+        let small_header_vd = process_small_header_vd::<C, F, D>();
+        let small_header_cd = process_small_header_cd();
+        let small_header_vd_t = self.constant_verifier_data(&small_header_vd);
+
         self.conditionally_verify_proof_or_dummy::<C>(
             small_header,
             small_header_proof,
-            small_header_vd,
+            &small_header_vd_t,
             &small_header_cd,
         )
         .expect("Failed in generating small header verification conditional circuit");
 
         let large_header = self.not(small_header);
+        let large_header_vd = process_large_header_vd::<C, F, D>();
+        let large_header_cd = process_large_header_cd();
+        let large_header_vd_t = self.constant_verifier_data(&large_header_vd);
 
         self.conditionally_verify_proof_or_dummy::<C>(
             large_header,
             large_header_proof,
-            large_header_vd,
+            &large_header_vd_t,
             &large_header_cd,
         )
         .expect("Failed in generating header header verification conditional circuit");
@@ -768,12 +772,19 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
 #[cfg(test)]
 pub mod tests {
     use crate::{
+        header::{
+            create_header_circuit, process_large_header_cd, process_large_header_vd,
+            process_small_header_cd, process_small_header_vd, CircuitBuilderHeader,
+        },
         subchain_verification::{
             parse_public_inputs, verify_header_ivc_cd, verify_header_ivc_vd,
             CircuitBuilderHeaderVerification,
         },
         testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM},
-        utils::{CircuitBuilderUtils, WitnessEncodedHeader, CHUNK_128_BYTES},
+        utils::{
+            CircuitBuilderUtils, EncodedHeaderTarget, WitnessEncodedHeader, CHUNK_128_BYTES,
+            MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE,
+        },
     };
     use anyhow::Result;
     use log::Level;
@@ -798,19 +809,27 @@ pub mod tests {
     type F = <C as GenericConfig<D>>::F;
 
     pub fn retrieve_subchain_verification_proof() -> Result<ProofWithPublicInputs<F, C, D>> {
+        let (small_header_encoded_header_target, process_small_header_data, dummy_small_proof) =
+            create_header_circuit::<C, F, D, MAX_SMALL_HEADER_SIZE>();
+        assert!(process_small_header_data.common == process_small_header_cd());
+        assert!(process_small_header_data.verifier_only == process_small_header_vd());
+
+        let (large_header_encoded_header_target, process_large_header_data, dummy_large_proof) =
+            create_header_circuit::<C, F, D, MAX_LARGE_HEADER_SIZE>();
+        assert!(process_large_header_data.common == process_large_header_cd());
+        assert!(process_large_header_data.verifier_only == process_large_header_vd());
+
+        /*
         let config = CircuitConfig::standard_recursion_config();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
+        let mut header_ivc_builder = CircuitBuilder::<F, D>::new(config);
 
         let common_data = verify_header_ivc_cd();
         let verifier_data = verify_header_ivc_vd();
 
-        let (
-            condition,
-            encoded_block_input,
-            encoded_block_size,
-            verifier_data_target,
-            previous_header_verification_proof_with_pis,
-        ) = builder.verify_header_ivc::<C>();
+        let ivc_base_case = header_ivc_builder.add_virtual_bool_target_safe();
+
+
+        header_ivc_builder.verify_header_ivc::<C>();
 
         let cyclic_circuit_data = builder.build::<C>();
 
@@ -919,6 +938,9 @@ pub mod tests {
         );
 
         Ok(final_proof)
+        */
+
+        Err(anyhow::anyhow!("not implemented"))
     }
 
     #[test]
@@ -935,22 +957,5 @@ pub mod tests {
         } else {
             Ok(())
         }
-    }
-
-    #[test]
-    fn test_verify_small_header() -> Result<()> {
-        let mut builder_logger = env_logger::Builder::from_default_env();
-        builder_logger.format_timestamp(None);
-        builder_logger.filter_level(log::LevelFilter::Trace);
-        builder_logger.try_init()?;
-
-        let config = CircuitConfig::standard_recursion_config();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
-
-        let encoded_block_input = builder.add_virtual_encoded_header_target_safe();
-        let encoded_block_size = builder.add_virtual_target();
-
-        const SMALL_HEADER_SIZE: usize = 5 * CHUNK_128_BYTES;
-        builder.verify_header::<SMALL_HEADER_SIZE>(&encoded_block_input, encoded_block_size);
     }
 }

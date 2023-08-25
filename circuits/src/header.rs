@@ -287,10 +287,22 @@ mod tests {
             let header_fields = parse_header_pi::<C, F, D>(proof.public_inputs);
 
             assert_eq!(header_fields.block_num, block_num);
-            assert_eq!(header_fields.block_hash.as_slice(), hex::decode(BLOCK_HASHES[i]).unwrap());
-            assert_eq!(header_fields.state_root.as_slice(), hex::decode(STATE_ROOTS[i]).unwrap());
-            assert_eq!(header_fields.data_root.as_slice(), hex::decode(DATA_ROOTS[i]).unwrap());
-            assert_eq!(header_fields.parent_hash.as_slice(), hex::decode(PARENT_HASHES[i]).unwrap());
+            assert_eq!(
+                header_fields.block_hash.as_slice(),
+                hex::decode(BLOCK_HASHES[i]).unwrap()
+            );
+            assert_eq!(
+                header_fields.state_root.as_slice(),
+                hex::decode(STATE_ROOTS[i]).unwrap()
+            );
+            assert_eq!(
+                header_fields.data_root.as_slice(),
+                hex::decode(DATA_ROOTS[i]).unwrap()
+            );
+            assert_eq!(
+                header_fields.parent_hash.as_slice(),
+                hex::decode(PARENT_HASHES[i]).unwrap()
+            );
         }
 
         Ok(())

@@ -2,7 +2,7 @@ use itertools::Itertools;
 use plonky2::gates::selectors::SelectorsInfo;
 use plonky2::hash::hash_types::HashOut;
 use plonky2::hash::merkle_tree::MerkleCap;
-use plonky2::plonk::circuit_data::VerifierOnlyCircuitData;
+use plonky2::plonk::circuit_data::{CircuitData, VerifierCircuitTarget, VerifierOnlyCircuitData};
 use plonky2::{
     field::extension::Extendable,
     fri::{reduction_strategies::FriReductionStrategy, FriConfig, FriParams},
@@ -19,21 +19,76 @@ use plonky2::{
     iop::target::{BoolTarget, Target},
     plonk::{
         circuit_builder::CircuitBuilder,
-        circuit_data::{CircuitConfig, CommonCircuitData, VerifierCircuitTarget},
+        circuit_data::{CircuitConfig, CommonCircuitData},
         config::{AlgebraicHasher, GenericConfig},
         proof::ProofWithPublicInputsTarget,
     },
 };
 use plonky2x::{hash::blake2::blake2b::blake2b, num::u32::gates::add_many_u32::U32AddManyGate};
 
-use crate::utils::MAX_HEADER_SIZE;
-use crate::{
-    decoder::CircuitBuilderHeaderDecoder,
-    utils::{
-        AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, CHUNK_128_BYTES, HASH_SIZE,
-    },
+use crate::header::{
+    process_large_header_cd, process_large_header_vd, process_small_header_cd,
+    process_small_header_vd, CircuitBuilderHeader,
 };
+use crate::utils::{AvailHashTarget, CircuitBuilderUtils, CHUNK_128_BYTES, HASH_SIZE};
 
+struct HeaderIVCTargets<const D: usize> {
+    ivc_base_case: BoolTarget,
+    ivc_prev_proof: ProofWithPublicInputsTarget<D>,
+    is_small_header: BoolTarget,
+    small_header_proof: ProofWithPublicInputsTarget<D>,
+    large_header_proof: ProofWithPublicInputsTarget<D>,
+    verifier_circuit_target: VerifierCircuitTarget,
+}
+
+fn create_header_ivc_circuit<
+    C: GenericConfig<D, F = F> + 'static,
+    F: RichField + Extendable<D>,
+    const D: usize,
+>() -> (HeaderIVCTargets<D>, CircuitData<F, C, D>)
+where
+    C::Hasher: AlgebraicHasher<F>,
+{
+    // Build the IVC circuit
+    let config = CircuitConfig::standard_recursion_config();
+    let mut header_ivc_builder = CircuitBuilder::<F, D>::new(config);
+
+    let header_ivc_data_cd = verify_header_ivc_cd();
+    let header_ivc_data_vd = verify_header_ivc_vd::<C, F, D>();
+
+    let ivc_base_case = header_ivc_builder.add_virtual_bool_target_safe();
+    let ivc_prev_proof = header_ivc_builder.add_virtual_proof_with_pis(&header_ivc_data_cd);
+    let is_small_header = header_ivc_builder.add_virtual_bool_target_safe();
+    let small_header_proof =
+        header_ivc_builder.add_virtual_proof_with_pis(&process_small_header_cd());
+    let large_header_proof =
+        header_ivc_builder.add_virtual_proof_with_pis(&process_large_header_cd());
+
+    let verifier_circuit_target = header_ivc_builder.verify_header_ivc::<C>(
+        ivc_base_case,
+        &ivc_prev_proof,
+        is_small_header,
+        &small_header_proof,
+        &large_header_proof,
+    );
+
+    let header_ivc_data = header_ivc_builder.build::<C>();
+
+    assert_eq!(header_ivc_data_cd, header_ivc_data.common);
+    assert_eq!(header_ivc_data_vd, header_ivc_data.verifier_only);
+
+    (
+        HeaderIVCTargets {
+            ivc_base_case,
+            ivc_prev_proof,
+            is_small_header,
+            small_header_proof,
+            large_header_proof,
+            verifier_circuit_target,
+        },
+        header_ivc_data,
+    )
+}
 #[derive(Debug)]
 pub struct PublicInputsElements {
     pub initial_block_hash: [u8; HASH_SIZE],
@@ -183,8 +238,8 @@ pub(crate) fn verify_header_ivc_cd<F: RichField + Extendable<D>, const D: usize>
                 num_query_rounds: 28,
             },
             hiding: false,
-            degree_bits: 20,
-            reduction_arity_bits: vec![4, 4, 4, 4],
+            degree_bits: 15,
+            reduction_arity_bits: vec![4, 4, 4],
         },
         gates: vec![
             GateRef::new(NoopGate {}),
@@ -267,139 +322,139 @@ where
         constants_sigmas_cap: MerkleCap(vec![
             HashOut {
                 elements: [
-                    F::from_canonical_u64(14279925247335401071),
-                    F::from_canonical_u64(3583580480101461931),
-                    F::from_canonical_u64(16536002908860857775),
-                    F::from_canonical_u64(6379011898590097254),
+                    F::from_canonical_u64(13719139148739964809),
+                    F::from_canonical_u64(3985397077093140875),
+                    F::from_canonical_u64(773757932482375232),
+                    F::from_canonical_u64(8637618966119583773),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8732164097790799892),
-                    F::from_canonical_u64(6151513101891070743),
-                    F::from_canonical_u64(1404140543879842872),
-                    F::from_canonical_u64(1186760377589587695),
+                    F::from_canonical_u64(2656020757760353093),
+                    F::from_canonical_u64(14686348016219292686),
+                    F::from_canonical_u64(17770147950708789167),
+                    F::from_canonical_u64(1850510006545369410),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(4659367829642659994),
-                    F::from_canonical_u64(12964625556265386253),
-                    F::from_canonical_u64(15874664631145335428),
-                    F::from_canonical_u64(792879913970014316),
+                    F::from_canonical_u64(1090170580786137082),
+                    F::from_canonical_u64(12030120322367455319),
+                    F::from_canonical_u64(6693889947032175223),
+                    F::from_canonical_u64(4742544349390995199),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(5060056232339645809),
-                    F::from_canonical_u64(7579074518106734870),
-                    F::from_canonical_u64(13396451108061219118),
-                    F::from_canonical_u64(6431550535925716133),
+                    F::from_canonical_u64(5967148472721089790),
+                    F::from_canonical_u64(521240221714532128),
+                    F::from_canonical_u64(15113222525508286174),
+                    F::from_canonical_u64(18101070528724371009),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(4772976151813849053),
-                    F::from_canonical_u64(5019224891998960239),
-                    F::from_canonical_u64(856022066557676709),
-                    F::from_canonical_u64(13050201476718469703),
+                    F::from_canonical_u64(2179402085063084374),
+                    F::from_canonical_u64(1324738038116675393),
+                    F::from_canonical_u64(15639935564811592268),
+                    F::from_canonical_u64(14110330424342799321),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2487290536140898141),
-                    F::from_canonical_u64(4174181341619288417),
-                    F::from_canonical_u64(14982911265678359885),
-                    F::from_canonical_u64(13893519756166789652),
+                    F::from_canonical_u64(5085493671857677834),
+                    F::from_canonical_u64(3163465376487088930),
+                    F::from_canonical_u64(446859572954146329),
+                    F::from_canonical_u64(562431090586488276),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(12757396429388144395),
-                    F::from_canonical_u64(11991974417901135198),
-                    F::from_canonical_u64(13917361533990408017),
-                    F::from_canonical_u64(14414676336513742857),
+                    F::from_canonical_u64(633852943748649501),
+                    F::from_canonical_u64(14898532295077885214),
+                    F::from_canonical_u64(12860999273626228119),
+                    F::from_canonical_u64(6450279647528044710),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(13525073521029784592),
-                    F::from_canonical_u64(12386677733145181517),
-                    F::from_canonical_u64(14957654821266202593),
-                    F::from_canonical_u64(8110540373850920504),
+                    F::from_canonical_u64(16088316488449644138),
+                    F::from_canonical_u64(7516367299025720302),
+                    F::from_canonical_u64(14612406540018789082),
+                    F::from_canonical_u64(309571978577453448),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(8132364512809958997),
-                    F::from_canonical_u64(812601146402104015),
-                    F::from_canonical_u64(18271575082902528502),
-                    F::from_canonical_u64(16551916704520327064),
+                    F::from_canonical_u64(11032371094331043424),
+                    F::from_canonical_u64(12897008859105511198),
+                    F::from_canonical_u64(10280412945954997874),
+                    F::from_canonical_u64(4638235353211685583),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(14221641715425497611),
-                    F::from_canonical_u64(12623299214957053833),
-                    F::from_canonical_u64(13078306607384483897),
-                    F::from_canonical_u64(15630241381614775121),
+                    F::from_canonical_u64(4336604884965786914),
+                    F::from_canonical_u64(10521862303181130403),
+                    F::from_canonical_u64(8198530657707600836),
+                    F::from_canonical_u64(862832117634404501),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(9511367709381189559),
-                    F::from_canonical_u64(1864191245331275275),
-                    F::from_canonical_u64(17658721473363737448),
-                    F::from_canonical_u64(7877250233373704416),
+                    F::from_canonical_u64(8764447427652359863),
+                    F::from_canonical_u64(140806324180441725),
+                    F::from_canonical_u64(2124360974791376117),
+                    F::from_canonical_u64(1157920850574243235),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(7066539818341181594),
-                    F::from_canonical_u64(15011388141196267991),
-                    F::from_canonical_u64(5040531198568509574),
-                    F::from_canonical_u64(10697356820270951727),
+                    F::from_canonical_u64(11971173263666324029),
+                    F::from_canonical_u64(11626208458821757341),
+                    F::from_canonical_u64(12510683023519432739),
+                    F::from_canonical_u64(628223843945421854),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2293756880236203641),
-                    F::from_canonical_u64(2665884223398335517),
-                    F::from_canonical_u64(13736438034327644166),
-                    F::from_canonical_u64(5669853307172626816),
+                    F::from_canonical_u64(4649190021658144552),
+                    F::from_canonical_u64(8769951343905798523),
+                    F::from_canonical_u64(2040244381547316143),
+                    F::from_canonical_u64(5468458054821461752),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(2856730570195234907),
-                    F::from_canonical_u64(18316577759665185535),
-                    F::from_canonical_u64(16427081493093691001),
-                    F::from_canonical_u64(4647791340002963359),
+                    F::from_canonical_u64(9446091277615157237),
+                    F::from_canonical_u64(11272874009298949758),
+                    F::from_canonical_u64(12636611450938436722),
+                    F::from_canonical_u64(8361652884955591133),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(17467181932095298266),
-                    F::from_canonical_u64(10201010735740812763),
-                    F::from_canonical_u64(7898132404335443927),
-                    F::from_canonical_u64(14480769791743578824),
+                    F::from_canonical_u64(17026774536457495032),
+                    F::from_canonical_u64(1702526204064302965),
+                    F::from_canonical_u64(4668331712793734099),
+                    F::from_canonical_u64(6571179310180709525),
                 ],
             },
             HashOut {
                 elements: [
-                    F::from_canonical_u64(5245849465894255747),
-                    F::from_canonical_u64(8864305202869869746),
-                    F::from_canonical_u64(5467314423136200158),
-                    F::from_canonical_u64(3072797568720766929),
+                    F::from_canonical_u64(13236748600385133155),
+                    F::from_canonical_u64(596261182024546888),
+                    F::from_canonical_u64(1586674165004293151),
+                    F::from_canonical_u64(16144280193924284642),
                 ],
             },
         ]),
         circuit_digest: HashOut {
             elements: [
-                F::from_canonical_u64(18220935880225098234),
-                F::from_canonical_u64(9421693311425457359),
-                F::from_canonical_u64(5950288396293546789),
-                F::from_canonical_u64(5499183684015304306),
+                F::from_canonical_u64(16839424014964235289),
+                F::from_canonical_u64(7920165497178828214),
+                F::from_canonical_u64(13857837247028786633),
+                F::from_canonical_u64(3825363243085304393),
             ],
         },
     }
@@ -489,24 +544,29 @@ pub struct PublicInputsElementsTarget {
 }
 
 pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D: usize> {
-    fn verify_header(
+    fn recursive_verify_header<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
-        encoded_header: &EncodedHeaderTarget,
-        encoded_header_size: Target,
-        parent_block_num: Target,
-        parent_hash: &AvailHashTarget,
-        data_root_acc: &AvailHashTarget,
-    );
+        small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) -> (
+        AvailHashTarget,
+        Target,
+        AvailHashTarget,
+        AvailHashTarget,
+        AvailHashTarget,
+    )
+    where
+        C::Hasher: AlgebraicHasher<F>;
 
     fn verify_header_ivc<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
-    ) -> (
-        BoolTarget,
-        EncodedHeaderTarget,
-        Target,
-        VerifierCircuitTarget,
-        ProofWithPublicInputsTarget<D>,
-    )
+        ivc_base_case: BoolTarget,
+        ivc_prev_proof: &ProofWithPublicInputsTarget<D>,
+        is_small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) -> VerifierCircuitTarget
     where
         C::Hasher: AlgebraicHasher<F>;
 
@@ -516,60 +576,157 @@ pub trait CircuitBuilderHeaderVerification<F: RichField + Extendable<D>, const D
 impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerification<F, D>
     for CircuitBuilder<F, D>
 {
-    fn verify_header(
+    fn recursive_verify_header<C: GenericConfig<D, F = F> + 'static>(
         &mut self,
-        encoded_header: &EncodedHeaderTarget,
-        encoded_header_size: Target,
-        parent_block_num: Target,
-        parent_hash_target: &AvailHashTarget,
-        data_root_acc: &AvailHashTarget,
-    ) {
-        // Calculate the hash for the current header
-        let header_hasher = blake2b::<F, D, MAX_HEADER_SIZE, HASH_SIZE>(self);
+        small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) -> (
+        AvailHashTarget,
+        Target,
+        AvailHashTarget,
+        AvailHashTarget,
+        AvailHashTarget,
+    )
+    where
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        let small_header_vd = process_small_header_vd::<C, F, D>();
+        let small_header_cd = process_small_header_cd();
+        let small_header_vd_t = self.constant_verifier_data(&small_header_vd);
 
-        // Input the encoded header bytes into the hasher
-        for i in 0..MAX_HEADER_SIZE {
-            // Need to split the bytes into bits
-            let mut bits = self.split_le(encoded_header.header_bytes[i], 8);
+        self.conditionally_verify_proof_or_dummy::<C>(
+            small_header,
+            small_header_proof,
+            &small_header_vd_t,
+            &small_header_cd,
+        )
+        .expect("Failed in generating small header verification conditional circuit");
 
-            // Needs to be in bit big endian order for the EDDSA verification circuit
-            bits.reverse();
-            for (j, bit) in bits.iter().enumerate().take(8) {
-                self.connect(header_hasher.message[i * 8 + j].target, bit.target);
-            }
-        }
+        let large_header = self.not(small_header);
+        let large_header_vd = process_large_header_vd::<C, F, D>();
+        let large_header_cd = process_large_header_cd();
+        let large_header_vd_t = self.constant_verifier_data(&large_header_vd);
 
-        self.connect(header_hasher.message_len, encoded_header_size);
+        self.conditionally_verify_proof_or_dummy::<C>(
+            large_header,
+            large_header_proof,
+            &large_header_vd_t,
+            &large_header_cd,
+        )
+        .expect("Failed in generating header header verification conditional circuit");
 
-        // Convert the digest (vector of bits) to bytes
-        let mut header_hash_bytes = Vec::new();
-        for byte_chunk in header_hasher.digest.chunks(8) {
-            let byte = self.le_sum(byte_chunk.to_vec().iter().rev());
-            self.register_public_input(byte);
-            header_hash_bytes.push(byte);
-        }
+        let small_header_public_inputs = self.parse_header_pi(&small_header_proof.public_inputs);
 
-        // Get the decoded_header object to retrieve the block numbers and parent hashes
-        let decoded_header = self.decode_header(
-            encoded_header,
-            AvailHashTarget(header_hash_bytes.as_slice().try_into().unwrap()),
+        let large_header_public_inputs = self.parse_header_pi(&large_header_proof.public_inputs);
+
+        let block_hash = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.block_hash,
+                small_header_public_inputs.block_hash,
+            ],
+        );
+
+        let block_num = self.random_access(
+            small_header.target,
+            vec![
+                large_header_public_inputs.block_num,
+                small_header_public_inputs.block_num,
+            ],
+        );
+
+        let parent_hash = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.parent_hash,
+                small_header_public_inputs.parent_hash,
+            ],
+        );
+
+        let state_root = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.state_root,
+                small_header_public_inputs.state_root,
+            ],
+        );
+
+        let data_root = self.random_access_avail_hash(
+            small_header.target,
+            vec![
+                large_header_public_inputs.data_root,
+                small_header_public_inputs.data_root,
+            ],
+        );
+
+        (block_hash, block_num, parent_hash, state_root, data_root)
+    }
+
+    fn verify_header_ivc<C: GenericConfig<D, F = F> + 'static>(
+        &mut self,
+        ivc_base_case: BoolTarget,
+        ivc_prev_proof: &ProofWithPublicInputsTarget<D>,
+        is_small_header: BoolTarget,
+        small_header_proof: &ProofWithPublicInputsTarget<D>,
+        large_header_proof: &ProofWithPublicInputsTarget<D>,
+    ) -> VerifierCircuitTarget
+    where
+        C::Hasher: AlgebraicHasher<F>,
+    {
+        let previous_proof_elements = self.parse_public_inputs(&ivc_prev_proof.public_inputs);
+
+        // Set the initial elements to be public inputs
+        self.register_public_inputs(&previous_proof_elements.initial_block_hash.0);
+        self.register_public_input(previous_proof_elements.initial_block_num);
+        self.register_public_inputs(&previous_proof_elements.initial_data_root_accumulator.0);
+
+        // For the base case, the previous block is the initial block
+        let previous_block_hash = self.random_access_avail_hash(
+            ivc_base_case.target,
+            vec![
+                previous_proof_elements.initial_block_hash,
+                previous_proof_elements.latest_block_hash,
+            ],
+        );
+
+        let previous_block_num = self.random_access(
+            ivc_base_case.target,
+            vec![
+                previous_proof_elements.initial_block_num,
+                previous_proof_elements.latest_block_num,
+            ],
+        );
+
+        let previous_data_root_accumulator = self.random_access_avail_hash(
+            ivc_base_case.target,
+            vec![
+                previous_proof_elements.initial_data_root_accumulator,
+                previous_proof_elements.latest_data_root_accumulator,
+            ],
+        );
+
+        // Verify the header proof
+        let (block_hash, block_num, parent_hash, _, data_root) = self.recursive_verify_header::<C>(
+            is_small_header,
+            small_header_proof,
+            large_header_proof,
         );
 
         // Verify that this header's block number is one greater than the previous header's block number
         let one = self.one();
-        let expected_block_num = self.add(parent_block_num, one);
-        self.connect(expected_block_num, decoded_header.block_number);
-        self.register_public_input(decoded_header.block_number);
+        let expected_block_num = self.add(previous_block_num, one);
+        self.connect(expected_block_num, block_num);
 
         // Verify that the parent hash is equal to the decoded parent hash
-        self.connect_avail_hash(parent_hash_target.clone(), decoded_header.parent_hash);
+        self.connect_avail_hash(previous_block_hash, parent_hash);
 
         // Calculate the hash of the extracted fields and add them into the accumulator
         let data_root_acc_hasher = blake2b::<F, D, CHUNK_128_BYTES, HASH_SIZE>(self);
 
         let mut hasher_idx = 0;
         // Input the accumulator
-        for hash_byte in data_root_acc.0.iter() {
+        for hash_byte in previous_data_root_accumulator.0.iter() {
             let mut bits = self.split_le(*hash_byte, 8);
 
             bits.reverse();
@@ -581,7 +738,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         }
 
         // Input the data root
-        for byte in decoded_header.data_root.0.iter() {
+        for byte in data_root.0.iter() {
             let mut bits = self.split_le(*byte, 8);
 
             bits.reverse();
@@ -600,92 +757,26 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
         let input_len = self.constant(F::from_canonical_usize(hasher_idx / 8));
         self.connect(data_root_acc_hasher.message_len, input_len);
 
+        // Register the current header's fields as public inputs
+        self.register_public_inputs(&block_hash.0);
+        self.register_public_input(block_num);
+
         for byte_chunk in data_root_acc_hasher.digest.chunks(8) {
             let byte = self.le_sum(byte_chunk.to_vec().iter().rev());
             self.register_public_input(byte);
         }
-    }
 
-    fn verify_header_ivc<C: GenericConfig<D, F = F> + 'static>(
-        &mut self,
-    ) -> (
-        BoolTarget,
-        EncodedHeaderTarget,
-        Target,
-        VerifierCircuitTarget,
-        ProofWithPublicInputsTarget<D>,
-    )
-    where
-        C::Hasher: AlgebraicHasher<F>,
-    {
-        // False for the base case, true otherwise
-        let condition = self.add_virtual_bool_target_safe();
+        let ivc_verifier_data = self.add_verifier_data_public_inputs();
 
-        let common_data = verify_header_ivc_cd();
-
-        // Unpack inner proof's public inputs.
-        let previous_header_verification_proof_with_pis =
-            self.add_virtual_proof_with_pis(&common_data);
-        let previous_proof_elements =
-            self.parse_public_inputs(&previous_header_verification_proof_with_pis.public_inputs);
-
-        // Set the initial elements to be public inputs
-        self.register_public_inputs(&previous_proof_elements.initial_block_hash.0);
-        self.register_public_input(previous_proof_elements.initial_block_num);
-        self.register_public_inputs(&previous_proof_elements.initial_data_root_accumulator.0);
-
-        let previous_block_hash = self.random_access_avail_hash(
-            condition.target,
-            vec![
-                previous_proof_elements.initial_block_hash,
-                previous_proof_elements.latest_block_hash,
-            ],
-        );
-
-        let previous_block_num = self.random_access(
-            condition.target,
-            vec![
-                previous_proof_elements.initial_block_num,
-                previous_proof_elements.latest_block_num,
-            ],
-        );
-
-        let previous_data_root_accumulator = self.random_access_avail_hash(
-            condition.target,
-            vec![
-                previous_proof_elements.initial_data_root_accumulator,
-                previous_proof_elements.latest_data_root_accumulator,
-            ],
-        );
-
-        // Create inputs for the current encoded block;
-        let encoded_block_input = self.add_virtual_encoded_header_target_safe();
-        let encoded_block_size = self.add_virtual_target();
-
-        self.verify_header(
-            &encoded_block_input,
-            encoded_block_size,
-            previous_block_num,
-            &previous_block_hash,
-            &previous_data_root_accumulator,
-        );
-
-        let verifier_data_target = self.add_verifier_data_public_inputs();
-
+        // verify the previous proof
         self.conditionally_verify_cyclic_proof_or_dummy::<C>(
-            condition,
-            &previous_header_verification_proof_with_pis,
-            &common_data,
+            ivc_base_case,
+            ivc_prev_proof,
+            &verify_header_ivc_cd(),
         )
         .expect("generation of cyclic proof circuit failed");
 
-        (
-            condition,
-            encoded_block_input,
-            encoded_block_size,
-            verifier_data_target,
-            previous_header_verification_proof_with_pis,
-        )
+        ivc_verifier_data
     }
 
     fn parse_public_inputs(&mut self, public_inputs: &[Target]) -> PublicInputsElementsTarget {
@@ -741,12 +832,15 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderVerificat
 #[cfg(test)]
 pub mod tests {
     use crate::{
+        header::{
+            create_header_circuit, process_large_header_cd, process_large_header_vd,
+            process_small_header_cd, process_small_header_vd,
+        },
         subchain_verification::{
-            parse_public_inputs, verify_header_ivc_cd, verify_header_ivc_vd,
-            CircuitBuilderHeaderVerification,
+            create_header_ivc_circuit, parse_public_inputs, verify_header_ivc_vd,
         },
         testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM},
-        utils::WitnessEncodedHeader,
+        utils::{WitnessEncodedHeader, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE},
     };
     use anyhow::Result;
     use log::Level;
@@ -754,8 +848,6 @@ pub mod tests {
     use plonky2::{
         iop::witness::{PartialWitness, WitnessWrite},
         plonk::{
-            circuit_builder::CircuitBuilder,
-            circuit_data::CircuitConfig,
             config::{GenericConfig, PoseidonGoldilocksConfig},
             proof::ProofWithPublicInputs,
             prover::prove,
@@ -771,26 +863,17 @@ pub mod tests {
     type F = <C as GenericConfig<D>>::F;
 
     pub fn retrieve_subchain_verification_proof() -> Result<ProofWithPublicInputs<F, C, D>> {
-        let config = CircuitConfig::standard_recursion_config();
-        let mut builder = CircuitBuilder::<F, D>::new(config);
+        let (small_header_encoded_header_target, process_small_header_data, dummy_small_proof) =
+            create_header_circuit::<C, F, D, MAX_SMALL_HEADER_SIZE>();
+        assert!(process_small_header_data.common == process_small_header_cd());
+        assert!(process_small_header_data.verifier_only == process_small_header_vd());
 
-        let common_data = verify_header_ivc_cd();
-        let verifier_data = verify_header_ivc_vd();
+        let (large_header_encoded_header_target, process_large_header_data, dummy_large_proof) =
+            create_header_circuit::<C, F, D, MAX_LARGE_HEADER_SIZE>();
+        assert!(process_large_header_data.common == process_large_header_cd());
+        assert!(process_large_header_data.verifier_only == process_large_header_vd());
 
-        let (
-            condition,
-            encoded_block_input,
-            encoded_block_size,
-            verifier_data_target,
-            previous_header_verification_proof_with_pis,
-        ) = builder.verify_header_ivc::<C>();
-
-        let cyclic_circuit_data = builder.build::<C>();
-
-        // Assert that the circuit's common data nd verifier data matches what is expected
-        assert_eq!(common_data, cyclic_circuit_data.common);
-
-        assert_eq!(verifier_data, cyclic_circuit_data.verifier_only,);
+        let (header_ivc_targets, header_ivc_data) = create_header_ivc_circuit();
 
         let initial_block_hash_val = hex::decode(BLOCK_HASHES[0]).unwrap();
         let initial_block_num_val = HEAD_BLOCK_NUM;
@@ -802,14 +885,63 @@ pub mod tests {
 
         // The first encoded header is the HEAD header.  We assume that is already verified.
         for header in ENCODED_HEADERS[1..].iter() {
-            println!("Generating proof for header: {}", header_num);
-            let mut pw = PartialWitness::new();
+            // First generate the individual header proof
+            let mut header_pw = PartialWitness::new();
             let header_bytes = hex::decode(header).expect("Expect a valid hex string");
-            pw.set_bool_target(condition, use_prev_proof);
-            pw.set_encoded_header_target(&encoded_block_input, header_bytes.clone());
-            pw.set_target(
-                encoded_block_size,
-                F::from_canonical_u64(header_bytes.len() as u64),
+            let is_small_header = header_bytes.len() <= MAX_SMALL_HEADER_SIZE;
+
+            println!(
+                "Generating proof for header: {}, is_small_header: {}",
+                header_num, is_small_header
+            );
+
+            let mut small_header_proof = dummy_small_proof.clone();
+            let mut large_header_proof = dummy_large_proof.clone();
+            if is_small_header {
+                header_pw.set_encoded_header_target(
+                    &small_header_encoded_header_target,
+                    header_bytes.clone(),
+                );
+                let mut small_header_timing =
+                    TimingTree::new("small header proof gen", Level::Info);
+                small_header_proof = prove::<F, C, D>(
+                    &process_small_header_data.prover_only,
+                    &process_small_header_data.common,
+                    header_pw,
+                    &mut small_header_timing,
+                )?;
+                small_header_timing.print();
+                process_small_header_data.verify(small_header_proof.clone())?;
+            } else {
+                header_pw.set_encoded_header_target(
+                    &large_header_encoded_header_target,
+                    header_bytes.clone(),
+                );
+                let mut large_header_timing =
+                    TimingTree::new("large header proof gen", Level::Info);
+                large_header_proof = prove::<F, C, D>(
+                    &process_large_header_data.prover_only,
+                    &process_large_header_data.common,
+                    header_pw,
+                    &mut large_header_timing,
+                )?;
+                large_header_timing.print();
+                process_large_header_data.verify(large_header_proof.clone())?;
+            }
+
+            let mut header_ivc_pw = PartialWitness::new();
+            header_ivc_pw.set_bool_target(header_ivc_targets.ivc_base_case, use_prev_proof);
+
+            header_ivc_pw.set_bool_target(header_ivc_targets.is_small_header, is_small_header);
+
+            header_ivc_pw.set_proof_with_pis_target(
+                &header_ivc_targets.small_header_proof,
+                &small_header_proof,
+            );
+
+            header_ivc_pw.set_proof_with_pis_target(
+                &header_ivc_targets.large_header_proof,
+                &large_header_proof,
             );
 
             if !use_prev_proof {
@@ -828,40 +960,43 @@ pub mod tests {
                 let initial_pi_map = initial_pi.into_iter().enumerate().collect();
 
                 let base_proof = cyclic_base_proof(
-                    &common_data,
-                    &cyclic_circuit_data.verifier_only,
+                    &header_ivc_data.common,
+                    &header_ivc_data.verifier_only,
                     initial_pi_map,
                 );
 
-                pw.set_proof_with_pis_target::<C, D>(
-                    &previous_header_verification_proof_with_pis,
+                header_ivc_pw.set_proof_with_pis_target::<C, D>(
+                    &header_ivc_targets.ivc_prev_proof,
                     &base_proof,
                 );
             } else {
-                pw.set_proof_with_pis_target::<C, D>(
-                    &previous_header_verification_proof_with_pis,
+                header_ivc_pw.set_proof_with_pis_target::<C, D>(
+                    &header_ivc_targets.ivc_prev_proof,
                     &prev_proof.expect("some be a Some value"),
                 );
             }
 
-            pw.set_verifier_data_target(&verifier_data_target, &cyclic_circuit_data.verifier_only);
+            header_ivc_pw.set_verifier_data_target(
+                &header_ivc_targets.verifier_circuit_target,
+                &verify_header_ivc_vd::<C, F, D>(),
+            );
 
-            let mut timing1 = TimingTree::new("proof gen", Level::Info);
+            let mut ivc_timing = TimingTree::new("ivc proof gen", Level::Info);
             let proof = prove::<F, C, D>(
-                &cyclic_circuit_data.prover_only,
-                &cyclic_circuit_data.common,
-                pw,
-                &mut timing1,
+                &header_ivc_data.prover_only,
+                &header_ivc_data.common,
+                header_ivc_pw,
+                &mut ivc_timing,
             )?;
-            timing1.print();
+            ivc_timing.print();
 
             check_cyclic_proof_verifier_data(
                 &proof,
-                &cyclic_circuit_data.verifier_only,
-                &cyclic_circuit_data.common,
+                &header_ivc_data.verifier_only,
+                &header_ivc_data.common,
             )?;
 
-            cyclic_circuit_data.verify(proof.clone())?;
+            header_ivc_data.verify(proof.clone())?;
             println!("proof for block {} is valid", header_num);
 
             prev_proof = Some(proof);

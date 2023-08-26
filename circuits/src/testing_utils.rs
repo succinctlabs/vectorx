@@ -1,5 +1,4 @@
 #[cfg(test)]
-#[allow(dead_code)]
 pub(crate) mod tests {
     use crate::utils::{NUM_AUTHORITIES, QUORUM_SIZE};
 

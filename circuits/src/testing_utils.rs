@@ -238,7 +238,7 @@ pub(crate) mod tests {
         "61771bd363e7deb0e9f260e9a7e0e36e646cdb30ae5e8b7ed55ce45411a4ac4c",
     ];
     pub const BLOCK_272515_AUTHORITY_SET_COMMITMENT: &str =
-        "e786491aaeec8777b3f5c3fe5d1ca1292fb38cc7d4250b19763fd931a9757b12";
+        "39c6fdc9b2e5835509e98d30820165872f0974e3afd2bb95cde669e6ba8b0fd5";
 
     // concatenation of:
     // orig head hash:  7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118f

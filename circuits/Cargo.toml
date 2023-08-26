@@ -27,7 +27,7 @@ tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 anyhow = "1.0.68"
 
 [patch."https://github.com/mir-protocol/plonky2.git"]
-plonky2 = { path = "../../../plonky2/plonky2" }
+plonky2 = { path = "../../plonky2/plonky2" }
 
 #[patch."https://github.com/succinctlabs/sdk.git"]
 #plonky2x = { path = "../../../sdk/plonky2x" }

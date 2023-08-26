@@ -1,4 +1,5 @@
 use curta::math::prelude::CubicParameters;
+use itertools::Itertools;
 use num::BigUint;
 
 use plonky2::field::extension::Extendable;
@@ -14,14 +15,14 @@ use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2x::ecc::ed25519::gadgets::curve::{AffinePointTarget, CircuitBuilderCurve};
 use plonky2x::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
 use plonky2x::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
-use plonky2x::hash::blake2::blake2b::blake2b;
+use plonky2x::hash::sha::sha256::sha256;
 use plonky2x::num::biguint::{CircuitBuilderBiguint, WitnessBigUint};
 use plonky2x::num::nonnative::nonnative::CircuitBuilderNonNative;
 
 use crate::decoder::{CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget};
 use crate::utils::{
-    to_bits, AvailHashTarget, CircuitBuilderUtils, CHUNK_128_BYTES, ENCODED_PRECOMMIT_LENGTH,
-    HASH_SIZE, NUM_AUTHORITIES, PUB_KEY_SIZE, QUORUM_SIZE,
+    to_bits, AvailHashTarget, CircuitBuilderUtils, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE,
+    NUM_AUTHORITIES, PUB_KEY_SIZE, QUORUM_SIZE, WEIGHT_SIZE,
 };
 
 #[derive(Clone, Debug)]
@@ -34,6 +35,7 @@ pub struct PrecommitTarget<C: Curve> {
 #[derive(Clone)]
 pub struct AuthoritySetSignersTarget<C: Curve> {
     pub pub_keys: [AffinePointTarget<C>; NUM_AUTHORITIES], // Array of pub keys (in compressed form)
+    pub weights: [Target; NUM_AUTHORITIES], // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
     pub commitment: AvailHashTarget,
     pub set_id: Target,
 }
@@ -107,8 +109,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
 
     fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget<C> {
         let mut pub_keys = Vec::new();
+        let mut weights = Vec::new();
         for _i in 0..NUM_AUTHORITIES {
             pub_keys.push(self.add_virtual_affine_point_target());
+            weights.push(self.add_virtual_target()); // Weights should be u64, but we assume they are within the goldilocks field.
         }
 
         let commitment = self.add_virtual_avail_hash_target_safe(false);
@@ -118,6 +122,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
 
         AuthoritySetSignersTarget {
             pub_keys: pub_keys.try_into().unwrap(),
+            weights: weights.try_into().unwrap(),
             commitment,
             set_id,
         }
@@ -138,43 +143,41 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         // First check to see that we have the right authority set
         // Calculate the hash for the authority set
         // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
-        const AUTHORITIES_INPUT_LENGTH: usize = NUM_AUTHORITIES * PUB_KEY_SIZE;
-        const AUTHORITIES_INPUT_PADDING: usize =
-            (CHUNK_128_BYTES - (AUTHORITIES_INPUT_LENGTH % CHUNK_128_BYTES)) % CHUNK_128_BYTES;
-        const AUTHORITIES_INPUT_PADDED_LENGTH: usize =
-            AUTHORITIES_INPUT_LENGTH + AUTHORITIES_INPUT_PADDING;
-        let hash_circuit = blake2b::<F, D, AUTHORITIES_INPUT_PADDED_LENGTH, HASH_SIZE>(self);
+        const AUTHORITIES_INPUT_LENGTH: usize = NUM_AUTHORITIES * (PUB_KEY_SIZE + WEIGHT_SIZE);
 
+        let mut hasher_input = Vec::new();
         // Input the pub keys into the hasher
         for i in 0..NUM_AUTHORITIES {
             let mut compressed_pub_key = self.compress_point(&authority_set_signers.pub_keys[i]);
 
-            // Reverse the byte endian order
-            for (byte_num, bits) in compressed_pub_key
-                .bit_targets
-                .chunks_mut(8)
-                .rev()
-                .enumerate()
-            {
-                for (bit_num, bit) in bits.iter().enumerate() {
-                    self.connect(
-                        hash_circuit.message[i * 256 + byte_num * 8 + bit_num].target,
-                        bit.target,
-                    );
-                }
-            }
+            // Add the authority.
+            // Byte ordering is correct, but need to reverse the bit ordering
+            hasher_input.extend(
+                compressed_pub_key
+                    .bit_targets
+                    .chunks_mut(8)
+                    .rev()
+                    .flatten()
+                    .map(|x| *x)
+                    .collect_vec(),
+            );
+
+            // Add the weight.  It is in byte little ending, bit bit endian order.
+            let mut weight_bits = self.split_le(authority_set_signers.weights[i], 64);
+            hasher_input.extend(
+                weight_bits
+                    .chunks_mut(8)
+                    .rev()
+                    .flatten()
+                    .map(|x| *x)
+                    .collect_vec(),
+            );
         }
 
-        // Add the padding
-        let zero = self.zero();
-        for i in AUTHORITIES_INPUT_LENGTH * 8..AUTHORITIES_INPUT_PADDED_LENGTH * 8 {
-            self.connect(hash_circuit.message[i].target, zero);
-        }
+        assert!(hasher_input.len() == AUTHORITIES_INPUT_LENGTH * 8);
 
-        // Length of the input in bytes
-        let authority_set_hash_input_length =
-            self.constant(F::from_canonical_usize(NUM_AUTHORITIES * PUB_KEY_SIZE));
-        self.connect(hash_circuit.message_len, authority_set_hash_input_length);
+        // TODO:  Once we have variable authority set size, need to use a variable size sha256 gadget.
+        let authority_set_hash = sha256(self, hasher_input.as_slice());
 
         // Verify that the hash matches
         for i in 0..HASH_SIZE {
@@ -183,7 +186,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
             for (j, bit) in bits.iter().enumerate().take(8) {
-                self.connect(hash_circuit.digest[i * 8 + j].target, bit.target);
+                self.connect(authority_set_hash[i * 8 + j].target, bit.target);
             }
         }
 

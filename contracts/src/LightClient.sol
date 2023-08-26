@@ -79,7 +79,7 @@ contract LightClient is StepVerifier, SubstrateTrie {
     /// @notice The active authority set ID.
     uint64 public activeAuthoritySetID;
 
-    /// @notice Maps from an authority set id to the keccak hash of the authorities' pub keys
+    /// @notice Maps from an authority set id to the sha256 hash of the authorities' pub keys
     mapping(uint64 => bytes32) public authoritySetCommitments;
 
     /// @notice The plonky2 step circuit digest
@@ -192,11 +192,13 @@ contract LightClient is StepVerifier, SubstrateTrie {
             bytes4(head),
             bytes4(updatedHead));
 
-        bytes32 publicInputsHash;
+        bytes32[1] memory hashResult;
         assembly {
-            publicInputsHash := keccak256(hashInput, 240)
+            let gasLeft := gas()
+            pop(staticcall(gasLeft, 0x02, hashInput, 240, hashResult, 32))
         }
 
+        bytes32 publicInputsHash = hashResult[0];
         inputs[0] = (uint256(publicInputsHash) >> 192) & 0xffffffffffffffff;
         inputs[1] = (uint256(publicInputsHash) >> 128) & 0xffffffffffffffff;
         inputs[2] = (uint256(publicInputsHash) >> 64) & 0xffffffffffffffff;

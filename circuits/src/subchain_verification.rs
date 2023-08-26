@@ -24,7 +24,7 @@ use plonky2::{
         proof::ProofWithPublicInputsTarget,
     },
 };
-use plonky2x::{hash::blake2::blake2b::blake2b, num::u32::gates::add_many_u32::U32AddManyGate};
+use plonky2x::{frontend::hash::blake2::blake2b::blake2b, frontend::num::u32::gates::add_many_u32::U32AddManyGate};
 
 use crate::header::{
     process_large_header_cd, process_large_header_vd, process_small_header_cd,

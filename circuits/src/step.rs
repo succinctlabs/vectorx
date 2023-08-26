@@ -13,8 +13,8 @@ use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::plonk::proof::ProofWithPublicInputsTarget;
-use plonky2x::ecc::ed25519::curve::curve_types::Curve;
-use plonky2x::hash::blake2::blake2b::blake2b;
+use plonky2x::frontend::ecc::ed25519::curve::curve_types::Curve;
+use plonky2x::frontend::hash::blake2::blake2b::blake2b;
 
 pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Curve> {
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
@@ -238,7 +238,7 @@ mod tests {
     use plonky2::plonk::proof::ProofWithPublicInputs;
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
-    use plonky2x::ecc::ed25519::curve::ed25519::Ed25519;
+    use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
 
     use crate::justification::{set_authority_set_pw, set_precommits_pw};
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;

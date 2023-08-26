@@ -237,6 +237,9 @@ pub(crate) mod tests {
         "1e05e4b40cf57ae8965cac3ea994a135f020b6a4e02ac478d3025dfe2f33d12c",
         "61771bd363e7deb0e9f260e9a7e0e36e646cdb30ae5e8b7ed55ce45411a4ac4c",
     ];
+
+    pub const BLOCK_272515_AUTHORITY_WEIGHTS: [u64; NUM_AUTHORITIES] = [1u64; NUM_AUTHORITIES];
+
     pub const BLOCK_272515_AUTHORITY_SET_COMMITMENT: &str =
         "39c6fdc9b2e5835509e98d30820165872f0974e3afd2bb95cde669e6ba8b0fd5";
 

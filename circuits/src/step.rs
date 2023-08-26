@@ -246,8 +246,9 @@ mod tests {
     use crate::subchain_verification::tests::retrieve_subchain_verification_proof;
     use crate::testing_utils::tests::{
         BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
-        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_PRECOMMIT_MESSAGE,
-        BLOCK_272515_PUBLIC_INPUTS_HASH, BLOCK_272515_SIGNERS, BLOCK_272515_SIGS,
+        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_WEIGHTS,
+        BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_PUBLIC_INPUTS_HASH, BLOCK_272515_SIGNERS,
+        BLOCK_272515_SIGS,
     };
     use crate::utils::{WitnessAvailHash, QUORUM_SIZE};
 
@@ -322,6 +323,7 @@ mod tests {
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
+            BLOCK_272515_AUTHORITY_WEIGHTS.to_vec(),
             BLOCK_272515_AUTHORITY_SET_ID,
             hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
         );

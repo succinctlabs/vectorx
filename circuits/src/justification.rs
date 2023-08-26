@@ -55,6 +55,14 @@ pub trait CircuitBuilderGrandpaJustificationVerifier<
 
     fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget<C>;
 
+    fn verify_authority_set_commitment<
+        Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+    >(
+        &mut self,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
+    ) where
+        Config::Hasher: AlgebraicHasher<F>;
+
     fn verify_justification<
         Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
         E: CubicParameters<F>,
@@ -128,19 +136,14 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         }
     }
 
-    // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
-    fn verify_justification<
+    fn verify_authority_set_commitment<
         Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
-        E: CubicParameters<F>,
     >(
         &mut self,
-        signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget<C>,
-        finalized_block: &FinalizedBlockTarget,
     ) where
         Config::Hasher: AlgebraicHasher<F>,
     {
-        // First check to see that we have the right authority set
         // Calculate the hash for the authority set
         // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
         const AUTHORITIES_INPUT_LENGTH: usize = NUM_AUTHORITIES * (PUB_KEY_SIZE + WEIGHT_SIZE);
@@ -189,8 +192,24 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 self.connect(authority_set_hash[i * 8 + j].target, bit.target);
             }
         }
+    }
 
-        // First verify that each signed precommit is using a pub key from the authority set and that there are QUORUM_SIZE signed precommits
+    // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
+    fn verify_justification<
+        Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+        E: CubicParameters<F>,
+    >(
+        &mut self,
+        signed_precommits: Vec<PrecommitTarget<C>>,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
+        finalized_block: &FinalizedBlockTarget,
+    ) where
+        Config::Hasher: AlgebraicHasher<F>,
+    {
+        // Verify the authority set commitment
+        self.verify_authority_set_commitment::<Config>(authority_set_signers);
+
+        // Verify that each signed precommit is using a pub key from the authority set and that there are QUORUM_SIZE signed precommits
         let mut num_signers = self.zero();
         let one = self.one();
         for signed_precommit in signed_precommits.iter() {
@@ -359,14 +378,16 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
     pw: &mut PartialWitness<F>,
     authority_set_target: &AuthoritySetSignersTarget<C>,
     pub_keys: Vec<Vec<u8>>,
+    weights: Vec<u64>,
     authority_set_id: u64,
     authority_set_commitment: Vec<u8>,
 ) {
     assert!(pub_keys.len() == NUM_AUTHORITIES);
+    assert!(weights.len() == NUM_AUTHORITIES);
     assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES);
 
     // Set the authority set partial witness values
-    for (i, pub_key) in pub_keys.iter().enumerate() {
+    for (i, (pub_key, weight)) in pub_keys.iter().zip(weights.iter()).enumerate() {
         let authority_set_signers_target = &authority_set_target.pub_keys[i];
         let pub_key_affine_point = AffinePoint::<C>::new_from_compressed_point(&pub_key[..]);
 
@@ -377,6 +398,11 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
         pw.set_biguint_target(
             &authority_set_signers_target.y.value,
             &pub_key_affine_point.y.to_canonical_biguint(),
+        );
+
+        pw.set_target(
+            authority_set_target.weights[i],
+            F::from_canonical_u64(*weight),
         );
     }
 
@@ -423,8 +449,9 @@ pub(crate) mod tests {
     };
     use crate::testing_utils::tests::{
         BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
-        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGNERS,
-        BLOCK_272515_SIGS, BLOCK_HASHES, HEAD_BLOCK_NUM, NUM_BLOCKS,
+        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_WEIGHTS,
+        BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGNERS, BLOCK_272515_SIGS, BLOCK_HASHES,
+        HEAD_BLOCK_NUM, NUM_BLOCKS,
     };
     use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, QUORUM_SIZE};
 
@@ -562,6 +589,44 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_verify_authority_set_commitment() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Curve = Ed25519;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut pw = PartialWitness::new();
+
+        let authority_set = builder.add_virtual_authority_set_signers_target_safe();
+
+        builder.verify_authority_set_commitment::<C>(&authority_set);
+
+        set_authority_set_pw::<F, D, Curve>(
+            &mut pw,
+            &authority_set,
+            BLOCK_272515_AUTHORITY_SET
+                .iter()
+                .map(|s| hex::decode(s).unwrap())
+                .collect::<Vec<_>>(),
+            BLOCK_272515_AUTHORITY_WEIGHTS.to_vec(),
+            BLOCK_272515_AUTHORITY_SET_ID,
+            hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
+        );
+
+        let data = builder.build::<C>();
+        let mut timing = TimingTree::new("verify authority set commitment", Level::Info);
+        let proof = prove::<F, C, D>(&data.prover_only, &data.common, pw, &mut timing).unwrap();
+        timing.print();
+        data.verify(proof)
+    }
+
+    #[test]
     fn test_grandpa_verification_simple() -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
@@ -613,6 +678,7 @@ pub(crate) mod tests {
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
+            BLOCK_272515_AUTHORITY_WEIGHTS.to_vec(),
             BLOCK_272515_AUTHORITY_SET_ID,
             hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
         );

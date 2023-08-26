@@ -470,12 +470,16 @@ contract EventDecoder {
                     revert("Incorrect number of authorities");
                 }
 
+                bytes32[1] memory result;
                 assembly {
                     let ptr := mload(0x40)
                     let msg_len := mul(numAuthorities, 40)
                     calldatacopy(ptr, cursor, msg_len)
-                    digest := keccak256(ptr, msg_len)
+                    let gasLeft := gas()
+                    pop(staticcall(gasLeft, 0x02, ptr, msg_len, result, 32))
                 }
+
+                digest = result[0];
 
                 break;
             } else {

@@ -170,8 +170,7 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             hasher_input.extend(
                 weight_bits
                     .chunks_mut(8)
-                    .rev()
-                    .flatten()
+                    .flat_map(|x| {x.reverse(); x})
                     .map(|x| *x)
                     .collect_vec(),
             );
@@ -184,7 +183,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
 
         self.register_public_inputs(authority_set_hash.iter().map(|x| x.target).collect_vec().as_slice());
 
-        /*
         // Verify that the hash matches
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
@@ -195,7 +193,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 self.connect(authority_set_hash[i * 8 + j].target, bit.target);
             }
         }
-        */
     }
 
     // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)

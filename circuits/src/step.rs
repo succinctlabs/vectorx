@@ -14,7 +14,7 @@ use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::plonk::proof::ProofWithPublicInputsTarget;
 use plonky2x::frontend::ecc::ed25519::curve::curve_types::Curve;
-use plonky2x::frontend::hash::blake2::blake2b::blake2b;
+use plonky2x::frontend::hash::sha::sha256::sha256;
 
 pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Curve> {
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
@@ -39,12 +39,11 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
     ) where
         Config::Hasher: AlgebraicHasher<F>,
     {
-        // The public inputs are 240 bytes long;
-        // Need to store each byte as BE bits
-        let mut public_inputs_hash_input = Vec::new();
-
+        // First verify public inputs hash
         let subchain_verification_proof_pis =
             self.parse_public_inputs(&subchain_verification_proof.public_inputs);
+
+        let mut public_inputs_hash_input = Vec::new();
 
         // Input the initial head head hash into the public inputs hasher
         for i in 0..HASH_SIZE {
@@ -53,7 +52,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
-            public_inputs_hash_input.append(&mut bits);
+            public_inputs_hash_input.extend(bits);
         }
 
         // Input the updated head hash into the public inputs hasher
@@ -62,7 +61,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
-            public_inputs_hash_input.append(&mut bits);
+            public_inputs_hash_input.extend(bits);
         }
 
         // Input the initial data root commitment into the public inputs hasher
@@ -76,7 +75,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
-            public_inputs_hash_input.append(&mut bits);
+            public_inputs_hash_input.extend(bits);
         }
 
         // Input the updated data root commitment into the public inputs hasher
@@ -90,53 +89,34 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
-            public_inputs_hash_input.append(&mut bits);
+            public_inputs_hash_input.extend(bits);
         }
 
         // Input the validator commitment into the public inputs hasher
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
             bits.reverse();
-            public_inputs_hash_input.append(&mut bits);
+            public_inputs_hash_input.extend(bits);
         }
 
         // Input the validator set id into the public inputs hasher
         let mut set_id_bits = self.split_le(authority_set_signers.set_id, 64);
         set_id_bits.reverse();
-        public_inputs_hash_input.append(&mut set_id_bits);
+        public_inputs_hash_input.extend(set_id_bits);
 
         // Input the initial block number into the public inputs hasher
         let mut initial_block_num_bits =
             self.split_le(subchain_verification_proof_pis.initial_block_num, 32);
         initial_block_num_bits.reverse();
-        public_inputs_hash_input.append(&mut initial_block_num_bits);
+        public_inputs_hash_input.extend(initial_block_num_bits);
 
         // Input the updated block number into the public inputs hasher
         let mut latest_block_num_bits =
             self.split_le(subchain_verification_proof_pis.latest_block_num, 32);
         latest_block_num_bits.reverse();
-        public_inputs_hash_input.append(&mut latest_block_num_bits);
+        public_inputs_hash_input.extend(latest_block_num_bits);
 
-        // The input digest is 240 bytes.  So padded input length would be 256.
-        const PUBLIC_INPUTS_MAX_SIZE: usize = 256;
-        let public_inputs_hash_circuit = blake2b::<F, D, PUBLIC_INPUTS_MAX_SIZE, HASH_SIZE>(self);
-
-        for (i, bit) in public_inputs_hash_input.iter().enumerate() {
-            self.connect(bit.target, public_inputs_hash_circuit.message[i].target);
-        }
-
-        // Add the padding
-        let zero = self.zero();
-        for i in public_inputs_hash_input.len()..PUBLIC_INPUTS_MAX_SIZE * 8 {
-            self.connect(zero, public_inputs_hash_circuit.message[i].target);
-        }
-
-        let public_inputs_input_size =
-            self.constant(F::from_canonical_usize(public_inputs_hash_input.len() / 8));
-        self.connect(
-            public_inputs_hash_circuit.message_len,
-            public_inputs_input_size,
-        );
+        let calculated_public_inputs_hash = sha256(self, &public_inputs_hash_input);
 
         // Verify that the public input hash matches
         for i in 0..HASH_SIZE {
@@ -145,10 +125,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
             for (j, bit) in bits.iter().enumerate().take(8) {
-                self.connect(
-                    public_inputs_hash_circuit.digest[i * 8 + j].target,
-                    bit.target,
-                );
+                self.connect(calculated_public_inputs_hash[i * 8 + j].target, bit.target);
             }
         }
 

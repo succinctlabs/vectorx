@@ -10,7 +10,9 @@ use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::frontend::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
-use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
+use plonky2x::frontend::ecc::ed25519::curve::eddsa::{
+    verify_message, EDDSAPublicKey, EDDSASignature,
+};
 use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2x::frontend::ecc::ed25519::gadgets::curve::{AffinePointTarget, CircuitBuilderCurve};
 use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
@@ -170,7 +172,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             hasher_input.extend(
                 weight_bits
                     .chunks_mut(8)
-                    .flat_map(|x| {x.reverse(); x})
+                    .flat_map(|x| {
+                        x.reverse();
+                        x
+                    })
                     .map(|x| *x)
                     .collect_vec(),
             );
@@ -185,7 +190,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
 
-            // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
             for (j, bit) in bits.iter().enumerate().take(8) {
                 self.connect(authority_set_hash[i * 8 + j].target, bit.target);
@@ -437,9 +441,13 @@ pub(crate) mod tests {
     use plonky2::util::timing::TimingTree;
     use plonky2x::frontend::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
     use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
-    use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
+    use plonky2x::frontend::ecc::ed25519::curve::eddsa::{
+        verify_message, EDDSAPublicKey, EDDSASignature,
+    };
     use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-    use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::{verify_signatures_circuit, EDDSATargets};
+    use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::{
+        verify_signatures_circuit, EDDSATargets,
+    };
     use plonky2x::frontend::num::biguint::WitnessBigUint;
 
     use crate::justification::{

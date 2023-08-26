@@ -181,8 +181,6 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
         // TODO:  Once we have variable authority set size, need to use a variable size sha256 gadget.
         let authority_set_hash = sha256(self, hasher_input.as_slice());
 
-        self.register_public_inputs(authority_set_hash.iter().map(|x| x.target).collect_vec().as_slice());
-
         // Verify that the hash matches
         for i in 0..HASH_SIZE {
             let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
@@ -624,7 +622,6 @@ pub(crate) mod tests {
         let mut timing = TimingTree::new("verify authority set commitment", Level::Info);
         let proof = prove::<F, C, D>(&data.prover_only, &data.common, pw, &mut timing).unwrap();
         timing.print();
-        println!("public inputs: {:?}", proof.public_inputs);
         data.verify(proof)
     }
 

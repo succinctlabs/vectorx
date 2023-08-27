@@ -17,6 +17,13 @@ use plonky2x::frontend::ecc::ed25519::curve::curve_types::Curve;
 use plonky2x::frontend::hash::sha::sha256::sha256;
 
 pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Curve> {
+    fn verify_public_inputs_hash(
+        &mut self,
+        subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
+        public_inputs_hash: &AvailHashTarget,
+    );
+
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
         &mut self,
         subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
@@ -30,16 +37,12 @@ pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Cu
 impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<F, D, C>
     for CircuitBuilder<F, D>
 {
-    fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
+    fn verify_public_inputs_hash(
         &mut self,
         subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
-        signed_precommits: Vec<PrecommitTarget<C>>,
         authority_set_signers: &AuthoritySetSignersTarget<C>,
         public_inputs_hash: &AvailHashTarget,
-    ) where
-        Config::Hasher: AlgebraicHasher<F>,
-    {
-        // First verify public inputs hash
+    ) {
         let subchain_verification_proof_pis =
             self.parse_public_inputs(&subchain_verification_proof.public_inputs);
 
@@ -128,12 +131,32 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
                 self.connect(calculated_public_inputs_hash[i * 8 + j].target, bit.target);
             }
         }
+    }
+
+    fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
+        &mut self,
+        subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
+        signed_precommits: Vec<PrecommitTarget<C>>,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
+        public_inputs_hash: &AvailHashTarget,
+    ) where
+        Config::Hasher: AlgebraicHasher<F>,
+    {
+        // First verify public inputs hash
+        self.verify_public_inputs_hash(
+            subchain_verification_proof,
+            authority_set_signers,
+            public_inputs_hash,
+        );
 
         let inner_cd = verify_header_ivc_cd();
         let inner_vd = verify_header_ivc_vd::<Config, F, D>();
         let inner_vd_t = self.constant_verifier_data(&inner_vd);
 
         self.verify_proof::<Config>(subchain_verification_proof, &inner_vd_t, &inner_cd);
+
+        let subchain_verification_proof_pis =
+            self.parse_public_inputs(&subchain_verification_proof.public_inputs);
 
         // Now verify the grandpa justification
         self.verify_justification::<Config, E>(
@@ -217,17 +240,20 @@ mod tests {
     use plonky2::util::timing::TimingTree;
     use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
 
-    use crate::justification::{set_authority_set_pw, set_precommits_pw};
+    use crate::justification::{
+        set_authority_set_pw, set_precommits_pw, CircuitBuilderGrandpaJustificationVerifier,
+    };
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
-    use crate::step::make_step_circuit;
+    use crate::step::{make_step_circuit, CircuitBuilderStep};
     use crate::subchain_verification::tests::retrieve_subchain_verification_proof;
+    use crate::subchain_verification::verify_header_ivc_cd;
     use crate::testing_utils::tests::{
         BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
         BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_WEIGHTS,
         BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_PUBLIC_INPUTS_HASH, BLOCK_272515_SIGNERS,
         BLOCK_272515_SIGS,
     };
-    use crate::utils::{WitnessAvailHash, QUORUM_SIZE};
+    use crate::utils::{CircuitBuilderUtils, WitnessAvailHash, QUORUM_SIZE};
 
     fn gen_step_proof<F: RichField + Extendable<D>, C: GenericConfig<D, F = F>, const D: usize>(
         cd: &CircuitData<F, C, D>,
@@ -238,6 +264,66 @@ mod tests {
         timing.print();
 
         proof.unwrap()
+    }
+
+    #[test]
+    fn test_verify_public_inputs() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Curve = Ed25519;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut pw: PartialWitness<F> = PartialWitness::new();
+
+        let subchain_verification_proof =
+            retrieve_subchain_verification_proof().expect("subchain proof generation failed");
+
+        let subchain_verification_proof_pis =
+            builder.add_virtual_proof_with_pis(&verify_header_ivc_cd::<F, D>());
+        let authority_set_signers = builder.add_virtual_authority_set_signers_target_safe();
+        let public_inputs_hash = builder.add_virtual_avail_hash_target_safe(false);
+
+        builder.verify_public_inputs_hash(
+            &subchain_verification_proof_pis,
+            &authority_set_signers,
+            &public_inputs_hash,
+        );
+
+        pw.set_proof_with_pis_target(
+            &subchain_verification_proof_pis,
+            &subchain_verification_proof,
+        );
+
+        pw.set_avail_hash_target(
+            &public_inputs_hash,
+            hex::decode(BLOCK_272515_PUBLIC_INPUTS_HASH)
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        );
+
+        set_authority_set_pw::<F, D, Curve>(
+            &mut pw,
+            &authority_set_signers,
+            BLOCK_272515_AUTHORITY_SET
+                .iter()
+                .map(|s| hex::decode(s).unwrap())
+                .collect::<Vec<_>>(),
+            BLOCK_272515_AUTHORITY_WEIGHTS.to_vec(),
+            BLOCK_272515_AUTHORITY_SET_ID,
+            hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
+        );
+
+        let data = builder.build();
+        let proof = gen_step_proof::<F, C, D>(&data, &pw);
+        data.verify(proof)
     }
 
     #[test]

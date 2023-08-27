@@ -1,4 +1,5 @@
 use curta::math::prelude::CubicParameters;
+use itertools::Itertools;
 use num::BigUint;
 
 use plonky2::field::extension::Extendable;
@@ -8,20 +9,22 @@ use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2x::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
-use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
-use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-use plonky2x::ecc::ed25519::gadgets::curve::{AffinePointTarget, CircuitBuilderCurve};
-use plonky2x::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
-use plonky2x::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
-use plonky2x::hash::blake2::blake2b::blake2b;
-use plonky2x::num::biguint::{CircuitBuilderBiguint, WitnessBigUint};
-use plonky2x::num::nonnative::nonnative::CircuitBuilderNonNative;
+use plonky2x::frontend::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
+use plonky2x::frontend::ecc::ed25519::curve::eddsa::{
+    verify_message, EDDSAPublicKey, EDDSASignature,
+};
+use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
+use plonky2x::frontend::ecc::ed25519::gadgets::curve::{AffinePointTarget, CircuitBuilderCurve};
+use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
+use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
+use plonky2x::frontend::hash::sha::sha256::sha256;
+use plonky2x::frontend::num::biguint::{CircuitBuilderBiguint, WitnessBigUint};
+use plonky2x::frontend::num::nonnative::nonnative::CircuitBuilderNonNative;
 
 use crate::decoder::{CircuitBuilderPrecommitDecoder, EncodedPrecommitTarget};
 use crate::utils::{
-    to_bits, AvailHashTarget, CircuitBuilderUtils, CHUNK_128_BYTES, ENCODED_PRECOMMIT_LENGTH,
-    HASH_SIZE, NUM_AUTHORITIES, PUB_KEY_SIZE, QUORUM_SIZE,
+    to_bits, AvailHashTarget, CircuitBuilderUtils, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE,
+    NUM_AUTHORITIES, PUB_KEY_SIZE, QUORUM_SIZE, WEIGHT_SIZE,
 };
 
 #[derive(Clone, Debug)]
@@ -34,6 +37,7 @@ pub struct PrecommitTarget<C: Curve> {
 #[derive(Clone)]
 pub struct AuthoritySetSignersTarget<C: Curve> {
     pub pub_keys: [AffinePointTarget<C>; NUM_AUTHORITIES], // Array of pub keys (in compressed form)
+    pub weights: [Target; NUM_AUTHORITIES], // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
     pub commitment: AvailHashTarget,
     pub set_id: Target,
 }
@@ -52,6 +56,14 @@ pub trait CircuitBuilderGrandpaJustificationVerifier<
     fn add_virtual_precommit_target_safe(&mut self) -> PrecommitTarget<C>;
 
     fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget<C>;
+
+    fn verify_authority_set_commitment<
+        Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+    >(
+        &mut self,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
+    ) where
+        Config::Hasher: AlgebraicHasher<F>;
 
     fn verify_justification<
         Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
@@ -107,8 +119,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
 
     fn add_virtual_authority_set_signers_target_safe(&mut self) -> AuthoritySetSignersTarget<C> {
         let mut pub_keys = Vec::new();
+        let mut weights = Vec::new();
         for _i in 0..NUM_AUTHORITIES {
             pub_keys.push(self.add_virtual_affine_point_target());
+            weights.push(self.add_virtual_target()); // Weights should be u64, but we assume they are within the goldilocks field.
         }
 
         let commitment = self.add_virtual_avail_hash_target_safe(false);
@@ -118,8 +132,68 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
 
         AuthoritySetSignersTarget {
             pub_keys: pub_keys.try_into().unwrap(),
+            weights: weights.try_into().unwrap(),
             commitment,
             set_id,
+        }
+    }
+
+    fn verify_authority_set_commitment<
+        Config: GenericConfig<D, F = F, FE = F::Extension> + 'static,
+    >(
+        &mut self,
+        authority_set_signers: &AuthoritySetSignersTarget<C>,
+    ) where
+        Config::Hasher: AlgebraicHasher<F>,
+    {
+        // Calculate the hash for the authority set
+        // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
+        const AUTHORITIES_INPUT_LENGTH: usize = NUM_AUTHORITIES * (PUB_KEY_SIZE + WEIGHT_SIZE);
+
+        let mut hasher_input = Vec::new();
+        // Input the pub keys into the hasher
+        for i in 0..NUM_AUTHORITIES {
+            let mut compressed_pub_key = self.compress_point(&authority_set_signers.pub_keys[i]);
+
+            // Add the authority.
+            // Byte ordering is correct, but need to reverse the bit ordering
+            hasher_input.extend(
+                compressed_pub_key
+                    .bit_targets
+                    .chunks_mut(8)
+                    .rev()
+                    .flatten()
+                    .map(|x| *x)
+                    .collect_vec(),
+            );
+
+            // Add the weight.  It is in byte little ending, bit bit endian order.
+            let mut weight_bits = self.split_le(authority_set_signers.weights[i], 64);
+            hasher_input.extend(
+                weight_bits
+                    .chunks_mut(8)
+                    .flat_map(|x| {
+                        x.reverse();
+                        x
+                    })
+                    .map(|x| *x)
+                    .collect_vec(),
+            );
+        }
+
+        assert!(hasher_input.len() == AUTHORITIES_INPUT_LENGTH * 8);
+
+        // TODO:  Once we have variable authority set size, need to use a variable size sha256 gadget.
+        let authority_set_hash = sha256(self, hasher_input.as_slice());
+
+        // Verify that the hash matches
+        for i in 0..HASH_SIZE {
+            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+
+            bits.reverse();
+            for (j, bit) in bits.iter().enumerate().take(8) {
+                self.connect(authority_set_hash[i * 8 + j].target, bit.target);
+            }
         }
     }
 
@@ -135,59 +209,10 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
     ) where
         Config::Hasher: AlgebraicHasher<F>,
     {
-        // First check to see that we have the right authority set
-        // Calculate the hash for the authority set
-        // Note that the input to this circuit must be of chunks of 128 bytes, so it may need to be padded.
-        const AUTHORITIES_INPUT_LENGTH: usize = NUM_AUTHORITIES * PUB_KEY_SIZE;
-        const AUTHORITIES_INPUT_PADDING: usize =
-            (CHUNK_128_BYTES - (AUTHORITIES_INPUT_LENGTH % CHUNK_128_BYTES)) % CHUNK_128_BYTES;
-        const AUTHORITIES_INPUT_PADDED_LENGTH: usize =
-            AUTHORITIES_INPUT_LENGTH + AUTHORITIES_INPUT_PADDING;
-        let hash_circuit = blake2b::<F, D, AUTHORITIES_INPUT_PADDED_LENGTH, HASH_SIZE>(self);
+        // Verify the authority set commitment
+        self.verify_authority_set_commitment::<Config>(authority_set_signers);
 
-        // Input the pub keys into the hasher
-        for i in 0..NUM_AUTHORITIES {
-            let mut compressed_pub_key = self.compress_point(&authority_set_signers.pub_keys[i]);
-
-            // Reverse the byte endian order
-            for (byte_num, bits) in compressed_pub_key
-                .bit_targets
-                .chunks_mut(8)
-                .rev()
-                .enumerate()
-            {
-                for (bit_num, bit) in bits.iter().enumerate() {
-                    self.connect(
-                        hash_circuit.message[i * 256 + byte_num * 8 + bit_num].target,
-                        bit.target,
-                    );
-                }
-            }
-        }
-
-        // Add the padding
-        let zero = self.zero();
-        for i in AUTHORITIES_INPUT_LENGTH * 8..AUTHORITIES_INPUT_PADDED_LENGTH * 8 {
-            self.connect(hash_circuit.message[i].target, zero);
-        }
-
-        // Length of the input in bytes
-        let authority_set_hash_input_length =
-            self.constant(F::from_canonical_usize(NUM_AUTHORITIES * PUB_KEY_SIZE));
-        self.connect(hash_circuit.message_len, authority_set_hash_input_length);
-
-        // Verify that the hash matches
-        for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
-
-            // Needs to be in bit big endian order for the BLAKE2B circuit
-            bits.reverse();
-            for (j, bit) in bits.iter().enumerate().take(8) {
-                self.connect(hash_circuit.digest[i * 8 + j].target, bit.target);
-            }
-        }
-
-        // First verify that each signed precommit is using a pub key from the authority set and that there are QUORUM_SIZE signed precommits
+        // Verify that each signed precommit is using a pub key from the authority set and that there are QUORUM_SIZE signed precommits
         let mut num_signers = self.zero();
         let one = self.one();
         for signed_precommit in signed_precommits.iter() {
@@ -356,14 +381,16 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
     pw: &mut PartialWitness<F>,
     authority_set_target: &AuthoritySetSignersTarget<C>,
     pub_keys: Vec<Vec<u8>>,
+    weights: Vec<u64>,
     authority_set_id: u64,
     authority_set_commitment: Vec<u8>,
 ) {
     assert!(pub_keys.len() == NUM_AUTHORITIES);
+    assert!(weights.len() == NUM_AUTHORITIES);
     assert!(authority_set_target.pub_keys.len() == NUM_AUTHORITIES);
 
     // Set the authority set partial witness values
-    for (i, pub_key) in pub_keys.iter().enumerate() {
+    for (i, (pub_key, weight)) in pub_keys.iter().zip(weights.iter()).enumerate() {
         let authority_set_signers_target = &authority_set_target.pub_keys[i];
         let pub_key_affine_point = AffinePoint::<C>::new_from_compressed_point(&pub_key[..]);
 
@@ -374,6 +401,11 @@ pub fn set_authority_set_pw<F: RichField + Extendable<D>, const D: usize, C: Cur
         pw.set_biguint_target(
             &authority_set_signers_target.y.value,
             &pub_key_affine_point.y.to_canonical_biguint(),
+        );
+
+        pw.set_target(
+            authority_set_target.weights[i],
+            F::from_canonical_u64(*weight),
         );
     }
 
@@ -407,12 +439,16 @@ pub(crate) mod tests {
     use plonky2::plonk::config::{AlgebraicHasher, GenericConfig, PoseidonGoldilocksConfig};
     use plonky2::plonk::prover::prove;
     use plonky2::util::timing::TimingTree;
-    use plonky2x::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
-    use plonky2x::ecc::ed25519::curve::ed25519::Ed25519;
-    use plonky2x::ecc::ed25519::curve::eddsa::{verify_message, EDDSAPublicKey, EDDSASignature};
-    use plonky2x::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
-    use plonky2x::ecc::ed25519::gadgets::eddsa::{verify_signatures_circuit, EDDSATargets};
-    use plonky2x::num::biguint::WitnessBigUint;
+    use plonky2x::frontend::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
+    use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
+    use plonky2x::frontend::ecc::ed25519::curve::eddsa::{
+        verify_message, EDDSAPublicKey, EDDSASignature,
+    };
+    use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
+    use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::{
+        verify_signatures_circuit, EDDSATargets,
+    };
+    use plonky2x::frontend::num::biguint::WitnessBigUint;
 
     use crate::justification::{
         set_authority_set_pw, set_precommits_pw, AuthoritySetSignersTarget,
@@ -420,8 +456,9 @@ pub(crate) mod tests {
     };
     use crate::testing_utils::tests::{
         BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
-        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGNERS,
-        BLOCK_272515_SIGS, BLOCK_HASHES, HEAD_BLOCK_NUM, NUM_BLOCKS,
+        BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_WEIGHTS,
+        BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_SIGNERS, BLOCK_272515_SIGS, BLOCK_HASHES,
+        HEAD_BLOCK_NUM, NUM_BLOCKS,
     };
     use crate::utils::{to_bits, CircuitBuilderUtils, WitnessAvailHash, QUORUM_SIZE};
 
@@ -559,6 +596,44 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn test_verify_authority_set_commitment() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        type Curve = Ed25519;
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+        let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
+        let mut pw = PartialWitness::new();
+
+        let authority_set = builder.add_virtual_authority_set_signers_target_safe();
+
+        builder.verify_authority_set_commitment::<C>(&authority_set);
+
+        set_authority_set_pw::<F, D, Curve>(
+            &mut pw,
+            &authority_set,
+            BLOCK_272515_AUTHORITY_SET
+                .iter()
+                .map(|s| hex::decode(s).unwrap())
+                .collect::<Vec<_>>(),
+            BLOCK_272515_AUTHORITY_WEIGHTS.to_vec(),
+            BLOCK_272515_AUTHORITY_SET_ID,
+            hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
+        );
+
+        let data = builder.build::<C>();
+        let mut timing = TimingTree::new("verify authority set commitment", Level::Info);
+        let proof = prove::<F, C, D>(&data.prover_only, &data.common, pw, &mut timing).unwrap();
+        timing.print();
+        data.verify(proof)
+    }
+
+    #[test]
     fn test_grandpa_verification_simple() -> Result<()> {
         const D: usize = 2;
         type C = PoseidonGoldilocksConfig;
@@ -610,6 +685,7 @@ pub(crate) mod tests {
                 .iter()
                 .map(|s| hex::decode(s).unwrap())
                 .collect::<Vec<_>>(),
+            BLOCK_272515_AUTHORITY_WEIGHTS.to_vec(),
             BLOCK_272515_AUTHORITY_SET_ID,
             hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
         );

@@ -22,7 +22,10 @@ use plonky2::{
     },
     recursion::dummy_circuit::cyclic_base_proof,
 };
-use plonky2x::{hash::blake2::blake2b::blake2b, num::u32::gates::add_many_u32::U32AddManyGate};
+use plonky2x::{
+    frontend::hash::blake2::blake2b::blake2b,
+    frontend::num::u32::gates::add_many_u32::U32AddManyGate,
+};
 
 use crate::{
     decoder::CircuitBuilderHeaderDecoder,

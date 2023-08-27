@@ -237,24 +237,27 @@ pub(crate) mod tests {
         "1e05e4b40cf57ae8965cac3ea994a135f020b6a4e02ac478d3025dfe2f33d12c",
         "61771bd363e7deb0e9f260e9a7e0e36e646cdb30ae5e8b7ed55ce45411a4ac4c",
     ];
+
+    pub const BLOCK_272515_AUTHORITY_WEIGHTS: [u64; NUM_AUTHORITIES] = [1u64; NUM_AUTHORITIES];
+
     pub const BLOCK_272515_AUTHORITY_SET_COMMITMENT: &str =
-        "e786491aaeec8777b3f5c3fe5d1ca1292fb38cc7d4250b19763fd931a9757b12";
+        "39c6fdc9b2e5835509e98d30820165872f0974e3afd2bb95cde669e6ba8b0fd5";
 
     // concatenation of:
     // orig head hash:  7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118f
     // updated head hash:  c63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f
     // orig data root commitment: 0101010101010101010101010101010101010101010101010101010101010101
     // updated data root commitment: feca63bd2df984e9b737f8b58e914cbe6bb0c8dac7fb1b5c5a13c8a9ca952718
-    // validator commitment:  e786491aaeec8777b3f5c3fe5d1ca1292fb38cc7d4250b19763fd931a9757b12
+    // validator commitment:  39c6fdc9b2e5835509e98d30820165872f0974e3afd2bb95cde669e6ba8b0fd5
     // validator set id: 0000000000000100
     // orig header num: 00042883
     // updated header num: 00042897
     //
     // Calculated hash by using the python lines:
     // >>> import hashlib
-    // >>> hasher = hashlib.blake2b(digest_size = 32)
-    // >>> hasher.update(bytes.fromhex("7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118fc63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f0101010101010101010101010101010101010101010101010101010101010101feca63bd2df984e9b737f8b58e914cbe6bb0c8dac7fb1b5c5a13c8a9ca952718e786491aaeec8777b3f5c3fe5d1ca1292fb38cc7d4250b19763fd931a9757b1200000000000001000004288300042897"))
+    // >>> hasher = hashlib.sha256()
+    // >>> hasher.update(bytes.fromhex("7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118fc63e6b7db7863b35b289b35349a8a488ae886a59c37d4825577ddb9470c4537f0101010101010101010101010101010101010101010101010101010101010101feca63bd2df984e9b737f8b58e914cbe6bb0c8dac7fb1b5c5a13c8a9ca95271839c6fdc9b2e5835509e98d30820165872f0974e3afd2bb95cde669e6ba8b0fd500000000000001000004288300042897"))
     // >>> hasher.digest().hex()
     pub const BLOCK_272515_PUBLIC_INPUTS_HASH: &str =
-        "82429b55152dc35ded717fd89fae7488a30f92ef1356e810d854db1b6fdc3949";
+        "eb3a06e0d4c9641111f21922637f206baa68bf66c1be50a04029be0cbbff47da";
 }

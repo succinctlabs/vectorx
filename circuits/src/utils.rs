@@ -21,6 +21,7 @@ pub const MAX_LARGE_HEADER_SIZE: usize = CHUNK_128_BYTES * 52;
 pub const MAX_SMALL_HEADER_SIZE: usize = CHUNK_128_BYTES * 10;
 pub const HASH_SIZE: usize = 32; // in bytes
 pub const PUB_KEY_SIZE: usize = 32; // in bytes
+pub const WEIGHT_SIZE: usize = 8; // in bytes
 
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 

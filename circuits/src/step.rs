@@ -4,12 +4,14 @@ use crate::justification::{
 };
 use crate::subchain_verification::{
     verify_header_ivc_cd, verify_header_ivc_vd, CircuitBuilderHeaderVerification,
+    PublicInputsElementsTarget,
 };
 use crate::utils::HASH_SIZE;
 use crate::utils::{AvailHashTarget, CircuitBuilderUtils, QUORUM_SIZE};
 use curta::math::prelude::CubicParameters;
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;
+use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2::plonk::proof::ProofWithPublicInputsTarget;
@@ -19,9 +21,10 @@ use plonky2x::frontend::hash::sha::sha256::sha256;
 pub trait CircuitBuilderStep<F: RichField + Extendable<D>, const D: usize, C: Curve> {
     fn verify_public_inputs_hash(
         &mut self,
-        subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
-        authority_set_signers: &AuthoritySetSignersTarget<C>,
-        public_inputs_hash: &AvailHashTarget,
+        public_inputs_elements: &PublicInputsElementsTarget,
+        authority_set_id: Target,
+        authority_set_commitment: &AvailHashTarget,
+        expected_public_inputs_hash: &AvailHashTarget,
     );
 
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
@@ -39,19 +42,16 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 {
     fn verify_public_inputs_hash(
         &mut self,
-        subchain_verification_proof: &ProofWithPublicInputsTarget<D>,
-        authority_set_signers: &AuthoritySetSignersTarget<C>,
-        public_inputs_hash: &AvailHashTarget,
+        public_inputs_elements: &PublicInputsElementsTarget,
+        authority_set_id: Target,
+        authority_set_commitment: &AvailHashTarget,
+        expected_public_inputs_hash: &AvailHashTarget,
     ) {
-        let subchain_verification_proof_pis =
-            self.parse_public_inputs(&subchain_verification_proof.public_inputs);
-
         let mut public_inputs_hash_input = Vec::new();
 
         // Input the initial head head hash into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits =
-                self.split_le(subchain_verification_proof_pis.initial_block_hash.0[i], 8);
+            let mut bits = self.split_le(public_inputs_elements.initial_block_hash.0[i], 8);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
@@ -60,7 +60,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Input the updated head hash into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(subchain_verification_proof_pis.latest_block_hash.0[i], 8);
+            let mut bits = self.split_le(public_inputs_elements.latest_block_hash.0[i], 8);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
@@ -69,12 +69,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Input the initial data root commitment into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(
-                subchain_verification_proof_pis
-                    .initial_data_root_accumulator
-                    .0[i],
-                8,
-            );
+            let mut bits =
+                self.split_le(public_inputs_elements.initial_data_root_accumulator.0[i], 8);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
@@ -83,12 +79,8 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Input the updated data root commitment into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(
-                subchain_verification_proof_pis
-                    .latest_data_root_accumulator
-                    .0[i],
-                8,
-            );
+            let mut bits =
+                self.split_le(public_inputs_elements.latest_data_root_accumulator.0[i], 8);
 
             // Needs to be in bit big endian order for the blake2b verification circuit
             bits.reverse();
@@ -97,25 +89,24 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Input the validator commitment into the public inputs hasher
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(authority_set_signers.commitment.0[i], 8);
+            let mut bits = self.split_le(authority_set_commitment.0[i], 8);
             bits.reverse();
             public_inputs_hash_input.extend(bits);
         }
 
         // Input the validator set id into the public inputs hasher
-        let mut set_id_bits = self.split_le(authority_set_signers.set_id, 64);
+        let mut set_id_bits = self.split_le(authority_set_id, 64);
         set_id_bits.reverse();
         public_inputs_hash_input.extend(set_id_bits);
 
         // Input the initial block number into the public inputs hasher
         let mut initial_block_num_bits =
-            self.split_le(subchain_verification_proof_pis.initial_block_num, 32);
+            self.split_le(public_inputs_elements.initial_block_num, 32);
         initial_block_num_bits.reverse();
         public_inputs_hash_input.extend(initial_block_num_bits);
 
         // Input the updated block number into the public inputs hasher
-        let mut latest_block_num_bits =
-            self.split_le(subchain_verification_proof_pis.latest_block_num, 32);
+        let mut latest_block_num_bits = self.split_le(public_inputs_elements.latest_block_num, 32);
         latest_block_num_bits.reverse();
         public_inputs_hash_input.extend(latest_block_num_bits);
 
@@ -123,7 +114,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
 
         // Verify that the public input hash matches
         for i in 0..HASH_SIZE {
-            let mut bits = self.split_le(public_inputs_hash.0[i], 8);
+            let mut bits = self.split_le(expected_public_inputs_hash.0[i], 8);
 
             // Needs to be in bit big endian order for the BLAKE2B circuit
             bits.reverse();
@@ -142,10 +133,15 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
     ) where
         Config::Hasher: AlgebraicHasher<F>,
     {
+        let subchain_verification_proof_pis =
+            self.parse_public_inputs(&subchain_verification_proof.public_inputs);
+
         // First verify public inputs hash
-        self.verify_public_inputs_hash(
-            subchain_verification_proof,
-            authority_set_signers,
+        <CircuitBuilder<F, D> as CircuitBuilderStep<F, D, C>>::verify_public_inputs_hash(
+            self,
+            &subchain_verification_proof_pis,
+            authority_set_signers.set_id,
+            &authority_set_signers.commitment,
             public_inputs_hash,
         );
 
@@ -154,9 +150,6 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         let inner_vd_t = self.constant_verifier_data(&inner_vd);
 
         self.verify_proof::<Config>(subchain_verification_proof, &inner_vd_t, &inner_cd);
-
-        let subchain_verification_proof_pis =
-            self.parse_public_inputs(&subchain_verification_proof.public_inputs);
 
         // Now verify the grandpa justification
         self.verify_justification::<Config, E>(
@@ -229,7 +222,7 @@ mod tests {
     use curta::math::goldilocks::cubic::GoldilocksCubicParameters;
     use log::Level;
     use plonky2::field::extension::Extendable;
-    use plonky2::field::types::PrimeField64;
+    use plonky2::field::types::{Field, PrimeField64};
     use plonky2::hash::hash_types::RichField;
     use plonky2::iop::witness::{PartialWitness, WitnessWrite};
     use plonky2::plonk::circuit_builder::CircuitBuilder;
@@ -240,18 +233,16 @@ mod tests {
     use plonky2::util::timing::TimingTree;
     use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
 
-    use crate::justification::{
-        set_authority_set_pw, set_precommits_pw, CircuitBuilderGrandpaJustificationVerifier,
-    };
+    use crate::justification::{set_authority_set_pw, set_precommits_pw};
     use crate::plonky2_config::PoseidonBN128GoldilocksConfig;
     use crate::step::{make_step_circuit, CircuitBuilderStep};
     use crate::subchain_verification::tests::retrieve_subchain_verification_proof;
-    use crate::subchain_verification::verify_header_ivc_cd;
+    use crate::subchain_verification::PublicInputsElementsTarget;
     use crate::testing_utils::tests::{
         BLOCK_272515_AUTHORITY_SET, BLOCK_272515_AUTHORITY_SET_COMMITMENT,
         BLOCK_272515_AUTHORITY_SET_ID, BLOCK_272515_AUTHORITY_WEIGHTS,
         BLOCK_272515_PRECOMMIT_MESSAGE, BLOCK_272515_PUBLIC_INPUTS_HASH, BLOCK_272515_SIGNERS,
-        BLOCK_272515_SIGS,
+        BLOCK_272515_SIGS, BLOCK_HASHES, HEAD_BLOCK_NUM,
     };
     use crate::utils::{CircuitBuilderUtils, WitnessAvailHash, QUORUM_SIZE};
 
@@ -281,44 +272,93 @@ mod tests {
         let mut builder = CircuitBuilder::<F, D>::new(CircuitConfig::standard_ecc_config());
         let mut pw: PartialWitness<F> = PartialWitness::new();
 
-        let subchain_verification_proof =
-            retrieve_subchain_verification_proof().expect("subchain proof generation failed");
+        let authority_set_id = builder.add_virtual_target();
+        let authority_set_commitment = builder.add_virtual_avail_hash_target_safe(false);
+        let expected_public_inputs_hash = builder.add_virtual_avail_hash_target_safe(false);
+        let public_inputs_elements = PublicInputsElementsTarget {
+            initial_block_hash: builder.add_virtual_avail_hash_target_safe(false),
+            initial_block_num: builder.add_virtual_target(),
+            initial_data_root_accumulator: builder.add_virtual_avail_hash_target_safe(false),
+            latest_block_hash: builder.add_virtual_avail_hash_target_safe(false),
+            latest_block_num: builder.add_virtual_target(),
+            latest_data_root_accumulator: builder.add_virtual_avail_hash_target_safe(false),
+        };
 
-        let subchain_verification_proof_pis =
-            builder.add_virtual_proof_with_pis(&verify_header_ivc_cd::<F, D>());
-        let authority_set_signers = builder.add_virtual_authority_set_signers_target_safe();
-        let public_inputs_hash = builder.add_virtual_avail_hash_target_safe(false);
-
-        builder.verify_public_inputs_hash(
-            &subchain_verification_proof_pis,
-            &authority_set_signers,
-            &public_inputs_hash,
-        );
-
-        pw.set_proof_with_pis_target(
-            &subchain_verification_proof_pis,
-            &subchain_verification_proof,
+        <CircuitBuilder<F, D> as CircuitBuilderStep<F, D, Curve>>::verify_public_inputs_hash(
+            &mut builder,
+            &public_inputs_elements,
+            authority_set_id,
+            &authority_set_commitment,
+            &expected_public_inputs_hash,
         );
 
         pw.set_avail_hash_target(
-            &public_inputs_hash,
-            hex::decode(BLOCK_272515_PUBLIC_INPUTS_HASH)
+            &public_inputs_elements.initial_block_hash,
+            hex::decode(BLOCK_HASHES[0])
                 .unwrap()
                 .as_slice()
                 .try_into()
                 .unwrap(),
         );
 
-        set_authority_set_pw::<F, D, Curve>(
-            &mut pw,
-            &authority_set_signers,
-            BLOCK_272515_AUTHORITY_SET
-                .iter()
-                .map(|s| hex::decode(s).unwrap())
-                .collect::<Vec<_>>(),
-            BLOCK_272515_AUTHORITY_WEIGHTS.to_vec(),
-            BLOCK_272515_AUTHORITY_SET_ID,
-            hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT).unwrap(),
+        pw.set_target(
+            public_inputs_elements.initial_block_num,
+            F::from_canonical_u64(HEAD_BLOCK_NUM.into()),
+        );
+
+        pw.set_avail_hash_target(
+            &public_inputs_elements.initial_data_root_accumulator,
+            hex::decode("0101010101010101010101010101010101010101010101010101010101010101")
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        );
+
+        pw.set_avail_hash_target(
+            &public_inputs_elements.latest_block_hash,
+            hex::decode(BLOCK_HASHES[20])
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        );
+
+        pw.set_target(
+            public_inputs_elements.latest_block_num,
+            F::from_canonical_u64((HEAD_BLOCK_NUM + 20).into()),
+        );
+
+        pw.set_avail_hash_target(
+            &public_inputs_elements.latest_data_root_accumulator,
+            hex::decode("feca63bd2df984e9b737f8b58e914cbe6bb0c8dac7fb1b5c5a13c8a9ca952718")
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        );
+
+        pw.set_target(
+            authority_set_id,
+            F::from_canonical_u64(BLOCK_272515_AUTHORITY_SET_ID),
+        );
+
+        pw.set_avail_hash_target(
+            &authority_set_commitment,
+            hex::decode(BLOCK_272515_AUTHORITY_SET_COMMITMENT)
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        );
+
+        pw.set_avail_hash_target(
+            &expected_public_inputs_hash,
+            hex::decode(BLOCK_272515_PUBLIC_INPUTS_HASH)
+                .unwrap()
+                .as_slice()
+                .try_into()
+                .unwrap(),
         );
 
         let data = builder.build();

@@ -110,6 +110,9 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         latest_block_num_bits.reverse();
         public_inputs_hash_input.extend(latest_block_num_bits);
 
+        // Assert that the public inputs hash input is the correct size
+        assert!(public_inputs_hash_input.len() == 8 * 176);
+
         let calculated_public_inputs_hash = sha256(self, &public_inputs_hash_input);
 
         // Verify that the public input hash matches

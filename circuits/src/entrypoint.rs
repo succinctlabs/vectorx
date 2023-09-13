@@ -1,18 +1,9 @@
+use plonky2x::prelude::{Circuit, VerifiableFunction, DefaultBuilder, PlonkParameters, Bytes32Variable, BytesVariable, ArrayVariable};
 
 
-
-// trait Circuit
-use plonky2x::backend::circuit::{Circuit, PlonkParameters};
-use plonky2x::backend::function::VerifiableFunction;
-
-
-// Every block N
-// generate_header_proof(N) -> header_proof_N
-// generate_ivc(header_proof_N, ivc_{N-1}, base_case_flag)
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct GetOffchainInputs {
-    : u8,
 }
 
 impl<L: PlonkParameters<D>, const D: usize> Hint<L, D> for GetOffchainInputs {
@@ -28,106 +19,49 @@ impl<L: PlonkParameters<D>, const D: usize> Hint<L, D> for GetOffchainInputs {
         // spawn 50 tasks 
         // generate header proof for each 
 
-        output_stream.write_value::<ProofWithPublicInputsTarget>(...)
-        output_stream.write_value::<PrecommitTarget>(...)
-        output_stream.write_value::<AuthoritySetSignersTarget>(...)
+        output_stream.write_value::<ProofWithPublicInputsVariable>(...)
+        output_stream.write_value::<ArrayVariable<PrecommitVariable; QUORUM_SIZE>>(...)
+        output_stream.write_value::<AuthoritySetSignersVariablet>(...)
+        output_stream.write_value::<Bytes32Variable>(...)
     }
 }
-
-pub fn hint()
-
-struct AvailIvcEntrypoint {}
-
-impl Circuit for AvailIvcEntrypoint {
-    fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>) {
-        let header_hash = builder.read::<Bytes32Variable>();
-        let base_case = builder.read::<BoolVariable>();
-        // get header from hint by calling RPC
-        let header_proof, header_fields = builder.api.get_header_fields(header_hash, header_bytes);
-
-        // get previous_ivc by calling RPC for "proof store"
-        let ivc_proof = builder.api.verify_header_ivc()
-
-        builder.write::<ivc_proof>(...);
-
-
-        let updatedHeadHash = builder.read::<Bytes32Variable>();
-        let dataRootsCommitment = builder.read::<Bytes32Variable>();
-        let updatedDataRootsCommitment = builder.read::<Bytes32Variable>();
-        let previousStateRoot = builder.read::<Bytes32Variable>();
-
-        let mut input_stream = VariableStream::new();
-        input_stream.write(&public_inputs_hash);
-
-        let hint = AddSome { amount: 1 };
-        let output_stream = builder.hint(input_stream, hint);
-        let pi_target = output_stream.read::<ProofWithPublicInputsTarget>(&mut builder);
-        // etc.
-
-        // CONVERT circuitvariable to step format
-
-        builder.api.step(subchain_verification_proof, pi_target);
-        builder.write::<BoolVariable>(builder._true());
-    }
-}
-
-fn main() {
-    VerifiableFunction::<AvailCircuit>::entrypoint();
-}
-
-
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct GetOffchainInputs {
-    : u8,
-}
-
-impl<L: PlonkParameters<D>, const D: usize> Hint<L, D> for GetOffchainInputs {
-    fn hint(
-        &self,
-        input_stream: &mut ValueStream<L, D>,
-        output_stream: &mut ValueStream<L, D>,
-    ) {
-        let pub_input_hash = input_stream.read_value::<AvailHashTarget>();
-        let provider = get_provider_from_env();
-        let og_input = provider.get_hash_input(pub_input_hash);
-        // Call all RPCs to get all the inputs necesary for step
-        // spawn 50 tasks 
-        // generate header proof for each 
-
-        output_stream.write_value::<ProofWithPublicInputsTarget>(...)
-        output_stream.write_value::<PrecommitTarget>(...)
-        output_stream.write_value::<AuthoritySetSignersTarget>(...)
-    }
-}
-
-pub fn hint()
 
 struct AvailStepEntrypoint {}
 
 impl Circuit for AvailStepEntrypoint {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>) {
-        let headHash = builder.evm_read::<Bytes32Variable>();
+        let headHash = builder.read::<Bytes32Variable>();
         let updatedHeadHash = builder.read::<Bytes32Variable>();
         let dataRootsCommitment = builder.read::<Bytes32Variable>();
         let updatedDataRootsCommitment = builder.read::<Bytes32Variable>();
         let previousStateRoot = builder.read::<Bytes32Variable>();
+        let newStateRoot = builder.read::<Bytes32Variable>();
+        let authoritySetCommitment = builder.read::<Bytes32Variable>();
+        let activeAuthoritySetId = builder.read::<BytesVariable<8>>();
+        let head = builder.read::<BytesVariable<4>>();
+        let updatedHeader = builder.read::<BytesVariable<4>>();
 
         let mut input_stream = VariableStream::new();
         input_stream.write(&public_inputs_hash);
 
-        let hint = AddSome { amount: 1 };
+        let hint = GetOffchainInputs { amount: 1 };
         let output_stream = builder.hint(input_stream, hint);
-        let pi_target = output_stream.read::<ProofWithPublicInputsTarget>(&mut builder);
-        // etc.
+        let subchain_verification_proof = output_stream.read::<ProofWithPublicInputsVariable>(&mut builder);
+        let signed_precommits = output_stream.read::<ArrayVariable<PrecommitVariable; QUORUM_SIZE>>(&mut builder);
+        let authority_set_signers = output_stream.read::<AuthoritySetSignersVariable>(&mut builder);
+        // TODO: I think we no longer need this
+        let public_inputs_hash = output_stream.read::<Bytes32Variable>(&mut builder);
+        builder.api.step(
+            subchain_verification_proof,
+            signed_precommits,
+            authority_set_signers,
+            public_inputs_hash,
+        );
 
-        // CONVERT circuitvariable to step format
-
-        builder.api.step(subchain_verification_proof, pi_target);
         builder.write::<BoolVariable>(builder._true());
     }
 }
 
 fn main() {
-    VerifiableFunction::<AvailCircuit>::entrypoint();
+    VerifiableFunction::<AvailStepEntrypoint>::entrypoint();
 }

@@ -2611,6 +2611,7 @@ checksum = "e3d7ddaed09e0eb771a79ab0fd64609ba0afb0a8366421957936ad14cbd13630"
 [[package]]
 name = "plonky2"
 version = "0.1.4"
+source = "git+https://github.com/succinctlabs/plonky2.git?branch=kevjue/make_fields_public#f23d428c4e21c353629b7590f5d7f28f632aff92"
 dependencies = [
  "ahash",
  "anyhow",

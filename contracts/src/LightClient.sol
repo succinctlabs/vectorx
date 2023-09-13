@@ -6,6 +6,22 @@ import { SubstrateTrie } from "src/SubstrateTrie.sol";
 import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY, EVENT_LIST_PROOF_ADDRESS, AUTHORITY_SETID_PROOF_ADDRESS } from "src/Constants.sol";
 
 
+
+function submitHeader(uint256 _startBlock, uint256 _updatedBlock) public {
+        require(epoch(_startBlock) == epoch(_updatedBlock), "Invalid epoch");
+        bytes32 header = headerHash[_startBlock];
+        bytes memory result = IGateway(gateway).zkCall(
+            functionId, // skip
+            abi.encodePacked(header, _updatedBlock)
+        );
+        (bytes32 newHeader) = abi.decode(
+            result,
+            (bytes32)
+        );
+        headerHash[_updatedBlock] = newHeader;
+}
+
+
 struct Groth16Proof {
     uint256[2] a;
     uint256[2][2] b;
@@ -135,19 +151,23 @@ contract LightClient is StepVerifier, SubstrateTrie {
             revert("Authority set ID is not currently active");
         }
 
-        Proof memory proof;
-        proof.A = Pairing.G1Point(update.proof.a[0], update.proof.a[1]);
-        proof.B = Pairing.G2Point(update.proof.b[0], update.proof.b[1]);
-        proof.C = Pairing.G1Point(update.proof.c[0], update.proof.c[1]);
-
-        verifyStepProof(
-            update.head,
-            update.headHash,
-            update.previousStateRoot,
-            update.stateRoot,
-            update.updatedDataRootsCommitment,
-            proof
+        bytes memory inputBytes = bytes.concat(
+            headHash,
+            updatedHeadHash,
+            dataRootsCommitment,
+            updatedDataRootsCommitment,
+            previousStateRoot,
+            newStateRoot,
+            authoritySetCommitments[activeAuthoritySetID],
+            bytes8(activeAuthoritySetID),
+            bytes4(head),
+            bytes4(updatedHead)
         );
+
+        bytes memory _ = IGateway.zkCall(
+            MY_FUNCTION_ID,
+            inputBytes
+        )
 
         // Note that the snark proof above verifies that the first header is correctly linked to the current head.
         // Update the light client storage
@@ -197,6 +217,7 @@ contract LightClient is StepVerifier, SubstrateTrie {
             let gasLeft := gas()
             pop(staticcall(gasLeft, 0x02, hashInput, 240, hashResult, 32))
         }
+        emit HashInput(indexed hashResult, hashInput);
 
         bytes32 publicInputsHash = hashResult[0];
         inputs[0] = (uint256(publicInputsHash) >> 192) & 0xffffffffffffffff;

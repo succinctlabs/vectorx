@@ -127,6 +127,7 @@ impl<F: RichField + Extendable<D>, const D: usize, C: Curve> CircuitBuilderStep<
         }
     }
 
+
     fn step<Config: GenericConfig<D, F = F, FE = F::Extension> + 'static, E: CubicParameters<F>>(
         &mut self,
         subchain_verification_proof: &ProofWithPublicInputsTarget<D>,

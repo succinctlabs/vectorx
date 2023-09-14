@@ -1,5 +1,5 @@
 [package]
-name = "succinct_avail_circuits"
+name = "avail_plonky2x"
 version = "0.1.0"
 edition = "2021"
 

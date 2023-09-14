@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-curta = { git = "https://github.com/succinctlabs/curta.git" }
+curta = { git = "https://github.com/succinctlabs/curta.git", branch = "john/nightly" }
 env_logger = { version = "0.9.0", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "std"] }
 ed25519-dalek = "1.0.1"
@@ -25,9 +25,6 @@ tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 
 [dev-dependencies]
 anyhow = "1.0.68"
-
-[patch."https://github.com/mir-protocol/plonky2.git"]
-plonky2 = { git = "https://github.com/succinctlabs/plonky2.git",  branch = "kevjue/make_fields_public" }
 
 #[patch."https://github.com/succinctlabs/sdk.git"]
 #plonky2x = { path = "../../../sdk/plonky2x" }

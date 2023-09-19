@@ -9,8 +9,8 @@ use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ArrayVariable, CircuitBuilder, CircuitVariable, GoldilocksField, PlonkParameters, RichField,
-    Target, Variable, Witness, WitnessWrite,
+    ArrayVariable, CircuitBuilder, CircuitVariable, Field, GoldilocksField, PlonkParameters,
+    RichField, Target, Variable, Witness, WitnessWrite,
 };
 
 use crate::vars::*;
@@ -203,19 +203,36 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         // (https://wiki.polygon.technology/docs/miden/design/multiset#computing-a-virtual-tables-trace-column).
         // To retrieve the randomness, we use plonky2's recursive challenger seeding it with 3 elements of 56 bits from the header hash.
         // We do the verification twice to increase the security of it.
-        let data_root = self.subarray_rlc::<HASH_SIZE>(header, DATA_ROOT_OFFSET_FROM_END);
+        let data_root_offset =
+            self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
+        let data_root_start = self.sub(header.header_size, data_root_offset);
+        let data_root: Vec<U32Variable> = self
+            .get_fixed_subarray::<HASH_SIZE>(
+                &header
+                    .header_bytes
+                    .as_vec()
+                    .iter()
+                    .map(|x| x.0)
+                    .collect::<Vec<Variable>>(),
+                data_root_start,
+            )
+            .as_vec()
+            .iter()
+            .map(|x| U32Variable(*x))
+            .collect();
 
         HeaderVariable {
             block_number: U32Variable(Variable(block_number_target)), // TODO: do we need to do a range-check here?
             parent_hash: ArrayVariable::new(parent_hash),
             state_root,
-            data_root,
+            data_root: ArrayVariable::new(data_root),
         }
     }
 
     fn decode_precommit(&mut self, precommit: EncodedPrecommitVariable) -> PrecommitVariable {
         // The first byte is the variant number and should be 1
-        self.assert_is_equal(precommit[0], self.one());
+        let one = self.one();
+        self.assert_is_equal(precommit[0], one);
 
         // The next 32 bytes is the block hash
         let block_hash = precommit[1..33].to_vec();

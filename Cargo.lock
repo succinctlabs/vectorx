@@ -220,7 +220,7 @@ name = "avail_plonky2x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "curta",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=john/nightly)",
  "ed25519-dalek",
  "env_logger 0.9.3",
  "ff_ce",
@@ -232,7 +232,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=uma/small-change)",
  "rand 0.4.6",
  "serde",
  "serde_json",
@@ -742,6 +742,24 @@ dependencies = [
 name = "curta"
 version = "0.1.0"
 source = "git+https://github.com/succinctlabs/curta.git?branch=john/nightly#e8b9f1745c9d92be77ba9817b0e3921869c1df7a"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "hex",
+ "itertools 0.10.5",
+ "log",
+ "num",
+ "plonky2",
+ "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.8.5",
+ "serde",
+ "subtle-encoding",
+]
+
+[[package]]
+name = "curta"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/curta.git?branch=tamir/serialization#252099a28bc350b9c8a3d2a9c95fea44d577c304"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2834,7 +2852,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#48bdeaf8c09f5a446bea2c3aa95b6217b3255abc"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=uma/small-change#c5d906748b9c36eb96a6804d5300ee8296e974e7"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -2842,7 +2860,7 @@ dependencies = [
  "base64 0.13.1",
  "bincode",
  "clap",
- "curta",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=tamir/serialization)",
  "curve25519-dalek 4.0.0",
  "dotenv",
  "env_logger 0.10.0",
@@ -2856,7 +2874,7 @@ dependencies = [
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=uma/small-change)",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -2867,6 +2885,54 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.4.1",
+]
+
+[[package]]
+name = "plonky2x"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#48bdeaf8c09f5a446bea2c3aa95b6217b3255abc"
+dependencies = [
+ "anyhow",
+ "array-macro",
+ "backtrace",
+ "base64 0.13.1",
+ "bincode",
+ "clap",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=john/nightly)",
+ "curve25519-dalek 4.0.0",
+ "dotenv",
+ "env_logger 0.10.0",
+ "ethers",
+ "ff",
+ "futures",
+ "hex",
+ "itertools 0.10.5",
+ "lazy_static",
+ "log",
+ "num",
+ "num-bigint 0.4.4",
+ "plonky2",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_plain",
+ "serde_with",
+ "sha2 0.10.7",
+ "tokio",
+ "tracing",
+ "uuid 1.4.1",
+]
+
+[[package]]
+name = "plonky2x-derive"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=uma/small-change#c5d906748b9c36eb96a6804d5300ee8296e974e7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.33",
 ]
 
 [[package]]
@@ -3840,7 +3906,7 @@ name = "succinct_avail_circuits"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "curta",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=john/nightly)",
  "ed25519-dalek",
  "env_logger 0.9.3",
  "ff_ce",
@@ -3852,7 +3918,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
  "rand 0.4.6",
  "serde",
  "serde_json",

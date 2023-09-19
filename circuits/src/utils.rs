@@ -188,6 +188,24 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         });
         selected.into()
     }
+
+    fn int_div(&mut self, dividend: Target, divisor: Target) -> Target {
+        let quotient = self.add_virtual_target();
+        let remainder = self.add_virtual_target();
+
+        self.add_simple_generator(FloorDivGenerator::<F, D> {
+            divisor,
+            dividend,
+            quotient,
+            remainder,
+            _marker: PhantomData,
+        });
+        let base = self.mul(quotient, divisor);
+        let rhs = self.add(base, remainder);
+        let is_equal = self.is_equal(rhs, dividend);
+        self.assert_one(is_equal.target);
+        quotient
+    }
 }
 
 #[derive(Debug)]

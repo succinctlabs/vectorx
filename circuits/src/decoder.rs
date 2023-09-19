@@ -299,13 +299,18 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 
 #[cfg(test)]
 mod tests {
-    use crate::decoder::CircuitBuilderScaleDecoder;
+    use crate::decoder::{CircuitBuilderScaleDecoder, CircuitBuilderHeaderDecoder};
+    use crate::testing_utils::tests::{NUM_BLOCKS, ENCODED_HEADERS, BLOCK_HASHES, HEAD_BLOCK_NUM, STATE_ROOTS, DATA_ROOTS};
+    use crate::utils::{CircuitBuilderUtils, WitnessEncodedHeader, WitnessAvailHash, MAX_LARGE_HEADER_SIZE};
     use anyhow::Result;
+    use log::Level;
     use plonky2::field::types::Field;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+    use plonky2::plonk::prover::prove;
+    use plonky2::util::timing::TimingTree;
 
     fn test_compact_int(
         encoded_bytes: [u8; 5],
@@ -383,5 +388,59 @@ mod tests {
         let encoded_bytes = [3, 0, 0, 0, 64];
         let expected_value = 1073741824;
         test_compact_int(encoded_bytes, expected_value, 3, 5)
+    }
+
+    #[test]
+    fn test_decode_large_header() -> Result<()> {
+        const D: usize = 2;
+        type C = PoseidonGoldilocksConfig;
+        type F = <C as GenericConfig<D>>::F;
+        let config = CircuitConfig::standard_recursion_config();
+        let mut builder = CircuitBuilder::<F, D>::new(config);
+
+        let mut builder_logger = env_logger::Builder::from_default_env();
+        builder_logger.format_timestamp(None);
+        builder_logger.filter_level(log::LevelFilter::Trace);
+        builder_logger.try_init()?;
+
+
+        let mut encoded_headers = Vec::new();
+        let mut header_hashes = Vec::new();
+
+        for i in 0..180 {
+            let encoded_header = builder.add_virtual_encoded_header_target_safe::<MAX_LARGE_HEADER_SIZE>();
+            let header_hash = builder.add_virtual_avail_hash_target_safe(false);
+
+            encoded_headers.push(encoded_header.clone());
+            header_hashes.push(header_hash.clone());
+
+            let decoded_header = builder.decode_header(&encoded_header, header_hash.clone());
+
+            if i == 0 || i == 179 {
+                builder.register_public_input(decoded_header.block_number);
+                builder.register_public_inputs(decoded_header.parent_hash.0.as_slice());
+                builder.register_public_inputs(decoded_header.state_root.0.as_slice());
+                builder.register_public_inputs(decoded_header.data_root.0.as_slice());
+            }
+        }
+
+
+        let data = builder.build::<C>();
+
+        let mut pw = PartialWitness::new();
+        for i in 0..180 {
+            pw.set_encoded_header_target(&encoded_headers[i], hex::decode(ENCODED_HEADERS[NUM_BLOCKS-1]).unwrap());
+            pw.set_avail_hash_target(&header_hashes[i], hex::decode(BLOCK_HASHES[NUM_BLOCKS-1]).unwrap().as_slice().try_into().unwrap());
+        }
+        let mut timing = TimingTree::new("grandpa proof gen", Level::Info);
+        let proof = prove::<F, C, D>(&data.prover_only, &data.common, pw, &mut timing).unwrap();
+        timing.print();
+
+        assert!(proof.public_inputs[0] == F::from_canonical_u32(HEAD_BLOCK_NUM + NUM_BLOCKS as u32 - 1));
+        assert!(proof.public_inputs[1..33] == hex::decode(BLOCK_HASHES[NUM_BLOCKS-2]).unwrap().as_slice().iter().map(|b| F::from_canonical_u8(*b)).collect::<Vec<_>>());
+        assert!(proof.public_inputs[33..65] == hex::decode(STATE_ROOTS[NUM_BLOCKS-1]).unwrap().as_slice().iter().map(|b| F::from_canonical_u8(*b)).collect::<Vec<_>>());
+        assert!(proof.public_inputs[65..97] == hex::decode(DATA_ROOTS[NUM_BLOCKS-1]).unwrap().as_slice().iter().map(|b| F::from_canonical_u8(*b)).collect::<Vec<_>>());
+
+        data.verify(proof)
     }
 }

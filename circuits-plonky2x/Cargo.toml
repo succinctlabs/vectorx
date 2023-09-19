@@ -15,7 +15,7 @@ ff = {package="ff_ce" , version="0.11", features = ["derive"]}
 lazy_static = "1.4.0"
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = [ "rand" ] }
-plonky2 = { git = "https://github.com/succinctlabs/plonky2.git",  branch = "uma/selector-pub" }
+plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
 rand = "0.4"
 serde = {version = "1", features= ["derive"]}
@@ -25,3 +25,6 @@ tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 
 [dev-dependencies]
 anyhow = "1.0.68"
+
+# [patch."https://github.com/mir-protocol/plonky2.git"]
+# plonky2 = { git = "https://github.com/succinctlabs/plonky2.git",  branch = "uma/selector-pub" }

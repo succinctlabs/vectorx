@@ -1,40 +1,9 @@
-use avail::utils::ENCODED_PRECOMMIT_LENGTH;
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable, DefaultBuilder,
-    PlonkParameters, RichField, Variable,
+    ArrayVariable, CircuitBuilder, CircuitVariable, GoldilocksField, PlonkParameters, RichField,
+    Target, Variable, Witness, WitnessWrite,
 };
 
-// TODO: these should be moved to plonky2x/utils
-impl<F: RichField> From<Vec<u8>> for Vec<F> {
-    fn from(item: Vec<u8>) -> Self {
-        todo!();
-    }
-}
-
-impl<F: RichField> From<Vec<F>> for Vec<u8> {
-    fn from(item: Vec<F>) -> Self {
-        todo!();
-    }
-}
-
-type HashVariable = ArrayVariable<Variable, 32>;
-type EncodedPrecommitVariable = ArrayVariable<Variable, ENCODED_PRECOMMIT_LENGTH>;
-
-// TODO: derive CircuitVariable on this
-struct HeaderVariable {
-    pub block_number: Variable,
-    pub parent_hash: HashVariable,
-    pub state_root: HashVariable,
-    pub data_root: HashVariable,
-}
-
-// TODO: derive CircuitVariable on this
-struct PrecommitVariable {
-    pub block_hash: HashVariable,
-    pub block_number: Variable,
-    pub justification_round: Variable,
-    pub authority_set_id: Variable,
-}
+use crate::vars::*;
 
 pub trait DecodingMethods {
     fn decode_compact_int(&mut self, compact_bytes: Vec<Target>) -> (Target, Target, Target);

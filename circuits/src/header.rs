@@ -1,36 +1,32 @@
 use hashbrown::HashMap;
-
 use itertools::Itertools;
-use plonky2::{
-    field::extension::Extendable,
-    fri::{reduction_strategies::FriReductionStrategy, FriConfig, FriParams},
-    gates::{
-        arithmetic_base::ArithmeticGate, base_sum::BaseSumGate, constant::ConstantGate,
-        gate::GateRef, noop::NoopGate, poseidon::PoseidonGate, public_input::PublicInputGate,
-        random_access::RandomAccessGate, selectors::SelectorsInfo,
-    },
-    hash::{
-        hash_types::{HashOut, RichField},
-        merkle_tree::MerkleCap,
-    },
-    iop::target::Target,
-    plonk::{
-        circuit_builder::CircuitBuilder,
-        circuit_data::{CircuitConfig, CircuitData, CommonCircuitData, VerifierOnlyCircuitData},
-        config::{AlgebraicHasher, GenericConfig},
-        proof::ProofWithPublicInputs,
-    },
-    recursion::dummy_circuit::cyclic_base_proof,
+use plonky2::field::extension::Extendable;
+use plonky2::fri::reduction_strategies::FriReductionStrategy;
+use plonky2::fri::{FriConfig, FriParams};
+use plonky2::gates::arithmetic_base::ArithmeticGate;
+use plonky2::gates::base_sum::BaseSumGate;
+use plonky2::gates::constant::ConstantGate;
+use plonky2::gates::gate::GateRef;
+use plonky2::gates::noop::NoopGate;
+use plonky2::gates::poseidon::PoseidonGate;
+use plonky2::gates::public_input::PublicInputGate;
+use plonky2::gates::random_access::RandomAccessGate;
+use plonky2::gates::selectors::SelectorsInfo;
+use plonky2::hash::hash_types::{HashOut, RichField};
+use plonky2::hash::merkle_tree::MerkleCap;
+use plonky2::iop::target::Target;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::plonk::circuit_data::{
+    CircuitConfig, CircuitData, CommonCircuitData, VerifierOnlyCircuitData,
 };
-use plonky2x::{
-    frontend::hash::blake2::blake2b::blake2b,
-    frontend::num::u32::gates::add_many_u32::U32AddManyGate,
-};
+use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
+use plonky2::plonk::proof::ProofWithPublicInputs;
+use plonky2::recursion::dummy_circuit::cyclic_base_proof;
+use plonky2x::frontend::hash::blake2::blake2b::blake2b;
+use plonky2x::frontend::num::u32::gates::add_many_u32::U32AddManyGate;
 
-use crate::{
-    decoder::CircuitBuilderHeaderDecoder,
-    utils::{AvailHashTarget, EncodedHeaderTarget, HASH_SIZE},
-};
+use crate::decoder::CircuitBuilderHeaderDecoder;
+use crate::utils::{AvailHashTarget, EncodedHeaderTarget, HASH_SIZE};
 
 pub(crate) fn create_header_circuit<
     C: GenericConfig<D, F = F> + 'static,
@@ -819,6 +815,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeader<F, D>
             AvailHashTarget(header_hash_bytes.as_slice().try_into().unwrap()),
         );
 
+        // TODO: I'm not sure that we should do the public input registration here
         self.register_public_input(decoded_header.block_number);
         self.register_public_inputs(decoded_header.parent_hash.0.as_slice());
         self.register_public_inputs(decoded_header.state_root.0.as_slice());
@@ -878,23 +875,17 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeader<F, D>
 mod tests {
     use anyhow::{Ok, Result};
     use plonky2::field::types::Field;
-    use plonky2::{
-        iop::witness::{PartialWitness, WitnessWrite},
-        plonk::{
-            circuit_builder::CircuitBuilder,
-            circuit_data::CircuitConfig,
-            config::{GenericConfig, PoseidonGoldilocksConfig},
-        },
-    };
+    use plonky2::iop::witness::{PartialWitness, WitnessWrite};
+    use plonky2::plonk::circuit_builder::CircuitBuilder;
+    use plonky2::plonk::circuit_data::CircuitConfig;
+    use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
 
-    use crate::{
-        header::{parse_header_pi, CircuitBuilderHeader},
-        testing_utils::tests::{
-            BLOCK_HASHES, DATA_ROOTS, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
-            STATE_ROOTS,
-        },
-        utils::{EncodedHeaderTarget, MAX_LARGE_HEADER_SIZE},
+    use crate::header::{parse_header_pi, CircuitBuilderHeader};
+    use crate::testing_utils::tests::{
+        BLOCK_HASHES, DATA_ROOTS, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
+        STATE_ROOTS,
     };
+    use crate::utils::{EncodedHeaderTarget, MAX_LARGE_HEADER_SIZE};
 
     #[test]
     fn test_process_block() -> Result<()> {

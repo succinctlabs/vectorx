@@ -104,6 +104,8 @@ where
         .collect_vec();
     let mut public_inputs_iter = canonical_public_inputs.iter();
 
+    // I feel like there should have been a utility function instead of the long-ish amounts of code
+    // below
     HeaderPIElements {
         block_hash:
                 public_inputs_iter
@@ -142,6 +144,10 @@ where
     }
 }
 
+// Of course in the future, we really shouldn't have stuff like this in the code.
+// Even if it's a short-cut in the short-term, in the long-term actually we waste more time because it's a lot
+// less reproducible and when the circuit changes copy-pasting the values into the code takes a non-trivial amount of time
+// Better to just fix even in the short-term
 pub(crate) fn process_small_header_cd<F: RichField + Extendable<D>, const D: usize>(
 ) -> CommonCircuitData<F, D> {
     let k_is = vec![
@@ -815,7 +821,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeader<F, D>
             AvailHashTarget(header_hash_bytes.as_slice().try_into().unwrap()),
         );
 
-        // TODO: I'm not sure that we should do the public input registration here
+        // NOTE: I don't think it's great to do the public input registration here
+        // It mixes constraint logic with the public input registration logic
         self.register_public_input(decoded_header.block_number);
         self.register_public_inputs(decoded_header.parent_hash.0.as_slice());
         self.register_public_inputs(decoded_header.state_root.0.as_slice());

@@ -206,6 +206,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let data_root_offset =
             self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
         let data_root_start = self.sub(header.header_size, data_root_offset);
+        // TODO: use header_hash to seed the challenger in get_fixed_subarray
         let data_root: Vec<U32Variable> = self
             .get_fixed_subarray::<HASH_SIZE>(
                 &header

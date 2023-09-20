@@ -1,7 +1,7 @@
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ArrayVariable, CircuitBuilder, CircuitVariable, GoldilocksField, PlonkParameters, RichField,
-    Target, Variable, Witness, WitnessWrite,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, GoldilocksField,
+    PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
 pub const NUM_AUTHORITIES: usize = 76;
@@ -32,6 +32,22 @@ pub fn to_field_arr<F: RichField, const N: usize>(bytes: Vec<u8>) -> [F; N] {
         .try_into()
         .unwrap();
     fixed
+}
+
+pub trait ConversionUtils {
+    fn to_hash_variable(&mut self, x: Bytes32Variable) -> HashVariable;
+}
+
+impl<L: PlonkParameters<D>, const D: usize> ConversionUtils for CircuitBuilder<L, D> {
+    fn to_hash_variable(&mut self, x: Bytes32Variable) -> HashVariable {
+        let variables =
+            x.0 .0
+                .iter()
+                .map(|x| self.api.le_sum(x.as_bool_targets().iter()))
+                .map(|x| U32Variable(Variable(x)))
+                .collect();
+        ArrayVariable::new(variables)
+    }
 }
 
 pub struct EncodedHeaderVariable<const S: usize> {

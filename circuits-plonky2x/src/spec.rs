@@ -19,24 +19,25 @@ fn verify_simple_justification(
 }
 
 fn update_data_committment(trusted_block_number: u32, trusted_hash: Hash, authority_set_id: u32, authority_set_hash: Hash, target_block_number: u32) -> (Hash, Hash) {
-    let all_raw_headers = hint_get_headers(trusted_block, target_block_number); // this is a hint
+    let all_raw_headers = hint_get_headers(trusted_block, target_block_number, NUM_HEADERS); // this is a hint
+    let last_header_index = target_block_number - trusted_block_number;
     let decoded_headers = constraint_decode_headers(all_raw_headers);
     let block_hashes = constraint_hash_headers(all_raw_headers);
 
     constraint_block_number(decoded_headers[0], trusted_block_number);
     assert_eq(block_hashes[0] == trusted_hash); // this is redundant with the above line so we can pick one
-    constraint_block_number(decoded_headers[-1], target_block_number);
+    constraint_block_number(decoded_headers[last_header_index], target_block_number);
 
     let authority_set_members = hint_get_authority_set(authority_set_id);
     verify_simple_justification(
-        decoded_headers[-1],
-        block_hashes[-1],
+        decoded_headers[last_header_index],
+        block_hashes[last_header_index],
         authority_set_id, 
         authority_set_hash,
         authority_set_members
     );
 
-    verify_sequential_header_chain(decoded_headers, block_hashes);
-    data_root_hash = hash_data_root(decoded_headers.iter().map((x) => x.data_root));
+    verify_sequential_header_chain(decoded_headers, block_hashes, last_header_index);
+    data_root_hash = hash_data_root(decoded_headers.iter().map((x) => x.data_root), last_header_index);
     return block_hashes[-1], data_root_hash
 }

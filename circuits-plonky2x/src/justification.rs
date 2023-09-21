@@ -4,6 +4,11 @@ use plonky2x::prelude::{
     Target, Variable, Witness, WitnessWrite,
 };
 
+pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
+
+// TODO: take in block hash and authority_set_id
+// Return authority_set_signers and signed_precommits
+
 pub trait GrandpaJustificationVerifier<L: PlonkParameters<D>, const D: usize, C: Curve> {
     fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
         &mut self,

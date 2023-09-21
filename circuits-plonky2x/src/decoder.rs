@@ -9,11 +9,11 @@ use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ArrayVariable, CircuitBuilder, CircuitVariable, Field, GoldilocksField, PlonkParameters,
-    RichField, Target, Variable, Witness, WitnessWrite,
+    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
+    Field, GoldilocksField, PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
-use crate::vars::*;
+use crate::vars::{ConversionUtils, *};
 
 const DATA_ROOT_OFFSET_FROM_END: usize = 132;
 
@@ -73,9 +73,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
 trait CircuitBuilderScaleDecoder {
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
 
-    fn decode_compact_int(&mut self, compact_bytes: Vec<Target>) -> (Target, Target, Target);
-
-    fn decode_fixed_int(&mut self, bytes: Vec<Target>, num_bytes: usize) -> Target;
+    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target);
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -100,20 +98,21 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         quotient
     }
 
-    fn decode_compact_int(&mut self, compact_bytes: Vec<Target>) -> (Target, Target, Target) {
+    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target) {
         // For now, assume that compact_bytes is 5 bytes long
         assert!(compact_bytes.len() == 5);
 
-        let bits = self.split_le(compact_bytes[0], 8);
-        let compress_mode = self.le_sum(bits[0..2].iter());
+        let mut first_byte_bool_targets = compact_bytes[0].as_bool_targets();
+        first_byte_bool_targets.reverse();
+
+        let compress_mode = self.le_sum(first_byte_bool_targets[0..2].iter());
 
         // Get all of the possible bytes that could be used to represent the compact int
 
-        let zero_mode_value = compact_bytes[0];
-        let alpha = self.constant(F::from_canonical_u16(256));
-        let one_mode_value = reduce_with_powers_circuit(self, &compact_bytes[0..2], alpha);
-        let two_mode_value = reduce_with_powers_circuit(self, &compact_bytes[0..4], alpha);
-        let three_mode_value = reduce_with_powers_circuit(self, &compact_bytes[1..5], alpha);
+        let zero_mode_value = to_variable_unsafe(self, &compact_bytes[0..1]).0;
+        let one_mode_value = to_variable_unsafe(self, &compact_bytes[0..2]).0;
+        let two_mode_value = to_variable_unsafe(self, &compact_bytes[0..4]).0;
+        let three_mode_value = to_variable_unsafe(self, &compact_bytes[1..5]).0;
         let value = self.random_access(
             compress_mode,
             vec![
@@ -141,18 +140,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
 
         (decoded_int, compress_mode, encoded_byte_length)
     }
-
-    // WARNING !!!!
-    // Note that this only works for fixed ints that are 64 bytes or less, since the goldilocks field is a little under 64 bytes.
-    // So technically, it doesn't even work for 64 byte ints, but for now assume that all u64 values we encounter are less than
-    // the goldilocks field size.
-    fn decode_fixed_int(&mut self, bytes: Vec<Target>, value_byte_length: usize) -> Target {
-        assert!(bytes.len() == value_byte_length);
-        assert!(value_byte_length <= 64);
-
-        let alpha = self.constant(F::from_canonical_u16(256));
-        reduce_with_powers_circuit(self, &bytes, alpha)
-    }
 }
 
 pub trait DecodingMethods {
@@ -168,7 +155,10 @@ pub trait DecodingMethods {
         header_hash: &HashVariable,
     ) -> HeaderVariable;
 
-    fn decode_precommit(&mut self, precommit: EncodedPrecommitVariable) -> PrecommitVariable;
+    fn decode_precommit(
+        &mut self,
+        encoded_precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
+    ) -> PrecommitVariable;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -196,25 +186,21 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         header_hash: &HashVariable,
     ) -> HeaderVariable {
         // The first 32 bytes are the parent hash
-        let parent_hash = header.header_bytes[0..HASH_SIZE].to_vec();
+        let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
 
         // Next field is the block number
         // Can need up to 5 bytes to represent a compact u32
         const MAX_BLOCK_NUMBER_SIZE: usize = 5;
-        let (block_number_target, compress_mode, _) = self.api.decode_compact_int(
-            header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_SIZE]
-                .to_vec()
-                .iter()
-                .map(|x| x.0 .0)
-                .collect(),
-        );
+        let (block_number_target, compress_mode, _) = self
+            .api
+            .decode_compact_int(&header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_SIZE]);
 
         let all_possible_state_roots = vec![
-            ArrayVariable::<_, HASH_SIZE>::new(header.header_bytes[33..33 + HASH_SIZE].to_vec()),
-            ArrayVariable::<_, HASH_SIZE>::new(header.header_bytes[34..34 + HASH_SIZE].to_vec()),
-            // TODO: why is 35 missing here?
-            ArrayVariable::<_, HASH_SIZE>::new(header.header_bytes[36..36 + HASH_SIZE].to_vec()),
-            ArrayVariable::<_, HASH_SIZE>::new(header.header_bytes[37..37 + HASH_SIZE].to_vec()),
+            Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
+            Bytes32Variable::from(&header.header_bytes[34..34 + HASH_SIZE]),
+            // TODO: why is 35 missing here
+            Bytes32Variable::from(&header.header_bytes[36..36 + HASH_SIZE]),
+            Bytes32Variable::from(&header.header_bytes[37..37 + HASH_SIZE]),
         ];
 
         let state_root =
@@ -227,64 +213,56 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         // To retrieve the randomness, we use plonky2's recursive challenger seeding it with 3 elements of 56 bits from the header hash.
         // We do the verification twice to increase the security of it.
         let data_root_offset =
-            self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
+            self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END)); // Since we're working with bits
         let data_root_start = self.sub(header.header_size, data_root_offset);
+        let eight = self.constant(L::Field::from_canonical_u8(8));
+        let data_root_start_bits = self.mul(data_root_start, eight);
         // TODO: use header_hash to seed the challenger in get_fixed_subarray
-        let data_root: Vec<U32Variable> = self
-            .get_fixed_subarray::<HASH_SIZE>(
-                &header
-                    .header_bytes
-                    .as_vec()
-                    .iter()
-                    .map(|x| x.0)
-                    .collect::<Vec<Variable>>(),
-                data_root_start,
+        let data_root_variables: Vec<Variable> = self
+            .get_fixed_subarray::<HASH_SIZE_BITS>(
+                &header.header_bytes.variables(),
+                data_root_start_bits,
             )
-            .as_vec()
-            .iter()
-            .map(|x| U32Variable(*x))
-            .collect();
+            .as_vec();
+        let data_root = Bytes32Variable::from_variables_unsafe(&data_root_variables);
 
         HeaderVariable {
             block_number: U32Variable(Variable(block_number_target)), // TODO: do we need to do a range-check here?
-            parent_hash: ArrayVariable::new(parent_hash),
+            parent_hash,
             state_root,
-            data_root: ArrayVariable::new(data_root),
+            data_root,
         }
     }
 
-    fn decode_precommit(&mut self, precommit: EncodedPrecommitVariable) -> PrecommitVariable {
+    fn decode_precommit(
+        &mut self,
+        precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
+    ) -> PrecommitVariable {
+        // TODO: when we have seamless conversion between BytesVariable and U32/U64 variables, use those instead
+
         // The first byte is the variant number and should be 1
-        let one = self.one();
-        self.assert_is_equal(precommit[0], one);
+        let one = self.one::<Variable>();
+        let precommit_first_byte = to_variable(&mut self.api, precommit[0]);
+        self.assert_is_equal(precommit_first_byte, one);
 
         // The next 32 bytes is the block hash
-        let block_hash = precommit[1..33].to_vec();
+        let block_hash: Bytes32Variable = precommit[1..33].into();
 
         // The next 4 bytes is the block number
-        let block_number = self.api.decode_fixed_int(
-            precommit[33..37].to_vec().iter().map(|x| x.0 .0).collect(),
-            4,
-        );
+        let block_number = to_variable_unsafe(&mut self.api, &precommit[33..37]);
 
         // The next 8 bytes is the justification round
-        let justification_round = self.api.decode_fixed_int(
-            precommit[37..45].to_vec().iter().map(|x| x.0 .0).collect(),
-            8,
-        );
+        let justification_round = to_variable_unsafe(&mut self.api, &precommit[37..45]);
 
         // The next 8 bytes is the authority set id
-        let authority_set_id = self.api.decode_fixed_int(
-            precommit[45..53].to_vec().iter().map(|x| x.0 .0).collect(),
-            8,
-        );
+        let authority_set_id = to_variable_unsafe(&mut self.api, &precommit[45..53]);
 
         // It's okay that we're not range checking any of these because the inputs to this function are range-checked
         PrecommitVariable {
-            block_hash: ArrayVariable::new(block_hash),
-            block_number: U32Variable(Variable(block_number)),
-            justification_round: Variable(justification_round),
-            authority_set_id: Variable(authority_set_id),
+            block_hash,
+            block_number: U32Variable(block_number),
+            justification_round,
+            authority_set_id,
         }
     }
 }

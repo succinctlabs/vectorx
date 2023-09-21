@@ -27,9 +27,6 @@ trait ToField<F: RichField> {
     fn to_field(&self) -> F;
 }
 
-pub type U8Variable = U32Variable;
-pub type HashVariable = ArrayVariable<U8Variable, 32>;
-
 pub fn to_field_arr<F: RichField, const N: usize>(bytes: Vec<u8>) -> [F; N] {
     let fixed: [F; N] = bytes
         .iter()
@@ -38,12 +35,6 @@ pub fn to_field_arr<F: RichField, const N: usize>(bytes: Vec<u8>) -> [F; N] {
         .try_into()
         .unwrap();
     fixed
-}
-
-pub trait ConversionUtils {
-    fn to_variable(&mut self, byte: ByteVariable) -> Variable;
-
-    fn to_variable_unsafe(&mut self, bytes: &[ByteVariable]) -> Variable;
 }
 
 // TODO: put these methods in the actual builder and also replace with more efficient methods
@@ -103,6 +94,3 @@ pub struct AuthoritySetSignerVariable {
     pub pub_keys: EDDSAPublicKeyVariable, // Array of pub keys (in compressed form)
     pub weights: U64Variable, // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
 }
-
-// pub commitment: HashVariable,
-//     pub set_id: U64Variable,

@@ -13,7 +13,7 @@ use plonky2x::prelude::{
     Field, GoldilocksField, PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
-use crate::vars::{ConversionUtils, *};
+use crate::vars::*;
 
 const DATA_ROOT_OFFSET_FROM_END: usize = 132;
 
@@ -146,13 +146,13 @@ pub trait DecodingMethods {
     fn decoded_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
-        header_hashes: &ArrayVariable<HashVariable, N>,
+        header_hashes: &ArrayVariable<Bytes32Variable, N>,
     ) -> ArrayVariable<HeaderVariable, N>;
 
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-        header_hash: &HashVariable,
+        header_hash: &Bytes32Variable,
     ) -> HeaderVariable;
 
     fn decode_precommit(
@@ -168,7 +168,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
     fn decoded_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
-        header_hashes: &ArrayVariable<HashVariable, N>,
+        header_hashes: &ArrayVariable<Bytes32Variable, N>,
     ) -> ArrayVariable<HeaderVariable, N> {
         headers
             .as_vec()
@@ -183,7 +183,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-        header_hash: &HashVariable,
+        header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
         // The first 32 bytes are the parent hash
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();

@@ -12,16 +12,16 @@ pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
 pub trait GrandpaJustificationVerifier<L: PlonkParameters<D>, const D: usize, C: Curve> {
     fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
         &mut self,
-        authority_set_commitment: HashVariable,
+        authority_set_commitment: Bytes32Variable,
         authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
     );
 
     fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
         &mut self,
         block: HeaderVariable,
-        block_hash: HashVariable,
+        block_hash: Bytes32Variable,
         authority_set_id: U32Variable,
-        authority_set_hash: HashVariable,
+        authority_set_hash: Bytes32Variable,
         authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
         signed_precommits: &ArrayVariable<PrecommitVariable, NUM_AUTHORITIES>,
     );

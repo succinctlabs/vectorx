@@ -14,7 +14,7 @@ pub trait CommitmentMethods<L: PlonkParameters<D>, const D: usize, C: Curve> {
 
     fn hash_data_root<const N: usize>(
         &mut self,
-        data_roots: &ArrayVariable<HashVariable, N>,
+        data_roots: &ArrayVariable<Bytes32Variable, N>,
         num_enabled: Variable,
     ) -> Bytes32Variable;
 }
@@ -33,7 +33,7 @@ impl<L: PlonkParameters<D>, const D: usize> CommitmentMethods for CircuitBuilder
 
     fn hash_data_root<const N: usize>(
         &mut self,
-        data_roots: &ArrayVariable<HashVariable, N>,
+        data_roots: &ArrayVariable<Bytes32Variable, N>,
         num_enabled: Variable,
     ) -> Bytes32Variable {
         todo!();

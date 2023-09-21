@@ -14,12 +14,12 @@ pub trait HeaderMethods {
     fn hash_encoded_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-    ) -> HashVariable;
+    ) -> Bytes32Variable;
 
     fn hash_encoded_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
-    ) -> ArrayVariable<HashVariable, N>;
+    ) -> ArrayVariable<Bytes32Variable, N>;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -27,7 +27,7 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
     fn hash_encoded_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-    ) -> HashVariable {
+    ) -> Bytes32Variable {
         // TODO: given a header bytes that are encoded, blake2b hash the header
         // TODO: this is a placeholder for now
         todo!();
@@ -36,12 +36,12 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
     fn hash_encoded_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
-    ) -> ArrayVariable<HashVariable, N> {
+    ) -> ArrayVariable<Bytes32Variable, N> {
         headers
             .as_vec()
             .iter()
             .map(|x| self.hash_encoded_header(x))
-            .collect::<Vec<HashVariable>>()
+            .collect::<Vec<Bytes32Variable>>()
             .try_into()
             .unwrap()
     }

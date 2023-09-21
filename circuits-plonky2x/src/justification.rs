@@ -4,39 +4,20 @@ use plonky2x::prelude::{
     Target, Variable, Witness, WitnessWrite,
 };
 
-pub const NUM_AUTHORITIES: usize = 76;
-pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
-
-#[derive(Clone, Debug, CircuitVariable)]
-pub struct PrecommitVariable<C: Curve> {
-    pub precommit_message: EncodedPrecommitVariable,
-    pub signature: EddsaSignatureVariable<C>,
-    pub pub_key: AffinePointTarget<C>,
-}
-
-#[derive(Clone)]
-pub struct AuthoritySetSignersVariable<C: Curve> {
-    pub pub_keys: ArrayVariable<AffinePointTarget<C>, NUM_AUTHORITIES>, // Array of pub keys (in compressed form)
-    pub weights: ArrayVariable<VariableG<u64>, NUM_AUTHORITIES>, // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
-    pub commitment: HashVariable,
-    pub set_id: Variable,
-}
-
-pub struct FinalizedBlockVariable<C: Curve> {
-    pub hash: HashVariable,
-    pub num: Variable,
-}
-
 pub trait GrandpaJustificationVerifier<L: PlonkParameters<D>, const D: usize, C: Curve> {
-    fn verify_authority_set_commitment(
+    fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
         &mut self,
-        authority_set_signers: &AuthoritySetSignersVariable<C>,
+        authority_set_commitment: HashVariable,
+        authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
     );
 
-    fn verify_justification(
+    fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
         &mut self,
-        signed_precommits: Vec<PrecommitVariable<C>>, // TODO what size is this
-        authority_set_signers: &AuthoritySetSignersVariable<C>,
-        finalized_block: &FinalizedBlockVariable,
+        block: HeaderVariable,
+        block_hash: HashVariable,
+        authority_set_id: U32Variable,
+        authority_set_hash: HashVariable,
+        authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
+        signed_precommits: &ArrayVariable<PrecommitVariable, NUM_AUTHORITIES>,
     );
 }

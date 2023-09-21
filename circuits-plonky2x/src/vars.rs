@@ -1,3 +1,7 @@
+use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
+use plonky2x::frontend::ecc::ed25519::gadgets::curve::AffinePointTarget;
+use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
+use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, GoldilocksField,
@@ -50,6 +54,7 @@ impl<L: PlonkParameters<D>, const D: usize> ConversionUtils for CircuitBuilder<L
     }
 }
 
+#[derive(Clone, Debug, CircuitVariable)]
 pub struct EncodedHeaderVariable<const S: usize> {
     pub header_bytes: ArrayVariable<U8Variable, S>,
     pub header_size: Variable,
@@ -69,3 +74,21 @@ pub struct PrecommitVariable {
     pub justification_round: Variable,
     pub authority_set_id: Variable,
 }
+
+pub type Curve = Ed25519;
+pub type EDDSAPublicKeyVariable = AffinePointTarget<Curve>;
+
+#[derive(Clone, Debug, CircuitVariable)]
+pub struct SignedPrecommitVariable {
+    pub encoded_precommit_message: EncodedPrecommitVariable,
+    pub signature: EDDSASignatureTarget<Curve>,
+}
+
+#[derive(Clone)]
+pub struct AuthoritySetSignerVariable {
+    pub pub_keys: EDDSAPublicKeyVariable, // Array of pub keys (in compressed form)
+    pub weights: U64Variable, // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
+}
+
+// pub commitment: HashVariable,
+//     pub set_id: U64Variable,

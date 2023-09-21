@@ -156,10 +156,16 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
 }
 
 pub trait DecodingMethods {
+    fn decoded_headers<const S: usize, const N: usize>(
+        &mut self,
+        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+        header_hashes: &ArrayVariable<HashVariable, N>,
+    ) -> ArrayVariable<HeaderVariable, N>;
+
     fn decode_header<const S: usize>(
         &mut self,
-        header: EncodedHeaderVariable<S>,
-        header_hash: HashVariable,
+        header: &EncodedHeaderVariable<S>,
+        header_hash: &HashVariable,
     ) -> HeaderVariable;
 
     fn decode_precommit(&mut self, precommit: EncodedPrecommitVariable) -> PrecommitVariable;
@@ -167,10 +173,27 @@ pub trait DecodingMethods {
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
+    // Assumes that header and header_hash are properly linked already
+    // header_hash is only used for the RLC challenge
+    fn decoded_headers<const S: usize, const N: usize>(
+        &mut self,
+        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+        header_hashes: &ArrayVariable<HashVariable, N>,
+    ) -> ArrayVariable<HeaderVariable, N> {
+        headers
+            .as_vec()
+            .iter()
+            .zip(header_hashes.as_vec().iter())
+            .map(|(header, header_hash)| self.decode_header(header, header_hash))
+            .collect::<Vec<HeaderVariable>>()
+            .try_into()
+            .unwrap()
+    }
+
     fn decode_header<const S: usize>(
         &mut self,
-        header: EncodedHeaderVariable<S>,
-        header_hash: HashVariable,
+        header: &EncodedHeaderVariable<S>,
+        header_hash: &HashVariable,
     ) -> HeaderVariable {
         // The first 32 bytes are the parent hash
         let parent_hash = header.header_bytes[0..HASH_SIZE].to_vec();

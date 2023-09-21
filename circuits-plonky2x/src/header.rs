@@ -1,37 +1,51 @@
+use std::marker::PhantomData;
+
+use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, GoldilocksField,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, GoldilocksField,
     PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
 use crate::decoder::DecodingMethods;
 use crate::vars::*;
 
-#[derive(Clone, Debug, CircuitVariable)]
-pub struct VerifyHeaderPIs {
-    pub block_hash: HashVariable,
-    pub block_num: Variable,
-    pub parent_hash: HashVariable,
-    pub state_root: HashVariable,
-    pub data_root: HashVariable,
+pub trait HeaderMethods {
+    fn hash_encoded_header<const S: usize>(
+        &mut self,
+        header: &EncodedHeaderVariable<S>,
+    ) -> HashVariable;
+
+    fn hash_encoded_headers<const S: usize, const N: usize>(
+        &mut self,
+        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+    ) -> ArrayVariable<HashVariable, N>;
 }
 
-// struct HeaderCircuit<const HEADER_SIZE: usize, const NUM_HEADERS> {}
+// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
+impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, D> {
+    fn hash_encoded_header<const S: usize>(
+        &mut self,
+        header: &EncodedHeaderVariable<S>,
+    ) -> HashVariable {
+        // TODO: given a header bytes that are encoded, blake2b hash the header
+        // TODO: this is a placeholder for now
+        todo!();
+    }
 
-// impl<const HEADER_SIZE: usize> Circuit for HeaderCircuit<HEADER_SIZE> {
-//     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>) {
-//         let header_bytes = builder.read::<ArrayVariable<U8Variable, HEADER_SIZE>>();
-//         let header_length = builder.read::<Variable>();
-//         let encoded_header = EncodedHeaderVariable {
-//             header_bytes,
-//             header_size: header_length,
-//         };
-//         // TODO: get the blake2b header hash instead of builder.init::<> below
-//         let header_hash_bytes32 = builder.init::<Bytes32Variable>();
-//         let header_hash = builder.to_hash_variable(header_hash_bytes32);
-//         let decoded_header = builder.decode_header::<HEADER_SIZE>(encoded_header, header_hash);
-//     }
-// }
+    fn hash_encoded_headers<const S: usize, const N: usize>(
+        &mut self,
+        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+    ) -> ArrayVariable<HashVariable, N> {
+        headers
+            .as_vec()
+            .iter()
+            .map(|x| self.hash_encoded_header(x))
+            .collect::<Vec<HashVariable>>()
+            .try_into()
+            .unwrap()
+    }
+}
 
 #[cfg(test)]
 mod tests {

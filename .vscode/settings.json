@@ -1,5 +1,10 @@
 {
     "editor.inlineSuggest.enabled": true,
+    "editor.rulers": [100],
+    "rust-analyzer.linkedProjects": [
+        "./circuits-plonky2x/Cargo.toml",
+        "./circuits/Cargo.toml"
+    ],
     "[rust]": {
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
         "editor.formatOnSave": true,
@@ -16,11 +21,6 @@
         "warnings",
         "-A",
         "incomplete-features"
-    ],
-    "editor.rulers": [100],
-    "rust-analyzer.linkedProjects": [
-        "./circuits-plonky2x/Cargo.toml",
-        "./circuits/Cargo.toml"
     ],
     "rust-analyzer.runnables.extraEnv": {
         "RUST_LOG": "debug",

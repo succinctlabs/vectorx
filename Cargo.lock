@@ -342,6 +342,7 @@ dependencies = [
  "lazy_static",
  "log",
  "num",
+ "parity-scale-codec",
  "plonky2",
  "plonky2x",
  "rand 0.4.6",

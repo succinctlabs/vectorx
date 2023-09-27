@@ -21,13 +21,13 @@ pub trait DataFetcher {
     ) -> Vec<Header>;
 }
 
-pub async fn new_fetcher(chain_id: String) -> Box<dyn DataFetcher> {
+pub async fn new_fetcher() -> Box<dyn DataFetcher> {
     let fixture_path = format!("../fixtures");
     if cfg!(test) {
         return Box::new(FixtureDataFetcher { fixture_path });
     } else {
-        let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
-        url = "wss://kate.avail.tools:443/ws".to_string();
+        // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
+        let url = "wss://kate.avail.tools:443/ws".to_string();
         let client = build_client(url.as_str(), false).await.unwrap();
         return Box::new(RpcDataFetcher { client, save: None });
     }

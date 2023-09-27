@@ -63,6 +63,7 @@ pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
 }
 
 #[derive(Clone, Debug, CircuitVariable)]
+#[value_name(EncodedHeader)]
 pub struct EncodedHeaderVariable<const S: usize> {
     pub header_bytes: BytesVariable<S>,
     pub header_size: Variable,

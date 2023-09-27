@@ -30,6 +30,7 @@ avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "b68af96
 subxt = "0.27"
 async-trait = "0.1.73"
 reqwest = "0.11.20"
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
 
 [dev-dependencies]
 anyhow = "1.0.68"

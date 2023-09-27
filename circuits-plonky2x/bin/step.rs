@@ -5,7 +5,14 @@
 //!
 //!
 //!
-use avail_plonky2x::vars::{CircuitConstants, DefaultConstants, EncodedHeaderVariable};
+//!
+
+use avail_plonky2x::fetch::{new_fetcher, DataFetcher};
+use avail_plonky2x::vars::{
+    CircuitConstants, DefaultConstants, EncodedHeader, EncodedHeaderVariable,
+};
+use avail_subxt::primitives::Header;
+use codec::Encode;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::backend::function::VerifiableFunction;
 use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
@@ -13,7 +20,7 @@ use plonky2x::frontend::hint::simple::hint::Hint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
-    ArrayVariable, BoolVariable, Bytes32Variable, CircuitBuilder, PlonkParameters,
+    ArrayVariable, BoolVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters,
 };
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime; // TODO: re-export this instead of this path
@@ -31,17 +38,46 @@ impl<
     fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
         let trusted_block = input_stream.read_value::<U32Variable>();
         let target_block = input_stream.read_value::<U32Variable>();
-        // let mut data_fetcher = InputDataFetcher::new();
-        // let rt = Runtime::new().expect("failed to create tokio runtime");
-        // let result = rt.block_on(async {
-        //     data_fetcher
-        //         .get_headers::<NUM_HEADERS, L::Field>(trusted_block.as_u64(), target_block.as_u64())
-        //         .await
-        // });
-        // output_stream
-        //     .write_value::<ArrayVariable<EncodedHeaderVariable<C::MAX_HEADER_LENGTH>, C::NUM_HEADERS>>(
-        //         result.0,
-        //     );
+        let rt = Runtime::new().expect("failed to create tokio runtime");
+        let headers: Vec<Header> = rt.block_on(async {
+            let data_fetcher = new_fetcher().await;
+            data_fetcher
+                .get_block_headers_range(trusted_block, target_block)
+                .await
+        });
+
+        // Take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable
+        let mut header_variables = Vec::new();
+        for i in 0..headers.len() {
+            let header = &headers[i];
+            let mut header_bytes = header.encode();
+            let header_size = header_bytes.len();
+            if header_size > HEADER_LENGTH {
+                panic!(
+                    "header size {} is greater than HEADER_LENGTH {}",
+                    header_size, HEADER_LENGTH
+                );
+            }
+            header_bytes.resize(HEADER_LENGTH, 0);
+            let header_variable = EncodedHeader {
+                header_bytes: header_bytes.try_into().unwrap(),
+                header_size: L::Field::from_canonical_usize(header_size),
+            };
+            header_variables.push(header_variable);
+        }
+
+        // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
+        for i in headers.len()..NUM_HEADERS {
+            let header_variable = EncodedHeader {
+                header_bytes: [0u8; HEADER_LENGTH],
+                header_size: L::Field::from_canonical_usize(0),
+            };
+            header_variables.push(header_variable);
+        }
+        output_stream
+            .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
+                header_variables,
+            );
     }
 }
 

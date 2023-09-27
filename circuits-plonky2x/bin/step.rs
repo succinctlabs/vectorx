@@ -9,7 +9,7 @@
 
 use avail_plonky2x::fetch::{new_fetcher, DataFetcher};
 use avail_plonky2x::vars::{
-    CircuitConstants, DefaultConstants, EncodedHeader, EncodedHeaderVariable,
+    EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE,
 };
 use avail_subxt::primitives::Header;
 use codec::Encode;
@@ -38,6 +38,7 @@ impl<
     fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
         let trusted_block = input_stream.read_value::<U32Variable>();
         let target_block = input_stream.read_value::<U32Variable>();
+
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let headers: Vec<Header> = rt.block_on(async {
             let data_fetcher = new_fetcher().await;
@@ -46,7 +47,7 @@ impl<
                 .await
         });
 
-        // Take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable
+        // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
         let mut header_variables = Vec::new();
         for i in 0..headers.len() {
             let header = &headers[i];
@@ -74,6 +75,7 @@ impl<
             };
             header_variables.push(header_variable);
         }
+        println!("header_variables {:?}", header_variables);
         output_stream
             .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
                 header_variables,
@@ -99,13 +101,17 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
 
         let mut input_stream = VariableStream::new();
         input_stream.write(&trusted_block);
-        input_stream.write(&trusted_block);
+        input_stream.write(&target_block);
         let output_stream = builder.hint(
             input_stream,
             StepOffchainInputs::<HEADER_LENGTH, NUM_HEADERS> {},
         );
         let all_header_bytes = output_stream
             .read::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(builder);
+
+        let last_header_index = builder.sub(target_block, trusted_block);
+        // let target_header = builder.select_array(all_header_bytes, last_header_index.0);
+
         // let target_header = output_stream.read::<Bytes32Variable>(builder);
         // let round_present = output_stream.read::<BoolVariable>(builder);
         // let target_header_block_height_proof = output_stream.read::<HeightProofVariable>(builder);
@@ -144,7 +150,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
 
 fn main() {
     const MAX_VALIDATOR_SET_SIZE: usize = 4;
-    const MAX_HEADER_LENGTH: usize = 1024;
+    const MAX_HEADER_LENGTH: usize = MAX_LARGE_HEADER_SIZE;
     const NUM_HEADERS: usize = 4;
     VerifiableFunction::<StepCircuit<MAX_VALIDATOR_SET_SIZE,MAX_HEADER_LENGTH,NUM_HEADERS>>::entrypoint();
 }
@@ -167,7 +173,7 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         const MAX_VALIDATOR_SET_SIZE: usize = 4;
-        const MAX_HEADER_LENGTH: usize = 1024;
+        const MAX_HEADER_LENGTH: usize = MAX_LARGE_HEADER_SIZE;
         const NUM_HEADERS: usize = 4;
 
         let mut builder = DefaultBuilder::new();
@@ -225,7 +231,6 @@ mod tests {
     fn test_circuit_function_step_fixture() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
-        env::set_var("RPC_MOCHA_4", "fixture"); // Use fixture during testing
 
         const MAX_VALIDATOR_SET_SIZE: usize = 4;
         const MAX_HEADER_LENGTH: usize = 1024;
@@ -239,16 +244,23 @@ mod tests {
         let circuit = builder.build();
         log::debug!("Done building circuit");
 
+        // These inputs are taken from: https://kate.avail.tools/#/explorer/query/485710
         let mut input = circuit.input();
-        let trusted_header: [u8; 32] = [
-            101, 148, 196, 246, 245, 248, 99, 125, 20, 181, 200, 0, 157, 159, 211, 222, 105, 149,
-            108, 221, 97, 143, 205, 106, 162, 68, 113, 97, 5, 29, 183, 162,
-        ];
-        let trusted_block = 11000u64;
-        let target_block = 11105u64; // mimics test_step_small
+        let trusted_header: [u8; 32] =
+            hex::decode("5d237ce770cc8d4a0b0fa9f4a5f878076051b3adc359acf6cc68349372599df7")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let trusted_block = 485710u32;
+        let target_block = 485712u32; // mimics test_step_small
+        let authority_set_id = 0u32; // Placeholder for now
+        let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
+
+        input.evm_write::<U32Variable>(trusted_block.into());
         input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
-        input.evm_write::<U64Variable>(trusted_block.into());
-        input.evm_write::<U64Variable>(target_block.into());
+        input.evm_write::<U32Variable>(authority_set_id.into());
+        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.evm_write::<U32Variable>(target_block.into());
 
         log::debug!("Generating proof");
         let (proof, mut output) = circuit.prove(&input);

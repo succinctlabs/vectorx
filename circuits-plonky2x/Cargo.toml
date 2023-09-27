@@ -31,6 +31,13 @@ subxt = "0.27"
 async-trait = "0.1.73"
 reqwest = "0.11.20"
 codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
+ethers = "2.0.10"
+pallet-grandpa = "23.0.0"
+sp-application-crypto = "25.0.0"
+sp-core = "23.0.0"
+sha256 = "1.4.0"
+succinct_avail_utils = { path = "../utils" }
+
 
 [dev-dependencies]
 anyhow = "1.0.68"

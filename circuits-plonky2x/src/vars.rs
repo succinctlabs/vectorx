@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
-use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
+pub use plonky2x::frontend::ecc::ed25519::curve::curve_types::AffinePoint;
+pub use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
 use plonky2x::frontend::ecc::ed25519::gadgets::curve::AffinePointTarget;
 use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -97,21 +98,4 @@ pub struct SignedPrecommitVariable {
 pub struct AuthoritySetSignerVariable {
     pub pub_keys: EDDSAPublicKeyVariable, // Array of pub keys (in compressed form)
     pub weights: U64Variable, // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
-}
-
-/// Parameters for the circuit.
-pub trait CircuitConstants: Clone + PartialEq + 'static + Debug + Send + Sync {
-    const VALIDATOR_SET_SIZE: usize;
-    const HEADER_LENGTH: usize;
-    const NUM_HEADERS: usize;
-}
-
-/// Default parameters for the circuit.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct DefaultConstants;
-
-impl CircuitConstants for DefaultConstants {
-    const VALIDATOR_SET_SIZE: usize = NUM_AUTHORITIES;
-    const HEADER_LENGTH: usize = MAX_LARGE_HEADER_SIZE;
-    const NUM_HEADERS: usize = 1;
 }

@@ -39,5 +39,6 @@ fn update_data_committment(trusted_block_number: u32, trusted_hash: Hash, author
 
     verify_sequential_header_chain(decoded_headers, block_hashes, last_header_index);
     data_root_hash = hash_data_root(decoded_headers.iter().map((x) => x.data_root), last_header_index);
-    return block_hashes[-1], data_root_hash
+    state_root_hash = hash_state_root(decoded_headers.iter().map((x) => x.state_root), last_header_index);
+    return block_hashes[last_header_index], data_root_hash, state_root_hash
 }

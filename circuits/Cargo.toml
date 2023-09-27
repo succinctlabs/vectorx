@@ -25,6 +25,3 @@ tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
 
 [dev-dependencies]
 anyhow = "1.0.68"
-
-[patch."https://github.com/mir-protocol/plonky2.git"]
-plonky2 = { git = "https://github.com/succinctlabs/plonky2.git",  branch = "uma/selector-pub" }

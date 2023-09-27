@@ -8,8 +8,8 @@ use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Field, PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
+    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, Field,
+    PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
 use crate::vars::*;
@@ -212,8 +212,8 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             self.select_array_random_gate(&all_possible_state_roots, Variable(compress_mode));
 
         // Need the convert the encoded header header bytes into an array of variables.
-        // The byte variable array representation is in bits, and that makes array too "sparse"
-        // for get_fixed_subarray
+        // The byte variable array representation is in bits, and that significantly increases the
+        // number of contraints needed for get_fixed_subarray.
 
         let header_variables = header
             .header_bytes
@@ -297,13 +297,10 @@ pub mod tests {
     use super::DecodingMethods;
     use crate::testing_utils;
     use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
-    use crate::vars::{
-        EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_SIZE,
-        MAX_LARGE_HEADER_SIZE_BITS,
-    };
+    use crate::vars::{EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_SIZE};
 
     fn pad_header(mut bytes: Vec<u8>, pad_to: usize) -> Vec<u8> {
-        let mut pad_length = pad_to - bytes.len();
+        let pad_length = pad_to - bytes.len();
         bytes.extend(vec![0; pad_length]);
         bytes
     }
@@ -335,7 +332,7 @@ pub mod tests {
             let decoded_header = builder
                 .decode_header::<MAX_LARGE_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
 
-            //builder.assert_is_equal(decoded_header.block_number, expected_header_nums[i]);
+            builder.assert_is_equal(decoded_header.block_number, expected_header_nums[i]);
             builder.assert_is_equal(decoded_header.parent_hash, expected_parent_hashes[i]);
             builder.assert_is_equal(decoded_header.state_root, expected_state_roots[i]);
             builder.assert_is_equal(decoded_header.data_root, expected_data_roots[i]);
@@ -347,9 +344,14 @@ pub mod tests {
         let encoded_headers_values: Vec<EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F>> =
             ENCODED_HEADERS[0..NUM_BLOCKS_TEST]
                 .iter()
-                .map(|x| EncodedHeaderVariableValue {
-                    header_bytes: pad_header(bytes!(x), MAX_LARGE_HEADER_SIZE),
-                    header_size: F::from_canonical_u64(x.len() as u64),
+                .map(|x| {
+                    let header: Vec<u8> = bytes!(x);
+                    let header_len = header.len();
+                    let padded_header = pad_header(header, MAX_LARGE_HEADER_SIZE);
+                    EncodedHeaderVariableValue {
+                        header_bytes: padded_header,
+                        header_size: F::from_canonical_u64(header_len as u64),
+                    }
                 })
                 .collect::<_>();
 
@@ -366,7 +368,7 @@ pub mod tests {
         );
 
         input.write::<ArrayVariable<U32Variable, NUM_BLOCKS_TEST>>(
-            (HEAD_BLOCK_NUM + 1..HEAD_BLOCK_NUM + 1 + NUM_BLOCKS_TEST as u32)
+            (HEAD_BLOCK_NUM..HEAD_BLOCK_NUM + NUM_BLOCKS_TEST as u32)
                 .map(|x| x as u32)
                 .collect::<Vec<_>>(),
         );

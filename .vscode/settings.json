@@ -4,6 +4,19 @@
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
         "editor.formatOnSave": true,
     },
+    "rust-analyzer.check.overrideCommand": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--message-format=json",
+        "--all-features",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings",
+        "-A",
+        "incomplete-features"
+    ],
     "editor.rulers": [100],
     "rust-analyzer.linkedProjects": [
         "./circuits-plonky2x/Cargo.toml",

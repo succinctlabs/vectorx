@@ -72,10 +72,7 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
 trait CircuitBuilderScaleDecoder {
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
 
-    fn decode_compact_int<L: PlonkParameters<G>, const G: usize>(
-        &mut self,
-        compact_bytes: &[ByteVariable],
-    ) -> (Target, Target, Target);
+    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target);
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -100,10 +97,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         quotient
     }
 
-    fn decode_compact_int<L: PlonkParameters<G>, const G: usize>(
-        &mut self,
-        compact_bytes: &[ByteVariable],
-    ) -> (Target, Target, Target) {
+    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target) {
         // For now, assume that compact_bytes is 5 bytes long
         assert!(compact_bytes.len() == 5);
 
@@ -217,7 +211,6 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         let header_variables = header
             .header_bytes
-            .as_vec()
             .iter()
             .map(|x: &ByteVariable| x.to_variable(self))
             .collect::<Vec<_>>();
@@ -229,9 +222,8 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let data_root_variables: Vec<Variable> = self
             .get_fixed_subarray::<S, HASH_SIZE>(
                 &ArrayVariable::<Variable, S>::from(header_variables),
-                header.header_size,
                 data_root_start,
-                &ArrayVariable::<ByteVariable, 15>::from(header_hash.as_bytes()[0..15].to_vec()),
+                &header_hash.as_bytes()[0..15], // Seed the challenger with the first 15 bytes (120 bits) of the header hash
             )
             .as_vec();
 

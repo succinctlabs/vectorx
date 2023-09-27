@@ -5,8 +5,8 @@ use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Extendable, PlonkParameters, RichField, Variable, Witness, WitnessWrite,
+    ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable, Extendable,
+    PlonkParameters, RichField, Variable, Witness, WitnessWrite,
 };
 
 pub const NUM_AUTHORITIES: usize = 76;
@@ -67,7 +67,7 @@ pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct EncodedHeaderVariable<const S: usize> {
-    pub header_bytes: ArrayVariable<ByteVariable, S>,
+    pub header_bytes: BytesVariable<S>,
     pub header_size: Variable,
 }
 #[derive(Clone, Debug, CircuitVariable)]

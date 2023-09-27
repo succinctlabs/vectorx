@@ -107,6 +107,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         let compress_mode = self.le_sum(first_byte_bool_targets[0..2].iter());
 
         // Get all of the possible bytes that could be used to represent the compact int
+
         let zero_mode_value = to_variable_unsafe(self, &compact_bytes[0..1]).0;
         let one_mode_value = to_variable_unsafe(self, &compact_bytes[0..2]).0;
         let two_mode_value = to_variable_unsafe(self, &compact_bytes[0..4]).0;
@@ -284,7 +285,9 @@ pub mod tests {
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
     use plonky2x::utils::{bytes, bytes32};
-    use testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, PARENT_HASHES};
+    use testing_utils::tests::{
+        BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
+    };
 
     use super::DecodingMethods;
     use crate::testing_utils;
@@ -307,20 +310,16 @@ pub mod tests {
 
         let mut builder = DefaultBuilder::new();
 
-        const NUM_BLOCKS_TEST: usize = 21;
+        let encoded_headers = builder
+            .read::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS>>();
 
-        let encoded_headers: ArrayVariable<EncodedHeaderVariable<6656>, NUM_BLOCKS_TEST> = builder
-            .read::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS_TEST>>();
+        let header_hashes = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
+        let expected_header_nums = builder.read::<ArrayVariable<U32Variable, NUM_BLOCKS>>();
+        let expected_parent_hashes = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
+        let expected_state_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
+        let expected_data_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
 
-        let header_hashes = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
-        let expected_header_nums = builder.read::<ArrayVariable<U32Variable, NUM_BLOCKS_TEST>>();
-        let expected_parent_hashes =
-            builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
-        let expected_state_roots =
-            builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
-        let expected_data_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
-
-        for i in 0..NUM_BLOCKS_TEST {
+        for i in 0..NUM_BLOCKS {
             let decoded_header = builder
                 .decode_header::<MAX_LARGE_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
 
@@ -334,7 +333,7 @@ pub mod tests {
 
         let mut input = circuit.input();
         let encoded_headers_values: Vec<EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F>> =
-            ENCODED_HEADERS[0..NUM_BLOCKS_TEST]
+            ENCODED_HEADERS[0..NUM_BLOCKS]
                 .iter()
                 .map(|x| {
                     let header: Vec<u8> = bytes!(x);
@@ -347,40 +346,39 @@ pub mod tests {
                 })
                 .collect::<_>();
 
-        input
-            .write::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS_TEST>>(
-                encoded_headers_values,
-            );
+        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS>>(
+            encoded_headers_values,
+        );
 
-        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
-            BLOCK_HASHES[0..NUM_BLOCKS_TEST]
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
+            BLOCK_HASHES[0..NUM_BLOCKS]
                 .iter()
                 .map(|x| bytes32!(x))
                 .collect::<Vec<_>>(),
         );
 
-        input.write::<ArrayVariable<U32Variable, NUM_BLOCKS_TEST>>(
-            (HEAD_BLOCK_NUM..HEAD_BLOCK_NUM + NUM_BLOCKS_TEST as u32)
+        input.write::<ArrayVariable<U32Variable, NUM_BLOCKS>>(
+            (HEAD_BLOCK_NUM..HEAD_BLOCK_NUM + NUM_BLOCKS as u32)
                 .map(|x| x as u32)
                 .collect::<Vec<_>>(),
         );
 
-        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
-            PARENT_HASHES[0..NUM_BLOCKS_TEST]
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
+            PARENT_HASHES[0..NUM_BLOCKS]
                 .iter()
                 .map(|x| bytes32!(x))
                 .collect::<Vec<_>>(),
         );
 
-        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
-            STATE_ROOTS[0..NUM_BLOCKS_TEST]
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
+            STATE_ROOTS[0..NUM_BLOCKS]
                 .iter()
                 .map(|x| bytes32!(x))
                 .collect::<Vec<_>>(),
         );
 
-        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
-            DATA_ROOTS[0..NUM_BLOCKS_TEST]
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
+            DATA_ROOTS[0..NUM_BLOCKS]
                 .iter()
                 .map(|x| bytes32!(x))
                 .collect::<Vec<_>>(),

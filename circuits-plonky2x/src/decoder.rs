@@ -5,12 +5,11 @@ use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::witness::PartitionWitness;
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
-use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Field, GoldilocksField, PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
+    Field, PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
 use crate::vars::*;
@@ -73,7 +72,10 @@ impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
 trait CircuitBuilderScaleDecoder {
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
 
-    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target);
+    fn decode_compact_int<L: PlonkParameters<G>, const G: usize>(
+        &mut self,
+        compact_bytes: &[ByteVariable],
+    ) -> (Target, Target, Target);
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -98,7 +100,10 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         quotient
     }
 
-    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target) {
+    fn decode_compact_int<L: PlonkParameters<G>, const G: usize>(
+        &mut self,
+        compact_bytes: &[ByteVariable],
+    ) -> (Target, Target, Target) {
         // For now, assume that compact_bytes is 5 bytes long
         assert!(compact_bytes.len() == 5);
 
@@ -108,7 +113,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         let compress_mode = self.le_sum(first_byte_bool_targets[0..2].iter());
 
         // Get all of the possible bytes that could be used to represent the compact int
-
         let zero_mode_value = to_variable_unsafe(self, &compact_bytes[0..1]).0;
         let one_mode_value = to_variable_unsafe(self, &compact_bytes[0..2]).0;
         let two_mode_value = to_variable_unsafe(self, &compact_bytes[0..4]).0;
@@ -143,7 +147,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
 }
 
 pub trait DecodingMethods {
-    fn decoded_headers<const S: usize, const N: usize>(
+    fn decode_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
         header_hashes: &ArrayVariable<Bytes32Variable, N>,
@@ -165,7 +169,7 @@ pub trait DecodingMethods {
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
     // Assumes that header and header_hash are properly linked already
     // header_hash is only used for the RLC challenge
-    fn decoded_headers<const S: usize, const N: usize>(
+    fn decode_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
         header_hashes: &ArrayVariable<Bytes32Variable, N>,
@@ -174,12 +178,13 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .as_vec()
             .iter()
             .zip(header_hashes.as_vec().iter())
-            .map(|(header, header_hash)| self.decode_header(header, header_hash))
+            .map(|(header, header_hash)| self.decode_header::<S>(header, header_hash))
             .collect::<Vec<HeaderVariable>>()
             .try_into()
             .unwrap()
     }
 
+    // Note that S is the max header size in bits
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
@@ -191,9 +196,9 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         // Next field is the block number
         // Can need up to 5 bytes to represent a compact u32
         const MAX_BLOCK_NUMBER_SIZE: usize = 5;
-        let (block_number_target, compress_mode, _) = self
-            .api
-            .decode_compact_int(&header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_SIZE]);
+        let (block_number_target, compress_mode, _) = self.api.decode_compact_int::<L, D>(
+            &header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_SIZE],
+        );
 
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
@@ -206,25 +211,36 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let state_root =
             self.select_array_random_gate(&all_possible_state_roots, Variable(compress_mode));
 
-        // Parse the data root field.
-        // For this, we will use a generator to extract the data root field from the header bytes.
-        // To verify that it is correct, we will use a method similar to reduce a row to a value
-        // (https://wiki.polygon.technology/docs/miden/design/multiset#computing-a-virtual-tables-trace-column).
-        // To retrieve the randomness, we use plonky2's recursive challenger seeding it with 3 elements of 56 bits from the header hash.
-        // We do the verification twice to increase the security of it.
+        // Need the convert the encoded header header bytes into an array of variables.
+        // The byte variable array representation is in bits, and that makes array too "sparse"
+        // for get_fixed_subarray
+
+        let header_variables = header
+            .header_bytes
+            .as_vec()
+            .iter()
+            .map(|x: &ByteVariable| x.to_variable(self))
+            .collect::<Vec<_>>();
+
         let data_root_offset =
             self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END)); // Since we're working with bits
         let data_root_start = self.sub(header.header_size, data_root_offset);
-        let eight = self.constant(L::Field::from_canonical_u8(8));
-        let data_root_start_bits = self.mul(data_root_start, eight);
-        // TODO: use header_hash to seed the challenger in get_fixed_subarray
+
         let data_root_variables: Vec<Variable> = self
-            .get_fixed_subarray::<HASH_SIZE_BITS>(
-                &header.header_bytes.variables(),
-                data_root_start_bits,
+            .get_fixed_subarray::<S, HASH_SIZE>(
+                &ArrayVariable::<Variable, S>::from(header_variables),
+                header.header_size,
+                data_root_start,
+                &ArrayVariable::<ByteVariable, 15>::from(header_hash.as_bytes()[0..15].to_vec()),
             )
             .as_vec();
-        let data_root = Bytes32Variable::from_variables_unsafe(&data_root_variables);
+
+        let data_root_byte_vars = data_root_variables
+            .iter()
+            .map(|x| ByteVariable::from_target(self, x.0))
+            .collect::<Vec<_>>();
+
+        let data_root = Bytes32Variable::from(data_root_byte_vars.as_slice());
 
         HeaderVariable {
             block_number: U32Variable(Variable(block_number_target)), // TODO: do we need to do a range-check here?
@@ -264,5 +280,120 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             justification_round,
             authority_set_id,
         }
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use std::env;
+
+    use plonky2x::frontend::vars::U32Variable;
+    use plonky2x::prelude::{
+        ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
+    };
+    use plonky2x::utils::{bytes, bytes32};
+    use testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, PARENT_HASHES};
+
+    use super::DecodingMethods;
+    use crate::testing_utils;
+    use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
+    use crate::vars::{
+        EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_SIZE,
+        MAX_LARGE_HEADER_SIZE_BITS,
+    };
+
+    fn pad_header(mut bytes: Vec<u8>, pad_to: usize) -> Vec<u8> {
+        let mut pad_length = pad_to - bytes.len();
+        bytes.extend(vec![0; pad_length]);
+        bytes
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_decode_headers() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        type F = GoldilocksField;
+
+        let mut builder = DefaultBuilder::new();
+
+        const NUM_BLOCKS_TEST: usize = 21;
+
+        let encoded_headers: ArrayVariable<EncodedHeaderVariable<6656>, NUM_BLOCKS_TEST> = builder
+            .read::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS_TEST>>();
+
+        let header_hashes = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
+        let expected_header_nums = builder.read::<ArrayVariable<U32Variable, NUM_BLOCKS_TEST>>();
+        let expected_parent_hashes =
+            builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
+        let expected_state_roots =
+            builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
+        let expected_data_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>();
+
+        for i in 0..NUM_BLOCKS_TEST {
+            let decoded_header = builder
+                .decode_header::<MAX_LARGE_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
+
+            //builder.assert_is_equal(decoded_header.block_number, expected_header_nums[i]);
+            builder.assert_is_equal(decoded_header.parent_hash, expected_parent_hashes[i]);
+            builder.assert_is_equal(decoded_header.state_root, expected_state_roots[i]);
+            builder.assert_is_equal(decoded_header.data_root, expected_data_roots[i]);
+        }
+
+        let circuit = builder.build();
+
+        let mut input = circuit.input();
+        let encoded_headers_values: Vec<EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F>> =
+            ENCODED_HEADERS[0..NUM_BLOCKS_TEST]
+                .iter()
+                .map(|x| EncodedHeaderVariableValue {
+                    header_bytes: pad_header(bytes!(x), MAX_LARGE_HEADER_SIZE),
+                    header_size: F::from_canonical_u64(x.len() as u64),
+                })
+                .collect::<_>();
+
+        input
+            .write::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS_TEST>>(
+                encoded_headers_values,
+            );
+
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
+            BLOCK_HASHES[0..NUM_BLOCKS_TEST]
+                .iter()
+                .map(|x| bytes32!(x))
+                .collect::<Vec<_>>(),
+        );
+
+        input.write::<ArrayVariable<U32Variable, NUM_BLOCKS_TEST>>(
+            (HEAD_BLOCK_NUM + 1..HEAD_BLOCK_NUM + 1 + NUM_BLOCKS_TEST as u32)
+                .map(|x| x as u32)
+                .collect::<Vec<_>>(),
+        );
+
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
+            PARENT_HASHES[0..NUM_BLOCKS_TEST]
+                .iter()
+                .map(|x| bytes32!(x))
+                .collect::<Vec<_>>(),
+        );
+
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
+            STATE_ROOTS[0..NUM_BLOCKS_TEST]
+                .iter()
+                .map(|x| bytes32!(x))
+                .collect::<Vec<_>>(),
+        );
+
+        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS_TEST>>(
+            DATA_ROOTS[0..NUM_BLOCKS_TEST]
+                .iter()
+                .map(|x| bytes32!(x))
+                .collect::<Vec<_>>(),
+        );
+
+        let (proof, output) = circuit.prove(&input);
+
+        circuit.verify(&proof, &input, &output);
     }
 }

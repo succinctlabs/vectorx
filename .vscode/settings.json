@@ -1,20 +1,13 @@
 {
+    "editor.inlineSuggest.enabled": true,
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer",
+        "editor.formatOnSave": true,
+    },
+    "editor.rulers": [100],
     "rust-analyzer.linkedProjects": [
         "./circuits-plonky2x/Cargo.toml",
         "./circuits/Cargo.toml"
-    ],
-    "rust-analyzer.check.overrideCommand": [
-        "cargo",
-        "clippy",
-        "--workspace",
-        "--message-format=json",
-        "--all-features",
-        "--all-targets",
-        "--",
-        "-D",
-        "warnings",
-        "-A",
-        "incomplete-features"
     ],
     "rust-analyzer.runnables.extraEnv": {
         "RUST_LOG": "debug",

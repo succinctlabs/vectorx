@@ -38,16 +38,23 @@ pub fn to_field_arr<F: RichField, const N: usize>(bytes: Vec<u8>) -> [F; N] {
 }
 
 // TODO: put these methods in the actual builder and also replace with more efficient methods
+
+// The bytes are in byte LE order, but bit BE order
 pub fn to_variable_unsafe<F: RichField + Extendable<D>, const D: usize>(
     api: &mut BaseCircuitBuilder<F, D>,
     bytes: &[ByteVariable],
 ) -> Variable {
-    let mut bits_be = bytes
-        .iter()
-        .flat_map(|b| b.as_bool_targets())
-        .collect::<Vec<_>>();
-    bits_be.reverse();
-    Variable(api.le_sum(bits_be.iter()))
+    // Need to create a bit vector in LE order
+    let mut bits_le = Vec::new();
+
+    for byte in bytes.iter() {
+        let be_bits = byte.as_bool_targets();
+        let mut be_bits = be_bits.to_vec();
+        be_bits.reverse();
+        bits_le.extend(be_bits);
+    }
+
+    Variable(api.le_sum(bits_le.iter()))
 }
 
 pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
@@ -61,7 +68,7 @@ pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct EncodedHeaderVariable<const S: usize> {
-    pub header_bytes: BytesVariable<S>,
+    pub header_bytes: ArrayVariable<ByteVariable, S>,
     pub header_size: Variable,
 }
 #[derive(Clone, Debug, CircuitVariable)]

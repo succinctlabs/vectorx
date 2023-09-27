@@ -329,6 +329,8 @@ name = "avail_plonky2x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "avail-subxt",
  "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git)",
  "ed25519-dalek",
  "env_logger 0.9.3",
@@ -343,8 +345,10 @@ dependencies = [
  "plonky2",
  "plonky2x",
  "rand 0.4.6",
+ "reqwest",
  "serde",
  "serde_json",
+ "subxt",
  "tokio",
  "tokio-tungstenite 0.17.2",
 ]

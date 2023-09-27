@@ -3,8 +3,9 @@ use std::fmt::Debug;
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
 pub use plonky2x::frontend::ecc::ed25519::curve::curve_types::AffinePoint;
 pub use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
+pub use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2x::frontend::ecc::ed25519::gadgets::curve::AffinePointTarget;
-use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
+pub use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{

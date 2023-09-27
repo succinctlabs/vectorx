@@ -22,27 +22,12 @@ use crate::vars::{AffinePoint, Curve};
 
 // use subxt::config::Header as XtHeader;
 
-#[async_trait]
-pub trait DataFetcher {
-    async fn get_block_headers_range(
-        &self,
-        start_block_number: u32,
-        end_block_number: u32,
-    ) -> Vec<Header>;
-}
-
-pub async fn new_fetcher() -> Box<dyn DataFetcher> {
-    let fixture_path = format!("../fixtures");
-    if cfg!(test) {
-        return Box::new(FixtureDataFetcher { fixture_path });
-    } else {
-        // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
-        let url = "wss://kate.avail.tools:443/ws".to_string();
-        let client = build_client(url.as_str(), false).await.unwrap();
-        return Box::new(RpcDataFetcher { client, save: None });
-    }
-    // TODO: if in a test, return the FixtureDataFetcher with a const fixture path "test/fixtures/{chain_id{"
-    // else, read the RpcDataFetch with the env var "RPC_{chain_id}" url from the .env file and panic if the RPC url is not present
+pub struct SimpleJustificationData {
+    pub authority_set_id: u32,
+    pub signed_message: Vec<u8>,
+    pub validator_signed: Vec<bool>,
+    pub pubkeys: Vec<AffinePoint<Curve>>,
+    pub signatures: Vec<[u8; 64]>,
 }
 
 pub struct RpcDataFetcher {
@@ -51,7 +36,14 @@ pub struct RpcDataFetcher {
 }
 
 impl RpcDataFetcher {
-    async fn get_block_hash(&self, block_number: u32) -> H256 {
+    pub async fn new() -> Self {
+        // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
+        let url = "wss://kate.avail.tools:443/ws".to_string();
+        let client = build_client(url.as_str(), false).await.unwrap();
+        RpcDataFetcher { client, save: None }
+    }
+
+    pub async fn get_block_hash(&self, block_number: u32) -> H256 {
         let block_hash = self
             .client
             .rpc()
@@ -60,7 +52,29 @@ impl RpcDataFetcher {
         block_hash.unwrap().unwrap()
     }
 
-    async fn get_authority_set_id(&self, block_number: u32) -> u32 {
+    pub async fn get_block_headers_range(
+        &self,
+        start_block_number: u32,
+        end_block_number: u32,
+    ) -> Vec<Header> {
+        let mut headers = Vec::new();
+        for block_number in start_block_number..end_block_number {
+            let block_hash = self.get_block_hash(block_number).await;
+            let header_result = self.client.rpc().header(Some(block_hash)).await;
+            let header: Header = header_result.unwrap().unwrap();
+            headers.push(header);
+        }
+        if let Some(save_path) = &self.save {
+            let file_name = format!(
+                "{}/block_range/{}_{}.json",
+                save_path, start_block_number, end_block_number
+            );
+            fs::write(file_name, serde_json::to_string(&headers).unwrap());
+        }
+        headers
+    }
+
+    pub async fn get_authority_set_id(&self, block_number: u32) -> u32 {
         let block_hash = self.get_block_hash(block_number).await;
         // Construct the storage key for the "CurrentSetId"
         let mut epoch_index_storage_key = twox_128(b"Grandpa").to_vec();
@@ -79,7 +93,10 @@ impl RpcDataFetcher {
         u32::from_le_bytes(data.0[0..4].try_into().unwrap())
     }
 
-    async fn get_authorities(&self, block_number: u32) -> (Vec<AffinePoint<Curve>>, Vec<Vec<u8>>) {
+    pub async fn get_authorities(
+        &self,
+        block_number: u32,
+    ) -> (Vec<AffinePoint<Curve>>, Vec<Vec<u8>>) {
         let block_hash = self.get_block_hash(block_number).await;
         let grandpa_authorities_bytes = self
             .client
@@ -113,10 +130,10 @@ impl RpcDataFetcher {
         (authorities, authories_pubkey_bytes)
     }
 
-    async fn get_simple_justification<const VALIDATOR_SET_SIZE_MAX: usize>(
+    pub async fn get_simple_justification<const VALIDATOR_SET_SIZE_MAX: usize>(
         &self,
         block_number: u32,
-    ) {
+    ) -> SimpleJustificationData {
         let mut params = RpcParams::new();
         let _ = params.push(block_number);
         let encoded_finality_proof = self
@@ -204,62 +221,13 @@ impl RpcDataFetcher {
             padded_signatures.push([0u8; 64]);
         }
 
-        let message_byte_lengths = vec![signed_message.len() as u32; VALIDATOR_SET_SIZE_MAX];
-        let messages = vec![signed_message; VALIDATOR_SET_SIZE_MAX];
-
-        println!("validator_signed {:?}", validator_signed);
-        println!("padded_pubkeys {:?}", padded_pubkeys);
-        println!("padded_signatures {:?}", padded_signatures);
-    }
-}
-
-#[async_trait]
-impl DataFetcher for RpcDataFetcher {
-    async fn get_block_headers_range(
-        &self,
-        start_block_number: u32,
-        end_block_number: u32,
-    ) -> Vec<Header> {
-        let mut headers = Vec::new();
-        for block_number in start_block_number..end_block_number {
-            let block_hash = self.get_block_hash(block_number).await;
-            let header_result = self.client.rpc().header(Some(block_hash)).await;
-            let header: Header = header_result.unwrap().unwrap();
-            headers.push(header);
+        SimpleJustificationData {
+            authority_set_id,
+            signed_message,
+            validator_signed,
+            pubkeys: padded_pubkeys,
+            signatures: padded_signatures,
         }
-        if let Some(save_path) = &self.save {
-            let file_name = format!(
-                "{}/block_range/{}_{}.json",
-                save_path, start_block_number, end_block_number
-            );
-            fs::write(file_name, serde_json::to_string(&headers).unwrap());
-        }
-        headers
-    }
-}
-
-pub struct FixtureDataFetcher {
-    pub fixture_path: String,
-}
-
-#[async_trait]
-impl DataFetcher for FixtureDataFetcher {
-    async fn get_block_headers_range(
-        &self,
-        start_block_number: u32,
-        end_block_number: u32,
-    ) -> Vec<Header> {
-        let file_name = format!(
-            "{}/block_range/{}_{}.json",
-            self.fixture_path.as_str(),
-            start_block_number.to_string().as_str(),
-            end_block_number.to_string().as_str()
-        );
-        let file_content = fs::read_to_string(file_name.as_str());
-        let res = file_content.unwrap();
-        // let blocks: Vec<TempSignedBlock> =
-        //     serde_json::from_str(&res).expect("Failed to parse JSON");
-        todo!();
     }
 }
 
@@ -269,22 +237,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_block_headers_range() {
-        let url = "wss://kate.avail.tools:443/ws".to_string();
-        let client = build_client(url.as_str(), false).await.unwrap();
-        let fetcher = RpcDataFetcher { client, save: None };
+        let fetcher = RpcDataFetcher::new().await;
         let headers = fetcher.get_block_headers_range(0, 10).await;
         assert_eq!(headers.len(), 10);
     }
 
     #[tokio::test]
     async fn test_get_authority_set_id() {
-        let url = "wss://kate.avail.tools:443/ws".to_string();
-        let client = build_client(url.as_str(), false).await.unwrap();
-        let fetcher = RpcDataFetcher { client, save: None };
+        let fetcher = RpcDataFetcher::new().await;
         let authority_set_id = fetcher.get_authority_set_id(485710).await;
         assert_eq!(authority_set_id, 458);
         fetcher.get_authorities(485710).await;
-
         fetcher.get_simple_justification::<100>(485710).await;
     }
 }

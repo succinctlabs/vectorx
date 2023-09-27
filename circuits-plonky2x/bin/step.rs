@@ -7,7 +7,7 @@
 //!
 //!
 
-use avail_plonky2x::fetch::{new_fetcher, DataFetcher};
+use avail_plonky2x::fetch::RpcDataFetcher;
 use avail_plonky2x::vars::{
     EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE,
 };
@@ -41,7 +41,7 @@ impl<
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let headers: Vec<Header> = rt.block_on(async {
-            let data_fetcher = new_fetcher().await;
+            let data_fetcher = RpcDataFetcher::new().await;
             data_fetcher
                 .get_block_headers_range(trusted_block, target_block)
                 .await

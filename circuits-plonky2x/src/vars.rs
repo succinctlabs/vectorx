@@ -6,8 +6,7 @@ use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Extendable, Field, GoldilocksField, PlonkParameters, RichField, Target, Variable, Witness,
-    WitnessWrite,
+    Extendable, PlonkParameters, RichField, Variable, Witness, WitnessWrite,
 };
 
 pub const NUM_AUTHORITIES: usize = 76;

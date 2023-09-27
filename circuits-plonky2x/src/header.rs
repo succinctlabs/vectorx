@@ -1,13 +1,5 @@
-use std::marker::PhantomData;
+use plonky2x::prelude::{ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkParameters};
 
-use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
-use plonky2x::backend::circuit::Circuit;
-use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, GoldilocksField,
-    PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
-};
-
-use crate::decoder::DecodingMethods;
 use crate::vars::*;
 
 pub trait HeaderMethods {

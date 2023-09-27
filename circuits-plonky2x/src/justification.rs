@@ -1,4 +1,5 @@
 use num::BigUint;
+use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
 use plonky2x::frontend::hint::simple::hint::Hint;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
@@ -124,7 +125,23 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 
         // TODO: decode the encoded_precommit and ensure that it matches the block_hash, block_number, and authority_set_id
 
-        // TODO: verify the signatures
+        // We verify the signatures of the validators on the encoded_precommit message.
+        // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
+        // and they are also constant length, so we can have `message_byte_lengths` be a constant array
+        let message_byte_lengths =
+            self.constant::<ArrayVariable<U32Variable, NUM_AUTHORITIES>>(vec![
+                ENCODED_PRECOMMIT_LENGTH
+                    as u32;
+                NUM_AUTHORITIES
+            ]);
+        let messages = vec![encoded_precommit; NUM_AUTHORITIES];
+        self.conditional_batch_eddsa_verify::<NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
+            validator_signed,
+            message_byte_lengths,
+            ArrayVariable::new(messages),
+            signatures,
+            pubkeys,
+        );
 
         // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`
     }

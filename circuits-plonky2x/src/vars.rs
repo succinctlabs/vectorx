@@ -5,9 +5,8 @@ use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Extendable, Field, GoldilocksField, PlonkParameters, RichField, Target, Variable, Witness,
-    WitnessWrite,
+    ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable, Extendable,
+    PlonkParameters, RichField, Variable, Witness, WitnessWrite,
 };
 
 pub const NUM_AUTHORITIES: usize = 76;
@@ -38,16 +37,23 @@ pub fn to_field_arr<F: RichField, const N: usize>(bytes: Vec<u8>) -> [F; N] {
 }
 
 // TODO: put these methods in the actual builder and also replace with more efficient methods
+
+// The bytes are in byte LE order, but bit BE order
 pub fn to_variable_unsafe<F: RichField + Extendable<D>, const D: usize>(
     api: &mut BaseCircuitBuilder<F, D>,
     bytes: &[ByteVariable],
 ) -> Variable {
-    let mut bits_be = bytes
-        .iter()
-        .flat_map(|b| b.as_bool_targets())
-        .collect::<Vec<_>>();
-    bits_be.reverse();
-    Variable(api.le_sum(bits_be.iter()))
+    // Need to create a bit vector in LE order
+    let mut bits_le = Vec::new();
+
+    for byte in bytes.iter() {
+        let be_bits = byte.as_bool_targets();
+        let mut be_bits = be_bits.to_vec();
+        be_bits.reverse();
+        bits_le.extend(be_bits);
+    }
+
+    Variable(api.le_sum(bits_le.iter()))
 }
 
 pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(

@@ -191,9 +191,9 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         // Next field is the block number
         // Can need up to 5 bytes to represent a compact u32
         const MAX_BLOCK_NUMBER_SIZE: usize = 5;
-        let (block_number_target, compress_mode, _) = self.api.decode_compact_int::<L, D>(
-            &header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_SIZE],
-        );
+        let (block_number_target, compress_mode, _) = self
+            .api
+            .decode_compact_int(&header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_SIZE]);
 
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
@@ -212,6 +212,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         let header_variables = header
             .header_bytes
+            .as_vec()
             .iter()
             .map(|x: &ByteVariable| x.to_variable(self))
             .collect::<Vec<_>>();
@@ -291,14 +292,8 @@ pub mod tests {
 
     use super::DecodingMethods;
     use crate::testing_utils;
-    use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
+    use crate::testing_utils::tests::{pad_header, DATA_ROOTS, STATE_ROOTS};
     use crate::vars::{EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_SIZE};
-
-    fn pad_header(mut bytes: Vec<u8>, pad_to: usize) -> Vec<u8> {
-        let pad_length = pad_to - bytes.len();
-        bytes.extend(vec![0; pad_length]);
-        bytes
-    }
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -340,7 +335,7 @@ pub mod tests {
                     let header_len = header.len();
                     let padded_header = pad_header(header, MAX_LARGE_HEADER_SIZE);
                     EncodedHeaderVariableValue {
-                        header_bytes: padded_header,
+                        header_bytes: padded_header.as_slice().try_into().unwrap(),
                         header_size: F::from_canonical_u64(header_len as u64),
                     }
                 })
@@ -358,9 +353,7 @@ pub mod tests {
         );
 
         input.write::<ArrayVariable<U32Variable, NUM_BLOCKS>>(
-            (HEAD_BLOCK_NUM..HEAD_BLOCK_NUM + NUM_BLOCKS as u32)
-                .map(|x| x as u32)
-                .collect::<Vec<_>>(),
+            (HEAD_BLOCK_NUM..HEAD_BLOCK_NUM + NUM_BLOCKS as u32).collect::<Vec<_>>(),
         );
 
         input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(

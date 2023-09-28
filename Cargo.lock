@@ -123,9 +123,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.5.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f58811cfac344940f1a400b6e6231ce35171f614f26439e80f8c1465c5cc0c"
+checksum = "f6cd65a4b849ace0b7f6daeebcc1a1d111282227ca745458c61dbf670e52a597"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -137,15 +137,15 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b84bf0a05bbb2a83e5eb6fa36bb6e87baa08193c35ff52bbf6b38d8af2890e46"
+checksum = "7079075b41f533b8c61d2a4d073c4676e1f8b249ff94a393b0595db304e0dd87"
 
 [[package]]
 name = "anstyle-parse"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "938874ff5980b03a87c5524b3ae5b59cf99b1d6bc836848df7bc5ada9643c333"
+checksum = "317b9a89c1868f5ea6ff1d9539a69f45dffc21ce321ac1fd1160dfa48c8e2140"
 dependencies = [
  "utf8parse",
 ]
@@ -161,9 +161,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle-wincon"
-version = "2.1.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58f54d10c6dfa51283a066ceab3ec1ab78d13fae00aa49243a45e4571fb79dfd"
+checksum = "0238ca56c96dfa37bdf7c373c8886dd591322500aceeeccdb2216fe06dc2f796"
 dependencies = [
  "anstyle",
  "windows-sys 0.48.0",
@@ -342,7 +342,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration)",
  "rand 0.4.6",
  "serde",
  "serde_json",
@@ -712,9 +712,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.5"
+version = "4.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "824956d0dca8334758a5b7f7e50518d66ea319330cbceedcf76905c2f6ab30e3"
+checksum = "d04704f56c2cde07f43e8e2c154b43f216dc5c92fc98ada720177362f953b956"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -722,9 +722,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.5"
+version = "4.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "122ec64120a49b4563ccaedcbea7818d069ed8e9aa6d829b82d8a4128936b2ab"
+checksum = "0e231faeaca65ebd1ea3c737966bf858971cd38c3849107aa3ea7de90a804e45"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1021,6 +1021,24 @@ dependencies = [
 name = "curta"
 version = "0.1.0"
 source = "git+https://github.com/succinctlabs/curta.git?branch=john/nightly#e8b9f1745c9d92be77ba9817b0e3921869c1df7a"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "hex",
+ "itertools 0.10.5",
+ "log",
+ "num",
+ "plonky2",
+ "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.8.5",
+ "serde",
+ "subtle-encoding",
+]
+
+[[package]]
+name = "curta"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_variable_chunks#49a41f305fbd4f2fddbc6d92472f7b7d441ce0a9"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4225,7 +4243,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#71bf8d68a97aa5488d258992681332cb0fefa542"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#87a103476f18230a9874f3fbe75ecaba1fd40b28"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4233,7 +4251,50 @@ dependencies = [
  "backtrace",
  "base64 0.13.1",
  "bincode",
- "clap 4.4.5",
+ "clap 4.4.6",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_variable_chunks)",
+ "curve25519-dalek 4.0.0",
+ "digest 0.10.7",
+ "dotenv",
+ "ed25519-consensus",
+ "env_logger 0.10.0",
+ "ethers",
+ "ff",
+ "futures",
+ "hex",
+ "itertools 0.10.5",
+ "jemallocator",
+ "lazy_static",
+ "log",
+ "num",
+ "num-bigint 0.4.4",
+ "plonky2",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration)",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_plain",
+ "serde_with",
+ "sha2 0.10.8",
+ "sha256",
+ "tokio",
+ "tracing",
+ "uuid 1.4.1",
+]
+
+[[package]]
+name = "plonky2x"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#1b17826a163f4869501860c84f6da56ca00128cf"
+dependencies = [
+ "anyhow",
+ "array-macro",
+ "async-trait",
+ "backtrace",
+ "base64 0.13.1",
+ "bincode",
+ "clap 4.4.6",
  "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git)",
  "curve25519-dalek 4.0.0",
  "digest 0.10.7",
@@ -4251,7 +4312,7 @@ dependencies = [
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -4268,7 +4329,17 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#71bf8d68a97aa5488d258992681332cb0fefa542"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#87a103476f18230a9874f3fbe75ecaba1fd40b28"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.37",
+]
+
+[[package]]
+name = "plonky2x-derive"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#1b17826a163f4869501860c84f6da56ca00128cf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5331,9 +5402,9 @@ dependencies = [
 
 [[package]]
 name = "sharded-slab"
-version = "0.1.4"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900fba806f70c630b0a382d0d825e17a0f19fcd059a2ade1ff237bcddf446b31"
+checksum = "c1b21f559e07218024e7e9f90f96f601825397de0e25420135f7f952453fed0b"
 dependencies = [
  "lazy_static",
 ]
@@ -6735,7 +6806,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
  "rand 0.4.6",
  "serde",
  "serde_json",

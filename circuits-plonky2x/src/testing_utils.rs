@@ -2,6 +2,12 @@
 pub mod tests {
     use crate::vars::{NUM_AUTHORITIES, QUORUM_SIZE};
 
+    pub(crate) fn pad_header(mut bytes: Vec<u8>, pad_to: usize) -> Vec<u8> {
+        let pad_length = pad_to - bytes.len();
+        bytes.extend(vec![0; pad_length]);
+        bytes
+    }
+
     pub const HEAD_BLOCK_NUM: u32 = 272515;
     pub const NUM_BLOCKS: usize = 21;
     pub const BLOCK_HASHES: [&str; NUM_BLOCKS] = [

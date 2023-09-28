@@ -5,16 +5,18 @@ use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable, Extendable,
-    PlonkParameters, RichField, Variable, Witness, WitnessWrite,
+    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
+    Extendable, PlonkParameters, RichField, Variable, Witness, WitnessWrite,
 };
 
 pub const NUM_AUTHORITIES: usize = 76;
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
 
 pub const CHUNK_128_BYTES: usize = 128;
-pub const MAX_LARGE_HEADER_SIZE: usize = CHUNK_128_BYTES * 52;
-pub const MAX_SMALL_HEADER_SIZE: usize = CHUNK_128_BYTES * 10;
+pub const MAX_LARGE_HEADER_CHUNK_SIZE: usize = 67;
+pub const MAX_SMALL_HEADER_CHUNK_SIZE: usize = 5;
+pub const MAX_LARGE_HEADER_SIZE: usize = CHUNK_128_BYTES * MAX_LARGE_HEADER_CHUNK_SIZE;
+pub const MAX_SMALL_HEADER_SIZE: usize = CHUNK_128_BYTES * MAX_SMALL_HEADER_CHUNK_SIZE;
 pub const HASH_SIZE: usize = 32; // in bytes
 pub const HASH_SIZE_BITS: usize = 256; // in bits
 pub const PUB_KEY_SIZE: usize = 32; // in bytes
@@ -67,7 +69,7 @@ pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct EncodedHeaderVariable<const S: usize> {
-    pub header_bytes: BytesVariable<S>,
+    pub header_bytes: ArrayVariable<ByteVariable, S>,
     pub header_size: Variable,
 }
 #[derive(Clone, Debug, CircuitVariable)]

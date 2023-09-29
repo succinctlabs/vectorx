@@ -123,9 +123,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.6.1"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6cd65a4b849ace0b7f6daeebcc1a1d111282227ca745458c61dbf670e52a597"
+checksum = "2ab91ebe16eb252986481c5b62f6098f3b698a45e34b5b98200cf20dd2484a44"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -161,9 +161,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle-wincon"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0238ca56c96dfa37bdf7c373c8886dd591322500aceeeccdb2216fe06dc2f796"
+checksum = "f0699d10d2f4d628a98ee7b57b289abbc98ff3bad977cb3152709d4bf2330628"
 dependencies = [
  "anstyle",
  "windows-sys 0.48.0",
@@ -335,14 +335,14 @@ dependencies = [
  "ethers",
  "ff_ce",
  "futures-util",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.1",
  "hex",
  "itertools 0.10.5",
  "lazy_static",
  "log",
  "num",
  "plonky2",
- "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration)",
+ "plonky2x",
  "rand 0.4.6",
  "serde",
  "serde_json",
@@ -1038,25 +1038,7 @@ dependencies = [
 [[package]]
 name = "curta"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_variable_chunks#49a41f305fbd4f2fddbc6d92472f7b7d441ce0a9"
-dependencies = [
- "anyhow",
- "bincode",
- "hex",
- "itertools 0.10.5",
- "log",
- "num",
- "plonky2",
- "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.8.5",
- "serde",
- "subtle-encoding",
-]
-
-[[package]]
-name = "curta"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git#f7fba00f6f7fbe4eb861ab7e31961c06ffa4a878"
+source = "git+https://github.com/succinctlabs/curta.git#7f295d5652ab1781fbf5156a886c32781e1d6c6d"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2550,9 +2532,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+checksum = "7dfda62a12f55daeae5015f81b0baea145391cb4520f86c248fc615d72640d12"
 dependencies = [
  "ahash 0.8.3",
  "allocator-api2",
@@ -2853,12 +2835,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.0.1"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad227c3af19d4914570ad36d30409928b75967c298feb9ea1969db3a610bb14e"
+checksum = "8adf3ddd720272c6ea8bf59463c04e0f93d0bbf7c5439b691bca2987e0270897"
 dependencies = [
  "equivalent",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.1",
  "serde",
 ]
 
@@ -2913,7 +2895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb0889898416213fab133e1d33a0e5858a48177452750691bde3666d0fdbaf8b"
 dependencies = [
  "hermit-abi 0.3.3",
- "rustix 0.38.14",
+ "rustix 0.38.15",
  "windows-sys 0.48.0",
 ]
 
@@ -3356,7 +3338,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2cffa4ad52c6f791f4f8b15f0c05f9824b2ced1160e88cc393d64fff9a8ac64"
 dependencies = [
- "rustix 0.38.14",
+ "rustix 0.38.15",
 ]
 
 [[package]]
@@ -4061,7 +4043,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1d3afd2628e69da2be385eb6f2fd57c8ac7977ceeff6dc166ff1657b0e386a9"
 dependencies = [
  "fixedbitset",
- "indexmap 2.0.1",
+ "indexmap 2.0.2",
 ]
 
 [[package]]
@@ -4187,7 +4169,7 @@ dependencies = [
  "ahash 0.8.3",
  "anyhow",
  "getrandom 0.2.10",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.1",
  "itertools 0.11.0",
  "keccak-hash",
  "log",
@@ -4243,50 +4225,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#87a103476f18230a9874f3fbe75ecaba1fd40b28"
-dependencies = [
- "anyhow",
- "array-macro",
- "async-trait",
- "backtrace",
- "base64 0.13.1",
- "bincode",
- "clap 4.4.6",
- "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_variable_chunks)",
- "curve25519-dalek 4.0.0",
- "digest 0.10.7",
- "dotenv",
- "ed25519-consensus",
- "env_logger 0.10.0",
- "ethers",
- "ff",
- "futures",
- "hex",
- "itertools 0.10.5",
- "jemallocator",
- "lazy_static",
- "log",
- "num",
- "num-bigint 0.4.4",
- "plonky2",
- "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration)",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "serde_plain",
- "serde_with",
- "sha2 0.10.8",
- "sha256",
- "tokio",
- "tracing",
- "uuid 1.4.1",
-]
-
-[[package]]
-name = "plonky2x"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#1b17826a163f4869501860c84f6da56ca00128cf"
+source = "git+https://github.com/succinctlabs/succinctx.git#eb7a848ef0d3d7ce68a7205bf88b7a706bb868da"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4312,7 +4251,7 @@ dependencies = [
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "plonky2x-derive",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -4329,17 +4268,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#87a103476f18230a9874f3fbe75ecaba1fd40b28"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.37",
-]
-
-[[package]]
-name = "plonky2x-derive"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#1b17826a163f4869501860c84f6da56ca00128cf"
+source = "git+https://github.com/succinctlabs/succinctx.git#eb7a848ef0d3d7ce68a7205bf88b7a706bb868da"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4867,9 +4796,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.14"
+version = "0.38.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747c788e9ce8e92b12cd485c49ddf90723550b654b32508f979b71a7b1ecda4f"
+checksum = "d2f9da0cbd88f9f09e7814e388301c8414c51c62aa6ce1e4b5c551d49d96e531"
 dependencies = [
  "bitflags 2.4.0",
  "errno",
@@ -5287,7 +5216,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.0.1",
+ "indexmap 2.0.2",
  "serde",
  "serde_json",
  "serde_with_macros",
@@ -6799,14 +6728,14 @@ dependencies = [
  "env_logger 0.9.3",
  "ff_ce",
  "futures-util",
- "hashbrown 0.14.0",
+ "hashbrown 0.14.1",
  "hex",
  "itertools 0.10.5",
  "lazy_static",
  "log",
  "num",
  "plonky2",
- "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "plonky2x",
  "rand 0.4.6",
  "serde",
  "serde_json",
@@ -6910,7 +6839,7 @@ dependencies = [
  "cfg-if",
  "fastrand",
  "redox_syscall 0.3.5",
- "rustix 0.38.14",
+ "rustix 0.38.15",
  "windows-sys 0.48.0",
 ]
 
@@ -7184,7 +7113,7 @@ version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
- "indexmap 2.0.1",
+ "indexmap 2.0.2",
  "serde",
  "serde_spanned",
  "toml_datetime",

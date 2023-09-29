@@ -292,7 +292,7 @@ pub mod tests {
 
     use super::DecodingMethods;
     use crate::testing_utils;
-    use crate::testing_utils::tests::{pad_header, DATA_ROOTS, STATE_ROOTS};
+    use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
     use crate::vars::{EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_SIZE};
 
     #[test]
@@ -331,11 +331,11 @@ pub mod tests {
             ENCODED_HEADERS[0..NUM_BLOCKS]
                 .iter()
                 .map(|x| {
-                    let header: Vec<u8> = bytes!(x);
+                    let mut header: Vec<u8> = bytes!(x);
                     let header_len = header.len();
-                    let padded_header = pad_header(header, MAX_LARGE_HEADER_SIZE);
+                    header.resize(MAX_LARGE_HEADER_SIZE, 0);
                     EncodedHeaderVariableValue {
-                        header_bytes: padded_header.as_slice().try_into().unwrap(),
+                        header_bytes: header.as_slice().try_into().unwrap(),
                         header_size: F::from_canonical_u64(header_len as u64),
                     }
                 })

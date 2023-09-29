@@ -329,7 +329,7 @@ name = "avail_plonky2x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=john/nightly)",
+ "curta",
  "ed25519-dalek",
  "env_logger 0.9.3",
  "ethers",
@@ -1020,43 +1020,6 @@ dependencies = [
 [[package]]
 name = "curta"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git?branch=john/nightly#e8b9f1745c9d92be77ba9817b0e3921869c1df7a"
-dependencies = [
- "anyhow",
- "bincode",
- "hex",
- "itertools 0.10.5",
- "log",
- "num",
- "plonky2",
- "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.8.5",
- "serde",
- "subtle-encoding",
-]
-
-[[package]]
-name = "curta"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_variable_chunks#49a41f305fbd4f2fddbc6d92472f7b7d441ce0a9"
-dependencies = [
- "anyhow",
- "bincode",
- "hex",
- "itertools 0.10.5",
- "log",
- "num",
- "plonky2",
- "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.8.5",
- "serde",
- "subtle-encoding",
-]
-
-[[package]]
-name = "curta"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git#f7fba00f6f7fbe4eb861ab7e31961c06ffa4a878"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4243,7 +4206,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#87a103476f18230a9874f3fbe75ecaba1fd40b28"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#c3e4385cc74442cb927902f5c2672d8d473a4faf"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4252,7 +4215,7 @@ dependencies = [
  "base64 0.13.1",
  "bincode",
  "clap 4.4.6",
- "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_variable_chunks)",
+ "curta",
  "curve25519-dalek 4.0.0",
  "digest 0.10.7",
  "dotenv",
@@ -4295,7 +4258,7 @@ dependencies = [
  "base64 0.13.1",
  "bincode",
  "clap 4.4.6",
- "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git)",
+ "curta",
  "curve25519-dalek 4.0.0",
  "digest 0.10.7",
  "dotenv",
@@ -4329,7 +4292,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#87a103476f18230a9874f3fbe75ecaba1fd40b28"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_variable_chunk_integration#c3e4385cc74442cb927902f5c2672d8d473a4faf"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6794,7 +6757,7 @@ name = "succinct_avail_circuits"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=john/nightly)",
+ "curta",
  "ed25519-dalek",
  "env_logger 0.9.3",
  "ff_ce",

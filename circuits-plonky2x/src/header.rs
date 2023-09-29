@@ -3,34 +3,47 @@ use plonky2x::prelude::{ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkPar
 use crate::vars::*;
 
 pub trait HeaderMethods {
-    fn hash_encoded_header<const S: usize>(
+    fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
         &mut self,
-        header: &EncodedHeaderVariable<S>,
+        header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable;
 
-    fn hash_encoded_headers<const S: usize, const N: usize>(
+    fn hash_encoded_headers<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_CHUNK_SIZE: usize,
+        const N: usize,
+    >(
         &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
     ) -> ArrayVariable<Bytes32Variable, N>;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, D> {
-    fn hash_encoded_header<const S: usize>(
+    fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
         &mut self,
-        header: &EncodedHeaderVariable<S>,
+        header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable {
-        self.curta_blake2b_variable::<S>(header.header_bytes.as_slice(), header.header_size)
+        assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
+        self.curta_blake2b_variable::<MAX_CHUNK_SIZE>(
+            header.header_bytes.as_slice(),
+            header.header_size,
+        )
     }
 
-    fn hash_encoded_headers<const S: usize, const N: usize>(
+    fn hash_encoded_headers<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_CHUNK_SIZE: usize,
+        const N: usize,
+    >(
         &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
     ) -> ArrayVariable<Bytes32Variable, N> {
+        assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
         headers
             .as_vec()
             .iter()
-            .map(|x| self.hash_encoded_header(x))
+            .map(|x| self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_CHUNK_SIZE>(x))
             .collect::<Vec<Bytes32Variable>>()
             .try_into()
             .unwrap()
@@ -46,6 +59,7 @@ mod tests {
     };
     use plonky2x::utils::{bytes, bytes32};
 
+    use crate::header::HeaderMethods;
     use crate::testing_utils::tests::{pad_header, BLOCK_HASHES, ENCODED_HEADERS, NUM_BLOCKS};
     use crate::vars::{
         EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_CHUNK_SIZE,
@@ -75,14 +89,12 @@ mod tests {
             let last_block = i == NUM_BLOCKS - 1;
 
             let calculated_hash = if !last_block {
-                builder.curta_blake2b_variable::<MAX_SMALL_HEADER_CHUNK_SIZE>(
-                    small_headers[i].header_bytes.as_slice(),
-                    small_headers[i].header_size,
+                builder.hash_encoded_header::<MAX_SMALL_HEADER_SIZE, MAX_SMALL_HEADER_CHUNK_SIZE>(
+                    &small_headers[i],
                 )
             } else {
-                builder.curta_blake2b_variable::<MAX_LARGE_HEADER_CHUNK_SIZE>(
-                    large_header.header_bytes.as_slice(),
-                    large_header.header_size,
+                builder.hash_encoded_header::<MAX_LARGE_HEADER_SIZE, MAX_LARGE_HEADER_CHUNK_SIZE>(
+                    &large_header,
                 )
             };
 

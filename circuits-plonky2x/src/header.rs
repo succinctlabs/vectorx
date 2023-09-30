@@ -3,36 +3,47 @@ use plonky2x::prelude::{ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkPar
 use crate::vars::*;
 
 pub trait HeaderMethods {
-    fn hash_encoded_header<const S: usize>(
+    fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
         &mut self,
-        header: &EncodedHeaderVariable<S>,
+        header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable;
 
-    fn hash_encoded_headers<const S: usize, const N: usize>(
+    fn hash_encoded_headers<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_CHUNK_SIZE: usize,
+        const N: usize,
+    >(
         &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
     ) -> ArrayVariable<Bytes32Variable, N>;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, D> {
-    fn hash_encoded_header<const S: usize>(
+    fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
         &mut self,
-        header: &EncodedHeaderVariable<S>,
+        header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable {
-        // TODO: given a header bytes that are encoded, blake2b hash the header
-        // TODO: this is a placeholder for now
-        todo!();
+        assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
+        self.curta_blake2b_variable::<MAX_CHUNK_SIZE>(
+            header.header_bytes.as_slice(),
+            header.header_size,
+        )
     }
 
-    fn hash_encoded_headers<const S: usize, const N: usize>(
+    fn hash_encoded_headers<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_CHUNK_SIZE: usize,
+        const N: usize,
+    >(
         &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
+        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
     ) -> ArrayVariable<Bytes32Variable, N> {
+        assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
         headers
             .as_vec()
             .iter()
-            .map(|x| self.hash_encoded_header(x))
+            .map(|x| self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_CHUNK_SIZE>(x))
             .collect::<Vec<Bytes32Variable>>()
             .try_into()
             .unwrap()
@@ -41,78 +52,91 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
 
 #[cfg(test)]
 mod tests {
+    use std::env;
 
-    use curta::math::prelude::Field;
-    // use anyhow::{Ok, Result};
-    // use plonky2::field::types::Field;
-    // use plonky2::iop::witness::{PartialWitness, WitnessWrite};
-    // use plonky2::plonk::circuit_builder::CircuitBuilder;
-    // use plonky2::plonk::circuit_data::CircuitConfig;
-    // use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
-    use plonky2x::prelude::DefaultBuilder;
+    use plonky2x::prelude::{
+        ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
+    };
+    use plonky2x::utils::{bytes, bytes32};
 
-    use super::*;
-    // use crate::header;
-    // use crate::testing_utils::tests::{
-    //     BLOCK_HASHES, DATA_ROOTS, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
-    //     STATE_ROOTS,
-    // };
+    use crate::header::HeaderMethods;
+    use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, NUM_BLOCKS};
+    use crate::vars::{
+        EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_CHUNK_SIZE,
+        MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_CHUNK_SIZE, MAX_SMALL_HEADER_SIZE,
+    };
 
-    //     #[test]
-    //     fn test_process_block() {
-    //         const HEADER_SIZE: usize = MAX_LARGE_HEADER_SIZE;
+    #[test]
+    fn test_hash_blocks() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
 
-    //         let mut builder_logger = env_logger::Builder::from_default_env();
-    //         builder_logger.format_timestamp(None);
-    //         builder_logger.filter_level(log::LevelFilter::Trace);
-    //         builder_logger.try_init().unwrap();
+        type F = GoldilocksField;
 
-    //         let mut builder = DefaultBuilder::new();
-    //         HeaderCircuit::<HEADER_SIZE>::define(&mut builder);
+        const NUM_SMALL_HEADERS: usize = 20;
 
-    //         let circuit = builder.build();
+        let mut builder = DefaultBuilder::new();
 
-    //         for i in 0..NUM_BLOCKS {
-    //             let block_num = HEAD_BLOCK_NUM + i as u32;
-    //             println!("processing block {}", block_num);
+        let small_headers = builder
+            .read::<ArrayVariable<EncodedHeaderVariable<MAX_SMALL_HEADER_SIZE>, NUM_SMALL_HEADERS>>(
+            );
 
-    //             let mut pw = PartialWitness::new();
+        let large_header = builder.read::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>();
 
-    //             let mut encoded_header_bytes = hex::decode(ENCODED_HEADERS[i]).unwrap();
-    //             let header_length = encoded_header_bytes.len();
-    //             encoded_header_bytes.resize(HEADER_SIZE, 0);
+        for i in 0..NUM_BLOCKS {
+            let last_block = i == NUM_BLOCKS - 1;
 
-    //             let inputs = circuit.input();
-    //             inputs.write::<ArrayVariable<U8Variable, HEADER_SIZE>>(
-    //                 encoded_header_bytes.iter().map(|x| *x as u32).collect(), // TODO: change this when we have U8 for real
-    //             );
-    //             inputs.write::<Variable>(GoldilocksField::from_canonical_usize(header_length));
+            let calculated_hash = if !last_block {
+                builder.hash_encoded_header::<MAX_SMALL_HEADER_SIZE, MAX_SMALL_HEADER_CHUNK_SIZE>(
+                    &small_headers[i],
+                )
+            } else {
+                builder.hash_encoded_header::<MAX_LARGE_HEADER_SIZE, MAX_LARGE_HEADER_CHUNK_SIZE>(
+                    &large_header,
+                )
+            };
 
-    //             let proof = data.prove(pw)?;
-    //             let _ = data.verify(proof.clone());
+            builder.write::<Bytes32Variable>(calculated_hash);
+        }
 
-    //             // Verify the public inputs in the proof match the expected values
-    //             let header_fields = parse_header_pi::<C, F, D>(proof.public_inputs);
+        let circuit = builder.build();
 
-    //             assert_eq!(header_fields.block_num, block_num);
-    //             assert_eq!(
-    //                 header_fields.block_hash.as_slice(),
-    //                 hex::decode(BLOCK_HASHES[i]).unwrap()
-    //             );
-    //             assert_eq!(
-    //                 header_fields.state_root.as_slice(),
-    //                 hex::decode(STATE_ROOTS[i]).unwrap()
-    //             );
-    //             assert_eq!(
-    //                 header_fields.data_root.as_slice(),
-    //                 hex::decode(DATA_ROOTS[i]).unwrap()
-    //             );
-    //             assert_eq!(
-    //                 header_fields.parent_hash.as_slice(),
-    //                 hex::decode(PARENT_HASHES[i]).unwrap()
-    //             );
-    //         }
+        let mut input = circuit.input();
+        let encoded_small_headers_values: Vec<
+            EncodedHeaderVariableValue<MAX_SMALL_HEADER_SIZE, F>,
+        > = ENCODED_HEADERS[0..NUM_BLOCKS - 1]
+            .iter()
+            .map(|x| {
+                let mut header: Vec<u8> = bytes!(x);
+                let header_len = header.len();
+                header.resize(MAX_SMALL_HEADER_SIZE, 0);
+                EncodedHeaderVariableValue {
+                    header_bytes: header.as_slice().try_into().unwrap(),
+                    header_size: F::from_canonical_u64(header_len as u64),
+                }
+            })
+            .collect::<_>();
 
-    //         Ok(())
-    //     }
+        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_SMALL_HEADER_SIZE>, NUM_SMALL_HEADERS>>(
+            encoded_small_headers_values,
+        );
+
+        let mut large_header: Vec<u8> = bytes!(ENCODED_HEADERS[NUM_BLOCKS - 1]);
+        let large_header_len = large_header.len();
+        large_header.resize(MAX_LARGE_HEADER_SIZE, 0);
+        let encoded_large_header_value: EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F> =
+            EncodedHeaderVariableValue {
+                header_bytes: large_header.as_slice().try_into().unwrap(),
+                header_size: F::from_canonical_usize(large_header_len),
+            };
+        input.write::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>(encoded_large_header_value);
+
+        let (proof, mut output) = circuit.prove(&input);
+        circuit.verify(&proof, &input, &output);
+
+        for expected_hash in BLOCK_HASHES.iter() {
+            let calculated_hash = output.read::<Bytes32Variable>();
+            assert_eq!(calculated_hash, bytes32!(expected_hash));
+        }
+    }
 }

@@ -60,7 +60,7 @@ mod tests {
     use plonky2x::utils::{bytes, bytes32};
 
     use crate::header::HeaderMethods;
-    use crate::testing_utils::tests::{pad_header, BLOCK_HASHES, ENCODED_HEADERS, NUM_BLOCKS};
+    use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, NUM_BLOCKS};
     use crate::vars::{
         EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_CHUNK_SIZE,
         MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_CHUNK_SIZE, MAX_SMALL_HEADER_SIZE,
@@ -83,8 +83,6 @@ mod tests {
 
         let large_header = builder.read::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>();
 
-        let expected_hashes = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
-
         for i in 0..NUM_BLOCKS {
             let last_block = i == NUM_BLOCKS - 1;
 
@@ -98,7 +96,7 @@ mod tests {
                 )
             };
 
-            builder.assert_is_equal(calculated_hash, expected_hashes[i]);
+            builder.write::<Bytes32Variable>(calculated_hash);
         }
 
         let circuit = builder.build();
@@ -109,11 +107,11 @@ mod tests {
         > = ENCODED_HEADERS[0..NUM_BLOCKS - 1]
             .iter()
             .map(|x| {
-                let header: Vec<u8> = bytes!(x);
+                let mut header: Vec<u8> = bytes!(x);
                 let header_len = header.len();
-                let padded_header = pad_header(header, MAX_SMALL_HEADER_SIZE);
+                header.resize(MAX_SMALL_HEADER_SIZE, 0);
                 EncodedHeaderVariableValue {
-                    header_bytes: padded_header.as_slice().try_into().unwrap(),
+                    header_bytes: header.as_slice().try_into().unwrap(),
                     header_size: F::from_canonical_u64(header_len as u64),
                 }
             })
@@ -123,24 +121,22 @@ mod tests {
             encoded_small_headers_values,
         );
 
-        let large_header: Vec<u8> = bytes!(ENCODED_HEADERS[NUM_BLOCKS - 1]);
-        let padded_large_header = pad_header(large_header.clone(), MAX_LARGE_HEADER_SIZE);
+        let mut large_header: Vec<u8> = bytes!(ENCODED_HEADERS[NUM_BLOCKS - 1]);
+        let large_header_len = large_header.len();
+        large_header.resize(MAX_LARGE_HEADER_SIZE, 0);
         let encoded_large_header_value: EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F> =
             EncodedHeaderVariableValue {
-                header_bytes: padded_large_header.as_slice().try_into().unwrap(),
-                header_size: F::from_canonical_u64(large_header.len() as u64),
+                header_bytes: large_header.as_slice().try_into().unwrap(),
+                header_size: F::from_canonical_usize(large_header_len),
             };
         input.write::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>(encoded_large_header_value);
 
-        input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
-            BLOCK_HASHES[0..NUM_BLOCKS]
-                .iter()
-                .map(|x| bytes32!(x))
-                .collect::<Vec<_>>(),
-        );
-
-        let (proof, output) = circuit.prove(&input);
-
+        let (proof, mut output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
+
+        for expected_hash in BLOCK_HASHES.iter() {
+            let calculated_hash = output.read::<Bytes32Variable>();
+            assert_eq!(calculated_hash, bytes32!(expected_hash));
+        }
     }
 }

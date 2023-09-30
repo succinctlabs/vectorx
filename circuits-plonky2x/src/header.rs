@@ -122,11 +122,12 @@ mod tests {
         );
 
         let mut large_header: Vec<u8> = bytes!(ENCODED_HEADERS[NUM_BLOCKS - 1]);
+        let large_header_len = large_header.len();
         large_header.resize(MAX_LARGE_HEADER_SIZE, 0);
         let encoded_large_header_value: EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F> =
             EncodedHeaderVariableValue {
                 header_bytes: large_header.as_slice().try_into().unwrap(),
-                header_size: F::from_canonical_u64(large_header.len() as u64),
+                header_size: F::from_canonical_usize(large_header_len),
             };
         input.write::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>(encoded_large_header_value);
 

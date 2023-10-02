@@ -70,7 +70,7 @@ impl<
         // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
         for i in headers.len()..NUM_HEADERS {
             let header_variable = EncodedHeader {
-                header_bytes: [0u8; HEADER_LENGTH],
+                header_bytes: vec![0u8; HEADER_LENGTH],
                 header_size: L::Field::from_canonical_usize(0),
             };
             header_variables.push(header_variable);

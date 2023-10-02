@@ -10,8 +10,7 @@ use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Extendable, Field, GoldilocksField, PlonkParameters, RichField, Target, Variable, Witness,
-    WitnessWrite,
+    Extendable, PlonkParameters, RichField, Variable, Witness, WitnessWrite,
 };
 use serde::{Deserialize, Serialize};
 
@@ -19,8 +18,10 @@ pub const NUM_AUTHORITIES: usize = 76;
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
 
 pub const CHUNK_128_BYTES: usize = 128;
-pub const MAX_LARGE_HEADER_SIZE: usize = CHUNK_128_BYTES * 52;
-pub const MAX_SMALL_HEADER_SIZE: usize = CHUNK_128_BYTES * 10;
+pub const MAX_LARGE_HEADER_CHUNK_SIZE: usize = 67;
+pub const MAX_SMALL_HEADER_CHUNK_SIZE: usize = 5;
+pub const MAX_LARGE_HEADER_SIZE: usize = CHUNK_128_BYTES * MAX_LARGE_HEADER_CHUNK_SIZE;
+pub const MAX_SMALL_HEADER_SIZE: usize = CHUNK_128_BYTES * MAX_SMALL_HEADER_CHUNK_SIZE;
 pub const HASH_SIZE: usize = 32; // in bytes
 pub const HASH_SIZE_BITS: usize = 256; // in bits
 pub const PUB_KEY_SIZE: usize = 32; // in bytes
@@ -43,16 +44,23 @@ pub fn to_field_arr<F: RichField, const N: usize>(bytes: Vec<u8>) -> [F; N] {
 }
 
 // TODO: put these methods in the actual builder and also replace with more efficient methods
+
+// The bytes are in byte LE order, but bit BE order
 pub fn to_variable_unsafe<F: RichField + Extendable<D>, const D: usize>(
     api: &mut BaseCircuitBuilder<F, D>,
     bytes: &[ByteVariable],
 ) -> Variable {
-    let mut bits_be = bytes
-        .iter()
-        .flat_map(|b| b.as_bool_targets())
-        .collect::<Vec<_>>();
-    bits_be.reverse();
-    Variable(api.le_sum(bits_be.iter()))
+    // Need to create a bit vector in LE order
+    let mut bits_le = Vec::new();
+
+    for byte in bytes.iter() {
+        let be_bits = byte.as_bool_targets();
+        let mut be_bits = be_bits.to_vec();
+        be_bits.reverse();
+        bits_le.extend(be_bits);
+    }
+
+    Variable(api.le_sum(bits_le.iter()))
 }
 
 pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
@@ -67,7 +75,7 @@ pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
 #[derive(Clone, Debug, CircuitVariable)]
 #[value_name(EncodedHeader)]
 pub struct EncodedHeaderVariable<const S: usize> {
-    pub header_bytes: BytesVariable<S>,
+    pub header_bytes: ArrayVariable<ByteVariable, S>,
     pub header_size: Variable,
 }
 #[derive(Clone, Debug, CircuitVariable)]

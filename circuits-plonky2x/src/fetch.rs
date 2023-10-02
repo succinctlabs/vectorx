@@ -3,10 +3,12 @@ use std::{env, fs};
 
 use async_trait::async_trait;
 use avail_subxt::primitives::Header;
-use avail_subxt::{build_client, AvailConfig};
+use avail_subxt::{api, build_client, AvailConfig};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
+use ethers::types::U64;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
+use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use sp_application_crypto::{RuntimeAppPublic, RuntimePublic};
 use sp_core::ed25519::Public as EdPublic;
 use sp_core::storage::StorageKey;
@@ -24,7 +26,7 @@ use crate::vars::{AffinePoint, Curve};
 // use subxt::config::Header as XtHeader;
 
 pub struct SimpleJustificationData {
-    pub authority_set_id: u32,
+    pub authority_set_id: U64,
     pub signed_message: Vec<u8>,
     pub validator_signed: Vec<bool>,
     pub pubkeys: Vec<AffinePoint<Curve>>,
@@ -75,23 +77,34 @@ impl RpcDataFetcher {
         headers
     }
 
-    pub async fn get_authority_set_id(&self, block_number: u32) -> u32 {
+    pub async fn get_authority_set_id(&self, block_number: u32) -> u64 {
         let block_hash = self.get_block_hash(block_number).await;
-        // Construct the storage key for the "CurrentSetId"
-        let mut epoch_index_storage_key = twox_128(b"Grandpa").to_vec();
-        epoch_index_storage_key.extend(twox_128(b"CurrentSetId").to_vec());
-        let sk = StorageKey(epoch_index_storage_key);
-        let keys = [sk.0.as_slice()];
 
-        // Retrieve the storage data for the event key
-        let data = self
-            .client
-            .rpc()
-            .storage(keys[0], Some(block_hash))
+        let set_id_key = api::storage().grandpa().current_set_id();
+        self.client
+            .storage()
+            .at(Some(block_hash))
             .await
             .unwrap()
-            .unwrap();
-        u32::from_le_bytes(data.0[0..4].try_into().unwrap())
+            .fetch(&set_id_key)
+            .await
+            .unwrap()
+            .unwrap()
+        // Construct the storage key for the "CurrentSetId"
+        // let mut epoch_index_storage_key = twox_128(b"Grandpa").to_vec();
+        // epoch_index_storage_key.extend(twox_128(b"CurrentSetId").to_vec());
+        // let sk = StorageKey(epoch_index_storage_key);
+        // let keys = [sk.0.as_slice()];
+
+        // // Retrieve the storage data for the event key
+        // let data = self
+        //     .client
+        //     .rpc()
+        //     .storage(keys[0], Some(block_hash))
+        //     .await
+        //     .unwrap()
+        //     .unwrap();
+        // u32::from_le_bytes(data.0[0..4].try_into().unwrap())
     }
 
     pub async fn get_authorities(
@@ -154,18 +167,14 @@ impl RpcDataFetcher {
         if authorities.len() > VALIDATOR_SET_SIZE_MAX {
             panic!("Too many authorities");
         }
+
         // Form a message which is signed in the justification
         let signed_message = Encode::encode(&(
             &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
             &justification.round,
-            &authority_set_id - 1,
+            &authority_set_id,
         ));
         // TODO: verify above that signed_message = block_hash || block_number || round || set_id
-
-        println!(
-            "signed message is {:?}",
-            hex::encode(signed_message.clone())
-        );
 
         let mut pubkey_bytes_to_signature = HashMap::new();
 
@@ -201,8 +210,8 @@ impl RpcDataFetcher {
             if signature.is_none() {
                 validator_signed.push(false);
                 padded_pubkeys.push(*authority);
-                // TODO: make this a real dummy
-                padded_signatures.push([0u8; 64]);
+                // We push a dummy signature, since this validator didn't sign
+                padded_signatures.push(DUMMY_SIGNATURE);
             } else {
                 validator_signed.push(true);
                 padded_pubkeys.push(*authority);
@@ -215,17 +224,15 @@ impl RpcDataFetcher {
             panic!("Not enough voting power");
         }
 
-        println!("voted {}, total {}", voting_weight, authorities.len());
-
         for _ in authorities.len()..VALIDATOR_SET_SIZE_MAX {
             validator_signed.push(false);
-            // TODO: fill in the rest with actual dummies
-            padded_pubkeys.push(AffinePoint::<Curve>::ZERO);
-            padded_signatures.push([0u8; 64]);
+            // We push a dummy pubkey and a dummy padded signature to fill out the rest of the padding
+            padded_pubkeys.push(AffinePoint::new_from_compressed_point(&DUMMY_PUBLIC_KEY));
+            padded_signatures.push(DUMMY_SIGNATURE);
         }
 
         SimpleJustificationData {
-            authority_set_id,
+            authority_set_id: authority_set_id.into(),
             signed_message,
             validator_signed,
             pubkeys: padded_pubkeys,
@@ -251,6 +258,14 @@ mod tests {
         let authority_set_id = fetcher.get_authority_set_id(485710).await;
         assert_eq!(authority_set_id, 458);
         fetcher.get_authorities(485710).await;
-        fetcher.get_simple_justification::<100>(485710).await;
+        let simple_justification_data = fetcher.get_simple_justification::<100>(485710).await;
+        println!(
+            "Number authorities {:?}",
+            simple_justification_data.pubkeys.len()
+        );
+        println!(
+            "signed_message len {:?}",
+            simple_justification_data.signed_message.len()
+        );
     }
 }

@@ -1,6 +1,7 @@
 use num::BigUint;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
 use plonky2x::frontend::hint::simple::hint::Hint;
+use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
@@ -33,7 +34,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
 {
     fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
         let block_number = input_stream.read_value::<U32Variable>();
-        let authority_set_id = input_stream.read_value::<U32Variable>();
+        let authority_set_id = input_stream.read_value::<U64Variable>();
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let justification_data: SimpleJustificationData = rt.block_on(async {
@@ -86,7 +87,7 @@ pub trait GrandpaJustificationVerifier {
         &mut self,
         block: HeaderVariable,
         block_hash: Bytes32Variable,
-        authority_set_id: U32Variable,
+        authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
         // authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
         // signed_precommits: &ArrayVariable<SignedPrecommitVariable, NUM_AUTHORITIES>,
@@ -106,13 +107,14 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         &mut self,
         block: HeaderVariable,
         block_hash: Bytes32Variable,
-        authority_set_id: U32Variable,
+        authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
     ) {
         let mut input_stream = VariableStream::new();
         input_stream.write(&block.block_number);
         input_stream.write(&authority_set_id);
         let output_stream = self.hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
+
         let encoded_precommit = output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(self);
         let validator_signed =
             output_stream.read::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(self);
@@ -135,14 +137,77 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                 NUM_AUTHORITIES
             ]);
         let messages = vec![encoded_precommit; NUM_AUTHORITIES];
-        self.conditional_batch_eddsa_verify::<NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
-            validator_signed,
-            message_byte_lengths,
-            ArrayVariable::new(messages),
-            signatures,
-            pubkeys,
+        self.conditional_batch_eddsa_verify::<1, ENCODED_PRECOMMIT_LENGTH>(
+            ArrayVariable::new(validator_signed[0..1].to_vec()),
+            ArrayVariable::new(message_byte_lengths[0..1].to_vec()),
+            ArrayVariable::new(messages[0..1].to_vec()),
+            ArrayVariable::new(signatures[0..1].to_vec()),
+            ArrayVariable::new(pubkeys[0..1].to_vec()),
         );
 
         // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use ethers::types::H256;
+    use log::info;
+    use plonky2x::prelude::{Bytes32Variable, DefaultBuilder};
+
+    use super::*;
+
+    #[test]
+    fn test_simple_justification() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        // There are only 7 authories in the 10,000-th block
+        // But we set NUM_AUTHORITIES=10 so that we can test padding
+        const BLOCK_NUMBER: u32 = 10000u32;
+        const NUM_AUTHORITIES: usize = 7;
+
+        let rt = Runtime::new().expect("failed to create tokio runtime");
+        let justification_data: SimpleJustificationData = rt.block_on(async {
+            let fetcher = RpcDataFetcher::new().await;
+            fetcher
+                .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
+                .await
+        });
+        let fetched_authority_set_id = justification_data.authority_set_id;
+
+        info!("Defining circuit");
+        // Define the circuit
+        let mut builder = DefaultBuilder::new();
+
+        let block = builder.read::<HeaderVariable>();
+        let block_hash = builder.read::<Bytes32Variable>();
+        let authority_set_id = builder.read::<U64Variable>();
+        let authority_set_hash = builder.read::<Bytes32Variable>();
+        builder.verify_simple_justification::<NUM_AUTHORITIES>(
+            block,
+            block_hash,
+            authority_set_id,
+            authority_set_hash,
+        );
+        info!("Building circuit");
+        let circuit = builder.build();
+
+        let mut input = circuit.input();
+        input.write::<HeaderVariable>(HeaderValueType {
+            block_number: BLOCK_NUMBER,
+            parent_hash: H256::from([0u8; 32]), // TODO: these will have to be filled in with real things
+            state_root: H256::from([0u8; 32]),
+            data_root: H256::from([0u8; 32]),
+        });
+        input.write::<Bytes32Variable>(H256::from([0u8; 32]));
+        input.write::<U64Variable>(fetched_authority_set_id);
+        input.write::<Bytes32Variable>(H256::from([0u8; 32])); // TODO: will have to be filled in with real thing
+
+        info!("Generating proof");
+        let (proof, mut output) = circuit.prove(&input);
+        circuit.verify(&proof, &input, &output);
     }
 }

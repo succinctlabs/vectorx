@@ -62,8 +62,8 @@ mod tests {
     use crate::header::HeaderMethods;
     use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, NUM_BLOCKS};
     use crate::vars::{
-        EncodedHeaderVariable, EncodedHeaderVariableValue, MAX_LARGE_HEADER_CHUNK_SIZE,
-        MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_CHUNK_SIZE, MAX_SMALL_HEADER_SIZE,
+        EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_CHUNK_SIZE, MAX_LARGE_HEADER_SIZE,
+        MAX_SMALL_HEADER_CHUNK_SIZE, MAX_SMALL_HEADER_SIZE,
     };
 
     #[test]
@@ -102,20 +102,19 @@ mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let encoded_small_headers_values: Vec<
-            EncodedHeaderVariableValue<MAX_SMALL_HEADER_SIZE, F>,
-        > = ENCODED_HEADERS[0..NUM_BLOCKS - 1]
-            .iter()
-            .map(|x| {
-                let mut header: Vec<u8> = bytes!(x);
-                let header_len = header.len();
-                header.resize(MAX_SMALL_HEADER_SIZE, 0);
-                EncodedHeaderVariableValue {
-                    header_bytes: header.as_slice().try_into().unwrap(),
-                    header_size: F::from_canonical_u64(header_len as u64),
-                }
-            })
-            .collect::<_>();
+        let encoded_small_headers_values: Vec<EncodedHeader<MAX_SMALL_HEADER_SIZE, F>> =
+            ENCODED_HEADERS[0..NUM_BLOCKS - 1]
+                .iter()
+                .map(|x| {
+                    let mut header: Vec<u8> = bytes!(x);
+                    let header_len = header.len();
+                    header.resize(MAX_SMALL_HEADER_SIZE, 0);
+                    EncodedHeader {
+                        header_bytes: header.as_slice().try_into().unwrap(),
+                        header_size: F::from_canonical_u64(header_len as u64),
+                    }
+                })
+                .collect::<_>();
 
         input.write::<ArrayVariable<EncodedHeaderVariable<MAX_SMALL_HEADER_SIZE>, NUM_SMALL_HEADERS>>(
             encoded_small_headers_values,
@@ -124,11 +123,10 @@ mod tests {
         let mut large_header: Vec<u8> = bytes!(ENCODED_HEADERS[NUM_BLOCKS - 1]);
         let large_header_len = large_header.len();
         large_header.resize(MAX_LARGE_HEADER_SIZE, 0);
-        let encoded_large_header_value: EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F> =
-            EncodedHeaderVariableValue {
-                header_bytes: large_header.as_slice().try_into().unwrap(),
-                header_size: F::from_canonical_usize(large_header_len),
-            };
+        let encoded_large_header_value: EncodedHeader<MAX_LARGE_HEADER_SIZE, F> = EncodedHeader {
+            header_bytes: large_header.as_slice().try_into().unwrap(),
+            header_size: F::from_canonical_usize(large_header_len),
+        };
         input.write::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>(encoded_large_header_value);
 
         let (proof, mut output) = circuit.prove(&input);

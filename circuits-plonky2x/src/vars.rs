@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use avail_subxt::primitives::Header;
+use codec::Encode;
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
 pub use plonky2x::frontend::ecc::ed25519::curve::curve_types::AffinePoint;
 pub use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
@@ -72,6 +74,19 @@ pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
     Variable(api.le_sum(bits_be.to_vec().iter()))
 }
 
+pub fn to_header_variable<const S: usize, F: RichField>(header: Header) -> EncodedHeader<S, F> {
+    let mut header_bytes = header.encode();
+    let header_size = header_bytes.len();
+    if header_size > S {
+        panic!("header size {} is greater than S {}", header_size, S);
+    }
+    header_bytes.resize(S, 0);
+    EncodedHeader {
+        header_bytes,
+        header_size: F::from_canonical_usize(header_size),
+    }
+}
+
 #[derive(Clone, Debug, CircuitVariable)]
 #[value_name(EncodedHeader)]
 pub struct EncodedHeaderVariable<const S: usize> {
@@ -79,6 +94,7 @@ pub struct EncodedHeaderVariable<const S: usize> {
     pub header_size: Variable,
 }
 #[derive(Clone, Debug, CircuitVariable)]
+#[value_name(HeaderValueType)]
 pub struct HeaderVariable {
     pub block_number: U32Variable,
     pub parent_hash: Bytes32Variable,

@@ -50,6 +50,7 @@ impl<
         // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
         let mut header_variables = Vec::new();
         for i in 0..headers.len() {
+            // TODO: replace with `to_header_variable` from vars.rs
             let header = &headers[i];
             let mut header_bytes = header.encode();
             let header_size = header_bytes.len();
@@ -95,7 +96,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>) {
         let trusted_block = builder.evm_read::<U32Variable>();
         let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
-        let authority_set_id = builder.evm_read::<U32Variable>();
+        let authority_set_id = builder.evm_read::<U64Variable>();
         let authority_set_hash = builder.evm_read::<Bytes32Variable>();
         let target_block = builder.evm_read::<U32Variable>();
 
@@ -253,12 +254,12 @@ mod tests {
                 .unwrap();
         let trusted_block = 485710u32;
         let target_block = 485712u32; // mimics test_step_small
-        let authority_set_id = 0u32; // Placeholder for now
+        let authority_set_id = 0u64; // Placeholder for now
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
 
         input.evm_write::<U32Variable>(trusted_block.into());
         input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
-        input.evm_write::<U32Variable>(authority_set_id.into());
+        input.evm_write::<U64Variable>(authority_set_id.into());
         input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
         input.evm_write::<U32Variable>(target_block.into());
 

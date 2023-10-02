@@ -5,9 +5,10 @@ use async_trait::async_trait;
 use avail_subxt::primitives::Header;
 use avail_subxt::{build_client, AvailConfig};
 use codec::{Decode, Encode};
+use ed25519_dalek::{PublicKey, Signature, Verifier};
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use sp_application_crypto::{RuntimeAppPublic, RuntimePublic};
-use sp_core::ed25519::{Public as EdPublic, Signature};
+use sp_core::ed25519::Public as EdPublic;
 use sp_core::storage::StorageKey;
 use sp_core::{ed25519, twox_128, Pair};
 use subxt::rpc::RpcParams;
@@ -177,14 +178,16 @@ impl RpcDataFetcher {
             .for_each(|precommit| {
                 let pubkey = precommit.clone().id;
                 let signature = precommit.clone().signature.0;
-                // TODO: put this check back in, some weird error with mismatched types
-                // let is_ok = <ed25519::Pair as Pair>::verify(
-                //     &precommit.signature,
-                //     signed_message.as_slice(),
-                //     &pubkey,
-                // );
-                // assert!(is_ok);
                 let pubkey_bytes = pubkey.0.to_vec();
+
+                // Verify the signature as a sanity check
+                let pubkey_dalek = PublicKey::from_bytes(&pubkey_bytes).unwrap();
+                let verified = pubkey_dalek
+                    .verify(&signed_message, &Signature::from_bytes(&signature).unwrap());
+                if verified.is_err() {
+                    panic!("Signature is not valid");
+                }
+
                 pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
             });
 

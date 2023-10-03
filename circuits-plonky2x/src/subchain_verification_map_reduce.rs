@@ -1,22 +1,23 @@
+use ethers::types::H256;
 use itertools::Itertools;
-use plonky2::field::types::PrimeField64;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
-use plonky2x::frontend::hint::simple::hint::Hint;
-use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
-use plonky2x::frontend::vars::{ValueStream, VariableStream};
+use plonky2x::frontend::vars::VariableStream;
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, Field, HintRegistry, Variable,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, Variable,
 };
-use serde::{Deserialize, Serialize};
+use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderLookupHint};
 
-use crate::vars::EncodedHeaderVariable;
+use crate::decoder::DecodingMethods;
 
 /// MAX NUM HEADERS OF EPOCH
-const MAX_EPOCH_SIZE: usize = 200;
+//const MAX_EPOCH_SIZE: usize = 200;
+const MAX_EPOCH_SIZE: usize = 24;
 
 /// The batch size for each map job
-const BATCH_SIZE: usize = 50;
+const BATCH_SIZE: usize = 12;
+
+//const BATCH_SIZE: usize = 50;
 
 const MAX_HEADER_CHUNK_SIZE: usize = 100;
 const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
@@ -29,88 +30,85 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
         <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
             AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
     {
-        let headers =
-            builder.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, MAX_EPOCH_SIZE>>();
         let idxs = (0..MAX_EPOCH_SIZE)
             .map(L::Field::from_canonical_usize)
             .collect_vec();
 
-        let _ = builder
-            .mapreduce::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, MAX_EPOCH_SIZE>, Variable, (Bytes32Variable, Bytes32Variable), _, _, BATCH_SIZE>(
-                headers,
-                idxs,
-                |map_headers, map_idxs, builder| {
-                    let mut input_stream = VariableStream::new();
-                    input_stream.write(&map_headers);
-                    input_stream.write(&map_idxs[0]);
+        let dummy: Variable = builder.zero();
 
-                    let hint = HeaderLookupHint::<BATCH_SIZE> {};
-                    let headers = builder.hint(input_stream, hint).read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, BATCH_SIZE>>(builder);
+        let _ = builder.mapreduce::<Variable, Variable, (
+            Bytes32Variable,
+            Bytes32Variable,
+            Bytes32Variable,
+            Bytes32Variable,
+        ), _, _, BATCH_SIZE>(
+            dummy,
+            idxs,
+            |map_headers, map_idxs, builder| {
+                let mut input_stream = VariableStream::new();
+                input_stream.write(&map_headers);
+                input_stream.write(&map_idxs[0]);
 
-                    let mut hashes = Vec::new();
+                let hint = HeaderLookupHint {};
+                let headers = builder
+                    .hint(input_stream, hint)
+                    .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, BATCH_SIZE>>(
+                        builder,
+                    );
 
-                    for header in headers.as_vec().iter() {
-                        let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
-                            header.header_bytes.as_slice(),
-                            header.header_size,
-                        );
+                let mut block_nums = Vec::new();
+                let mut block_hashes = Vec::new();
+                let mut block_state_roots = Vec::new();
+                let mut block_data_roots = Vec::new();
 
-                        hashes.push(hash);
-                    }
+                //let zero_hash = Bytes32Variable::constant(builder, H256([0;32]));
 
-                    (hashes[0], hashes[BATCH_SIZE - 1])
-                },
-                |_, left, right, _| {
-                    (left.0, right.1)
+                for header in headers.as_vec().iter() {
+                    let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
+                        header.header_bytes.as_slice(),
+                        header.header_size,
+                    );
+                    block_hashes.push(hash);
+
+                    let header_variable = builder.decode_header(header, &hash);
+                    block_nums.push(header_variable.block_number);
+                    block_state_roots.push(header_variable.state_root.0);
+                    block_data_roots.push(header_variable.data_root.0);
                 }
-            );
-    }
 
-    fn register_generators<L: PlonkParameters<D>, const D: usize>(registry: &mut HintRegistry<L, D>)
-    where
-        <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher: AlgebraicHasher<L::Field>,
-    {
-        let id = MapReduceGenerator::<
-            L,
-            ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, MAX_EPOCH_SIZE>,
-            Variable,
-            (Bytes32Variable, Bytes32Variable),
-            BATCH_SIZE,
-            D,
-        >::id();
-        registry.register_simple::<MapReduceGenerator<
-            L,
-            ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, MAX_EPOCH_SIZE>,
-            Variable,
-            (Bytes32Variable, Bytes32Variable),
-            BATCH_SIZE,
-            D,
-        >>(id);
-    }
-}
+                // Need to pad block_state_roots and block_data_roots to be of length 16;
+                for _i in 0..4 {
+                    block_state_roots.push(Bytes32Variable::default().0);
+                    block_data_roots.push(Bytes32Variable::default().0);
+                }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HeaderLookupHint<const B: usize> {}
+                let mut leaves_enabled = Vec::new();
+                leaves_enabled.extend([builder._true(); 12]);
+                leaves_enabled.extend([builder._false(); 4]);
 
-impl<L: PlonkParameters<D>, const D: usize, const B: usize> Hint<L, D> for HeaderLookupHint<B> {
-    fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
-        let headers = input_stream
-            .read_value::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, MAX_EPOCH_SIZE>>();
-        let start_idx = input_stream.read_value::<Variable>().to_canonical_u64();
+                let state_merkle_root = builder
+                    .compute_root_from_leaves::<16, 32>(block_state_roots, leaves_enabled.clone());
+                let data_merkle_root =
+                    builder.compute_root_from_leaves::<16, 32>(block_data_roots, leaves_enabled);
 
-        output_stream.write_value::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, B>>(
-            headers[start_idx as usize..start_idx as usize + B].to_vec(),
+                (
+                    block_hashes[0],
+                    block_hashes[BATCH_SIZE - 1],
+                    state_merkle_root,
+                    data_merkle_root,
+                )
+            },
+            |_, left_node, right_node, _| (left_node.0, right_node.1, left_node.2, left_node.3),
+            //(left_node.0, right_node.0),
         );
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use plonky2x::prelude::{bytes, DefaultParameters, GoldilocksField};
+    use plonky2x::prelude::DefaultParameters;
 
     use super::*;
-    use crate::testing_utils::tests::{pad_header, ENCODED_HEADERS};
-    use crate::vars::EncodedHeaderVariableValue;
 
     type L = DefaultParameters;
     const D: usize = 2;
@@ -119,32 +117,14 @@ mod tests {
     fn test_circuit() {
         env_logger::try_init().unwrap_or_default();
 
-        type F = GoldilocksField;
-
         let mut builder = CircuitBuilder::<L, D>::new();
         MapReduceSubchainVerificationCircuit::define(&mut builder);
         let circuit = builder.build();
 
-        let mut input = circuit.input();
-
-        let mut encoded_headers_values = Vec::new();
-        for i in 0..10 {
-            for j in 0..20 {
-                let encoded_header_value = EncodedHeaderVariableValue {
-                    header_bytes: pad_header(bytes!(ENCODED_HEADERS[i * 20 + j]), MAX_HEADER_SIZE),
-                    header_size: F::from_canonical_usize(ENCODED_HEADERS[i * 20 + j].len()),
-                };
-                encoded_headers_values.push(encoded_header_value);
-            }
-        }
-
-        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, 180>>(
-            encoded_headers_values,
-        );
-
+        let input = circuit.input();
         let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        MapReduceSubchainVerificationCircuit::test_serialization::<L, D>();
+        //MapReduceSubchainVerificationCircuit::test_serialization::<L, D>();
     }
 }

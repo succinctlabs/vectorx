@@ -8,8 +8,6 @@ use plonky2x::prelude::{
 };
 use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderLookupHint};
 
-use crate::decoder::DecodingMethods;
-
 /// MAX NUM HEADERS OF EPOCH
 //const MAX_EPOCH_SIZE: usize = 200;
 const MAX_EPOCH_SIZE: usize = 24;
@@ -22,7 +20,7 @@ const BATCH_SIZE: usize = 12;
 const MAX_HEADER_CHUNK_SIZE: usize = 100;
 const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
 
-struct MapReduceSubchainVerificationCircuit;
+pub struct MapReduceSubchainVerificationCircuit;
 
 impl Circuit for MapReduceSubchainVerificationCircuit {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
@@ -39,8 +37,8 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
         let _ = builder.mapreduce::<Variable, Variable, (
             Bytes32Variable,
             Bytes32Variable,
-            Bytes32Variable,
-            Bytes32Variable,
+            // Bytes32Variable,
+            // Bytes32Variable,
         ), _, _, BATCH_SIZE>(
             dummy,
             idxs,
@@ -56,10 +54,10 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
                         builder,
                     );
 
-                let mut block_nums = Vec::new();
+                // let mut block_nums = Vec::new();
                 let mut block_hashes = Vec::new();
-                let mut block_state_roots = Vec::new();
-                let mut block_data_roots = Vec::new();
+                // let mut block_state_roots = Vec::new();
+                // let mut block_data_roots = Vec::new();
 
                 //let zero_hash = Bytes32Variable::constant(builder, H256([0;32]));
 
@@ -70,36 +68,37 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
                     );
                     block_hashes.push(hash);
 
-                    let header_variable = builder.decode_header(header, &hash);
-                    block_nums.push(header_variable.block_number);
-                    block_state_roots.push(header_variable.state_root.0);
-                    block_data_roots.push(header_variable.data_root.0);
+                    // let header_variable = builder.decode_header(header, &hash);
+                    // block_nums.push(header_variable.block_number);
+                    // block_state_roots.push(header_variable.state_root.0);
+                    // block_data_roots.push(header_variable.data_root.0);
                 }
 
                 // Need to pad block_state_roots and block_data_roots to be of length 16;
-                for _i in 0..4 {
-                    block_state_roots.push(Bytes32Variable::default().0);
-                    block_data_roots.push(Bytes32Variable::default().0);
-                }
+                // for _i in 0..4 {
+                //     block_state_roots.push(Bytes32Variable::default().0);
+                //     block_data_roots.push(Bytes32Variable::default().0);
+                // }
 
-                let mut leaves_enabled = Vec::new();
-                leaves_enabled.extend([builder._true(); 12]);
-                leaves_enabled.extend([builder._false(); 4]);
+                // let mut leaves_enabled = Vec::new();
+                // leaves_enabled.extend([builder._true(); 12]);
+                // leaves_enabled.extend([builder._false(); 4]);
 
-                let state_merkle_root = builder
-                    .compute_root_from_leaves::<16, 32>(block_state_roots, leaves_enabled.clone());
-                let data_merkle_root =
-                    builder.compute_root_from_leaves::<16, 32>(block_data_roots, leaves_enabled);
+                // let state_merkle_root = builder
+                //     .compute_root_from_leaves::<16, 32>(block_state_roots, leaves_enabled.clone());
+                // let data_merkle_root =
+                //     builder.compute_root_from_leaves::<16, 32>(block_data_roots, leaves_enabled);
 
                 (
                     block_hashes[0],
                     block_hashes[BATCH_SIZE - 1],
-                    state_merkle_root,
-                    data_merkle_root,
+                    //state_merkle_root,
+                    //data_merkle_root,
                 )
             },
-            |_, left_node, right_node, _| (left_node.0, right_node.1, left_node.2, left_node.3),
-            //(left_node.0, right_node.0),
+            |_, left_node, right_node, _| 
+            //(left_node.0, right_node.1, left_node.2, left_node.3),
+            (left_node.0, right_node.0),
         );
     }
 }

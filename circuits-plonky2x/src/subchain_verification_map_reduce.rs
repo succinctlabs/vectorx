@@ -2,9 +2,10 @@ use ethers::types::H256;
 use itertools::Itertools;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
+use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
 use plonky2x::frontend::vars::VariableStream;
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, Variable,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, Variable, HintRegistry,
 };
 use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderLookupHint};
 
@@ -44,11 +45,8 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
         ), _, _, BATCH_SIZE>(
             dummy,
             idxs,
-            |map_headers, map_idxs, builder| {
-                let mut input_stream = VariableStream::new();
-                input_stream.write(&map_headers);
-                input_stream.write(&map_idxs[0]);
-
+            |_, _, builder| {
+                let input_stream = VariableStream::new();
                 let hint = HeaderLookupHint {};
                 let headers = builder
                     .hint(input_stream, hint)
@@ -103,6 +101,29 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
             (left_node.0, right_node.0),
         );
     }
+
+    fn register_generators<L: PlonkParameters<D>, const D: usize>(registry: &mut HintRegistry<L, D>)
+    where
+        <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher: AlgebraicHasher<L::Field>,
+    {
+        let id = MapReduceGenerator::<
+            L,
+            Variable,
+            Variable,
+            (Bytes32Variable, Bytes32Variable),
+            BATCH_SIZE,
+            D,
+        >::id();
+        registry.register_simple::<MapReduceGenerator<
+            L,
+            Variable,
+            Variable,
+            (Bytes32Variable, Bytes32Variable),
+            BATCH_SIZE,
+            D,
+        >>(id);
+    }
+    
 }
 
 #[cfg(test)]

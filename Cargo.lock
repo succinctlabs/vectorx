@@ -375,7 +375,7 @@ dependencies = [
  "pallet-grandpa 23.0.0",
  "parity-scale-codec",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints)",
  "rand 0.4.6",
  "reqwest",
  "serde",
@@ -1101,6 +1101,24 @@ dependencies = [
 name = "curta"
 version = "0.1.0"
 source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/support_small_public_inputs#e23cabe9764d070dc8aaa169a28005af85c6b654"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "hex",
+ "itertools 0.10.5",
+ "log",
+ "num",
+ "plonky2",
+ "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.8.5",
+ "serde",
+ "subtle-encoding",
+]
+
+[[package]]
+name = "curta"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/curta.git#1a36e5681c1e25f108c89270ae480a5f0efe317b"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4703,6 +4721,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#6576c83fa13132abf1aff5bccc23d9fcd0fd8825"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4730,7 +4749,7 @@ dependencies = [
  "num-bigint 0.4.4",
  "parity-scale-codec",
  "plonky2",
- "plonky2x-derive",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints)",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -4739,7 +4758,50 @@ dependencies = [
  "serde_with",
  "sha2 0.10.8",
  "sha256",
- "succinct_avail_utils",
+ "succinct_avail_utils 0.1.0 (git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment)",
+ "tokio",
+ "tracing",
+ "uuid 1.4.1",
+]
+
+[[package]]
+name = "plonky2x"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#b527792881a6077482d3aef24de78b5e7dfc4c74"
+dependencies = [
+ "anyhow",
+ "array-macro",
+ "async-trait",
+ "backtrace",
+ "base64 0.13.1",
+ "bincode",
+ "clap 4.4.6",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git)",
+ "curve25519-dalek 4.0.0",
+ "digest 0.10.7",
+ "dotenv",
+ "ed25519-consensus",
+ "env_logger 0.10.0",
+ "ethers",
+ "ff",
+ "futures",
+ "hex",
+ "itertools 0.10.5",
+ "jemallocator",
+ "lazy_static",
+ "log",
+ "num",
+ "num-bigint 0.4.4",
+ "plonky2",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_plain",
+ "serde_with",
+ "sha2 0.10.8",
+ "sha256",
  "tokio",
  "tracing",
  "uuid 1.4.1",
@@ -4748,6 +4810,17 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#6576c83fa13132abf1aff5bccc23d9fcd0fd8825"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.37",
+]
+
+[[package]]
+name = "plonky2x-derive"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#b527792881a6077482d3aef24de78b5e7dfc4c74"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7733,7 +7806,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
  "rand 0.4.6",
  "serde",
  "serde_json",
@@ -7744,6 +7817,32 @@ dependencies = [
 [[package]]
 name = "succinct_avail_utils"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "avail-subxt",
+ "enum_extract",
+ "hex",
+ "itertools 0.8.2",
+ "pallet-grandpa 21.0.0",
+ "parity-scale-codec",
+ "primitive-types 0.12.1",
+ "reqwest",
+ "scale-info",
+ "serde",
+ "serde_json",
+ "sha256",
+ "sp-application-crypto 25.0.0",
+ "sp-core 16.0.0",
+ "sp-state-machine 0.12.0",
+ "subxt",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "succinct_avail_utils"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment#292a4e76ef04e86319c4242219c82d6a6316546f"
 dependencies = [
  "async-trait",
  "avail-subxt",

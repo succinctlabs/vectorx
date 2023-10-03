@@ -1,0 +1,11 @@
+{
+    "entrypoints": [
+        {
+            "name": "v1",
+            "framework": "plonky2",
+            "baseDir": ".",
+            "buildCommand": "cargo run --release --bin subchain_verification build && mv ./target/release/subchain_verification ./build/subchain_verification",
+            "proveCommand": "./build/subchain_verification prove-wrapped --input-json input.json --wrapper-path /verifier-build"
+        }
+    ]
+}

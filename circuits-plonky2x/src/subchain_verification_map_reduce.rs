@@ -8,6 +8,8 @@ use plonky2x::prelude::{
 };
 use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderLookupHint};
 
+use crate::decoder::DecodingMethods;
+
 /// MAX NUM HEADERS OF EPOCH
 //const MAX_EPOCH_SIZE: usize = 200;
 const MAX_EPOCH_SIZE: usize = 24;
@@ -54,46 +56,46 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
                         builder,
                     );
 
-                // let mut block_nums = Vec::new();
-                let mut block_hashes = Vec::new();
-                // let mut block_state_roots = Vec::new();
-                // let mut block_data_roots = Vec::new();
+                let mut block_nums = Vec::new();
+                // let mut block_hashes = Vec::new();
+                let mut block_state_roots = Vec::new();
+                let mut block_data_roots = Vec::new();
 
-                //let zero_hash = Bytes32Variable::constant(builder, H256([0;32]));
+                let zero_hash = Bytes32Variable::constant(builder, H256([0;32]));
 
                 for header in headers.as_vec().iter() {
-                    let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
-                        header.header_bytes.as_slice(),
-                        header.header_size,
-                    );
-                    block_hashes.push(hash);
+                    // let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
+                    //     header.header_bytes.as_slice(),
+                    //     header.header_size,
+                    // );
+                    // block_hashes.push(hash);
 
-                    // let header_variable = builder.decode_header(header, &hash);
-                    // block_nums.push(header_variable.block_number);
-                    // block_state_roots.push(header_variable.state_root.0);
-                    // block_data_roots.push(header_variable.data_root.0);
+                    let header_variable = builder.decode_header(header, &zero_hash);
+                    block_nums.push(header_variable.block_number);
+                    block_state_roots.push(header_variable.state_root.0);
+                    block_data_roots.push(header_variable.data_root.0);
                 }
 
                 // Need to pad block_state_roots and block_data_roots to be of length 16;
-                // for _i in 0..4 {
-                //     block_state_roots.push(Bytes32Variable::default().0);
-                //     block_data_roots.push(Bytes32Variable::default().0);
-                // }
+                for _i in 0..4 {
+                    block_state_roots.push(Bytes32Variable::default().0);
+                    block_data_roots.push(Bytes32Variable::default().0);
+                }
 
-                // let mut leaves_enabled = Vec::new();
-                // leaves_enabled.extend([builder._true(); 12]);
-                // leaves_enabled.extend([builder._false(); 4]);
+                let mut leaves_enabled = Vec::new();
+                leaves_enabled.extend([builder._true(); 12]);
+                leaves_enabled.extend([builder._false(); 4]);
 
-                // let state_merkle_root = builder
-                //     .compute_root_from_leaves::<16, 32>(block_state_roots, leaves_enabled.clone());
-                // let data_merkle_root =
-                //     builder.compute_root_from_leaves::<16, 32>(block_data_roots, leaves_enabled);
+                let state_merkle_root = builder
+                    .compute_root_from_leaves::<16, 32>(block_state_roots, leaves_enabled.clone());
+                let data_merkle_root =
+                    builder.compute_root_from_leaves::<16, 32>(block_data_roots, leaves_enabled);
 
                 (
-                    block_hashes[0],
-                    block_hashes[BATCH_SIZE - 1],
-                    //state_merkle_root,
-                    //data_merkle_root,
+                    // block_hashes[0],
+                    // block_hashes[BATCH_SIZE - 1],
+                    state_merkle_root,
+                    data_merkle_root,
                 )
             },
             |_, left_node, right_node, _| 

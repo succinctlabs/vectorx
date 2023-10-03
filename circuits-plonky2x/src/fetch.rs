@@ -38,6 +38,15 @@ pub struct RpcDataFetcher {
     pub save: Option<String>,
 }
 
+/// This function is useful for verifying that a Ed25519 signature is valid, it will panic if the signature is not valid
+pub fn verify_signature(pubkey_bytes: &[u8], signed_message: &[u8], signature: &[u8; 64]) {
+    let pubkey_dalek = PublicKey::from_bytes(pubkey_bytes).unwrap();
+    let verified = pubkey_dalek.verify(signed_message, &Signature::from_bytes(signature).unwrap());
+    if verified.is_err() {
+        panic!("Signature is not valid");
+    }
+}
+
 impl RpcDataFetcher {
     pub async fn new() -> Self {
         // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
@@ -136,6 +145,8 @@ impl RpcDataFetcher {
                 panic!("Weight for authority is not 1");
             }
             let pub_key_vec = authority_key.to_raw_vec();
+            // Reversing causes problems
+            // let reversed = pub_key_vec.clone().into_iter().rev().collect::<Vec<u8>>();
             let pub_key_point = AffinePoint::<Curve>::new_from_compressed_point(&pub_key_vec);
             authorities.push(pub_key_point);
             authories_pubkey_bytes.push(pub_key_vec);
@@ -189,14 +200,7 @@ impl RpcDataFetcher {
                 let signature = precommit.clone().signature.0;
                 let pubkey_bytes = pubkey.0.to_vec();
 
-                // Verify the signature as a sanity check
-                let pubkey_dalek = PublicKey::from_bytes(&pubkey_bytes).unwrap();
-                let verified = pubkey_dalek
-                    .verify(&signed_message, &Signature::from_bytes(&signature).unwrap());
-                if verified.is_err() {
-                    panic!("Signature is not valid");
-                }
-
+                verify_signature(&pubkey_bytes, &signed_message, &signature);
                 pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
             });
 
@@ -213,6 +217,7 @@ impl RpcDataFetcher {
                 // We push a dummy signature, since this validator didn't sign
                 padded_signatures.push(DUMMY_SIGNATURE);
             } else {
+                verify_signature(&pubkey_bytes, &signed_message, signature.unwrap());
                 validator_signed.push(true);
                 padded_pubkeys.push(*authority);
                 padded_signatures.push(*signature.unwrap());

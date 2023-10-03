@@ -1,4 +1,7 @@
+use ed25519_dalek::{PublicKey, Signature, Verifier};
+use num::traits::ToBytes;
 use num::BigUint;
+use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSASignature};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
 use plonky2x::frontend::hint::simple::hint::Hint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -7,10 +10,11 @@ use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
     Field, PlonkParameters, RichField, Variable,
 };
+use plonky2x::utils::to_be_bits;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-use crate::fetch::{RpcDataFetcher, SimpleJustificationData};
+use crate::fetch::{verify_signature, RpcDataFetcher, SimpleJustificationData};
 use crate::vars::*;
 
 type SignatureValueType<F> = <EDDSASignatureTarget<Curve> as CircuitVariable>::ValueType<F>;
@@ -52,6 +56,32 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
         if encoded_precommit.len() != ENCODED_PRECOMMIT_LENGTH {
             panic!("Encoded precommit is not the correct length");
         }
+
+        verify_signature(
+            &justification_data.pubkeys[0].compress_point().to_le_bytes(),
+            &encoded_precommit,
+            &justification_data.signatures[0],
+        );
+
+        let value_type = signature_to_value_type::<L::Field>(&justification_data.signatures[0]);
+
+        verify_message(
+            &to_be_bits(&encoded_precommit),
+            &EDDSASignature::<Ed25519> {
+                r: value_type.r,
+                s: value_type.s,
+            },
+            &plonky2x::frontend::ecc::ed25519::curve::eddsa::EDDSAPublicKey(
+                justification_data.pubkeys[0],
+            ),
+        );
+        println!("Verified message");
+        println!("{}", hex::encode(encoded_precommit.clone()));
+        println!("{}", hex::encode(justification_data.signatures[0]));
+        println!(
+            "{}",
+            hex::encode(justification_data.pubkeys[0].compress_point().to_le_bytes())
+        );
 
         output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
             encoded_precommit.try_into().unwrap(),
@@ -122,6 +152,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             output_stream.read::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(self);
         let pubkeys =
             output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(self);
+        // TODO: read `num_active_authorities` from output stream
 
         // TODO: call verify_authority_set_commitment
 

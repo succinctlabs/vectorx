@@ -1,27 +1,123 @@
-use plonky2x::frontend::ecc::ed25519::curve::curve_types::{AffinePoint, Curve};
+use ed25519_dalek::{PublicKey, Signature, Verifier};
+use num::traits::ToBytes;
+use num::BigUint;
+use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSASignature};
+use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
+use plonky2x::frontend::hint::simple::hint::Hint;
+use plonky2x::frontend::uint::uint64::U64Variable;
+use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
-    ArrayVariable, CircuitBuilder, CircuitVariable, GoldilocksField, PlonkParameters, RichField,
-    Target, Variable, Witness, WitnessWrite,
+    ArrayVariable, BoolVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
+    Field, PlonkParameters, RichField, Variable,
 };
+use plonky2x::utils::to_be_bits;
+use serde::{Deserialize, Serialize};
+use tokio::runtime::Runtime;
 
-pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
+use crate::fetch::{verify_signature, RpcDataFetcher, SimpleJustificationData};
+use crate::vars::*;
+
+type SignatureValueType<F> = <EDDSASignatureTarget<Curve> as CircuitVariable>::ValueType<F>;
+
+fn signature_to_value_type<F: RichField>(sig_bytes: &[u8]) -> SignatureValueType<F> {
+    let sig_r = AffinePoint::new_from_compressed_point(&sig_bytes[0..32]);
+    assert!(sig_r.is_valid());
+    let sig_s_biguint = BigUint::from_bytes_le(&sig_bytes[32..64]);
+    if sig_s_biguint.to_u32_digits().is_empty() {
+        panic!("sig_s_biguint has 0 limbs which will cause problems down the line")
+    }
+    let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
+    SignatureValueType::<F> { r: sig_r, s: sig_s }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
+
+impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L, D>
+    for HintSimpleJustification<NUM_AUTHORITIES>
+{
+    fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
+        let block_number = input_stream.read_value::<U32Variable>();
+        let authority_set_id = input_stream.read_value::<U64Variable>();
+
+        let rt = Runtime::new().expect("failed to create tokio runtime");
+        let justification_data: SimpleJustificationData = rt.block_on(async {
+            let data_fetcher = RpcDataFetcher::new().await;
+            data_fetcher
+                .get_simple_justification::<NUM_AUTHORITIES>(block_number)
+                .await
+        });
+
+        if justification_data.authority_set_id != authority_set_id {
+            panic!("Authority set id does not match");
+        }
+
+        let encoded_precommit = justification_data.signed_message;
+        if encoded_precommit.len() != ENCODED_PRECOMMIT_LENGTH {
+            panic!("Encoded precommit is not the correct length");
+        }
+
+        verify_signature(
+            &justification_data.pubkeys[0].compress_point().to_le_bytes(),
+            &encoded_precommit,
+            &justification_data.signatures[0],
+        );
+
+        let value_type = signature_to_value_type::<L::Field>(&justification_data.signatures[0]);
+
+        verify_message(
+            &to_be_bits(&encoded_precommit),
+            &EDDSASignature::<Ed25519> {
+                r: value_type.r,
+                s: value_type.s,
+            },
+            &plonky2x::frontend::ecc::ed25519::curve::eddsa::EDDSAPublicKey(
+                justification_data.pubkeys[0],
+            ),
+        );
+        println!("Verified message");
+        println!("{}", hex::encode(encoded_precommit.clone()));
+        println!("{}", hex::encode(justification_data.signatures[0]));
+        println!(
+            "{}",
+            hex::encode(justification_data.pubkeys[0].compress_point().to_le_bytes())
+        );
+
+        output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
+            encoded_precommit.try_into().unwrap(),
+        );
+        output_stream.write_value::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(
+            justification_data.validator_signed,
+        );
+        output_stream.write_value::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(
+            justification_data
+                .signatures
+                .iter()
+                .map(|x| signature_to_value_type::<L::Field>(x))
+                .collect(),
+        );
+        output_stream.write_value::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(
+            justification_data.pubkeys,
+        );
+    }
+}
 
 // TODO: take in block hash and authority_set_id
 // Return authority_set_signers and signed_precommits
 
-pub trait GrandpaJustificationVerifier<L: PlonkParameters<D>, const D: usize, C: Curve> {
+pub trait GrandpaJustificationVerifier {
     fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
     );
 
     fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
         &mut self,
         block: HeaderVariable,
         block_hash: Bytes32Variable,
-        authority_set_id: U32Variable,
+        authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
         // authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
         // signed_precommits: &ArrayVariable<SignedPrecommitVariable, NUM_AUTHORITIES>,
@@ -33,7 +129,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
     ) {
     }
 
@@ -41,16 +137,108 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         &mut self,
         block: HeaderVariable,
         block_hash: Bytes32Variable,
-        authority_set_id: U32Variable,
+        authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
-        // authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
-        // signed_precommits: &ArrayVariable<SignedPrecommitVariable, NUM_AUTHORITIES>,
     ) {
-        // TODO get the authority_set_signers, signed_precommits, authority_enabled from hint
-        // sum up the weights of the authority_set_signers weighted by active_authories and validate quorum
-        // verify decoded precommit block_hash matches provided block_hash
-        // verify decoded precommit block_number matches provider block_number
-        // verify decoded precommit authority_set_id matches provided authority_set_id
-        // ? justification round
+        let mut input_stream = VariableStream::new();
+        input_stream.write(&block.block_number);
+        input_stream.write(&authority_set_id);
+        let output_stream = self.hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
+
+        let encoded_precommit = output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(self);
+        let validator_signed =
+            output_stream.read::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(self);
+        let signatures =
+            output_stream.read::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(self);
+        let pubkeys =
+            output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(self);
+        // TODO: read `num_active_authorities` from output stream
+
+        // TODO: call verify_authority_set_commitment
+
+        // TODO: decode the encoded_precommit and ensure that it matches the block_hash, block_number, and authority_set_id
+
+        // We verify the signatures of the validators on the encoded_precommit message.
+        // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
+        // and they are also constant length, so we can have `message_byte_lengths` be a constant array
+        let message_byte_lengths =
+            self.constant::<ArrayVariable<U32Variable, NUM_AUTHORITIES>>(vec![
+                ENCODED_PRECOMMIT_LENGTH
+                    as u32;
+                NUM_AUTHORITIES
+            ]);
+        let messages = vec![encoded_precommit; NUM_AUTHORITIES];
+        self.conditional_batch_eddsa_verify::<1, ENCODED_PRECOMMIT_LENGTH>(
+            ArrayVariable::new(validator_signed[0..1].to_vec()),
+            ArrayVariable::new(message_byte_lengths[0..1].to_vec()),
+            ArrayVariable::new(messages[0..1].to_vec()),
+            ArrayVariable::new(signatures[0..1].to_vec()),
+            ArrayVariable::new(pubkeys[0..1].to_vec()),
+        );
+
+        // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::env;
+
+    use ethers::types::H256;
+    use log::info;
+    use plonky2x::prelude::{Bytes32Variable, DefaultBuilder};
+
+    use super::*;
+
+    #[test]
+    fn test_simple_justification() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        // There are only 7 authories in the 10,000-th block
+        // But we set NUM_AUTHORITIES=10 so that we can test padding
+        const BLOCK_NUMBER: u32 = 10000u32;
+        const NUM_AUTHORITIES: usize = 7;
+
+        let rt = Runtime::new().expect("failed to create tokio runtime");
+        let justification_data: SimpleJustificationData = rt.block_on(async {
+            let fetcher = RpcDataFetcher::new().await;
+            fetcher
+                .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
+                .await
+        });
+        let fetched_authority_set_id = justification_data.authority_set_id;
+
+        info!("Defining circuit");
+        // Define the circuit
+        let mut builder = DefaultBuilder::new();
+
+        let block = builder.read::<HeaderVariable>();
+        let block_hash = builder.read::<Bytes32Variable>();
+        let authority_set_id = builder.read::<U64Variable>();
+        let authority_set_hash = builder.read::<Bytes32Variable>();
+        builder.verify_simple_justification::<NUM_AUTHORITIES>(
+            block,
+            block_hash,
+            authority_set_id,
+            authority_set_hash,
+        );
+        info!("Building circuit");
+        let circuit = builder.build();
+
+        let mut input = circuit.input();
+        input.write::<HeaderVariable>(HeaderValueType {
+            block_number: BLOCK_NUMBER,
+            parent_hash: H256::from([0u8; 32]), // TODO: these will have to be filled in with real things
+            state_root: H256::from([0u8; 32]),
+            data_root: H256::from([0u8; 32]),
+        });
+        input.write::<Bytes32Variable>(H256::from([0u8; 32]));
+        input.write::<U64Variable>(fetched_authority_set_id);
+        input.write::<Bytes32Variable>(H256::from([0u8; 32])); // TODO: will have to be filled in with real thing
+
+        info!("Generating proof");
+        let (proof, mut output) = circuit.prove(&input);
+        circuit.verify(&proof, &input, &output);
     }
 }

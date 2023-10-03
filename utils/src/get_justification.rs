@@ -1,17 +1,13 @@
 use std::ops::Deref;
 
-use avail_subxt::{api, build_client, primitives::Header};
+use avail_subxt::primitives::Header;
+use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use primitive_types::H256;
 use serde::de::Error;
-use serde::Deserialize;
-use serde::Serialize;
-use sp_core::bytes;
-use sp_core::ed25519;
-use sp_core::ed25519::Public as EdPublic;
-use sp_core::ed25519::Signature;
-use sp_core::Bytes;
-use sp_core::Pair;
+use serde::{Deserialize, Serialize};
+use sp_core::ed25519::{Public as EdPublic, Signature};
+use sp_core::{bytes, ed25519, Bytes, Pair};
 use subxt::rpc::RpcParams;
 
 // use anyhow::Result;
@@ -106,7 +102,7 @@ pub enum FinalityProofError {
 
 #[tokio::main]
 pub async fn main() {
-    let header_num = 272535;
+    let header_num = 485710;
     let url: &str = "wss://kate.avail.tools:443/ws";
 
     let c = build_client(url, false).await.unwrap();
@@ -153,7 +149,10 @@ pub async fn main() {
         &set_id,
     ));
 
-    println!("signed message is {:?}", hex::encode(signed_message.clone()));
+    println!(
+        "signed message is {:?}",
+        hex::encode(signed_message.clone())
+    );
 
     let mut signatures = Vec::new();
     let mut pub_keys = Vec::new();
@@ -187,5 +186,4 @@ pub async fn main() {
         .map(|x| hex::encode(x.0))
         .collect::<Vec<String>>();
     println!("{:?}", pub_keys_str);
-
 }

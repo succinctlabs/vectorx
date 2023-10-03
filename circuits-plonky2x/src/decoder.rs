@@ -265,19 +265,19 @@ pub mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let encoded_headers_values: Vec<EncodedHeaderVariableValue<MAX_LARGE_HEADER_SIZE, F>> =
-            ENCODED_HEADERS[0..NUM_BLOCKS]
-                .iter()
-                .map(|x| {
-                    let mut header: Vec<u8> = bytes!(x);
-                    let header_len = header.len();
-                    header.resize(MAX_LARGE_HEADER_SIZE, 0);
-                    EncodedHeaderVariableValue {
-                        header_bytes: header.as_slice().try_into().unwrap(),
-                        header_size: F::from_canonical_u64(header_len as u64),
-                    }
-                })
-                .collect::<_>();
+        let encoded_headers_values: Vec<EncodedHeader<MAX_LARGE_HEADER_SIZE, F>> = ENCODED_HEADERS
+            [0..NUM_BLOCKS]
+            .iter()
+            .map(|x| {
+                let mut header: Vec<u8> = bytes!(x);
+                let header_len = header.len();
+                header.resize(MAX_LARGE_HEADER_SIZE, 0);
+                EncodedHeader {
+                    header_bytes: header.as_slice().try_into().unwrap(),
+                    header_size: F::from_canonical_u64(header_len as u64),
+                }
+            })
+            .collect::<_>();
 
         input.write::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS>>(
             encoded_headers_values,

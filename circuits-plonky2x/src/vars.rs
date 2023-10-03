@@ -1,13 +1,20 @@
+use std::fmt::Debug;
+
+use avail_subxt::primitives::Header;
+use codec::Encode;
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
-use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
+pub use plonky2x::frontend::ecc::ed25519::curve::curve_types::AffinePoint;
+pub use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
+pub use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2x::frontend::ecc::ed25519::gadgets::curve::AffinePointTarget;
-use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
+pub use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable, Extendable,
     PlonkParameters, RichField, Variable, Witness, WitnessWrite,
 };
+use serde::{Deserialize, Serialize};
 
 pub const NUM_AUTHORITIES: usize = 76;
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
@@ -65,6 +72,19 @@ pub fn to_variable<F: RichField + Extendable<D>, const D: usize>(
     let mut bits_be = byte.as_bool_targets();
     bits_be.reverse();
     Variable(api.le_sum(bits_be.to_vec().iter()))
+}
+
+pub fn to_header_variable<const S: usize, F: RichField>(header: Header) -> EncodedHeader<S, F> {
+    let mut header_bytes = header.encode();
+    let header_size = header_bytes.len();
+    if header_size > S {
+        panic!("header size {} is greater than S {}", header_size, S);
+    }
+    header_bytes.resize(S, 0);
+    EncodedHeader {
+        header_bytes,
+        header_size: F::from_canonical_usize(header_size),
+    }
 }
 
 #[derive(Clone, Debug, CircuitVariable)]

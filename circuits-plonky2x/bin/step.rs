@@ -8,6 +8,7 @@
 //!
 
 use avail_plonky2x::fetch::RpcDataFetcher;
+use avail_plonky2x::justification::HintSimpleJustification;
 use avail_plonky2x::vars::{
     EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE,
 };
@@ -25,6 +26,8 @@ use plonky2x::prelude::{
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime; // TODO: re-export this instead of this path
 
+/// This hint takes in a trusted_block and target_block and fetches all the block headers in that range.
+/// We return an ArrayVariable of EncodedHeaderVariable of length NUM_HEADERS, padding with empty headers if necessary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StepOffchainInputs<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 
@@ -50,21 +53,8 @@ impl<
         // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
         let mut header_variables = Vec::new();
         for i in 0..headers.len() {
-            // TODO: replace with `to_header_variable` from vars.rs
             let header = &headers[i];
-            let mut header_bytes = header.encode();
-            let header_size = header_bytes.len();
-            if header_size > HEADER_LENGTH {
-                panic!(
-                    "header size {} is greater than HEADER_LENGTH {}",
-                    header_size, HEADER_LENGTH
-                );
-            }
-            header_bytes.resize(HEADER_LENGTH, 0);
-            let header_variable = EncodedHeader {
-                header_bytes: header_bytes.try_into().unwrap(),
-                header_size: L::Field::from_canonical_usize(header_size),
-            };
+            let header_variable = to_header_variable::<HEADER_LENGTH, L::Field>(header);
             header_variables.push(header_variable);
         }
 
@@ -76,7 +66,7 @@ impl<
             };
             header_variables.push(header_variable);
         }
-        println!("header_variables {:?}", header_variables);
+
         output_stream
             .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
                 header_variables,
@@ -94,6 +84,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
     for StepCircuit<VALIDATOR_SET_SIZE, HEADER_LENGTH, NUM_HEADERS>
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>) {
+        // Read the on-chain inputs.
         let trusted_block = builder.evm_read::<U32Variable>();
         let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
         let authority_set_id = builder.evm_read::<U64Variable>();
@@ -107,36 +98,14 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
             input_stream,
             StepOffchainInputs::<HEADER_LENGTH, NUM_HEADERS> {},
         );
-        let all_header_bytes = output_stream
+        let all_encoded_header_variables = output_stream
             .read::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(builder);
 
+        // We compute the last header index based on the target_block and trusted_block.
         let last_header_index = builder.sub(target_block, trusted_block);
-        // let target_header = builder.select_array(all_header_bytes, last_header_index.0);
 
-        // let target_header = output_stream.read::<Bytes32Variable>(builder);
-        // let round_present = output_stream.read::<BoolVariable>(builder);
-        // let target_header_block_height_proof = output_stream.read::<HeightProofVariable>(builder);
-        // let target_header_validators_hash_proof =
-        //     output_stream.read::<HashInclusionProofVariable<HEADER_PROOF_DEPTH>>(builder);
-        // let trusted_header = output_stream.read::<Bytes32Variable>(builder);
-        // let trusted_header_validators_hash_proof =
-        //     output_stream.read::<HashInclusionProofVariable<HEADER_PROOF_DEPTH>>(builder);
-        // let trusted_header_validators_hash_fields = output_stream
-        //     .read::<ArrayVariable<ValidatorHashFieldVariable<Ed25519>, MAX_VALIDATOR_SET_SIZE>>(
-        //         builder,
-        //     );
-
-        // builder.step(
-        //     &target_block_validators,
-        //     &target_header,
-        //     &target_header_block_height_proof,
-        //     &target_header_validators_hash_proof,
-        //     &round_present,
-        //     trusted_header,
-        //     &trusted_header_validators_hash_proof,
-        //     &trusted_header_validators_hash_fields,
-        // );
-        // builder.evm_write(target_header);
+        // TODO: verify a simple justification for the last header
+        // TODO: verify a header chain
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
@@ -146,6 +115,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         generator_registry.register_hint::<StepOffchainInputs<HEADER_LENGTH, NUM_HEADERS>>();
+        generator_registry.register_hint::<HintSimpleJustification<VALIDATOR_SET_SIZE>>();
     }
 }
 

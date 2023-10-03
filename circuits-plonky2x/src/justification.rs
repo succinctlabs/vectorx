@@ -1,4 +1,3 @@
-use ed25519_dalek::{PublicKey, Signature, Verifier};
 use num::traits::ToBytes;
 use num::BigUint;
 use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSASignature};
@@ -31,7 +30,7 @@ fn signature_to_value_type<F: RichField>(sig_bytes: &[u8]) -> SignatureValueType
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
+pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
 
 impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L, D>
     for HintSimpleJustification<NUM_AUTHORITIES>
@@ -75,13 +74,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
                 justification_data.pubkeys[0],
             ),
         );
-        println!("Verified message");
-        println!("{}", hex::encode(encoded_precommit.clone()));
-        println!("{}", hex::encode(justification_data.signatures[0]));
-        println!(
-            "{}",
-            hex::encode(justification_data.pubkeys[0].compress_point().to_le_bytes())
-        );
 
         output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
             encoded_precommit.try_into().unwrap(),
@@ -101,9 +93,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
         );
     }
 }
-
-// TODO: take in block hash and authority_set_id
-// Return authority_set_signers and signed_precommits
 
 pub trait GrandpaJustificationVerifier {
     fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
@@ -168,12 +157,12 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                 NUM_AUTHORITIES
             ]);
         let messages = vec![encoded_precommit; NUM_AUTHORITIES];
-        self.conditional_batch_eddsa_verify::<1, ENCODED_PRECOMMIT_LENGTH>(
-            ArrayVariable::new(validator_signed[0..1].to_vec()),
-            ArrayVariable::new(message_byte_lengths[0..1].to_vec()),
-            ArrayVariable::new(messages[0..1].to_vec()),
-            ArrayVariable::new(signatures[0..1].to_vec()),
-            ArrayVariable::new(pubkeys[0..1].to_vec()),
+        self.conditional_batch_eddsa_verify::<NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
+            validator_signed,
+            message_byte_lengths,
+            messages.into(),
+            signatures,
+            pubkeys,
         );
 
         // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`

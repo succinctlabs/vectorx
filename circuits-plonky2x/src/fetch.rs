@@ -1,32 +1,24 @@
 use std::collections::HashMap;
-use std::{env, fs};
+use std::fs;
 
-use async_trait::async_trait;
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client, AvailConfig};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
-use ethers::types::U64;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
-use sp_application_crypto::{RuntimeAppPublic, RuntimePublic};
-use sp_core::ed25519::Public as EdPublic;
-use sp_core::storage::StorageKey;
-use sp_core::{ed25519, twox_128, Pair};
+use sp_application_crypto::RuntimeAppPublic;
 use subxt::rpc::RpcParams;
 use subxt::utils::H256;
 use subxt::OnlineClient;
 use succinct_avail_utils::get_justification::{
-    Commit, EncodedFinalityProof, FinalityProof, GrandpaJustification, Precommit, SignedPrecommit,
-    SignerMessage,
+    EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage,
 };
 
 use crate::vars::{AffinePoint, Curve};
 
-// use subxt::config::Header as XtHeader;
-
 pub struct SimpleJustificationData {
-    pub authority_set_id: U64,
+    pub authority_set_id: u64,
     pub signed_message: Vec<u8>,
     pub validator_signed: Vec<bool>,
     pub pubkeys: Vec<AffinePoint<Curve>>,
@@ -76,13 +68,6 @@ impl RpcDataFetcher {
             let header: Header = header_result.unwrap().unwrap();
             headers.push(header);
         }
-        if let Some(save_path) = &self.save {
-            let file_name = format!(
-                "{}/block_range/{}_{}.json",
-                save_path, start_block_number, end_block_number
-            );
-            fs::write(file_name, serde_json::to_string(&headers).unwrap());
-        }
         headers
     }
 
@@ -99,23 +84,10 @@ impl RpcDataFetcher {
             .await
             .unwrap()
             .unwrap()
-        // Construct the storage key for the "CurrentSetId"
-        // let mut epoch_index_storage_key = twox_128(b"Grandpa").to_vec();
-        // epoch_index_storage_key.extend(twox_128(b"CurrentSetId").to_vec());
-        // let sk = StorageKey(epoch_index_storage_key);
-        // let keys = [sk.0.as_slice()];
-
-        // // Retrieve the storage data for the event key
-        // let data = self
-        //     .client
-        //     .rpc()
-        //     .storage(keys[0], Some(block_hash))
-        //     .await
-        //     .unwrap()
-        //     .unwrap();
-        // u32::from_le_bytes(data.0[0..4].try_into().unwrap())
     }
 
+    // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
+    // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
     pub async fn get_authorities(
         &self,
         block_number: u32,
@@ -135,7 +107,8 @@ impl RpcDataFetcher {
         let grandpa_authorities =
             VersionedAuthorityList::decode(&mut grandpa_authorities_bytes.as_slice()).unwrap();
 
-        // grandpa_authorities_bytes = [X, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
+        // The grandpa_authorities_bytes has the following format:
+        // [X, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
 
         let authority_list: AuthorityList = grandpa_authorities.into();
         let mut authorities: Vec<AffinePoint<Curve>> = Vec::new();
@@ -145,8 +118,6 @@ impl RpcDataFetcher {
                 panic!("Weight for authority is not 1");
             }
             let pub_key_vec = authority_key.to_raw_vec();
-            // Reversing causes problems
-            // let reversed = pub_key_vec.clone().into_iter().rev().collect::<Vec<u8>>();
             let pub_key_point = AffinePoint::<Curve>::new_from_compressed_point(&pub_key_vec);
             authorities.push(pub_key_point);
             authories_pubkey_bytes.push(pub_key_vec);
@@ -155,6 +126,9 @@ impl RpcDataFetcher {
         (authorities, authories_pubkey_bytes)
     }
 
+    // This function takes in a block_number as input, fetches the authority set for that block and the finality proof
+    // for that block. If the finality proof is a simple justification, it will return a SimpleJustificationData
+    // containing all the encoded precommit that the authorities sign, the validator signatures, and the authority pubkeys.
     pub async fn get_simple_justification<const VALIDATOR_SET_SIZE_MAX: usize>(
         &self,
         block_number: u32,
@@ -237,7 +211,7 @@ impl RpcDataFetcher {
         }
 
         SimpleJustificationData {
-            authority_set_id: authority_set_id.into(),
+            authority_set_id,
             signed_message,
             validator_signed,
             pubkeys: padded_pubkeys,

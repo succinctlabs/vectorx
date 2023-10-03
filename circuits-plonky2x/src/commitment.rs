@@ -1,8 +1,7 @@
 use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
-
-use crate::vars::*;
+use plonky2x::utils::avail::HeaderVariable;
 
 pub trait CommitmentMethods {
     fn get_enabled_array<const N: usize>(

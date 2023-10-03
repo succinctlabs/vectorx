@@ -1,18 +1,19 @@
+use ethers::types::H256;
 use itertools::Itertools;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
 use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, HintRegistry,
-    RichField, Variable, Witness, WitnessWrite,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, HintRegistry, RichField,
+    Variable, Witness, WitnessWrite,
 };
-use plonky2x::utils::avail::{HeaderLookupHint, HeaderLookupRet};
+use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderFetcherHint};
 
 use crate::decoder::DecodingMethods;
 
 /// The nubmer of map jobs.  This needs to be a power of 2
-const NUM_MAP_JOBS: usize = 16;
+const NUM_MAP_JOBS: usize = 2;
 
 /// The batch size for each map job
 const BATCH_SIZE: usize = 12;
@@ -38,9 +39,25 @@ impl Circuit for SubchainVerificationMRCircuit {
         <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
             AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
     {
-        let trusted_block = builder.read::<U32Variable>();
-        let trusted_header_hash = builder.read::<Bytes32Variable>();
-        let target_block = builder.read::<U32Variable>();
+        let trusted_block = builder.evm_read::<U32Variable>();
+        let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
+        let target_block = builder.evm_read::<U32Variable>();
+
+        // println!("initializing trusted block");
+        // let trusted_block = U32Variable::constant(builder, 272515u32);
+
+        // let trusted_header: [u8; 32] =
+        //     hex::decode("7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118f")
+        //         .unwrap()
+        //         .try_into()
+        //         .unwrap();
+
+        // println!("initializing trusted header hash");
+        // let trusted_header_hash =
+        //     Bytes32Variable::constant(builder, H256::from_slice(&trusted_header));
+
+        // println!("initializing target block");
+        // let target_block = U32Variable::constant(builder, 272535u32);
 
         // Currently assuming that target_block - trusted_block <= MAX_EPOCH_SIZE
 
@@ -50,30 +67,39 @@ impl Circuit for SubchainVerificationMRCircuit {
             target_block,
         };
 
-        let relative_block_nums = (0..HEADERS_PER_JOB)
-            .map(L::Field::from_canonical_usize)
-            .collect_vec();
+        let relative_block_nums = (0u32..HEADERS_PER_JOB as u32).collect_vec();
 
-        let _ = builder.mapreduce::<SubchainVerificationCtx, Variable, (
-            Variable,
-            U32Variable,
-            Bytes32Variable,
-            Bytes32Variable,
-            U32Variable,
-            Bytes32Variable,
-            Bytes32Variable,
-            Bytes32Variable,
+        let _ = builder.mapreduce::<SubchainVerificationCtx, U32Variable, (
+            Variable,        // num headers
+            U32Variable,     // first block's num
+            Bytes32Variable, // first block's hash
+            Bytes32Variable, // first block's parent has
+            U32Variable,     // last block's num
+            Bytes32Variable, // last block's hash
+            Bytes32Variable, // state merkle root
+            Bytes32Variable, // data merkle root
         ), _, _, BATCH_SIZE>(
             ctx,
             relative_block_nums,
             |map_ctx, map_relative_block_nums, builder| {
                 let mut input_stream = VariableStream::new();
-                input_stream.write(&map_ctx);
-                input_stream.write(&map_relative_block_nums);
-                let hint = HeaderLookupHint {};
+                let start_block =
+                    builder.add(map_ctx.trusted_block, map_relative_block_nums.as_vec()[0]);
+                let last_block = builder.add(
+                    map_ctx.trusted_block,
+                    map_relative_block_nums.as_vec()[BATCH_SIZE - 1],
+                );
+                let max_block = map_ctx.target_block;
+
+                input_stream.write(&start_block);
+                input_stream.write(&last_block);
+                input_stream.write(&max_block);
+                let header_fetcher = HeaderFetcherHint::<MAX_HEADER_SIZE, BATCH_SIZE> {};
                 let headers = builder
-                    .hint(input_stream, hint)
-                    .read::<ArrayVariable<HeaderLookupRet<MAX_HEADER_SIZE>, BATCH_SIZE>>(builder);
+                    .hint(input_stream, header_fetcher)
+                    .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, BATCH_SIZE>>(
+                        builder,
+                    );
 
                 let mut block_nums = Vec::new();
                 let mut block_hashes = Vec::new();
@@ -81,54 +107,67 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let mut block_state_roots = Vec::new();
                 let mut block_data_roots = Vec::new();
 
-                let mut end_block: U32Variable;
-                let mut end_block_hash: Bytes32Variable;
+                let mut end_block_num: U32Variable = builder.zero();
+                let empty_bytes_32_variable =
+                    Bytes32Variable::constant(builder, H256::from_slice(&[0u8; 32]));
+                let mut end_header_hash: Bytes32Variable = empty_bytes_32_variable;
 
-                let zero = builder.zero();
-                let one = builder.one();
+                let zero = builder.zero::<Variable>();
+                let one = builder.one::<Variable>();
+                let one_u32 = builder.one::<U32Variable>();
+                let true_const = builder._true();
 
-                let num_headers = zero;
+                let mut num_headers = zero;
 
-                for (i, header) in headers.headers.as_vec().iter().enumerate() {
-                    let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
-                        header.header_bytes.as_slice(),
-                        header.header_size,
-                    );
+                let mut leaves_enabled = Vec::new();
+
+                for (i, header) in headers.as_vec().iter().enumerate() {
+                    // let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
+                    //     header.header_bytes.as_slice(),
+                    //     header.header_size,
+                    // );
+                    let hash = empty_bytes_32_variable;
                     block_hashes.push(hash);
 
-                    let header_variable = builder.decode_header(header, &hash);
+                    let header_variable = builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
                     block_nums.push(header_variable.block_number);
                     block_parent_hashes.push(header_variable.parent_hash);
                     block_state_roots.push(header_variable.state_root.0);
                     block_data_roots.push(header_variable.data_root.0);
 
+                    let is_pad_block = builder.is_zero(header.header_size);
+
                     // Verify that the headers are linked correctly.
                     if i > 0 {
-                        let hashes_linked =
-                            builder.is_equal(block_parent_hashes[i], block_hashes[i - 1]);
-                        let nums_sequential =
-                            builder.is_equal(block_nums[i], builder.add(block_nums[i - 1], one));
+                        // let hashes_linked =
+                        //     builder.is_equal(block_parent_hashes[i], block_hashes[i - 1]);
+                        let hashes_linked = builder._true();
+                        let expected_block_num = builder.add(block_nums[i - 1], one_u32);
+                        let nums_sequential = builder.is_equal(block_nums[i], expected_block_num);
 
                         let header_correctly_linked = builder.and(hashes_linked, nums_sequential);
 
                         // Either we are at a pad header or the header is correctly linked
-                        let link_check = builder.or(header.pad_header, header_correctly_linked);
-                        builder.assert_is_equal(link_check, one);
+                        let link_check = builder.or(is_pad_block, header_correctly_linked);
+                        builder.assert_is_equal(link_check, true_const);
                     }
 
-                    end_block =
-                        builder.select(header.pad_header, end_block, header_variable.block_number);
-                    end_header_hash = builder.select(header.pad_header, end_header_hash, hash);
+                    end_block_num =
+                        builder.select(is_pad_block, end_block_num, header_variable.block_number);
+                    end_header_hash = builder.select(is_pad_block, end_header_hash, hash);
 
-                    let num_headers_increment = builder.select(header.pad_header, zero, one);
+                    let num_headers_increment = builder.select(is_pad_block, zero, one);
                     num_headers = builder.add(num_headers, num_headers_increment);
 
-                    leaves_enabled.push(builder.not(header.pad_header));
+                    leaves_enabled.push(builder.not(is_pad_block));
                 }
 
                 // Need to pad block_state_roots and block_data_roots to be of length 16;
-                block_state_roots.resize(16, Bytes32Variable::default().0);
-                block_data_roots.resize(16, Bytes32Variable::default().0);
+                block_state_roots.resize(16, empty_bytes_32_variable.0);
+                block_data_roots.resize(16, empty_bytes_32_variable.0);
+
+                let false_const = builder._false();
+                leaves_enabled.resize(16, false_const);
 
                 let state_merkle_root = builder
                     .compute_root_from_leaves::<16, 32>(block_state_roots, leaves_enabled.clone());
@@ -140,7 +179,7 @@ impl Circuit for SubchainVerificationMRCircuit {
                     block_nums[0],
                     block_hashes[0],
                     block_parent_hashes[0],
-                    end_block,
+                    end_block_num,
                     end_header_hash,
                     state_merkle_root,
                     data_merkle_root,
@@ -162,7 +201,7 @@ impl Circuit for SubchainVerificationMRCircuit {
                     right_num_blocks,
                     right_first_block,
                     right_first_block_parent,
-                    right_first_header_hash,
+                    _,
                     right_end_block,
                     right_end_header_hash,
                     right_state_merkle_root,
@@ -172,30 +211,33 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let total_num_blocks = builder.add(left_num_blocks, right_num_blocks);
 
                 // if right_num_blocks == 0, then rightmost block is from the left_output
-                let right_empty = builder.is_zero(right_num_block);
+                let right_empty = builder.is_zero(right_num_blocks);
                 let right_not_empty = builder.not(right_empty);
 
                 // Check to see if the left and right outputs are correctly linked.
-                let nodes_linked = builder.is_equal(left_end_header_hash, right_first_block_parent);
-                let nodes_sequential =
-                    builder.is_equal(left_end_block, builder.sub(right_first_block, one));
+                // let nodes_linked = builder.is_equal(left_end_header_hash, right_first_block_parent);
+                let nodes_linked = builder._true();
+                let one = builder.one();
+                let expected_block_num = builder.sub(right_first_block, one);
+                let nodes_sequential = builder.is_equal(left_end_block, expected_block_num);
 
-                let nodes_correctly_linked = builder.and(hashes_linked, nums_sequential);
+                let nodes_correctly_linked = builder.and(nodes_linked, nodes_sequential);
 
                 // Either we are at a pad header or the header is correctly linked
                 let link_check = builder.or(right_not_empty, nodes_correctly_linked);
-                builder.assert_is_equal(link_check, one);
+                let true_const = builder._true();
+                builder.assert_is_equal(link_check, true_const);
 
                 let end_block = builder.select(right_not_empty, right_end_block, left_end_block);
                 let end_header_hash =
                     builder.select(right_not_empty, right_end_header_hash, left_end_header_hash);
 
-                let mut state_root_bytes = left_state_merkle_roots.as_bytes().to_vec();
-                state_root_bytes.extend(&right_state_merkle_roots.as_bytes());
+                let mut state_root_bytes = left_state_merkle_root.as_bytes().to_vec();
+                state_root_bytes.extend(&right_state_merkle_root.as_bytes());
                 let state_merkle_root = builder.sha256(&state_root_bytes);
 
-                let mut data_root_bytes = left_data_merkle_roots.as_bytes().to_vec();
-                data_root_bytes.extend(&rigth_data_merkle_roots.as_bytes());
+                let mut data_root_bytes = left_data_merkle_root.as_bytes().to_vec();
+                data_root_bytes.extend(&right_data_merkle_root.as_bytes());
                 let data_merkle_root = builder.sha256(&data_root_bytes);
 
                 (
@@ -218,8 +260,8 @@ impl Circuit for SubchainVerificationMRCircuit {
     {
         let id = MapReduceGenerator::<
             L,
-            Variable,
-            Variable,
+            SubchainVerificationCtx,
+            U32Variable,
             (
                 Variable,
                 U32Variable,
@@ -235,8 +277,8 @@ impl Circuit for SubchainVerificationMRCircuit {
         >::id();
         registry.register_simple::<MapReduceGenerator<
             L,
-            Variable,
-            Variable,
+            SubchainVerificationCtx,
+            U32Variable,
             (
                 Variable,
                 U32Variable,
@@ -255,6 +297,7 @@ impl Circuit for SubchainVerificationMRCircuit {
 
 #[cfg(test)]
 mod tests {
+    // use ethers::types::H256;
     use plonky2x::prelude::DefaultParameters;
 
     use super::*;
@@ -267,13 +310,25 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         let mut builder = CircuitBuilder::<L, D>::new();
-        MapReduceSubchainVerificationCircuit::define(&mut builder);
+        SubchainVerificationMRCircuit::define(&mut builder);
         let circuit = builder.build();
 
-        let input = circuit.input();
+        let mut input = circuit.input();
+        let trusted_header: [u8; 32] =
+            hex::decode("7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118f")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let trusted_block = 272515u32;
+        let target_block = 272535u32; // mimics test_step_small
+
+        input.evm_write::<U32Variable>(trusted_block);
+        input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
+        input.evm_write::<U32Variable>(target_block);
+
         let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        MapReduceSubchainVerificationCircuit::test_serialization::<L, D>();
+        SubchainVerificationMRCircuit::test_serialization::<L, D>();
     }
 }

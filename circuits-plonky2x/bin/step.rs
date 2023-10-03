@@ -25,65 +25,6 @@ use plonky2x::prelude::{
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime; // TODO: re-export this instead of this path
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StepOffchainInputs<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
-
-impl<
-        const HEADER_LENGTH: usize,
-        const NUM_HEADERS: usize,
-        L: PlonkParameters<D>,
-        const D: usize,
-    > Hint<L, D> for StepOffchainInputs<HEADER_LENGTH, NUM_HEADERS>
-{
-    fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
-        let trusted_block = input_stream.read_value::<U32Variable>();
-        let target_block = input_stream.read_value::<U32Variable>();
-
-        let rt = Runtime::new().expect("failed to create tokio runtime");
-        let headers: Vec<Header> = rt.block_on(async {
-            let data_fetcher = RpcDataFetcher::new().await;
-            data_fetcher
-                .get_block_headers_range(trusted_block, target_block)
-                .await
-        });
-
-        // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
-        let mut header_variables = Vec::new();
-        for i in 0..headers.len() {
-            // TODO: replace with `to_header_variable` from vars.rs
-            let header = &headers[i];
-            let mut header_bytes = header.encode();
-            let header_size = header_bytes.len();
-            if header_size > HEADER_LENGTH {
-                panic!(
-                    "header size {} is greater than HEADER_LENGTH {}",
-                    header_size, HEADER_LENGTH
-                );
-            }
-            header_bytes.resize(HEADER_LENGTH, 0);
-            let header_variable = EncodedHeader {
-                header_bytes: header_bytes.try_into().unwrap(),
-                header_size: L::Field::from_canonical_usize(header_size),
-            };
-            header_variables.push(header_variable);
-        }
-
-        // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
-        for i in headers.len()..NUM_HEADERS {
-            let header_variable = EncodedHeader {
-                header_bytes: vec![0u8; HEADER_LENGTH],
-                header_size: L::Field::from_canonical_usize(0),
-            };
-            header_variables.push(header_variable);
-        }
-        println!("header_variables {:?}", header_variables);
-        output_stream
-            .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
-                header_variables,
-            );
-    }
-}
-
 struct StepCircuit<
     const VALIDATOR_SET_SIZE: usize,
     const HEADER_LENGTH: usize,

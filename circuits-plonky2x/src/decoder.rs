@@ -156,7 +156,13 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         let data_root_offset =
             self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END)); // Since we're working with bits
-        let data_root_start = self.sub(header.header_size, data_root_offset);
+
+        let mut data_root_start = self.sub(header.header_size, data_root_offset);
+
+        // If header_size == 0, then set data_root_start to 0
+        let header_is_zero_size = self.is_zero(header.header_size);
+        let zero = self.zero();
+        data_root_start = self.select(header_is_zero_size, zero, data_root_start);
 
         let data_root_variables: Vec<Variable> = self
             .get_fixed_subarray::<S, HASH_SIZE>(
@@ -222,7 +228,7 @@ pub mod tests {
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
-    use plonky2x::utils::avail::{EncodedHeaderVariable, EncodedHeaderVariableValue};
+    use plonky2x::utils::avail::{EncodedHeader, EncodedHeaderVariable};
     use plonky2x::utils::{bytes, bytes32};
     use testing_utils::tests::{
         BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,

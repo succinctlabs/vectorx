@@ -384,7 +384,6 @@ dependencies = [
  "sp-application-crypto 25.0.0",
  "sp-core 23.0.0",
  "subxt",
- "succinct_avail_utils",
  "tokio",
  "tokio-tungstenite 0.17.2",
 ]
@@ -4708,6 +4707,7 @@ dependencies = [
  "anyhow",
  "array-macro",
  "async-trait",
+ "avail-subxt",
  "backtrace",
  "base64 0.13.1",
  "bincode",
@@ -4728,6 +4728,7 @@ dependencies = [
  "log",
  "num",
  "num-bigint 0.4.4",
+ "parity-scale-codec",
  "plonky2",
  "plonky2x-derive",
  "rand 0.8.5",
@@ -4738,6 +4739,7 @@ dependencies = [
  "serde_with",
  "sha2 0.10.8",
  "sha256",
+ "succinct_avail_utils",
  "tokio",
  "tracing",
  "uuid 1.4.1",
@@ -7743,6 +7745,7 @@ dependencies = [
 name = "succinct_avail_utils"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "avail-subxt",
  "enum_extract",
  "hex",
@@ -7750,9 +7753,12 @@ dependencies = [
  "pallet-grandpa 21.0.0",
  "parity-scale-codec",
  "primitive-types 0.12.1",
+ "reqwest",
  "scale-info",
  "serde",
  "serde_json",
+ "sha256",
+ "sp-application-crypto 25.0.0",
  "sp-core 16.0.0",
  "sp-state-machine 0.12.0",
  "subxt",

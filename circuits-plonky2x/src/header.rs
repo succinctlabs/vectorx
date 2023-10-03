@@ -56,7 +56,7 @@ mod tests {
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
-    use plonky2x::utils::avail::{EncodedHeaderVariable, EncodedHeaderVariableValue};
+    use plonky2x::utils::avail::{EncodedHeader, EncodedHeaderVariable};
     use plonky2x::utils::{bytes, bytes32};
 
     use crate::header::HeaderMethods;

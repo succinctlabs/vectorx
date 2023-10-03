@@ -36,7 +36,6 @@ pallet-grandpa = "23.0.0"
 sp-application-crypto = "25.0.0"
 sp-core = "23.0.0"
 sha256 = "1.4.0"
-succinct_avail_utils = { path = "../utils" }
 
 [dev-dependencies]
 anyhow = "1.0.68"

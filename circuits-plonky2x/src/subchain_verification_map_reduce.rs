@@ -122,11 +122,10 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let mut leaves_enabled = Vec::new();
 
                 for (i, header) in headers.as_vec().iter().enumerate() {
-                    // let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
-                    //     header.header_bytes.as_slice(),
-                    //     header.header_size,
-                    // );
-                    let hash = empty_bytes_32_variable;
+                    let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
+                        header.header_bytes.as_slice(),
+                        header.header_size,
+                    );
                     block_hashes.push(hash);
 
                     let header_variable = builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);

@@ -12,7 +12,7 @@ use crate::decoder::DecodingMethods;
 
 /// MAX NUM HEADERS OF EPOCH
 //const MAX_EPOCH_SIZE: usize = 200;
-const MAX_EPOCH_SIZE: usize = 192;
+const MAX_EPOCH_SIZE: usize = 24;
 
 /// The batch size for each map job
 const BATCH_SIZE: usize = 12;
@@ -125,6 +125,6 @@ mod tests {
         let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        //MapReduceSubchainVerificationCircuit::test_serialization::<L, D>();
+        MapReduceSubchainVerificationCircuit::test_serialization::<L, D>();
     }
 }

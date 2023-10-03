@@ -5,7 +5,7 @@ use plonky2x::backend::circuit::{Circuit, PlonkParameters};
 use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
 use plonky2x::frontend::vars::VariableStream;
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, Variable, HintRegistry,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field, HintRegistry, Variable,
 };
 use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderLookupHint};
 
@@ -40,8 +40,8 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
         let _ = builder.mapreduce::<Variable, Variable, (
             Bytes32Variable,
             Bytes32Variable,
-            // Bytes32Variable,
-            // Bytes32Variable,
+            Bytes32Variable,
+            Bytes32Variable,
         ), _, _, BATCH_SIZE>(
             dummy,
             idxs,
@@ -55,20 +55,20 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
                     );
 
                 let mut block_nums = Vec::new();
-                // let mut block_hashes = Vec::new();
+                let mut block_hashes = Vec::new();
                 let mut block_state_roots = Vec::new();
                 let mut block_data_roots = Vec::new();
 
-                let zero_hash = Bytes32Variable::constant(builder, H256([0;32]));
+                let zero_hash = Bytes32Variable::constant(builder, H256([0; 32]));
 
                 for header in headers.as_vec().iter() {
-                    // let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
-                    //     header.header_bytes.as_slice(),
-                    //     header.header_size,
-                    // );
-                    // block_hashes.push(hash);
+                    let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
+                        header.header_bytes.as_slice(),
+                        header.header_size,
+                    );
+                    block_hashes.push(hash);
 
-                    let header_variable = builder.decode_header(header, &zero_hash);
+                    let header_variable = builder.decode_header(header, &hash);
                     block_nums.push(header_variable.block_number);
                     block_state_roots.push(header_variable.state_root.0);
                     block_data_roots.push(header_variable.data_root.0);
@@ -90,15 +90,14 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
                     builder.compute_root_from_leaves::<16, 32>(block_data_roots, leaves_enabled);
 
                 (
-                    // block_hashes[0],
-                    // block_hashes[BATCH_SIZE - 1],
+                    block_hashes[0],
+                    block_hashes[BATCH_SIZE - 1],
                     state_merkle_root,
                     data_merkle_root,
                 )
             },
-            |_, left_node, right_node, _| 
-            //(left_node.0, right_node.1, left_node.2, left_node.3),
-            (left_node.0, right_node.0),
+            |_, left_node, right_node, _| (left_node.0, right_node.1, left_node.2, left_node.3),
+            //(left_node.0, right_node.0),
         );
     }
 
@@ -110,7 +109,12 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
             L,
             Variable,
             Variable,
-            (Bytes32Variable, Bytes32Variable),
+            (
+                Bytes32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+            ),
             BATCH_SIZE,
             D,
         >::id();
@@ -118,12 +122,16 @@ impl Circuit for MapReduceSubchainVerificationCircuit {
             L,
             Variable,
             Variable,
-            (Bytes32Variable, Bytes32Variable),
+            (
+                Bytes32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+            ),
             BATCH_SIZE,
             D,
         >>(id);
     }
-    
 }
 
 #[cfg(test)]

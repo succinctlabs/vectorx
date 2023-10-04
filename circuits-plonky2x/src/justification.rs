@@ -1,4 +1,3 @@
-use ed25519_dalek::{PublicKey, Signature, Verifier};
 use num::traits::ToBytes;
 use num::BigUint;
 use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSASignature};
@@ -31,7 +30,7 @@ fn signature_to_value_type<F: RichField>(sig_bytes: &[u8]) -> SignatureValueType
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
+pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
 
 impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L, D>
     for HintSimpleJustification<NUM_AUTHORITIES>
@@ -75,13 +74,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
                 justification_data.pubkeys[0],
             ),
         );
-        println!("Verified message");
-        println!("{}", hex::encode(encoded_precommit.clone()));
-        println!("{}", hex::encode(justification_data.signatures[0]));
-        println!(
-            "{}",
-            hex::encode(justification_data.pubkeys[0].compress_point().to_le_bytes())
-        );
 
         output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
             encoded_precommit.try_into().unwrap(),
@@ -102,9 +94,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
     }
 }
 
-// TODO: take in block hash and authority_set_id
-// Return authority_set_signers and signed_precommits
-
 pub trait GrandpaJustificationVerifier {
     fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
         &mut self,
@@ -115,33 +104,33 @@ pub trait GrandpaJustificationVerifier {
 
     fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
         &mut self,
-        block: HeaderVariable,
+        block_number: U32Variable,
         block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
-        // authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
-        // signed_precommits: &ArrayVariable<SignedPrecommitVariable, NUM_AUTHORITIES>,
     );
 }
 
 impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for CircuitBuilder<L, D> {
     fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
         &mut self,
-        num_active_authorities: Variable,
-        authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
+        _num_active_authorities: Variable,
+        _authority_set_commitment: Bytes32Variable,
+        _authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
     ) {
+        todo!()
     }
 
+    // This assumes
     fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
         &mut self,
-        block: HeaderVariable,
-        block_hash: Bytes32Variable,
+        block_number: U32Variable,
+        _block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
-        authority_set_hash: Bytes32Variable,
+        _authority_set_hash: Bytes32Variable,
     ) {
         let mut input_stream = VariableStream::new();
-        input_stream.write(&block.block_number);
+        input_stream.write(&block_number);
         input_stream.write(&authority_set_id);
         let output_stream = self.hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
 
@@ -168,12 +157,12 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                 NUM_AUTHORITIES
             ]);
         let messages = vec![encoded_precommit; NUM_AUTHORITIES];
-        self.conditional_batch_eddsa_verify::<1, ENCODED_PRECOMMIT_LENGTH>(
-            ArrayVariable::new(validator_signed[0..1].to_vec()),
-            ArrayVariable::new(message_byte_lengths[0..1].to_vec()),
-            ArrayVariable::new(messages[0..1].to_vec()),
-            ArrayVariable::new(signatures[0..1].to_vec()),
-            ArrayVariable::new(pubkeys[0..1].to_vec()),
+        self.conditional_batch_eddsa_verify::<NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
+            validator_signed,
+            message_byte_lengths,
+            messages.into(),
+            signatures,
+            pubkeys,
         );
 
         // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`
@@ -213,12 +202,12 @@ mod tests {
         // Define the circuit
         let mut builder = DefaultBuilder::new();
 
-        let block = builder.read::<HeaderVariable>();
+        let block_number = builder.read::<U32Variable>();
         let block_hash = builder.read::<Bytes32Variable>();
         let authority_set_id = builder.read::<U64Variable>();
         let authority_set_hash = builder.read::<Bytes32Variable>();
         builder.verify_simple_justification::<NUM_AUTHORITIES>(
-            block,
+            block_number,
             block_hash,
             authority_set_id,
             authority_set_hash,
@@ -227,18 +216,13 @@ mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        input.write::<HeaderVariable>(HeaderValueType {
-            block_number: BLOCK_NUMBER,
-            parent_hash: H256::from([0u8; 32]), // TODO: these will have to be filled in with real things
-            state_root: H256::from([0u8; 32]),
-            data_root: H256::from([0u8; 32]),
-        });
+        input.write::<U32Variable>(BLOCK_NUMBER);
         input.write::<Bytes32Variable>(H256::from([0u8; 32]));
         input.write::<U64Variable>(fetched_authority_set_id);
         input.write::<Bytes32Variable>(H256::from([0u8; 32])); // TODO: will have to be filled in with real thing
 
         info!("Generating proof");
-        let (proof, mut output) = circuit.prove(&input);
+        let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
     }
 }

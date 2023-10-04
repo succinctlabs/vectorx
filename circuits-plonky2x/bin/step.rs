@@ -16,7 +16,7 @@ use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters, Variable};
-use plonky2x::utils::avail::BATCH_SIZE;
+use plonky2x::utils::avail::vars::BATCH_SIZE;
 
 struct StepCircuit<
     const VALIDATOR_SET_SIZE: usize,
@@ -42,7 +42,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
         let (target_header_hash, state_root_merkle_root, data_root_merkle_root) =
             builder.verify_subchain(trusted_block, trusted_header_hash, target_block);
 
-        builder.verify_simple_justification(
+        builder.verify_simple_justification::<VALIDATOR_SET_SIZE>(
             target_block,
             target_header_hash,
             authority_set_id,

@@ -57,7 +57,7 @@ impl Circuit for SubchainVerificationMRCircuit {
             Variable,        // num headers
             U32Variable,     // first block's num
             Bytes32Variable, // first block's hash
-            Bytes32Variable, // first block's parent has
+            Bytes32Variable, // first block's parent hash
             U32Variable,     // last block's num
             Bytes32Variable, // last block's hash
             Bytes32Variable, // state merkle root
@@ -159,8 +159,8 @@ impl Circuit for SubchainVerificationMRCircuit {
                 (
                     num_headers,
                     block_nums[0],
-                    block_parent_hashes[0],
                     block_hashes[0],
+                    block_parent_hashes[0],
                     end_block_num,
                     end_header_hash,
                     state_merkle_root,
@@ -171,8 +171,8 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let (
                     left_num_blocks,
                     left_first_block,
-                    left_first_block_parent,
                     left_first_header_hash,
+                    left_first_block_parent,
                     left_end_block,
                     left_end_header_hash,
                     left_state_merkle_root,
@@ -182,8 +182,8 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let (
                     right_num_blocks,
                     right_first_block,
-                    right_first_block_parent,
                     _,
+                    right_first_block_parent,
                     right_end_block,
                     right_end_header_hash,
                     right_state_merkle_root,
@@ -193,6 +193,11 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let total_num_blocks = builder.add(left_num_blocks, right_num_blocks);
 
                 let right_empty = builder.is_zero(right_num_blocks);
+
+                builder.watch(&left_end_header_hash, "left end header hash");
+                builder.watch(&right_first_block_parent, "right first block parent");
+                builder.watch(&left_end_block, "left end block");
+                builder.watch(&right_first_block, "right first block");
 
                 // Check to see if the left and right nodes are correctly linked.
                 let nodes_linked = builder.is_equal(left_end_header_hash, right_first_block_parent);
@@ -221,8 +226,8 @@ impl Circuit for SubchainVerificationMRCircuit {
                 (
                     total_num_blocks,
                     left_first_block,
-                    left_first_block_parent,
                     left_first_header_hash,
+                    left_first_block_parent,
                     end_block,
                     end_header_hash,
                     state_merkle_root,

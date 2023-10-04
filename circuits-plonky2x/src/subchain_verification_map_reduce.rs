@@ -13,7 +13,7 @@ use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderFetcherHint};
 use crate::decoder::DecodingMethods;
 
 /// The nubmer of map jobs.  This needs to be a power of 2
-const NUM_MAP_JOBS: usize = 2;
+const NUM_MAP_JOBS: usize = 16;
 
 /// The batch size for each map job
 const BATCH_SIZE: usize = 12;
@@ -42,22 +42,6 @@ impl Circuit for SubchainVerificationMRCircuit {
         let trusted_block = builder.evm_read::<U32Variable>();
         let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
         let target_block = builder.evm_read::<U32Variable>();
-
-        // println!("initializing trusted block");
-        // let trusted_block = U32Variable::constant(builder, 272515u32);
-
-        // let trusted_header: [u8; 32] =
-        //     hex::decode("7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118f")
-        //         .unwrap()
-        //         .try_into()
-        //         .unwrap();
-
-        // println!("initializing trusted header hash");
-        // let trusted_header_hash =
-        //     Bytes32Variable::constant(builder, H256::from_slice(&trusted_header));
-
-        // println!("initializing target block");
-        // let target_block = U32Variable::constant(builder, 272535u32);
 
         // Currently assuming that target_block - trusted_block <= MAX_EPOCH_SIZE
 
@@ -312,11 +296,11 @@ mod tests {
 
         let mut input = circuit.input();
         let trusted_header: [u8; 32] =
-            hex::decode("7c38fc8356aa20394c7f538e3cee3f924e6d9252494c8138d1a6aabfc253118f")
+            hex::decode("728dd64344fcf712071998c52dce567453ff825421b1cb0f4b8f59c90a884965")
                 .unwrap()
                 .try_into()
                 .unwrap();
-        let trusted_block = 272515u32;
+        let trusted_block = 272356u32;
         let target_block = 272535u32; // mimics test_step_small
 
         input.evm_write::<U32Variable>(trusted_block);

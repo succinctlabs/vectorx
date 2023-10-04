@@ -51,10 +51,6 @@ impl RpcDataFetcher {
         start_block_number: u32,
         end_block_number: u32,
     ) -> Vec<Header> {
-        println!(
-            "getting blocks start_block_number {} to end_block_number {}",
-            start_block_number, end_block_number
-        );
         let mut headers = Vec::new();
         for block_number in start_block_number..end_block_number {
             let block_hash = self.get_block_hash(block_number).await;

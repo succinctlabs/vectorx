@@ -8,7 +8,8 @@ use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, HintRegistry, RichField,
     Variable, Witness, WitnessWrite,
 };
-use plonky2x::utils::avail::{EncodedHeaderVariable, HeaderFetcherHint};
+use plonky2x::utils::avail::header::HeaderFetcherHint;
+use plonky2x::utils::avail::vars::EncodedHeaderVariable;
 
 use crate::decoder::DecodingMethods;
 

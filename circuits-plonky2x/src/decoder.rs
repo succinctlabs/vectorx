@@ -5,7 +5,8 @@ use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, Field,
     PlonkParameters, RichField, Target, Variable,
 };
-use plonky2x::utils::avail::{EncodedHeaderVariable, FloorDivGenerator, HeaderVariable};
+use plonky2x::utils::avail::header::FloorDivGenerator;
+use plonky2x::utils::avail::vars::{EncodedHeaderVariable, HeaderVariable};
 
 use crate::vars::*;
 
@@ -228,7 +229,7 @@ pub mod tests {
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
-    use plonky2x::utils::avail::{EncodedHeader, EncodedHeaderVariable};
+    use plonky2x::utils::avail::vars::{EncodedHeader, EncodedHeaderVariable};
     use plonky2x::utils::{bytes, bytes32};
     use testing_utils::tests::{
         BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,

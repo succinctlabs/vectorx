@@ -1,5 +1,5 @@
 use plonky2x::prelude::{ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkParameters};
-use plonky2x::utils::avail::EncodedHeaderVariable;
+use plonky2x::utils::avail::vars::EncodedHeaderVariable;
 
 pub trait HeaderMethods {
     fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
@@ -56,7 +56,7 @@ mod tests {
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
-    use plonky2x::utils::avail::{EncodedHeader, EncodedHeaderVariable};
+    use plonky2x::utils::avail::vars::{EncodedHeader, EncodedHeaderVariable};
     use plonky2x::utils::{bytes, bytes32};
 
     use crate::header::HeaderMethods;

@@ -7,22 +7,16 @@
 //!
 //!
 
-use avail_plonky2x::fetch::RpcDataFetcher;
-use avail_plonky2x::justification::HintSimpleJustification;
-use avail_plonky2x::subchain_verification_map_reduce::SubchainVerificationMRCircuit;
-use avail_plonky2x::vars::{
-    to_header_variable, EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE,
-    MAX_SMALL_HEADER_SIZE,
-};
-use avail_subxt::primitives::Header;
+use avail_plonky2x::justification::GrandpaJustificationVerifier;
+use avail_plonky2x::subchain_verification_map_reduce::{SubChainVerifier, SubchainVerificationCtx};
+use avail_plonky2x::vars::MAX_LARGE_HEADER_SIZE;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::backend::function::VerifiableFunction;
-use plonky2x::frontend::hint::simple::hint::Hint;
+use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
 use plonky2x::frontend::uint::uint64::U64Variable;
-use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
-use plonky2x::prelude::{ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters};
-use serde::{Deserialize, Serialize};
-use tokio::runtime::Runtime; // TODO: re-export this instead of this path
+use plonky2x::frontend::vars::U32Variable;
+use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters, Variable};
+use plonky2x::utils::avail::BATCH_SIZE;
 
 struct StepCircuit<
     const VALIDATOR_SET_SIZE: usize,
@@ -33,31 +27,69 @@ struct StepCircuit<
 impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEADERS: usize> Circuit
     for StepCircuit<VALIDATOR_SET_SIZE, HEADER_LENGTH, NUM_HEADERS>
 {
-    fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>) {
+    fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
+    where
+        <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
+            plonky2::plonk::config::AlgebraicHasher<L::Field>,
+    {
         // Read the on-chain inputs.
         let trusted_block = builder.evm_read::<U32Variable>();
-        let _trusted_header_hash = builder.evm_read::<Bytes32Variable>();
-        let _authority_set_id = builder.evm_read::<U64Variable>();
-        let _authority_set_hash = builder.evm_read::<Bytes32Variable>();
+        let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
+        let authority_set_id = builder.evm_read::<U64Variable>();
+        let authority_set_hash = builder.evm_read::<Bytes32Variable>();
         let target_block = builder.evm_read::<U32Variable>();
 
-        SubchainVerificationMRCircuit::define(&mut builder);
+        let (target_header_hash, state_root_merkle_root, data_root_merkle_root) =
+            builder.verify_subchain(trusted_block, trusted_header_hash, target_block);
 
-        // We compute the last header index based on the target_block and trusted_block.
-        let _last_header_index = builder.sub(target_block, trusted_block);
-
-        // TODO: verify a simple justification for the last header
-        // TODO: verify a header chain
+        builder.verify_simple_justification(
+            target_block,
+            target_header_hash,
+            authority_set_id,
+            authority_set_hash,
+        );
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
-        generator_registry: &mut plonky2x::prelude::HintRegistry<L, D>,
+        registry: &mut plonky2x::prelude::HintRegistry<L, D>,
     ) where
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        generator_registry.register_hint::<StepOffchainInputs<HEADER_LENGTH, NUM_HEADERS>>();
-        generator_registry.register_hint::<HintSimpleJustification<VALIDATOR_SET_SIZE>>();
+        let id = MapReduceGenerator::<
+            L,
+            SubchainVerificationCtx,
+            U32Variable,
+            (
+                Variable,
+                U32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+                U32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+            ),
+            BATCH_SIZE,
+            D,
+        >::id();
+        registry.register_simple::<MapReduceGenerator<
+            L,
+            SubchainVerificationCtx,
+            U32Variable,
+            (
+                Variable,
+                U32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+                U32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+                Bytes32Variable,
+            ),
+            BATCH_SIZE,
+            D,
+        >>(id);
     }
 }
 

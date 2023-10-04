@@ -4721,7 +4721,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#6576c83fa13132abf1aff5bccc23d9fcd0fd8825"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#86d2679086707592ea9030bd12436aa175ac7128"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4810,7 +4810,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#6576c83fa13132abf1aff5bccc23d9fcd0fd8825"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#86d2679086707592ea9030bd12436aa175ac7128"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7842,7 +7842,7 @@ dependencies = [
 [[package]]
 name = "succinct_avail_utils"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment#292a4e76ef04e86319c4242219c82d6a6316546f"
+source = "git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment#d1e694336bb6ed348b6fa77ff10b6e03dd8a8346"
 dependencies = [
  "async-trait",
  "avail-subxt",

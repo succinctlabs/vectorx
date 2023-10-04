@@ -194,7 +194,6 @@ impl Circuit for SubchainVerificationMRCircuit {
 
                 // if right_num_blocks == 0, then rightmost block is from the left_output
                 let right_empty = builder.is_zero(right_num_blocks);
-                let right_not_empty = builder.not(right_empty);
 
                 // Check to see if the left and right outputs are correctly linked.
                 let nodes_linked = builder.is_equal(left_end_header_hash, right_first_block_parent);
@@ -209,9 +208,9 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let true_const = builder._true();
                 builder.assert_is_equal(link_check, true_const);
 
-                let end_block = builder.select(right_not_empty, right_end_block, left_end_block);
+                let end_block = builder.select(right_empty, left_end_block, right_end_block);
                 let end_header_hash =
-                    builder.select(right_not_empty, right_end_header_hash, left_end_header_hash);
+                    builder.select(right_empty, left_end_header_hash, right_end_header_hash);
 
                 let mut state_root_bytes = left_state_merkle_root.as_bytes().to_vec();
                 state_root_bytes.extend(&right_state_merkle_root.as_bytes());

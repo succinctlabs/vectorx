@@ -134,6 +134,8 @@ impl Circuit for SubchainVerificationMRCircuit {
                         builder.assert_is_equal(link_check, true_const);
                     }
 
+                    builder.watch(&header_variable.block_number, "decoded block number");
+
                     end_block_num =
                         builder.select(is_pad_block, end_block_num, header_variable.block_number);
                     end_header_hash = builder.select(is_pad_block, end_header_hash, hash);

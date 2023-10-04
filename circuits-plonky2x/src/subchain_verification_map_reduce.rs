@@ -14,7 +14,7 @@ use plonky2x::utils::avail::vars::EncodedHeaderVariable;
 use crate::decoder::DecodingMethods;
 
 /// The nubmer of map jobs.  This needs to be a power of 2
-const NUM_MAP_JOBS: usize = 2;
+const NUM_MAP_JOBS: usize = 1;
 
 /// The batch size for each map job
 const BATCH_SIZE: usize = 12;
@@ -141,8 +141,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             builder.assert_is_equal(link_check, true_const);
                         }
 
-                        builder.watch(&header_variable.block_number, "decoded block number");
-
                         end_block_num = builder.select(
                             is_pad_block,
                             end_block_num,
@@ -207,11 +205,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let total_num_blocks = builder.add(left_num_blocks, right_num_blocks);
 
                     let right_empty = builder.is_zero(right_num_blocks);
-
-                    builder.watch(&left_end_header_hash, "left end header hash");
-                    builder.watch(&right_first_block_parent, "right first block parent");
-                    builder.watch(&left_end_block, "left end block");
-                    builder.watch(&right_first_block, "right first block");
 
                     // Check to see if the left and right nodes are correctly linked.
                     let nodes_linked =

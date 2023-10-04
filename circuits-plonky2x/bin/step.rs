@@ -48,6 +48,10 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
             authority_set_id,
             authority_set_hash,
         );
+
+        builder.evm_write::<Bytes32Variable>(target_header_hash);
+        builder.evm_write::<Bytes32Variable>(state_root_merkle_root);
+        builder.evm_write::<Bytes32Variable>(data_root_merkle_root);
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
@@ -178,7 +182,7 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 4;
+        const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = 1024;
         const NUM_HEADERS: usize = 4;
         let mut builder = DefaultBuilder::new();
@@ -202,11 +206,11 @@ mod tests {
         let authority_set_id = 0u64; // Placeholder for now
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
 
-        input.evm_write::<U32Variable>(trusted_block.into());
+        input.evm_write::<U32Variable>(trusted_block);
         input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
-        input.evm_write::<U64Variable>(authority_set_id.into());
+        input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
-        input.evm_write::<U32Variable>(target_block.into());
+        input.evm_write::<U32Variable>(target_block);
 
         log::debug!("Generating proof");
         let (proof, mut output) = circuit.prove(&input);
@@ -214,6 +218,10 @@ mod tests {
 
         circuit.verify(&proof, &input, &output);
         let target_header = output.evm_read::<Bytes32Variable>();
+        let state_root_merkle_root = output.evm_read::<Bytes32Variable>();
+        let data_root_merkle_root = output.evm_read::<Bytes32Variable>();
         println!("target_header {:?}", target_header);
+        println!("state root merkle root {:?}", state_root_merkle_root);
+        println!("data root merkle root {:?}", data_root_merkle_root);
     }
 }

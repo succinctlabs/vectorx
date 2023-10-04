@@ -1100,7 +1100,7 @@ dependencies = [
 [[package]]
 name = "curta"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/support_small_public_inputs#bddd181b56cf64816c4c91c860e92e6540a909a0"
+source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/support_small_public_inputs#32c4e1fef7bce0b0e7161a80aa1abcaf3da48877"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4721,7 +4721,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#379a7f769118998a8e2c1f73bd307a41695bc201"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#110b2b536652b3eeedd8de0e357fbc987fc3c39f"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4771,7 +4771,7 @@ dependencies = [
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#b527792881a6077482d3aef24de78b5e7dfc4c74"
+source = "git+https://github.com/succinctlabs/succinctx.git#f8373cb5339f701a9e6937c42af6945305816f18"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4814,7 +4814,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#379a7f769118998a8e2c1f73bd307a41695bc201"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#110b2b536652b3eeedd8de0e357fbc987fc3c39f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4824,7 +4824,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#b527792881a6077482d3aef24de78b5e7dfc4c74"
+source = "git+https://github.com/succinctlabs/succinctx.git#f8373cb5339f701a9e6937c42af6945305816f18"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7846,7 +7846,7 @@ dependencies = [
 [[package]]
 name = "succinct_avail_utils"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment#260b9cd64849afdc6b5b2c290da1bd78758c0a7c"
+source = "git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment#fd42af9d6d485626ecac1af9f4e0f9ef29a6d0e9"
 dependencies = [
  "async-trait",
  "avail-subxt",

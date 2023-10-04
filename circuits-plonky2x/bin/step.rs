@@ -182,7 +182,7 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 100;
+        const NUM_AUTHORITIES: usize = 76;
         const MAX_HEADER_LENGTH: usize = 1024;
         const NUM_HEADERS: usize = 4;
         let mut builder = DefaultBuilder::new();
@@ -197,12 +197,12 @@ mod tests {
         // These inputs are taken from: https://kate.avail.tools/#/explorer/query/485710
         let mut input = circuit.input();
         let trusted_header: [u8; 32] =
-            hex::decode("5d237ce770cc8d4a0b0fa9f4a5f878076051b3adc359acf6cc68349372599df7")
+            hex::decode("5f83b38a27a7d1e7e0709408e845b78bc7bd628c4c36217ad46280ab8ce4b4af")
                 .unwrap()
                 .try_into()
                 .unwrap();
-        let trusted_block = 485710u32;
-        let target_block = 485712u32; // mimics test_step_small
+        let trusted_block = 272525u32;
+        let target_block = 272535u32; // mimics test_step_small
         let authority_set_id = 0u64; // Placeholder for now
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
 

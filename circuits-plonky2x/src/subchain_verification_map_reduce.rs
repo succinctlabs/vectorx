@@ -205,7 +205,7 @@ impl Circuit for SubchainVerificationMRCircuit {
                 let nodes_correctly_linked = builder.and(nodes_linked, nodes_sequential);
 
                 // Either we are at a pad header or the header is correctly linked
-                let link_check = builder.or(right_not_empty, nodes_correctly_linked);
+                let link_check = builder.or(right_empty, nodes_correctly_linked);
                 let true_const = builder._true();
                 builder.assert_is_equal(link_check, true_const);
 

@@ -116,10 +116,11 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
 }
 
 fn main() {
-    const MAX_VALIDATOR_SET_SIZE: usize = 4;
+    const NUM_AUTHORITIES: usize = 4;
     const MAX_HEADER_LENGTH: usize = MAX_LARGE_HEADER_SIZE;
     const NUM_HEADERS: usize = 4;
-    VerifiableFunction::<StepCircuit<MAX_VALIDATOR_SET_SIZE,MAX_HEADER_LENGTH,NUM_HEADERS>>::entrypoint();
+    VerifiableFunction::<StepCircuit<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>>::entrypoint(
+    );
 }
 
 #[cfg(test)]
@@ -139,23 +140,23 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const MAX_VALIDATOR_SET_SIZE: usize = 4;
+        const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_LARGE_HEADER_SIZE;
         const NUM_HEADERS: usize = 4;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<MAX_VALIDATOR_SET_SIZE, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
         let circuit = builder.build();
         log::debug!("Done building circuit");
 
         let mut hint_registry = HintRegistry::new();
         let mut gate_registry = GateRegistry::new();
-        StepCircuit::<MAX_VALIDATOR_SET_SIZE, MAX_HEADER_LENGTH, NUM_HEADERS>::register_generators(
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_generators(
             &mut hint_registry,
         );
-        StepCircuit::<MAX_VALIDATOR_SET_SIZE, MAX_HEADER_LENGTH, NUM_HEADERS>::register_gates(
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_gates(
             &mut gate_registry,
         );
 
@@ -174,14 +175,14 @@ mod tests {
         )
         .unwrap();
 
-        const MAX_VALIDATOR_SET_SIZE: usize = 4;
+        const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = 1024;
         const NUM_HEADERS: usize = 4;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<MAX_VALIDATOR_SET_SIZE, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();
@@ -199,13 +200,13 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const MAX_VALIDATOR_SET_SIZE: usize = 4;
+        const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = 1024;
         const NUM_HEADERS: usize = 4;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<MAX_VALIDATOR_SET_SIZE, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();

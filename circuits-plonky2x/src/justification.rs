@@ -104,33 +104,33 @@ pub trait GrandpaJustificationVerifier {
 
     fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
         &mut self,
-        block: HeaderVariable,
+        block_number: U32Variable,
         block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
-        // authority_set_signers: &ArrayVariable<AuthoritySetSignersVariable, NUM_AUTHORITIES>,
-        // signed_precommits: &ArrayVariable<SignedPrecommitVariable, NUM_AUTHORITIES>,
     );
 }
 
 impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for CircuitBuilder<L, D> {
     fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
         &mut self,
-        num_active_authorities: Variable,
-        authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
+        _num_active_authorities: Variable,
+        _authority_set_commitment: Bytes32Variable,
+        _authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
     ) {
+        todo!()
     }
 
+    // This assumes
     fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
         &mut self,
-        block: HeaderVariable,
-        block_hash: Bytes32Variable,
+        block_number: U32Variable,
+        _block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
-        authority_set_hash: Bytes32Variable,
+        _authority_set_hash: Bytes32Variable,
     ) {
         let mut input_stream = VariableStream::new();
-        input_stream.write(&block.block_number);
+        input_stream.write(&block_number);
         input_stream.write(&authority_set_id);
         let output_stream = self.hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
 
@@ -202,12 +202,12 @@ mod tests {
         // Define the circuit
         let mut builder = DefaultBuilder::new();
 
-        let block = builder.read::<HeaderVariable>();
+        let block_number = builder.read::<U32Variable>();
         let block_hash = builder.read::<Bytes32Variable>();
         let authority_set_id = builder.read::<U64Variable>();
         let authority_set_hash = builder.read::<Bytes32Variable>();
         builder.verify_simple_justification::<NUM_AUTHORITIES>(
-            block,
+            block_number,
             block_hash,
             authority_set_id,
             authority_set_hash,
@@ -216,18 +216,13 @@ mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        input.write::<HeaderVariable>(HeaderValueType {
-            block_number: BLOCK_NUMBER,
-            parent_hash: H256::from([0u8; 32]), // TODO: these will have to be filled in with real things
-            state_root: H256::from([0u8; 32]),
-            data_root: H256::from([0u8; 32]),
-        });
+        input.write::<U32Variable>(BLOCK_NUMBER);
         input.write::<Bytes32Variable>(H256::from([0u8; 32]));
         input.write::<U64Variable>(fetched_authority_set_id);
         input.write::<Bytes32Variable>(H256::from([0u8; 32])); // TODO: will have to be filled in with real thing
 
         info!("Generating proof");
-        let (proof, mut output) = circuit.prove(&input);
+        let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
     }
 }

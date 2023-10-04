@@ -14,7 +14,6 @@ use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
     Extendable, PlonkParameters, RichField, Variable, Witness, WitnessWrite,
 };
-use serde::{Deserialize, Serialize};
 
 pub const NUM_AUTHORITIES: usize = 76;
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS

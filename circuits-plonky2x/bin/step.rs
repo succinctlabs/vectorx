@@ -10,19 +10,16 @@
 use avail_plonky2x::fetch::RpcDataFetcher;
 use avail_plonky2x::justification::HintSimpleJustification;
 use avail_plonky2x::vars::{
-    EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE,
+    to_header_variable, EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE,
+    MAX_SMALL_HEADER_SIZE,
 };
 use avail_subxt::primitives::Header;
-use codec::Encode;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::backend::function::VerifiableFunction;
-use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
 use plonky2x::frontend::hint::simple::hint::Hint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
-use plonky2x::prelude::{
-    ArrayVariable, BoolVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters,
-};
+use plonky2x::prelude::{ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime; // TODO: re-export this instead of this path
 
@@ -53,13 +50,12 @@ impl<
         // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
         let mut header_variables = Vec::new();
         for i in 0..headers.len() {
-            let header = &headers[i];
-            let header_variable = to_header_variable::<HEADER_LENGTH, L::Field>(header);
+            let header_variable = to_header_variable::<HEADER_LENGTH, L::Field>(headers[i].clone());
             header_variables.push(header_variable);
         }
 
         // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
-        for i in headers.len()..NUM_HEADERS {
+        for _ in headers.len()..NUM_HEADERS {
             let header_variable = EncodedHeader {
                 header_bytes: vec![0u8; HEADER_LENGTH],
                 header_size: L::Field::from_canonical_usize(0),
@@ -86,9 +82,9 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>) {
         // Read the on-chain inputs.
         let trusted_block = builder.evm_read::<U32Variable>();
-        let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
-        let authority_set_id = builder.evm_read::<U64Variable>();
-        let authority_set_hash = builder.evm_read::<Bytes32Variable>();
+        let _trusted_header_hash = builder.evm_read::<Bytes32Variable>();
+        let _authority_set_id = builder.evm_read::<U64Variable>();
+        let _authority_set_hash = builder.evm_read::<Bytes32Variable>();
         let target_block = builder.evm_read::<U32Variable>();
 
         let mut input_stream = VariableStream::new();
@@ -98,11 +94,11 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
             input_stream,
             StepOffchainInputs::<HEADER_LENGTH, NUM_HEADERS> {},
         );
-        let all_encoded_header_variables = output_stream
+        let _all_encoded_header_variables = output_stream
             .read::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(builder);
 
         // We compute the last header index based on the target_block and trusted_block.
-        let last_header_index = builder.sub(target_block, trusted_block);
+        let _last_header_index = builder.sub(target_block, trusted_block);
 
         // TODO: verify a simple justification for the last header
         // TODO: verify a header chain

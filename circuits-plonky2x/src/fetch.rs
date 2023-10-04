@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fs;
 
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client, AvailConfig};

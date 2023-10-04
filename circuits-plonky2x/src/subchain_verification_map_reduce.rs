@@ -159,8 +159,8 @@ impl Circuit for SubchainVerificationMRCircuit {
                 (
                     num_headers,
                     block_nums[0],
-                    block_hashes[0],
                     block_parent_hashes[0],
+                    block_hashes[0],
                     end_block_num,
                     end_header_hash,
                     state_merkle_root,
@@ -192,10 +192,9 @@ impl Circuit for SubchainVerificationMRCircuit {
 
                 let total_num_blocks = builder.add(left_num_blocks, right_num_blocks);
 
-                // if right_num_blocks == 0, then rightmost block is from the left_output
                 let right_empty = builder.is_zero(right_num_blocks);
 
-                // Check to see if the left and right outputs are correctly linked.
+                // Check to see if the left and right nodes are correctly linked.
                 let nodes_linked = builder.is_equal(left_end_header_hash, right_first_block_parent);
                 let one = builder.one();
                 let expected_block_num = builder.sub(right_first_block, one);
@@ -203,7 +202,6 @@ impl Circuit for SubchainVerificationMRCircuit {
 
                 let nodes_correctly_linked = builder.and(nodes_linked, nodes_sequential);
 
-                // Either we are at a pad header or the header is correctly linked
                 let link_check = builder.or(right_empty, nodes_correctly_linked);
                 let true_const = builder._true();
                 builder.assert_is_equal(link_check, true_const);

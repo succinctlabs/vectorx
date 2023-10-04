@@ -202,7 +202,7 @@ mod tests {
                 .try_into()
                 .unwrap();
         let trusted_block = 272525u32;
-        let target_block = 272535u32; // mimics test_step_small
+        let target_block = 272534u32; // mimics test_step_small
         let authority_set_id = 0u64; // Placeholder for now
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
 

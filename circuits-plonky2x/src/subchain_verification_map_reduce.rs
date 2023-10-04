@@ -9,15 +9,12 @@ use plonky2x::prelude::{
     Variable, Witness, WitnessWrite,
 };
 use plonky2x::utils::avail::header::HeaderFetcherHint;
-use plonky2x::utils::avail::vars::EncodedHeaderVariable;
+use plonky2x::utils::avail::vars::{EncodedHeaderVariable, BATCH_SIZE};
 
 use crate::decoder::DecodingMethods;
 
 /// The nubmer of map jobs.  This needs to be a power of 2
 const NUM_MAP_JOBS: usize = 2;
-
-/// The batch size for each map job
-const BATCH_SIZE: usize = 12;
 
 /// Num processed headers per MR job
 const HEADERS_PER_JOB: usize = BATCH_SIZE * NUM_MAP_JOBS;

@@ -8,6 +8,7 @@
 //!
 
 use avail_plonky2x::fetch::RpcDataFetcher;
+use avail_plonky2x::subchain_verification_map_reduce::SubchainVerificationMRCircuit;
 use avail_plonky2x::vars::{
     EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_SIZE,
 };
@@ -41,15 +42,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
         let authority_set_hash = builder.evm_read::<Bytes32Variable>();
         let target_block = builder.evm_read::<U32Variable>();
 
-        let mut input_stream = VariableStream::new();
-        input_stream.write(&trusted_block);
-        input_stream.write(&target_block);
-        let output_stream = builder.hint(
-            input_stream,
-            StepOffchainInputs::<HEADER_LENGTH, NUM_HEADERS> {},
-        );
-        let all_header_bytes = output_stream
-            .read::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(builder);
+        SubchainVerificationMRCircuit::define(&mut builder);
 
         let last_header_index = builder.sub(target_block, trusted_block);
         // let target_header = builder.select_array(all_header_bytes, last_header_index.0);

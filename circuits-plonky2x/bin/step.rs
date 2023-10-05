@@ -11,9 +11,8 @@ use avail_plonky2x::decoder::FloorDivGenerator;
 use avail_plonky2x::header::HeaderFetcherHint;
 use avail_plonky2x::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use avail_plonky2x::subchain_verification::{
-    SubChainVerifier, SubchainVerificationCtx, BATCH_SIZE,
+    SubChainVerifier, SubchainVerificationCtx, BATCH_SIZE, MAX_HEADER_SIZE,
 };
-use avail_plonky2x::vars::MAX_LARGE_HEADER_SIZE;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::backend::function::VerifiableFunction;
 use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;

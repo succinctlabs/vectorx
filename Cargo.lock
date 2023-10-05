@@ -4703,7 +4703,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#771d006eb8e4fc5ddffd7116354b0947839427b0"
+source = "git+https://github.com/succinctlabs/succinctx.git#60cee027833ec44aab5d5e7f2b0d6e924ec9757b"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4746,7 +4746,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#771d006eb8e4fc5ddffd7116354b0947839427b0"
+source = "git+https://github.com/succinctlabs/succinctx.git#60cee027833ec44aab5d5e7f2b0d6e924ec9757b"
 dependencies = [
  "proc-macro2",
  "quote",

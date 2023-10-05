@@ -1,7 +1,7 @@
 use ethers::types::H256;
 use itertools::Itertools;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2x::backend::circuit::{DefaultSerializer, PlonkParameters};
+use plonky2x::backend::circuit::{Circuit, PlonkParameters};
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
 use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, RichField, Variable,
@@ -30,7 +30,7 @@ pub struct SubchainVerificationCtx {
 }
 
 pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
-    fn verify_subchain(
+    fn verify_subchain<C: Circuit>(
         &mut self,
         trusted_block: U32Variable,
         trusted_header_hash: Bytes32Variable,
@@ -42,7 +42,7 @@ pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBuilder<L, D> {
-    fn verify_subchain(
+    fn verify_subchain<C: Circuit>(
         &mut self,
         trusted_block: U32Variable,
         trusted_header_hash: Bytes32Variable,
@@ -70,7 +70,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 Bytes32Variable, // last block's hash
                 Bytes32Variable, // state merkle root
                 Bytes32Variable, // data merkle root
-            ), self, BATCH_SIZE, _, _>(
+            ), C, BATCH_SIZE, _, _>(
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {

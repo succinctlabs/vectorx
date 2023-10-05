@@ -43,7 +43,11 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
         let target_block = builder.evm_read::<U32Variable>();
 
         let (target_header_hash, state_root_merkle_root, data_root_merkle_root) =
-            builder.verify_subchain(trusted_block, trusted_header_hash, target_block);
+            builder.verify_subchain::<StepCircuit<VALIDATOR_SET_SIZE, HEADER_LENGTH, NUM_HEADERS>>(
+                trusted_block,
+                trusted_header_hash,
+                target_block,
+            );
 
         builder.verify_simple_justification::<VALIDATOR_SET_SIZE>(
             target_block,

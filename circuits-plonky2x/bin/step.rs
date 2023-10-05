@@ -21,6 +21,7 @@ use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters, Variable};
 
+#[derive(Clone, Debug)]
 struct StepCircuit<
     const VALIDATOR_SET_SIZE: usize,
     const HEADER_LENGTH: usize,
@@ -87,6 +88,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
                 Bytes32Variable,
                 Bytes32Variable,
             ),
+            Self,
             BATCH_SIZE,
             D,
         >::id();
@@ -104,6 +106,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
                 Bytes32Variable,
                 Bytes32Variable,
             ),
+            Self,
             BATCH_SIZE,
             D,
         >>(mr_id);

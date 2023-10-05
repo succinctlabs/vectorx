@@ -7,8 +7,12 @@
 //!
 //!
 
-use avail_plonky2x::justification::GrandpaJustificationVerifier;
-use avail_plonky2x::subchain_verification_map_reduce::{SubChainVerifier, SubchainVerificationCtx};
+use avail_plonky2x::decoder::FloorDivGenerator;
+use avail_plonky2x::header::HeaderFetcherHint;
+use avail_plonky2x::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
+use avail_plonky2x::subchain_verification::{
+    SubChainVerifier, SubchainVerificationCtx, BATCH_SIZE,
+};
 use avail_plonky2x::vars::MAX_LARGE_HEADER_SIZE;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::backend::function::VerifiableFunction;
@@ -16,7 +20,6 @@ use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters, Variable};
-use plonky2x::utils::avail::vars::BATCH_SIZE;
 
 struct StepCircuit<
     const VALIDATOR_SET_SIZE: usize,
@@ -55,12 +58,18 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
-        registry: &mut plonky2x::prelude::HintRegistry<L, D>,
+        generator_registry: &mut plonky2x::prelude::HintRegistry<L, D>,
     ) where
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        let id = MapReduceGenerator::<
+        generator_registry.register_hint::<HeaderFetcherHint<HEADER_LENGTH, NUM_HEADERS>>();
+        generator_registry.register_hint::<HintSimpleJustification<VALIDATOR_SET_SIZE>>();
+
+        let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
+        generator_registry.register_simple::<FloorDivGenerator<L::Field, D>>(floor_div_id);
+
+        let mr_id = MapReduceGenerator::<
             L,
             SubchainVerificationCtx,
             U32Variable,
@@ -77,7 +86,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
             BATCH_SIZE,
             D,
         >::id();
-        registry.register_simple::<MapReduceGenerator<
+        generator_registry.register_simple::<MapReduceGenerator<
             L,
             SubchainVerificationCtx,
             U32Variable,
@@ -93,7 +102,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
             ),
             BATCH_SIZE,
             D,
-        >>(id);
+        >>(mr_id);
     }
 }
 

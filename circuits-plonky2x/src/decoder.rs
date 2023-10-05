@@ -1,16 +1,80 @@
+use std::marker::PhantomData;
+
 use plonky2::field::extension::Extendable;
+use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
+use plonky2::iop::witness::PartitionWitness;
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
+use plonky2::plonk::circuit_data::CommonCircuitData;
+use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, Field,
-    PlonkParameters, RichField, Target, Variable,
+    PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
-use plonky2x::utils::avail::header::FloorDivGenerator;
-use plonky2x::utils::avail::vars::{EncodedHeaderVariable, HeaderVariable};
 
 use crate::vars::*;
 
 const DATA_ROOT_OFFSET_FROM_END: usize = 132;
+
+#[derive(Debug)]
+pub struct FloorDivGenerator<F: RichField + Extendable<D>, const D: usize> {
+    divisor: Target,
+    dividend: Target,
+    quotient: Target,
+    remainder: Target,
+    _marker: PhantomData<F>,
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> FloorDivGenerator<F, D> {
+    pub fn id() -> String {
+        "FloorDivGenerator".to_string()
+    }
+}
+
+impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
+    for FloorDivGenerator<F, D>
+{
+    fn id(&self) -> String {
+        Self::id()
+    }
+
+    fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
+        dst.write_target(self.divisor)?;
+        dst.write_target(self.dividend)?;
+        dst.write_target(self.quotient)?;
+        dst.write_target(self.remainder)
+    }
+
+    fn deserialize(src: &mut Buffer, _common_data: &CommonCircuitData<F, D>) -> IoResult<Self> {
+        let divisor = src.read_target()?;
+        let dividend = src.read_target()?;
+        let quotient = src.read_target()?;
+        let remainder = src.read_target()?;
+        Ok(Self {
+            divisor,
+            dividend,
+            quotient,
+            remainder,
+            _marker: PhantomData,
+        })
+    }
+
+    fn dependencies(&self) -> Vec<Target> {
+        Vec::from([self.dividend])
+    }
+
+    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
+        let divisor = witness.get_target(self.divisor);
+        let dividend = witness.get_target(self.dividend);
+        let divisor_int = divisor.to_canonical_u64() as u32;
+        let dividend_int = dividend.to_canonical_u64() as u32;
+        let quotient = dividend_int / divisor_int;
+        let remainder = dividend_int % divisor_int;
+        out_buffer.set_target(self.quotient, F::from_canonical_u32(quotient));
+        out_buffer.set_target(self.remainder, F::from_canonical_u32(remainder));
+    }
+}
+
 trait CircuitBuilderScaleDecoder {
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
 
@@ -25,9 +89,13 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         let quotient = self.add_virtual_target();
         let remainder = self.add_virtual_target();
 
-        self.add_simple_generator(FloorDivGenerator::<F, D>::new(
-            divisor, dividend, quotient, remainder,
-        ));
+        self.add_simple_generator(FloorDivGenerator::<F, D> {
+            divisor,
+            dividend,
+            quotient,
+            remainder,
+            _marker: PhantomData,
+        });
         let base = self.mul(quotient, divisor);
         let rhs = self.add(base, remainder);
         let is_equal = self.is_equal(rhs, dividend);

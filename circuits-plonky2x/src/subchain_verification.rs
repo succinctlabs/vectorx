@@ -1,26 +1,33 @@
 use ethers::types::H256;
 use itertools::Itertools;
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
-use plonky2x::backend::circuit::{Circuit, PlonkParameters};
-use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
+use plonky2x::backend::circuit::{DefaultSerializer, PlonkParameters};
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, HintRegistry, RichField,
-    Variable, Witness, WitnessWrite,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, RichField, Variable,
 };
-use plonky2x::utils::avail::header::HeaderFetcherHint;
-use plonky2x::utils::avail::vars::{EncodedHeaderVariable, BATCH_SIZE};
 
 use crate::decoder::DecodingMethods;
+use crate::header::HeaderFetcherHint;
+use crate::vars::EncodedHeaderVariable;
 
 /// The nubmer of map jobs.  This needs to be a power of 2
 const NUM_MAP_JOBS: usize = 2;
+
+pub const BATCH_SIZE: usize = 16;
 
 /// Num processed headers per MR job
 const HEADERS_PER_JOB: usize = BATCH_SIZE * NUM_MAP_JOBS;
 
 const MAX_HEADER_CHUNK_SIZE: usize = 100;
 const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
+
+#[derive(Clone, Debug, CircuitVariable)]
+pub struct SubchainVerificationCtx {
+    pub trusted_block: U32Variable,
+    pub trusted_header_hash: Bytes32Variable,
+    pub target_block: U32Variable,
+}
 
 pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
     fn verify_subchain(
@@ -63,7 +70,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 Bytes32Variable, // last block's hash
                 Bytes32Variable, // state merkle root
                 Bytes32Variable, // data merkle root
-            ), _, _, BATCH_SIZE>(
+            ), DefaultSerializer, BATCH_SIZE, _, _>(
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
@@ -242,109 +249,5 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
             );
 
         (end_header_hash, state_merkle_root, data_merkle_root)
-    }
-}
-
-#[derive(Clone, Debug, CircuitVariable)]
-pub struct SubchainVerificationCtx {
-    pub trusted_block: U32Variable,
-    pub trusted_header_hash: Bytes32Variable,
-    pub target_block: U32Variable,
-}
-
-pub struct SubchainVerificationMRCircuit;
-
-impl Circuit for SubchainVerificationMRCircuit {
-    fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
-    where
-        <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
-            AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
-    {
-        let trusted_block = builder.evm_read::<U32Variable>();
-        let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
-        let target_block = builder.evm_read::<U32Variable>();
-
-        // Currently assuming that target_block - trusted_block <= MAX_EPOCH_SIZE
-        let (target_header_hash, _, _) =
-            builder.verify_subchain(trusted_block, trusted_header_hash, target_block);
-        builder.watch(&target_header_hash, "target header hash");
-    }
-
-    fn register_generators<L: PlonkParameters<D>, const D: usize>(registry: &mut HintRegistry<L, D>)
-    where
-        <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher: AlgebraicHasher<L::Field>,
-    {
-        let id = MapReduceGenerator::<
-            L,
-            SubchainVerificationCtx,
-            U32Variable,
-            (
-                Variable,
-                U32Variable,
-                Bytes32Variable,
-                Bytes32Variable,
-                U32Variable,
-                Bytes32Variable,
-                Bytes32Variable,
-                Bytes32Variable,
-            ),
-            BATCH_SIZE,
-            D,
-        >::id();
-        registry.register_simple::<MapReduceGenerator<
-            L,
-            SubchainVerificationCtx,
-            U32Variable,
-            (
-                Variable,
-                U32Variable,
-                Bytes32Variable,
-                Bytes32Variable,
-                U32Variable,
-                Bytes32Variable,
-                Bytes32Variable,
-                Bytes32Variable,
-            ),
-            BATCH_SIZE,
-            D,
-        >>(id);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    // use ethers::types::H256;
-    use plonky2x::prelude::DefaultParameters;
-
-    use super::*;
-
-    type L = DefaultParameters;
-    const D: usize = 2;
-
-    #[test]
-    fn test_circuit() {
-        env_logger::try_init().unwrap_or_default();
-
-        let mut builder = CircuitBuilder::<L, D>::new();
-        SubchainVerificationMRCircuit::define(&mut builder);
-        let circuit = builder.build();
-
-        let mut input = circuit.input();
-        let trusted_header: [u8; 32] =
-            hex::decode("4cfd147756de6e8004a5f2ba9f2ca29e8488bae40acb97474c7086c45b39ff92")
-                .unwrap()
-                .try_into()
-                .unwrap();
-        let trusted_block = 272503u32;
-        let target_block = 272535u32; // mimics test_step_small
-
-        input.evm_write::<U32Variable>(trusted_block);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
-        input.evm_write::<U32Variable>(target_block);
-
-        let (proof, output) = circuit.prove(&input);
-        circuit.verify(&proof, &input, &output);
-
-        SubchainVerificationMRCircuit::test_serialization::<L, D>();
     }
 }

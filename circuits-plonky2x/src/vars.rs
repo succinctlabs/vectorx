@@ -6,14 +6,14 @@ use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
 pub use plonky2x::frontend::ecc::ed25519::curve::curve_types::AffinePoint;
 pub use plonky2x::frontend::ecc::ed25519::curve::ed25519::Ed25519;
 pub use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
+use plonky2x::frontend::ecc::ed25519::gadgets::curve::AffinePointTarget;
 pub use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable, Extendable,
-    PlonkParameters, RichField, Variable, Witness, WitnessWrite,
+    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
+    Extendable, PlonkParameters, RichField, Variable,
 };
-use plonky2x::utils::avail::vars::{Curve, EDDSAPublicKeyVariable, EncodedHeader};
 
 pub const NUM_AUTHORITIES: usize = 76;
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
@@ -87,12 +87,30 @@ pub fn to_header_variable<const S: usize, F: RichField>(header: Header) -> Encod
 }
 
 #[derive(Clone, Debug, CircuitVariable)]
+#[value_name(EncodedHeader)]
+pub struct EncodedHeaderVariable<const S: usize> {
+    pub header_bytes: ArrayVariable<ByteVariable, S>,
+    pub header_size: Variable,
+}
+#[derive(Clone, Debug, CircuitVariable)]
+#[value_name(HeaderValueType)]
+pub struct HeaderVariable {
+    pub block_number: U32Variable,
+    pub parent_hash: Bytes32Variable,
+    pub state_root: Bytes32Variable,
+    pub data_root: Bytes32Variable,
+}
+
+#[derive(Clone, Debug, CircuitVariable)]
 pub struct PrecommitVariable {
     pub block_hash: Bytes32Variable,
     pub block_number: U32Variable,
     pub justification_round: Variable,
     pub authority_set_id: Variable,
 }
+
+pub type Curve = Ed25519;
+pub type EDDSAPublicKeyVariable = AffinePointTarget<Curve>;
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SignedPrecommitVariable {

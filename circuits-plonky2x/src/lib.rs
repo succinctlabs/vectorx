@@ -1,7 +1,8 @@
 pub mod commitment;
-mod decoder;
-mod header;
+pub mod decoder;
+pub mod fetch;
+pub mod header;
 pub mod justification;
-pub mod subchain_verification_map_reduce;
+pub mod subchain_verification;
 mod testing_utils;
 pub mod vars;

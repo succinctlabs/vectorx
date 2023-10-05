@@ -1,5 +1,15 @@
-use plonky2x::prelude::{ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkParameters};
-use plonky2x::utils::avail::vars::EncodedHeaderVariable;
+use codec::Encode;
+use log::debug;
+use plonky2x::frontend::hint::simple::hint::Hint;
+use plonky2x::prelude::{
+    ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, U32Variable,
+    ValueStream,
+};
+use serde::{Deserialize, Serialize};
+use tokio::runtime::Runtime;
+
+use crate::fetch::RpcDataFetcher;
+use crate::vars::*;
 
 pub trait HeaderMethods {
     fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
@@ -49,6 +59,75 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeaderFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
+
+impl<
+        const HEADER_LENGTH: usize,
+        const NUM_HEADERS: usize,
+        L: PlonkParameters<D>,
+        const D: usize,
+    > Hint<L, D> for HeaderFetcherHint<HEADER_LENGTH, NUM_HEADERS>
+{
+    fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
+        let start_block = input_stream.read_value::<U32Variable>();
+        let mut last_block = input_stream.read_value::<U32Variable>();
+        let max_block = input_stream.read_value::<U32Variable>();
+
+        last_block = last_block.min(max_block);
+
+        debug!(
+            "HeaderFetcherHint: downloading header range of start_block={}, last_block={}",
+            start_block, last_block
+        );
+
+        let mut headers = Vec::new();
+        if last_block >= start_block {
+            let rt = Runtime::new().expect("failed to create tokio runtime");
+            headers.extend(rt.block_on(async {
+                let data_fetcher = RpcDataFetcher::new().await;
+                data_fetcher
+                    .get_block_headers_range(start_block, last_block)
+                    .await
+            }));
+        }
+
+        // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
+        let mut header_variables = Vec::new();
+        for i in 0..headers.len() {
+            // TODO: replace with `to_header_variable` from vars.rs
+            let header = &headers[i];
+            let mut header_bytes = header.encode();
+            let header_size = header_bytes.len();
+            if header_size > HEADER_LENGTH {
+                panic!(
+                    "header size {} is greater than HEADER_LENGTH {}",
+                    header_size, HEADER_LENGTH
+                );
+            }
+            header_bytes.resize(HEADER_LENGTH, 0);
+            let header_variable = EncodedHeader {
+                header_bytes,
+                header_size: L::Field::from_canonical_usize(header_size),
+            };
+            header_variables.push(header_variable);
+        }
+
+        // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
+        for _i in headers.len()..NUM_HEADERS {
+            let header_variable = EncodedHeader {
+                header_bytes: vec![0u8; HEADER_LENGTH],
+                header_size: L::Field::from_canonical_usize(0),
+            };
+            header_variables.push(header_variable);
+        }
+        output_stream
+            .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
+                header_variables,
+            );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
@@ -56,14 +135,13 @@ mod tests {
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
-    use plonky2x::utils::avail::vars::{EncodedHeader, EncodedHeaderVariable};
     use plonky2x::utils::{bytes, bytes32};
 
     use crate::header::HeaderMethods;
     use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, NUM_BLOCKS};
     use crate::vars::{
-        MAX_LARGE_HEADER_CHUNK_SIZE, MAX_LARGE_HEADER_SIZE, MAX_SMALL_HEADER_CHUNK_SIZE,
-        MAX_SMALL_HEADER_SIZE,
+        EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_CHUNK_SIZE, MAX_LARGE_HEADER_SIZE,
+        MAX_SMALL_HEADER_CHUNK_SIZE, MAX_SMALL_HEADER_SIZE,
     };
 
     #[test]

@@ -297,7 +297,6 @@ pub mod tests {
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
-    use plonky2x::utils::avail::vars::{EncodedHeader, EncodedHeaderVariable};
     use plonky2x::utils::{bytes, bytes32};
     use testing_utils::tests::{
         BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
@@ -306,7 +305,7 @@ pub mod tests {
     use super::DecodingMethods;
     use crate::testing_utils;
     use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
-    use crate::vars::MAX_LARGE_HEADER_SIZE;
+    use crate::vars::{EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]

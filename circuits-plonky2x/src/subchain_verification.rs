@@ -58,7 +58,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
             target_block,
         };
 
-        let relative_block_nums = (0u32..HEADERS_PER_JOB as u32).collect_vec();
+        let relative_block_nums = (1u32..HEADERS_PER_JOB + 1 as u32).collect_vec();
 
         let (_, _, _, _, _, end_header_hash, state_merkle_root, data_merkle_root) =
             self.mapreduce::<SubchainVerificationCtx, U32Variable, (

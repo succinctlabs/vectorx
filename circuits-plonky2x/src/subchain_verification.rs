@@ -86,8 +86,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     // Get the max block that the whole MR job is responsible for
                     // Note that the max block may be less than the last_block (or even the start_block).
-                    // Right now, there is a hard coded number of map leaves and if the requests
-                    //
+                    // Right now, there is a hard coded number of map leaves and if the block
+                    // range doesn't fill that up, then there could be "no-op" leaves.
                     let max_block = map_ctx.target_block;
 
                     let mut input_stream = VariableStream::new();
@@ -95,6 +95,9 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     input_stream.write(&last_block);
                     input_stream.write(&max_block);
                     let header_fetcher = HeaderFetcherHint::<MAX_HEADER_SIZE, BATCH_SIZE> {};
+
+                    // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
+                    // Note that the latter number may be greater than start_block.
                     let headers = builder
                         .hint(input_stream, header_fetcher)
                         .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, BATCH_SIZE>>(
@@ -107,6 +110,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let mut block_state_roots = Vec::new();
                     let mut block_data_roots = Vec::new();
 
+                    // "end_block_num" and "end_header_hash" are iterators that will store the
+                    // respective values for the last non-padded header.
                     let mut end_block_num: U32Variable = builder.zero();
                     let empty_bytes_32_variable =
                         Bytes32Variable::constant(builder, H256::from_slice(&[0u8; 32]));
@@ -119,15 +124,20 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     let mut num_headers = zero;
 
+                    // This is a bitmap used for "compute_root_from_leaves".  The size of it will be
+                    // equal to BATCH_SIZE.  It specifies which downloaded headers are not pad
+                    // headers.
                     let mut leaves_enabled = Vec::new();
 
                     for (i, header) in headers.as_vec().iter().enumerate() {
+                        // Calculate and save the block hash.
                         let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
                             header.header_bytes.as_slice(),
                             header.header_size,
                         );
                         block_hashes.push(hash);
 
+                        // Decode the header and save relevant fields.
                         let header_variable =
                             builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
                         block_nums.push(header_variable.block_number);
@@ -135,6 +145,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         block_state_roots.push(header_variable.state_root.0);
                         block_data_roots.push(header_variable.data_root.0);
 
+                        // The header is a pad-header if it's size is 0.
                         let is_pad_block = builder.is_zero(header.header_size);
 
                         builder.watch(&header_variable.block_number, "decoded block num");
@@ -158,13 +169,16 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             builder.assert_is_equal(link_check, true_const);
                         }
 
+                        // Update the end_block_num value if the header is not a pad header.
                         end_block_num = builder.select(
                             is_pad_block,
                             end_block_num,
                             header_variable.block_number,
                         );
+                        // Update the end_header_hash value if the header is not a pad header.
                         end_header_hash = builder.select(is_pad_block, end_header_hash, hash);
 
+                        // Update the num_headers counter
                         let num_headers_increment = builder.select(is_pad_block, zero, one);
                         num_headers = builder.add(num_headers, num_headers_increment);
 
@@ -181,6 +195,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let false_const = builder._false();
                     leaves_enabled.resize(16, false_const);
 
+                    // Calculate the state and data merkle roots.
                     let state_merkle_root = builder.compute_root_from_leaves::<BATCH_SIZE, 32>(
                         block_state_roots,
                         leaves_enabled.clone(),
@@ -226,7 +241,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     let total_num_blocks = builder.add(left_num_blocks, right_num_blocks);
 
-                    let right_empty = builder.is_zero(right_num_blocks);
+                    let is_right_empty = builder.is_zero(right_num_blocks);
 
                     builder.watch(&left_end_header_hash, "left end header hash");
                     builder.watch(&right_first_block_parent, "right first block parent");
@@ -239,17 +254,23 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let one = builder.one();
                     let expected_block_num = builder.sub(right_first_block, one);
                     let nodes_sequential = builder.is_equal(left_end_block, expected_block_num);
-
                     let nodes_correctly_linked = builder.and(nodes_linked, nodes_sequential);
 
-                    let link_check = builder.or(right_empty, nodes_correctly_linked);
+                    // If the right node is empty, then don't need to check the "node_correctly_linked"
+                    // boolean.
+                    let link_check = builder.or(is_right_empty, nodes_correctly_linked);
                     let true_const = builder._true();
                     builder.assert_is_equal(link_check, true_const);
 
-                    let end_block = builder.select(right_empty, left_end_block, right_end_block);
+                    // Get the right most block num and hash between the two nodes.
+                    // If the right node is not empty, this will be the right node's rightmost entry,
+                    // otherwise it will be the left block's rightmost entry.
+                    let end_block = builder.select(is_right_empty, left_end_block, right_end_block);
                     let end_header_hash =
-                        builder.select(right_empty, left_end_header_hash, right_end_header_hash);
+                        builder.select(is_right_empty, left_end_header_hash, right_end_header_hash);
 
+                    // Compute the merkle roots where the left and right nodes are the merkle roots
+                    // from the left and right nodes respectively.
                     let mut state_root_bytes = left_state_merkle_root.as_bytes().to_vec();
                     state_root_bytes.extend(&right_state_merkle_root.as_bytes());
                     let state_merkle_root = builder.sha256(&state_root_bytes);

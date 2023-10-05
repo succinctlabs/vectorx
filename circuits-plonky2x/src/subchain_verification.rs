@@ -74,15 +74,23 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
-                    let mut input_stream = VariableStream::new();
+                    // Get the start block that this map job is responsible for
                     let start_block =
                         builder.add(map_ctx.trusted_block, map_relative_block_nums.as_vec()[0]);
+
+                    // Get the last block that this map job is responsible for
                     let last_block = builder.add(
                         map_ctx.trusted_block,
                         map_relative_block_nums.as_vec()[BATCH_SIZE - 1],
                     );
+
+                    // Get the max block that the whole MR job is responsible for
+                    // Note that the max block may be less than the last_block (or even the start_block).
+                    // Right now, there is a hard coded number of map leaves and if the requests
+                    //
                     let max_block = map_ctx.target_block;
 
+                    let mut input_stream = VariableStream::new();
                     input_stream.write(&start_block);
                     input_stream.write(&last_block);
                     input_stream.write(&max_block);
@@ -129,6 +137,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                         let is_pad_block = builder.is_zero(header.header_size);
 
+                        builder.watch(&header_variable.block_number, "decoded block num");
+                        builder.watch(&hash, "calculated block hash");
+                        builder.watch(&header_variable.parent_hash, "decoded parent hash");
+                        builder.watch(&is_pad_block, "is pad block");
+
                         // Verify that the headers are linked correctly.
                         if i > 0 {
                             let hashes_linked =
@@ -157,6 +170,9 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                         leaves_enabled.push(builder.not(is_pad_block));
                     }
+
+                    builder.watch(&end_block_num, "end block num");
+                    builder.watch(&end_header_hash, "end header hash");
 
                     // Need to pad block_state_roots and block_data_roots to be of length 16;
                     block_state_roots.resize(16, empty_bytes_32_variable.0);

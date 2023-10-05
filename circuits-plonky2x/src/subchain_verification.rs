@@ -70,7 +70,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 Bytes32Variable, // last block's hash
                 Bytes32Variable, // state merkle root
                 Bytes32Variable, // data merkle root
-            ), DefaultSerializer, BATCH_SIZE, _, _>(
+            ), self, BATCH_SIZE, _, _>(
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {

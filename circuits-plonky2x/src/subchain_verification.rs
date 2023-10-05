@@ -60,7 +60,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
         let relative_block_nums = (1u32..(HEADERS_PER_JOB as u32) + 1).collect_vec();
 
-        let (_, _, _, _, _, end_header_hash, state_merkle_root, data_merkle_root) =
+        let (_, _, _, first_parent_hash, _, end_header_hash, state_merkle_root, data_merkle_root) =
             self.mapreduce::<SubchainVerificationCtx, U32Variable, (
                 Variable,        // num headers
                 U32Variable,     // first block's num
@@ -83,6 +83,16 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         map_ctx.trusted_block,
                         map_relative_block_nums.as_vec()[BATCH_SIZE - 1],
                     );
+
+                    builder.watch(&map_ctx.trusted_block, "trusted block");
+                    builder.watch(&map_relative_block_nums[0], "map relative block num 0");
+                    builder.watch(
+                        &map_relative_block_nums[BATCH_SIZE - 1],
+                        "map relative block num 15",
+                    );
+
+                    builder.watch(&start_block, "start block");
+                    builder.watch(&last_block, "last block");
 
                     // Get the max block that the whole MR job is responsible for
                     // Note that the max block may be less than the last_block (or even the start_block).
@@ -291,6 +301,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     )
                 },
             );
+
+        self.assert_is_equal(trusted_header_hash, first_parent_hash);
 
         (end_header_hash, state_merkle_root, data_merkle_root)
     }

@@ -38,10 +38,19 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
     {
         // Read the on-chain inputs.
         let trusted_block = builder.evm_read::<U32Variable>();
+        builder.watch(&trusted_block, "trusted block");
+
         let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
+        builder.watch(&trusted_header_hash, "trusted header hash");
+
         let authority_set_id = builder.evm_read::<U64Variable>();
+        builder.watch(&authority_set_id, "authority set id");
+
         let authority_set_hash = builder.evm_read::<Bytes32Variable>();
+        builder.watch(&authority_set_hash, "authority set hash");
+
         let target_block = builder.evm_read::<U32Variable>();
+        builder.watch(&target_block, "target block");
 
         let (target_header_hash, state_root_merkle_root, data_root_merkle_root) =
             builder.verify_subchain::<StepCircuit<VALIDATOR_SET_SIZE, HEADER_LENGTH, NUM_HEADERS>>(
@@ -114,9 +123,9 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
 }
 
 fn main() {
-    const NUM_AUTHORITIES: usize = 4;
-    const MAX_HEADER_LENGTH: usize = MAX_LARGE_HEADER_SIZE;
-    const NUM_HEADERS: usize = 4;
+    const NUM_AUTHORITIES: usize = 76;
+    const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+    const NUM_HEADERS: usize = 36;
     VerifiableFunction::<StepCircuit<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>>::entrypoint(
     );
 }

@@ -7804,7 +7804,6 @@ dependencies = [
 name = "succinct_avail_utils"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "avail-subxt",
  "enum_extract",
  "hex",
@@ -7812,12 +7811,9 @@ dependencies = [
  "pallet-grandpa 21.0.0",
  "parity-scale-codec",
  "primitive-types 0.12.1",
- "reqwest",
  "scale-info",
  "serde",
  "serde_json",
- "sha256",
- "sp-application-crypto 25.0.0",
  "sp-core 16.0.0",
  "sp-state-machine 0.12.0",
  "subxt",

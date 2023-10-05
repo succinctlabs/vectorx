@@ -25,10 +25,6 @@ sp-core = { version = "16.0.0", default-features = false }
 sp-state-machine = "0.12.0"
 subxt = "0.27"
 
-sp-application-crypto = "25.0.0"
-async-trait = "0.1.73"
-reqwest = "0.11.20"
-sha256 = "1.4.0"
 
 ### Binaries
 

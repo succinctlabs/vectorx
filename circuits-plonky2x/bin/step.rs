@@ -67,7 +67,7 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        generator_registry.register_hint::<HeaderFetcherHint<HEADER_LENGTH, NUM_HEADERS>>();
+        generator_registry.register_hint::<HeaderFetcherHint<HEADER_LENGTH, BATCH_SIZE>>();
         generator_registry.register_hint::<HintSimpleJustification<VALIDATOR_SET_SIZE>>();
 
         let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
@@ -122,6 +122,7 @@ fn main() {
 mod tests {
     use std::env;
 
+    use avail_plonky2x::subchain_verification::MAX_HEADER_SIZE;
     use ethers::types::H256;
     use ethers::utils::hex;
     use plonky2x::backend::circuit::PublicInput;
@@ -136,8 +137,8 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 4;
-        const MAX_HEADER_LENGTH: usize = MAX_LARGE_HEADER_SIZE;
-        const NUM_HEADERS: usize = 4;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const NUM_HEADERS: usize = 36;
 
         let mut builder = DefaultBuilder::new();
 
@@ -196,8 +197,8 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 76;
-        const MAX_HEADER_LENGTH: usize = 1024;
-        const NUM_HEADERS: usize = 4;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const NUM_HEADERS: usize = 36;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");

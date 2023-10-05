@@ -20,7 +20,7 @@ pub const BATCH_SIZE: usize = 16;
 const HEADERS_PER_JOB: usize = BATCH_SIZE * NUM_MAP_JOBS;
 
 const MAX_HEADER_CHUNK_SIZE: usize = 100;
-const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
+pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
@@ -165,12 +165,14 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let false_const = builder._false();
                     leaves_enabled.resize(16, false_const);
 
-                    let state_merkle_root = builder.compute_root_from_leaves::<16, 32>(
+                    let state_merkle_root = builder.compute_root_from_leaves::<BATCH_SIZE, 32>(
                         block_state_roots,
                         leaves_enabled.clone(),
                     );
-                    let data_merkle_root = builder
-                        .compute_root_from_leaves::<16, 32>(block_data_roots, leaves_enabled);
+                    let data_merkle_root = builder.compute_root_from_leaves::<BATCH_SIZE, 32>(
+                        block_data_roots,
+                        leaves_enabled,
+                    );
 
                     (
                         num_headers,

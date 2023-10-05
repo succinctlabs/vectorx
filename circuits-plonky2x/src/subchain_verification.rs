@@ -12,7 +12,7 @@ use crate::header::HeaderFetcherHint;
 use crate::vars::EncodedHeaderVariable;
 
 /// The nubmer of map jobs.  This needs to be a power of 2
-const NUM_MAP_JOBS: usize = 16;
+const NUM_MAP_JOBS: usize = 2;
 
 pub const BATCH_SIZE: usize = 16;
 

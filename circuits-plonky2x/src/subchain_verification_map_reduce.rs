@@ -14,7 +14,7 @@ use plonky2x::utils::avail::vars::{EncodedHeaderVariable, BATCH_SIZE};
 use crate::decoder::DecodingMethods;
 
 /// The nubmer of map jobs.  This needs to be a power of 2
-const NUM_MAP_JOBS: usize = 2;
+const NUM_MAP_JOBS: usize = 16;
 
 /// Num processed headers per MR job
 const HEADERS_PER_JOB: usize = BATCH_SIZE * NUM_MAP_JOBS;

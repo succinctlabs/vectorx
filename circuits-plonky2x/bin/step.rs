@@ -197,11 +197,11 @@ mod tests {
         // These inputs are taken from: https://kate.avail.tools/#/explorer/query/485710
         let mut input = circuit.input();
         let trusted_header: [u8; 32] =
-            hex::decode("5f83b38a27a7d1e7e0709408e845b78bc7bd628c4c36217ad46280ab8ce4b4af")
+            hex::decode("9a69988124baf188d9d6bbbc579977815086a5d9dfa3b91bafa6d315f31047dc")
                 .unwrap()
                 .try_into()
                 .unwrap();
-        let trusted_block = 272525u32;
+        let trusted_block = 272502u32;
         let target_block = 272534u32; // mimics test_step_small
         let authority_set_id = 256u64;
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now

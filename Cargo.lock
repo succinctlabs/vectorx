@@ -360,7 +360,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "avail-subxt",
- "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=kevjue/support_small_public_inputs)",
  "ed25519-dalek 1.0.1",
  "env_logger 0.9.3",
  "ethers",
@@ -1083,24 +1082,6 @@ dependencies = [
 name = "curta"
 version = "0.1.0"
 source = "git+https://github.com/succinctlabs/curta.git?branch=john/nightly#e8b9f1745c9d92be77ba9817b0e3921869c1df7a"
-dependencies = [
- "anyhow",
- "bincode",
- "hex",
- "itertools 0.10.5",
- "log",
- "num",
- "plonky2",
- "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.8.5",
- "serde",
- "subtle-encoding",
-]
-
-[[package]]
-name = "curta"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/support_small_public_inputs#32c4e1fef7bce0b0e7161a80aa1abcaf3da48877"
 dependencies = [
  "anyhow",
  "bincode",
@@ -4721,7 +4702,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#7f334cde4dcc245667c916101ddcc29fc4ab093f"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#9e1c7fff1c8f68c9f3d07f6d460c7dd836dd0c37"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4752,6 +4733,7 @@ dependencies = [
  "parity-scale-codec",
  "plonky2",
  "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints)",
+ "primitive-types 0.12.1",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -4761,8 +4743,8 @@ dependencies = [
  "sha2 0.10.8",
  "sha256",
  "sp-application-crypto 25.0.0",
+ "sp-core 16.0.0",
  "subxt",
- "succinct_avail_utils 0.1.0 (git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment)",
  "tokio",
  "tracing",
  "uuid 1.4.1",
@@ -4814,7 +4796,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#7f334cde4dcc245667c916101ddcc29fc4ab093f"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/register_mapreduce_hints#9e1c7fff1c8f68c9f3d07f6d460c7dd836dd0c37"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7821,32 +7803,6 @@ dependencies = [
 [[package]]
 name = "succinct_avail_utils"
 version = "0.1.0"
-dependencies = [
- "async-trait",
- "avail-subxt",
- "enum_extract",
- "hex",
- "itertools 0.8.2",
- "pallet-grandpa 21.0.0",
- "parity-scale-codec",
- "primitive-types 0.12.1",
- "reqwest",
- "scale-info",
- "serde",
- "serde_json",
- "sha256",
- "sp-application-crypto 25.0.0",
- "sp-core 16.0.0",
- "sp-state-machine 0.12.0",
- "subxt",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "succinct_avail_utils"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/avail.git?branch=kevjue/mapreduce_experiment#6fe059c0df8038f4eb2bebdb85a6af79525333e7"
 dependencies = [
  "async-trait",
  "avail-subxt",

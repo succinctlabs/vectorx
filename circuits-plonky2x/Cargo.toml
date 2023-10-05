@@ -8,7 +8,6 @@ name = "step"
 path = "bin/step.rs"
 
 [dependencies]
-curta = { git = "https://github.com/succinctlabs/curta.git", branch = "kevjue/support_small_public_inputs" }
 env_logger = { version = "0.9.0", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = ["async-await", "sink", "std"] }
 ed25519-dalek = "1.0.1"

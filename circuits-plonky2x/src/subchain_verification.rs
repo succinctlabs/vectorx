@@ -212,6 +212,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     let right_empty = builder.is_zero(right_num_blocks);
 
+                    builder.watch(&left_end_header_hash, "left end header hash");
+                    builder.watch(&right_first_block_parent, "right first block parent");
+                    builder.watch(&left_end_block, "left end block");
+                    builder.watch(&right_first_block, "right first block");
+
                     // Check to see if the left and right nodes are correctly linked.
                     let nodes_linked =
                         builder.is_equal(left_end_header_hash, right_first_block_parent);

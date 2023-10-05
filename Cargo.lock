@@ -374,7 +374,7 @@ dependencies = [
  "pallet-grandpa 23.0.0",
  "parity-scale-codec",
  "plonky2",
- "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=john/fix-mapreduce-v2)",
+ "plonky2x",
  "rand 0.4.6",
  "reqwest",
  "serde",
@@ -4703,49 +4703,6 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=john/fix-mapreduce-v2#5269b3bc730e16bbd5bfedaf64cb626c50b2c8f3"
-dependencies = [
- "anyhow",
- "array-macro",
- "async-trait",
- "backtrace",
- "base64 0.13.1",
- "bincode",
- "clap 4.4.6",
- "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git)",
- "curve25519-dalek 4.0.0",
- "digest 0.10.7",
- "dotenv",
- "ed25519-consensus",
- "env_logger 0.10.0",
- "ethers",
- "ff",
- "futures",
- "hex",
- "itertools 0.10.5",
- "jemallocator",
- "lazy_static",
- "log",
- "num",
- "num-bigint 0.4.4",
- "plonky2",
- "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=john/fix-mapreduce-v2)",
- "rand 0.8.5",
- "reqwest",
- "serde",
- "serde_json",
- "serde_plain",
- "serde_with",
- "sha2 0.10.8",
- "sha256",
- "tokio",
- "tracing",
- "uuid 1.4.1",
-]
-
-[[package]]
-name = "plonky2x"
-version = "0.1.0"
 source = "git+https://github.com/succinctlabs/succinctx.git#771d006eb8e4fc5ddffd7116354b0947839427b0"
 dependencies = [
  "anyhow",
@@ -4772,7 +4729,7 @@ dependencies = [
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "plonky2x-derive",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -4784,16 +4741,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.4.1",
-]
-
-[[package]]
-name = "plonky2x-derive"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=john/fix-mapreduce-v2#5269b3bc730e16bbd5bfedaf64cb626c50b2c8f3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.38",
 ]
 
 [[package]]
@@ -7785,7 +7732,7 @@ dependencies = [
  "log",
  "num",
  "plonky2",
- "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "plonky2x",
  "rand 0.4.6",
  "serde",
  "serde_json",

@@ -331,11 +331,11 @@ mod tests {
 
         let mut input = circuit.input();
         let trusted_header: [u8; 32] =
-            hex::decode("728dd64344fcf712071998c52dce567453ff825421b1cb0f4b8f59c90a884965")
+            hex::decode("4cfd147756de6e8004a5f2ba9f2ca29e8488bae40acb97474c7086c45b39ff92")
                 .unwrap()
                 .try_into()
                 .unwrap();
-        let trusted_block = 272356u32;
+        let trusted_block = 272503u32;
         let target_block = 272535u32; // mimics test_step_small
 
         input.evm_write::<U32Variable>(trusted_block);

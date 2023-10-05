@@ -73,7 +73,6 @@ pub fn main() {
 
 #[cfg(test)]
 mod tests {
-    // use ethers::types::H256;
     use plonky2x::prelude::DefaultParameters;
 
     use super::*;

@@ -41,8 +41,8 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
         let authority_set_id = input_stream.read_value::<U64Variable>();
 
         debug!(
-            "HintSimpleJustification: downloading header range of start_block={}, last_block={}",
-            start_block, last_block
+            "HintSimpleJustification: downloading justification for block_number={} authority_set_id={}",
+            block_number, authority_set_id
         );
 
         let rt = Runtime::new().expect("failed to create tokio runtime");

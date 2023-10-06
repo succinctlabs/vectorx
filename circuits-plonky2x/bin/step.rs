@@ -37,19 +37,25 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
     {
         // Read the on-chain inputs.
         let trusted_block = builder.evm_read::<U32Variable>();
-        builder.watch(&trusted_block, "trusted block");
+        builder.watch(&trusted_block, "step circuit input - trusted block");
 
         let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
-        builder.watch(&trusted_header_hash, "trusted header hash");
+        builder.watch(
+            &trusted_header_hash,
+            "step circuit input - trusted header hash",
+        );
 
         let authority_set_id = builder.evm_read::<U64Variable>();
-        builder.watch(&authority_set_id, "authority set id");
+        builder.watch(&authority_set_id, "step circuit input - authority set id");
 
         let authority_set_hash = builder.evm_read::<Bytes32Variable>();
-        builder.watch(&authority_set_hash, "authority set hash");
+        builder.watch(
+            &authority_set_hash,
+            "step circuit input - authority set hash",
+        );
 
         let target_block = builder.evm_read::<U32Variable>();
-        builder.watch(&target_block, "target block");
+        builder.watch(&target_block, "step circuit input - target block");
 
         let (target_header_hash, state_root_merkle_root, data_root_merkle_root) =
             builder.verify_subchain::<StepCircuit<VALIDATOR_SET_SIZE, HEADER_LENGTH, NUM_HEADERS>>(

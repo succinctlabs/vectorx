@@ -64,6 +64,10 @@ impl<const VALIDATOR_SET_SIZE: usize, const HEADER_LENGTH: usize, const NUM_HEAD
                 target_block,
             );
 
+        builder.watch(&target_header_hash, "target header hash");
+        builder.watch(&state_root_merkle_root, "state root merkle root");
+        builder.watch(&data_root_merkle_root, "data root merkle root");
+
         builder.verify_simple_justification::<VALIDATOR_SET_SIZE>(
             target_block,
             target_header_hash,

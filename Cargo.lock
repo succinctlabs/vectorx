@@ -375,6 +375,7 @@ dependencies = [
  "parity-scale-codec",
  "plonky2",
  "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/watch_with_level)",
+ "primitive-types 0.12.1",
  "rand 0.4.6",
  "reqwest",
  "serde",
@@ -383,7 +384,6 @@ dependencies = [
  "sp-application-crypto 25.0.0",
  "sp-core 23.0.0",
  "subxt",
- "succinct_avail_utils",
  "tokio",
  "tokio-tungstenite 0.17.2",
 ]

@@ -12,9 +12,8 @@ use plonky2x::prelude::{
     PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
+use crate::consts::{DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE};
 use crate::vars::*;
-
-const DATA_ROOT_OFFSET_FROM_END: usize = 132;
 
 #[derive(Debug)]
 pub struct FloorDivGenerator<F: RichField + Extendable<D>, const D: usize> {
@@ -303,9 +302,10 @@ pub mod tests {
     };
 
     use super::DecodingMethods;
+    use crate::consts::MAX_HEADER_SIZE;
     use crate::testing_utils;
     use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
-    use crate::vars::{EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE};
+    use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -317,8 +317,8 @@ pub mod tests {
 
         let mut builder = DefaultBuilder::new();
 
-        let encoded_headers = builder
-            .read::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS>>();
+        let encoded_headers =
+            builder.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_BLOCKS>>();
 
         let header_hashes = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
         let expected_header_nums = builder.read::<ArrayVariable<U32Variable, NUM_BLOCKS>>();
@@ -327,8 +327,8 @@ pub mod tests {
         let expected_data_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
 
         for i in 0..NUM_BLOCKS {
-            let decoded_header = builder
-                .decode_header::<MAX_LARGE_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
+            let decoded_header =
+                builder.decode_header::<MAX_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
 
             builder.assert_is_equal(decoded_header.block_number, expected_header_nums[i]);
             builder.assert_is_equal(decoded_header.parent_hash, expected_parent_hashes[i]);
@@ -339,13 +339,13 @@ pub mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let encoded_headers_values: Vec<EncodedHeader<MAX_LARGE_HEADER_SIZE, F>> = ENCODED_HEADERS
+        let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = ENCODED_HEADERS
             [0..NUM_BLOCKS]
             .iter()
             .map(|x| {
                 let mut header: Vec<u8> = bytes!(x);
                 let header_len = header.len();
-                header.resize(MAX_LARGE_HEADER_SIZE, 0);
+                header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
                     header_bytes: header.as_slice().try_into().unwrap(),
                     header_size: F::from_canonical_u64(header_len as u64),
@@ -353,7 +353,7 @@ pub mod tests {
             })
             .collect::<_>();
 
-        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS>>(
+        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_BLOCKS>>(
             encoded_headers_values,
         );
 

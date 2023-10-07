@@ -8,13 +8,10 @@ use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, RichField, Variable,
 };
 
-use crate::decoder::DecodingMethods;
-use crate::header::HeaderFetcherHint;
-use crate::vars::{EncodedHeaderVariable, HASH_SIZE};
-
-pub const HEADERS_PER_MAP: usize = 16;
-const MAX_HEADER_CHUNK_SIZE: usize = 100;
-pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
+use crate::builder::decoder::DecodingMethods;
+use crate::builder::header::HeaderFetcherHint;
+use crate::consts::{HASH_SIZE, HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
+use crate::vars::EncodedHeaderVariable;
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
@@ -317,7 +314,7 @@ mod tests {
     use plonky2x::prelude::{DefaultParameters, HintRegistry};
 
     use super::*;
-    use crate::decoder::FloorDivGenerator;
+    use crate::builder::decoder::FloorDivGenerator;
 
     //  Need a test circuit, since map reduce requires a circuit generic
     #[derive(Clone, Debug)]

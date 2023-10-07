@@ -15,20 +15,7 @@ use plonky2x::prelude::{
     Extendable, PlonkParameters, RichField, Variable,
 };
 
-pub const NUM_AUTHORITIES: usize = 76;
-pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
-
-pub const CHUNK_128_BYTES: usize = 128;
-pub const MAX_LARGE_HEADER_CHUNK_SIZE: usize = 67;
-pub const MAX_SMALL_HEADER_CHUNK_SIZE: usize = 5;
-pub const MAX_LARGE_HEADER_SIZE: usize = CHUNK_128_BYTES * MAX_LARGE_HEADER_CHUNK_SIZE;
-pub const MAX_SMALL_HEADER_SIZE: usize = CHUNK_128_BYTES * MAX_SMALL_HEADER_CHUNK_SIZE;
-pub const HASH_SIZE: usize = 32; // in bytes
-pub const HASH_SIZE_BITS: usize = 256; // in bits
-pub const PUB_KEY_SIZE: usize = 32; // in bytes
-pub const WEIGHT_SIZE: usize = 8; // in bytes
-
-pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
+use crate::consts::ENCODED_PRECOMMIT_LENGTH;
 
 trait ToField<F: RichField> {
     fn to_field(&self) -> F;

@@ -13,7 +13,9 @@ use plonky2x::utils::to_be_bits;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-use crate::fetch::{verify_signature, RpcDataFetcher, SimpleJustificationData};
+use crate::consts::ENCODED_PRECOMMIT_LENGTH;
+use crate::input::types::SimpleJustificationData;
+use crate::input::{verify_signature, RpcDataFetcher};
 use crate::vars::*;
 
 type SignatureValueType<F> = <EDDSASignatureTarget<Curve> as CircuitVariable>::ValueType<F>;

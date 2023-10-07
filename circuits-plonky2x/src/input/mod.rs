@@ -1,3 +1,5 @@
+pub mod types;
+
 use std::collections::HashMap;
 
 use avail_subxt::primitives::Header;
@@ -10,19 +12,10 @@ use sp_application_crypto::RuntimeAppPublic;
 use subxt::rpc::RpcParams;
 use subxt::utils::H256;
 use subxt::OnlineClient;
-use succinct_avail_utils::get_justification::{
-    EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage,
-};
 
+use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
+use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
-
-pub struct SimpleJustificationData {
-    pub authority_set_id: u64,
-    pub signed_message: Vec<u8>,
-    pub validator_signed: Vec<bool>,
-    pub pubkeys: Vec<AffinePoint<Curve>>,
-    pub signatures: Vec<[u8; 64]>,
-}
 
 pub struct RpcDataFetcher {
     pub client: OnlineClient<AvailConfig>,

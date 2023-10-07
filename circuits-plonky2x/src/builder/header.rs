@@ -8,7 +8,7 @@ use plonky2x::prelude::{
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-use crate::fetch::RpcDataFetcher;
+use crate::input::RpcDataFetcher;
 use crate::vars::*;
 
 pub trait HeaderMethods {
@@ -94,9 +94,8 @@ impl<
 
         // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
         let mut header_variables = Vec::new();
-        for i in 0..headers.len() {
+        for header in headers.iter() {
             // TODO: replace with `to_header_variable` from vars.rs
-            let header = &headers[i];
             let mut header_bytes = header.encode();
             let header_size = header_bytes.len();
             if header_size > HEADER_LENGTH {
@@ -137,12 +136,10 @@ mod tests {
     };
     use plonky2x::utils::{bytes, bytes32};
 
-    use crate::header::HeaderMethods;
+    use crate::builder::header::HeaderMethods;
+    use crate::consts::{MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
     use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS, NUM_BLOCKS};
-    use crate::vars::{
-        EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_CHUNK_SIZE, MAX_LARGE_HEADER_SIZE,
-        MAX_SMALL_HEADER_CHUNK_SIZE, MAX_SMALL_HEADER_SIZE,
-    };
+    use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
     #[test]
     fn test_hash_blocks() {
@@ -156,22 +153,19 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         let small_headers = builder
-            .read::<ArrayVariable<EncodedHeaderVariable<MAX_SMALL_HEADER_SIZE>, NUM_SMALL_HEADERS>>(
-            );
+            .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_SMALL_HEADERS>>();
 
-        let large_header = builder.read::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>();
+        let large_header = builder.read::<EncodedHeaderVariable<MAX_HEADER_SIZE>>();
 
         for i in 0..NUM_BLOCKS {
             let last_block = i == NUM_BLOCKS - 1;
 
             let calculated_hash = if !last_block {
-                builder.hash_encoded_header::<MAX_SMALL_HEADER_SIZE, MAX_SMALL_HEADER_CHUNK_SIZE>(
+                builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(
                     &small_headers[i],
                 )
             } else {
-                builder.hash_encoded_header::<MAX_LARGE_HEADER_SIZE, MAX_LARGE_HEADER_CHUNK_SIZE>(
-                    &large_header,
-                )
+                builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&large_header)
             };
 
             builder.write::<Bytes32Variable>(calculated_hash);
@@ -180,32 +174,32 @@ mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let encoded_small_headers_values: Vec<EncodedHeader<MAX_SMALL_HEADER_SIZE, F>> =
-            ENCODED_HEADERS[0..NUM_BLOCKS - 1]
-                .iter()
-                .map(|x| {
-                    let mut header: Vec<u8> = bytes!(x);
-                    let header_len = header.len();
-                    header.resize(MAX_SMALL_HEADER_SIZE, 0);
-                    EncodedHeader {
-                        header_bytes: header.as_slice().try_into().unwrap(),
-                        header_size: F::from_canonical_u64(header_len as u64),
-                    }
-                })
-                .collect::<_>();
+        let encoded_small_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = ENCODED_HEADERS
+            [0..NUM_BLOCKS - 1]
+            .iter()
+            .map(|x| {
+                let mut header: Vec<u8> = bytes!(x);
+                let header_len = header.len();
+                header.resize(MAX_HEADER_SIZE, 0);
+                EncodedHeader {
+                    header_bytes: header.as_slice().try_into().unwrap(),
+                    header_size: F::from_canonical_u64(header_len as u64),
+                }
+            })
+            .collect::<_>();
 
-        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_SMALL_HEADER_SIZE>, NUM_SMALL_HEADERS>>(
+        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_SMALL_HEADERS>>(
             encoded_small_headers_values,
         );
 
         let mut large_header: Vec<u8> = bytes!(ENCODED_HEADERS[NUM_BLOCKS - 1]);
         let large_header_len = large_header.len();
-        large_header.resize(MAX_LARGE_HEADER_SIZE, 0);
-        let encoded_large_header_value: EncodedHeader<MAX_LARGE_HEADER_SIZE, F> = EncodedHeader {
+        large_header.resize(MAX_HEADER_SIZE, 0);
+        let encoded_large_header_value: EncodedHeader<MAX_HEADER_SIZE, F> = EncodedHeader {
             header_bytes: large_header.as_slice().try_into().unwrap(),
             header_size: F::from_canonical_usize(large_header_len),
         };
-        input.write::<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>>(encoded_large_header_value);
+        input.write::<EncodedHeaderVariable<MAX_HEADER_SIZE>>(encoded_large_header_value);
 
         let (proof, mut output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);

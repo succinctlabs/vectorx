@@ -1,6 +1,6 @@
 use ethers::types::H256;
 use itertools::Itertools;
-use log::{info, Level};
+use log::{debug, Level};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
@@ -69,7 +69,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         }
         let num_jobs_power_of_2 = f32::log2(num_map_jobs as f32).ceil() as u32;
         num_map_jobs = 2usize.pow(num_jobs_power_of_2);
-        info!("verify_subchain - num_map_jobs: {}", num_map_jobs);
+        debug!("verify_subchain - num_map_jobs: {}", num_map_jobs);
 
         let relative_block_nums =
             (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();

@@ -39,7 +39,3 @@ primitive-types = "0.12.1"
 
 [dev-dependencies]
 anyhow = "1.0.68"
-
-[[bin]]
-name = "subchain_verification"
-path = "bin/subchain_verification.rs"

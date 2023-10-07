@@ -14,7 +14,7 @@ use crate::subchain_verification::{
 };
 
 #[derive(Clone, Debug)]
-struct StepCircuit<
+pub struct StepCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_LENGTH: usize,
     const MAX_NUM_HEADERS: usize,

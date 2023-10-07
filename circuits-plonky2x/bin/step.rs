@@ -7,6 +7,9 @@
 //!
 //!
 
+use avail_plonky2x::step::StepCircuit;
+use plonky2x::backend::function::VerifiableFunction;
+
 fn main() {
     const MAX_AUTHORITY_SET_SIZE: usize = 76;
     const MAX_HEADER_CHUNK_SIZE: usize = 100;

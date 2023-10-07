@@ -1,3 +1,4 @@
+use log::debug;
 use num::traits::ToBytes;
 use num::BigUint;
 use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSASignature};
@@ -13,7 +14,9 @@ use plonky2x::utils::to_be_bits;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-use crate::fetch::{verify_signature, RpcDataFetcher, SimpleJustificationData};
+use crate::consts::ENCODED_PRECOMMIT_LENGTH;
+use crate::input::types::SimpleJustificationData;
+use crate::input::{verify_signature, RpcDataFetcher};
 use crate::vars::*;
 
 type SignatureValueType<F> = <EDDSASignatureTarget<Curve> as CircuitVariable>::ValueType<F>;
@@ -38,6 +41,11 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
     fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
         let block_number = input_stream.read_value::<U32Variable>();
         let authority_set_id = input_stream.read_value::<U64Variable>();
+
+        debug!(
+            "HintSimpleJustification: downloading justification for block_number={} authority_set_id={}",
+            block_number, authority_set_id
+        );
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let justification_data: SimpleJustificationData = rt.block_on(async {
@@ -186,8 +194,8 @@ mod tests {
 
         // There are only 7 authories in the 10,000-th block
         // But we set NUM_AUTHORITIES=10 so that we can test padding
-        const BLOCK_NUMBER: u32 = 10000u32;
-        const NUM_AUTHORITIES: usize = 7;
+        const BLOCK_NUMBER: u32 = 272535u32;
+        const NUM_AUTHORITIES: usize = 76;
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let justification_data: SimpleJustificationData = rt.block_on(async {

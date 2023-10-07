@@ -302,6 +302,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 },
             );
 
+        self.watch(&first_parent_hash, "verify_subchain - first parent hash");
         self.assert_is_equal(trusted_header_hash, first_parent_hash);
 
         (end_header_hash, state_merkle_root, data_merkle_root)

@@ -14,7 +14,9 @@ use plonky2x::utils::to_be_bits;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
-use crate::fetch::{verify_signature, RpcDataFetcher, SimpleJustificationData};
+use crate::consts::ENCODED_PRECOMMIT_LENGTH;
+use crate::input::types::SimpleJustificationData;
+use crate::input::{verify_signature, RpcDataFetcher};
 use crate::vars::*;
 
 type SignatureValueType<F> = <EDDSASignatureTarget<Curve> as CircuitVariable>::ValueType<F>;
@@ -192,7 +194,7 @@ mod tests {
 
         // There are only 7 authories in the 10,000-th block
         // But we set NUM_AUTHORITIES=10 so that we can test padding
-        const BLOCK_NUMBER: u32 = 272534;
+        const BLOCK_NUMBER: u32 = 272535u32;
         const NUM_AUTHORITIES: usize = 76;
 
         let rt = Runtime::new().expect("failed to create tokio runtime");

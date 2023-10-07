@@ -1,5 +1,6 @@
 use ethers::types::H256;
 use itertools::Itertools;
+use log::{info, Level};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
@@ -7,20 +8,10 @@ use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, RichField, Variable,
 };
 
-use crate::decoder::DecodingMethods;
-use crate::header::HeaderFetcherHint;
+use crate::builder::decoder::DecodingMethods;
+use crate::builder::header::HeaderFetcherHint;
+use crate::consts::{HASH_SIZE, HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
 use crate::vars::EncodedHeaderVariable;
-
-/// The nubmer of map jobs.  This needs to be a power of 2
-const NUM_MAP_JOBS: usize = 16;
-
-pub const BATCH_SIZE: usize = 16;
-
-/// Num processed headers per MR job
-const HEADERS_PER_JOB: usize = BATCH_SIZE * NUM_MAP_JOBS;
-
-const MAX_HEADER_CHUNK_SIZE: usize = 100;
-pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
@@ -30,7 +21,7 @@ pub struct SubchainVerificationCtx {
 }
 
 pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
-    fn verify_subchain<C: Circuit>(
+    fn verify_subchain<C: Circuit, const MAX_HEADER_LENGTH: usize>(
         &mut self,
         trusted_block: U32Variable,
         trusted_header_hash: Bytes32Variable,
@@ -41,8 +32,19 @@ pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
             AlgebraicHasher<<L as PlonkParameters<D>>::Field>;
 }
 
+pub type SubchainVerificationOutput = (
+    Variable,        // num headers
+    U32Variable,     // first block's num
+    Bytes32Variable, // first block's hash
+    Bytes32Variable, // first block's parent hash
+    U32Variable,     // last block's num
+    Bytes32Variable, // last block's hash
+    Bytes32Variable, // state merkle root
+    Bytes32Variable, // data merkle root
+);
+
 impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBuilder<L, D> {
-    fn verify_subchain<C: Circuit>(
+    fn verify_subchain<C: Circuit, const MAX_NUM_HEADERS: usize>(
         &mut self,
         trusted_block: U32Variable,
         trusted_header_hash: Bytes32Variable,
@@ -58,19 +60,22 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
             target_block,
         };
 
-        let relative_block_nums = (1u32..(HEADERS_PER_JOB as u32) + 1).collect_vec();
+        // Calculate the number of map jobs.
+        // It should be the smallest power of 2 that is >= to
+        // MAX_NUM_HEADERS / HEADERS_PER_MAP.
+        let mut num_map_jobs = MAX_NUM_HEADERS / HEADERS_PER_MAP;
+        if MAX_NUM_HEADERS % HEADERS_PER_MAP != 0 {
+            num_map_jobs += 1;
+        }
+        let num_jobs_power_of_2 = f32::log2(num_map_jobs as f32).ceil() as u32;
+        num_map_jobs = 2usize.pow(num_jobs_power_of_2);
+        info!("verify_subchain - num_map_jobs: {}", num_map_jobs);
+
+        let relative_block_nums =
+            (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();
 
         let (_, _, _, first_parent_hash, _, end_header_hash, state_merkle_root, data_merkle_root) =
-            self.mapreduce::<SubchainVerificationCtx, U32Variable, (
-                Variable,        // num headers
-                U32Variable,     // first block's num
-                Bytes32Variable, // first block's hash
-                Bytes32Variable, // first block's parent hash
-                U32Variable,     // last block's num
-                Bytes32Variable, // last block's hash
-                Bytes32Variable, // state merkle root
-                Bytes32Variable, // data merkle root
-            ), C, BATCH_SIZE, _, _>(
+            self.mapreduce::<SubchainVerificationCtx, U32Variable, SubchainVerificationOutput, C, HEADERS_PER_MAP, _, _>(
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
@@ -81,18 +86,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     // Get the last block that this map job is responsible for
                     let last_block = builder.add(
                         map_ctx.trusted_block,
-                        map_relative_block_nums.as_vec()[BATCH_SIZE - 1],
+                        map_relative_block_nums.as_vec()[HEADERS_PER_MAP - 1],
                     );
 
-                    builder.watch(&map_ctx.trusted_block, "trusted block");
-                    builder.watch(&map_relative_block_nums[0], "map relative block num 0");
-                    builder.watch(
-                        &map_relative_block_nums[BATCH_SIZE - 1],
-                        "map relative block num 15",
-                    );
-
-                    builder.watch(&start_block, "start block");
-                    builder.watch(&last_block, "last block");
+                    builder.watch_with_level(&start_block, "map job - start block", Level::Debug);
+                    builder.watch_with_level(&last_block, "map job - last block", Level::Debug);
 
                     // Get the max block that the whole MR job is responsible for
                     // Note that the max block may be less than the last_block (or even the start_block).
@@ -104,13 +102,13 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     input_stream.write(&start_block);
                     input_stream.write(&last_block);
                     input_stream.write(&max_block);
-                    let header_fetcher = HeaderFetcherHint::<MAX_HEADER_SIZE, BATCH_SIZE> {};
+                    let header_fetcher = HeaderFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
 
                     // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
                     // Note that the latter number may be greater than start_block.
                     let headers = builder
                         .hint(input_stream, header_fetcher)
-                        .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, BATCH_SIZE>>(
+                        .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
                             builder,
                         );
 
@@ -158,11 +156,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         // The header is a pad-header if it's size is 0.
                         let is_pad_block = builder.is_zero(header.header_size);
 
-                        builder.watch(&header_variable.block_number, "decoded block num");
-                        builder.watch(&hash, "calculated block hash");
-                        builder.watch(&header_variable.parent_hash, "decoded parent hash");
-                        builder.watch(&is_pad_block, "is pad block");
-
                         // Verify that the headers are linked correctly.
                         if i > 0 {
                             let hashes_linked =
@@ -195,22 +188,22 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         leaves_enabled.push(builder.not(is_pad_block));
                     }
 
-                    builder.watch(&end_block_num, "end block num");
-                    builder.watch(&end_header_hash, "end header hash");
+                    builder.watch_with_level(&end_block_num, "end block num", Level::Debug);
+                    builder.watch_with_level(&end_header_hash, "end header hash", Level::Debug);
 
                     // Need to pad block_state_roots and block_data_roots to be of length 16;
-                    block_state_roots.resize(16, empty_bytes_32_variable.0);
-                    block_data_roots.resize(16, empty_bytes_32_variable.0);
+                    block_state_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable.0);
+                    block_data_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable.0);
 
                     let false_const = builder._false();
                     leaves_enabled.resize(16, false_const);
 
                     // Calculate the state and data merkle roots.
-                    let state_merkle_root = builder.compute_root_from_leaves::<BATCH_SIZE, 32>(
+                    let state_merkle_root = builder.compute_root_from_leaves::<HEADERS_PER_MAP, HASH_SIZE>(
                         block_state_roots,
                         leaves_enabled.clone(),
                     );
-                    let data_merkle_root = builder.compute_root_from_leaves::<BATCH_SIZE, 32>(
+                    let data_merkle_root = builder.compute_root_from_leaves::<HEADERS_PER_MAP, HASH_SIZE>(
                         block_data_roots,
                         leaves_enabled,
                     );
@@ -249,14 +242,15 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         right_data_merkle_root,
                     ) = right_output;
 
+                    builder.watch_with_level(&left_num_blocks, "reduce job - left node num blocks", Level::Debug);
+                    builder.watch_with_level(&left_end_block, "reduce job - left node end block num", Level::Debug);
+                    builder.watch_with_level(&left_end_header_hash, "reduce job - left node end header hash", Level::Debug);
+                    builder.watch_with_level(&right_num_blocks, "reduce job - right node num blocks", Level::Debug);
+                    builder.watch_with_level(&right_first_block, "reduce job - right node first block num", Level::Debug);
+                    builder.watch_with_level(&right_first_block_parent, "reduce job - right num first block parent hash", Level::Debug);
+
                     let total_num_blocks = builder.add(left_num_blocks, right_num_blocks);
-
                     let is_right_empty = builder.is_zero(right_num_blocks);
-
-                    builder.watch(&left_end_header_hash, "left end header hash");
-                    builder.watch(&right_first_block_parent, "right first block parent");
-                    builder.watch(&left_end_block, "left end block");
-                    builder.watch(&right_first_block, "right first block");
 
                     // Check to see if the left and right nodes are correctly linked.
                     let nodes_linked =
@@ -289,6 +283,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     data_root_bytes.extend(&right_data_merkle_root.as_bytes());
                     let data_merkle_root = builder.sha256(&data_root_bytes);
 
+                    builder.watch_with_level(&total_num_blocks, "reduce job - total num blocks", Level::Debug);
+                    builder.watch_with_level(&left_first_block, "reduce job - first block num", Level::Debug);
+                    builder.watch_with_level(&left_first_block_parent, "reduce job - first block parent hash", Level::Debug);
+                    builder.watch_with_level(&end_block, "reduce job - end block num", Level::Debug);
+                    builder.watch_with_level(&end_header_hash, "reduce job - end block hash", Level::Debug);
+
                     (
                         total_num_blocks,
                         left_first_block,
@@ -302,9 +302,118 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 },
             );
 
-        self.watch(&first_parent_hash, "verify_subchain - first parent hash");
+        self.watch_with_level(
+            &first_parent_hash,
+            "verify_subchain - first parent hash",
+            Level::Debug,
+        );
         self.assert_is_equal(trusted_header_hash, first_parent_hash);
 
         (end_header_hash, state_merkle_root, data_merkle_root)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
+    use plonky2x::prelude::{DefaultParameters, HintRegistry};
+
+    use super::*;
+    use crate::builder::decoder::FloorDivGenerator;
+
+    //  Need a test circuit, since map reduce requires a circuit generic
+    #[derive(Clone, Debug)]
+
+    struct TestSubchainVerificationCircuit<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_NUM_HEADERS: usize,
+    >;
+
+    impl<const MAX_HEADER_SIZE: usize, const MAX_NUM_HEADERS: usize> Circuit
+        for TestSubchainVerificationCircuit<MAX_HEADER_SIZE, MAX_NUM_HEADERS>
+    {
+        fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
+        where
+            <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
+                AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
+        {
+            let trusted_block = builder.evm_read::<U32Variable>();
+            let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
+            let target_block = builder.evm_read::<U32Variable>();
+
+            // Currently assuming that target_block - trusted_block <= MAX_EPOCH_SIZE
+            let (target_header_hash, _, _) = builder.verify_subchain::<Self, MAX_NUM_HEADERS>(
+                trusted_block,
+                trusted_header_hash,
+                target_block,
+            );
+            builder.watch(&target_header_hash, "target header hash");
+        }
+
+        fn register_generators<L: PlonkParameters<D>, const D: usize>(
+            registry: &mut HintRegistry<L, D>,
+        ) where
+            <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
+                AlgebraicHasher<L::Field>,
+        {
+            registry.register_hint::<HeaderFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
+            let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
+            registry.register_simple::<FloorDivGenerator<L::Field, D>>(floor_div_id);
+
+            let id = MapReduceGenerator::<
+                L,
+                SubchainVerificationCtx,
+                U32Variable,
+                SubchainVerificationOutput,
+                Self,
+                HEADERS_PER_MAP,
+                D,
+            >::id();
+            registry.register_simple::<MapReduceGenerator<
+                L,
+                SubchainVerificationCtx,
+                U32Variable,
+                SubchainVerificationOutput,
+                Self,
+                HEADERS_PER_MAP,
+                D,
+            >>(id);
+        }
+    }
+    type L = DefaultParameters;
+    const D: usize = 2;
+
+    #[test]
+    fn test_verify_subchain() {
+        env_logger::try_init().unwrap_or_default();
+
+        let mut builder = CircuitBuilder::<L, D>::new();
+
+        const MAX_NUM_HEADERS: usize = 32;
+        const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
+
+        TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::define(&mut builder);
+        let circuit = builder.build();
+
+        let mut input = circuit.input();
+        let trusted_header: [u8; 32] =
+            hex::decode("4cfd147756de6e8004a5f2ba9f2ca29e8488bae40acb97474c7086c45b39ff92")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let trusted_block = 272503u32;
+        let target_block = 272535u32; // mimics test_step_small
+
+        input.evm_write::<U32Variable>(trusted_block);
+        input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
+        input.evm_write::<U32Variable>(target_block);
+
+        let (proof, output) = circuit.prove(&input);
+        circuit.verify(&proof, &input, &output);
+
+        TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_HEADER_SIZE>::test_serialization::<
+            L,
+            D,
+        >();
     }
 }

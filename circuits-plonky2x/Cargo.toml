@@ -19,7 +19,7 @@ lazy_static = "1.4.0"
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = [ "rand" ] }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
-plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
+plonky2x = { git = "https://github.com/succinctlabs/succinctx.git", branch = "kevjue/watch_with_level" }
 rand = "0.4"
 serde = {version = "1", features= ["derive"]}
 serde_json = "1.0.86"
@@ -35,7 +35,7 @@ pallet-grandpa = "23.0.0"
 sp-application-crypto = "25.0.0"
 sp-core = "23.0.0"
 sha256 = "1.4.0"
-succinct_avail_utils = { path = "../utils" }
+primitive-types = "0.12.1"
 
 [dev-dependencies]
 anyhow = "1.0.68"

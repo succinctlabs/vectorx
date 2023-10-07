@@ -7,6 +7,7 @@ use avail_subxt::{api, build_client, AvailConfig};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use hex::encode;
+use log::debug;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use sp_application_crypto::RuntimeAppPublic;
@@ -136,7 +137,10 @@ impl RpcDataFetcher {
             .unwrap();
 
         let hex_string = encode(&encoded_finality_proof.0 .0);
-        println!("{}", hex_string);
+        debug!(
+            "returned justification for block {:?} has bytes 0x{:?}",
+            block_number, hex_string
+        );
 
         let finality_proof: FinalityProof =
             Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();

@@ -113,7 +113,8 @@ impl<
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        generator_registry.register_hint::<HeaderFetcherHint<MAX_HEADER_LENGTH, HEADERS_PER_MAP>>();
+        generator_registry
+            .register_async_hint::<HeaderFetcherHint<MAX_HEADER_LENGTH, HEADERS_PER_MAP>>();
         generator_registry.register_hint::<HintSimpleJustification<MAX_AUTHORITY_SET_SIZE>>();
 
         let floor_div_id = FloorDivGenerator::<L::Field, D>::id();

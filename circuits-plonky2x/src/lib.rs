@@ -1,5 +1,5 @@
 pub mod builder;
-mod consts;
+pub mod consts;
 pub mod input;
 pub mod step;
 pub mod subchain_verification;

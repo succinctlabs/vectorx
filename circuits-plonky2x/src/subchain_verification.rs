@@ -107,7 +107,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
                     // Note that the latter number may be greater than start_block.
                     let headers = builder
-                        .hint(input_stream, header_fetcher)
+                        .async_hint(input_stream, header_fetcher)
                         .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
                             builder,
                         );
@@ -196,7 +196,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     block_data_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable.0);
 
                     let false_const = builder._false();
-                    leaves_enabled.resize(16, false_const);
+                    leaves_enabled.resize(HEADERS_PER_MAP, false_const);
 
                     // Calculate the state and data merkle roots.
                     let state_merkle_root = builder.compute_root_from_leaves::<HEADERS_PER_MAP, HASH_SIZE>(
@@ -356,7 +356,7 @@ mod tests {
             <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
                 AlgebraicHasher<L::Field>,
         {
-            registry.register_hint::<HeaderFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
+            registry.register_async_hint::<HeaderFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
             let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
             registry.register_simple::<FloorDivGenerator<L::Field, D>>(floor_div_id);
 

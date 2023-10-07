@@ -1,12 +1,12 @@
+use async_trait::async_trait;
 use codec::Encode;
 use log::debug;
-use plonky2x::frontend::hint::simple::hint::Hint;
+use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, U32Variable,
     ValueStream,
 };
 use serde::{Deserialize, Serialize};
-use tokio::runtime::Runtime;
 
 use crate::input::RpcDataFetcher;
 use crate::vars::*;
@@ -62,14 +62,19 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 
+#[async_trait]
 impl<
         const HEADER_LENGTH: usize,
         const NUM_HEADERS: usize,
         L: PlonkParameters<D>,
         const D: usize,
-    > Hint<L, D> for HeaderFetcherHint<HEADER_LENGTH, NUM_HEADERS>
+    > AsyncHint<L, D> for HeaderFetcherHint<HEADER_LENGTH, NUM_HEADERS>
 {
-    fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
+    async fn hint(
+        &self,
+        input_stream: &mut ValueStream<L, D>,
+        output_stream: &mut ValueStream<L, D>,
+    ) {
         let start_block = input_stream.read_value::<U32Variable>();
         let mut last_block = input_stream.read_value::<U32Variable>();
         let max_block = input_stream.read_value::<U32Variable>();
@@ -83,13 +88,12 @@ impl<
 
         let mut headers = Vec::new();
         if last_block >= start_block {
-            let rt = Runtime::new().expect("failed to create tokio runtime");
-            headers.extend(rt.block_on(async {
+            headers.extend({
                 let data_fetcher = RpcDataFetcher::new().await;
                 data_fetcher
                     .get_block_headers_range(start_block, last_block)
                     .await
-            }));
+            });
         }
 
         // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.

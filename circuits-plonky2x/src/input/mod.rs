@@ -1,28 +1,23 @@
+pub mod types;
+
 use std::collections::HashMap;
 
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client, AvailConfig};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
+use hex::encode;
+use log::debug;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use sp_application_crypto::RuntimeAppPublic;
 use subxt::rpc::RpcParams;
 use subxt::utils::H256;
 use subxt::OnlineClient;
-use succinct_avail_utils::get_justification::{
-    EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage,
-};
 
+use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
+use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
-
-pub struct SimpleJustificationData {
-    pub authority_set_id: u64,
-    pub signed_message: Vec<u8>,
-    pub validator_signed: Vec<bool>,
-    pub pubkeys: Vec<AffinePoint<Curve>>,
-    pub signatures: Vec<[u8; 64]>,
-}
 
 pub struct RpcDataFetcher {
     pub client: OnlineClient<AvailConfig>,
@@ -61,7 +56,7 @@ impl RpcDataFetcher {
         end_block_number: u32,
     ) -> Vec<Header> {
         let mut headers = Vec::new();
-        for block_number in start_block_number..end_block_number {
+        for block_number in start_block_number..end_block_number + 1 {
             let block_hash = self.get_block_hash(block_number).await;
             let header_result = self.client.rpc().header(Some(block_hash)).await;
             let header: Header = header_result.unwrap().unwrap();
@@ -140,6 +135,13 @@ impl RpcDataFetcher {
             .request::<EncodedFinalityProof>("grandpa_proveFinality", params)
             .await
             .unwrap();
+
+        let hex_string = encode(&encoded_finality_proof.0 .0);
+        debug!(
+            "returned justification for block {:?} has bytes 0x{:?}",
+            block_number, hex_string
+        );
+
         let finality_proof: FinalityProof =
             Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
         let justification: GrandpaJustification =

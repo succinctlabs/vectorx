@@ -12,12 +12,11 @@ use plonky2x::prelude::{
     PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
 };
 
+use crate::consts::{DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE};
 use crate::vars::*;
 
-const DATA_ROOT_OFFSET_FROM_END: usize = 132;
-
 #[derive(Debug)]
-struct FloorDivGenerator<F: RichField + Extendable<D>, const D: usize> {
+pub struct FloorDivGenerator<F: RichField + Extendable<D>, const D: usize> {
     divisor: Target,
     dividend: Target,
     quotient: Target,
@@ -25,11 +24,17 @@ struct FloorDivGenerator<F: RichField + Extendable<D>, const D: usize> {
     _marker: PhantomData<F>,
 }
 
+impl<F: RichField + Extendable<D>, const D: usize> FloorDivGenerator<F, D> {
+    pub fn id() -> String {
+        "FloorDivGenerator".to_string()
+    }
+}
+
 impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
     for FloorDivGenerator<F, D>
 {
     fn id(&self) -> String {
-        "FloorDivGenerator".to_string()
+        Self::id()
     }
 
     fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
@@ -219,7 +224,13 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         let data_root_offset =
             self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END)); // Since we're working with bits
-        let data_root_start = self.sub(header.header_size, data_root_offset);
+
+        let mut data_root_start = self.sub(header.header_size, data_root_offset);
+
+        // If header_size == 0, then set data_root_start to 0
+        let header_is_zero_size = self.is_zero(header.header_size);
+        let zero = self.zero();
+        data_root_start = self.select(header_is_zero_size, zero, data_root_start);
 
         let data_root_variables: Vec<Variable> = self
             .get_fixed_subarray::<S, HASH_SIZE>(
@@ -291,9 +302,10 @@ pub mod tests {
     };
 
     use super::DecodingMethods;
+    use crate::consts::MAX_HEADER_SIZE;
     use crate::testing_utils;
     use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
-    use crate::vars::{EncodedHeader, EncodedHeaderVariable, MAX_LARGE_HEADER_SIZE};
+    use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -305,8 +317,8 @@ pub mod tests {
 
         let mut builder = DefaultBuilder::new();
 
-        let encoded_headers = builder
-            .read::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS>>();
+        let encoded_headers =
+            builder.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_BLOCKS>>();
 
         let header_hashes = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
         let expected_header_nums = builder.read::<ArrayVariable<U32Variable, NUM_BLOCKS>>();
@@ -315,8 +327,8 @@ pub mod tests {
         let expected_data_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
 
         for i in 0..NUM_BLOCKS {
-            let decoded_header = builder
-                .decode_header::<MAX_LARGE_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
+            let decoded_header =
+                builder.decode_header::<MAX_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
 
             builder.assert_is_equal(decoded_header.block_number, expected_header_nums[i]);
             builder.assert_is_equal(decoded_header.parent_hash, expected_parent_hashes[i]);
@@ -327,13 +339,13 @@ pub mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let encoded_headers_values: Vec<EncodedHeader<MAX_LARGE_HEADER_SIZE, F>> = ENCODED_HEADERS
+        let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = ENCODED_HEADERS
             [0..NUM_BLOCKS]
             .iter()
             .map(|x| {
                 let mut header: Vec<u8> = bytes!(x);
                 let header_len = header.len();
-                header.resize(MAX_LARGE_HEADER_SIZE, 0);
+                header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
                     header_bytes: header.as_slice().try_into().unwrap(),
                     header_size: F::from_canonical_u64(header_len as u64),
@@ -341,7 +353,7 @@ pub mod tests {
             })
             .collect::<_>();
 
-        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_LARGE_HEADER_SIZE>, NUM_BLOCKS>>(
+        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_BLOCKS>>(
             encoded_headers_values,
         );
 

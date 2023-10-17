@@ -374,7 +374,7 @@ dependencies = [
  "pallet-grandpa 23.0.0",
  "parity-scale-codec",
  "plonky2",
- "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/watch_with_level)",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/range_checks)",
  "primitive-types 0.12.1",
  "rand 0.4.6",
  "reqwest",
@@ -4703,7 +4703,7 @@ source = "git+https://github.com/succinctlabs/plonky2.git?branch=uma/selector-pu
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/watch_with_level#ccbf9c251e4c4550d34933dfa9ab4bf0973057be"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/range_checks#a7dbab9babfdae09cba23a6aff409b69e8c63368"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4723,13 +4723,12 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.10.5",
- "jemallocator",
  "lazy_static",
  "log",
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/watch_with_level)",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/range_checks)",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -4789,7 +4788,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/watch_with_level#ccbf9c251e4c4550d34933dfa9ab4bf0973057be"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/range_checks#a7dbab9babfdae09cba23a6aff409b69e8c63368"
 dependencies = [
  "proc-macro2",
  "quote",

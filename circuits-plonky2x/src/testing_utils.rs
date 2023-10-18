@@ -1,6 +1,7 @@
 #[cfg(test)]
 pub mod tests {
-    use crate::vars::{NUM_AUTHORITIES, QUORUM_SIZE};
+    pub const NUM_AUTHORITIES: usize = 76;
+    pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
 
     pub const HEAD_BLOCK_NUM: u32 = 272515;
     pub const NUM_BLOCKS: usize = 21;

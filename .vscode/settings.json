@@ -7,7 +7,8 @@
     },
     "rust-analyzer.linkedProjects": [
         "./circuits-plonky2x/Cargo.toml",
-        "./circuits/Cargo.toml"
+        "./circuits/Cargo.toml",
+        "./circuits-plonky2x/Cargo.toml"
     ],
     "rust-analyzer.check.overrideCommand": [
         "cargo",

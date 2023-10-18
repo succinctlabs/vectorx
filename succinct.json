@@ -1,0 +1,11 @@
+{
+    "entrypoints": [
+        {
+            "name": "step",
+            "framework": "plonky2",
+            "baseDir": ".",
+            "buildCommand": "cargo run --release --bin step build && mv ./target/release/step ./build/step",
+            "proveCommand": "env RUST_LOG=debug ./build/step prove-wrapped --input-json input.json --wrapper-path /verifier-build"
+        }
+    ]
+}

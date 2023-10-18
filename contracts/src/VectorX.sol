@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
 
-contract GrandpaX {
+contract VectorX {
     // Information related to ZK circuits
     address public gateway;
     mapping(string => bytes32) public functionNameToId;

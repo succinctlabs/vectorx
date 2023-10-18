@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
-import {GrandpaX} from "../src/GrandpaX.sol";
+import {VectorX} from "../src/VectorX.sol";
 
 // forge script script/LightClient.s.sol --rpc-url ${RPC_5} --private-key ${PRIVATE_KEY} --etherscan-api-key ${ETHERSCAN_API_KEY} --broadcast
-// forge verify-contract 0xCC7FB73e5df7519E9B7f0A7297db65F52D968d36 GrandpaX --chain 5 --etherscan-api-key ${ETHERSCAN_API_KEY} --constructor-args "0x000000000000000000000000852a94f8309d445d27222edb1e92a4e83dddd2a8"
+// forge verify-contract 0xCC7FB73e5df7519E9B7f0A7297db65F52D968d36 VectorX --chain 5 --etherscan-api-key ${ETHERSCAN_API_KEY} --constructor-args "0x000000000000000000000000852a94f8309d445d27222edb1e92a4e83dddd2a8"
 contract DeployScript is Script {
     function setUp() public {}
 
@@ -17,11 +17,11 @@ contract DeployScript is Script {
         );
 
         // Use the below to interact with an already deployed ZK light client
-        // GrandpaX lightClient = GrandpaX(
+        // VectorX lightClient = VectorX(
         //     0xB1cdc97E3C9fC29a30da31e49B4e2304b011d631
         // );
 
-        GrandpaX lightClient = new GrandpaX(gateway);
+        VectorX lightClient = new VectorX(gateway);
 
         uint32 trustedBlock = 272502;
         bytes32 header = bytes32(

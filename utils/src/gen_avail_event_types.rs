@@ -20,7 +20,7 @@ enum Chunk {
 }
 
 fn add_constant_size(size: u32, type_chunk_sizes: &mut Vec<Chunk>) {
-    if type_chunk_sizes.len() > 0 {
+    if !type_chunk_sizes.is_empty() {
         match type_chunk_sizes.last_mut().unwrap() {
             Chunk::ConstantSize(s) => {
                 *s += size;

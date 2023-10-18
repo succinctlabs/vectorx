@@ -73,14 +73,12 @@ impl RpcDataFetcher {
 
     pub async fn get_head(&self) -> Header {
         let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
-        let head_block = self
-            .client
+        self.client
             .rpc()
             .header(Some(head_block_hash))
             .await
             .unwrap()
-            .unwrap();
-        head_block
+            .unwrap()
     }
 
     pub async fn get_authority_set_id(&self, block_number: u32) -> u64 {
@@ -244,7 +242,6 @@ mod tests {
     use std::cmp::Ordering;
 
     use avail_subxt::config::substrate::DigestItem;
-    use avail_subxt::primitives::grandpa::ConsensusLog;
 
     use super::*;
 

@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
 
-contract GrandpaLightClient {
+contract GrandpaX {
     // Information related to ZK circuits
     address public gateway;
     mapping(string => bytes32) public functionNameToId;
@@ -19,11 +19,7 @@ contract GrandpaLightClient {
 
     uint32 public constant MAX_RANGE = 128;
 
-    event DataCommitmentRequested(
-        uint32 trustedBlock,
-        uint32 targetBlock,
-        bytes32 requestId
-    );
+    event DataCommitmentRequested(uint32 trustedBlock, uint32 targetBlock);
 
     event DataCommitmentFulfilled(
         uint32 trustedBlock,
@@ -92,7 +88,8 @@ contract GrandpaLightClient {
         require(_requestedBlock - _trustedBlock <= MAX_RANGE);
         // NOTE: this is needed to prevent a long-range attack on the light client
         require(_requestedBlock > head);
-        bytes32 requestId = IFunctionGateway(gateway).request{value: msg.value}(
+
+        IFunctionGateway(gateway).requestCall{value: msg.value}(
             id,
             abi.encodePacked(
                 _trustedBlock,
@@ -101,25 +98,46 @@ contract GrandpaLightClient {
                 authoritySetHash,
                 _requestedBlock
             ),
-            this.callbackDataCommitment.selector,
-            abi.encode(_trustedBlock, _requestedBlock)
+            address(this),
+            abi.encodeWithSelector(
+                this.callbackDataCommitment.selector,
+                _trustedBlock,
+                trustedHeader,
+                authoritySetId,
+                authoritySetHash,
+                _requestedBlock
+            ),
+            500000
         );
-        emit DataCommitmentRequested(_trustedBlock, _requestedBlock, requestId);
+        emit DataCommitmentRequested(_trustedBlock, _requestedBlock);
     }
 
     function callbackDataCommitment(
-        bytes memory output,
-        bytes memory context
+        uint32 trustedBlock,
+        bytes32 trustedHeader,
+        uint64 authoritySetId,
+        bytes32 authoritySetHash,
+        uint32 targetBlock
     ) external onlyGateway {
+        bytes memory input = abi.encodePacked(
+            trustedBlock,
+            trustedHeader,
+            authoritySetId,
+            authoritySetHash,
+            targetBlock
+        );
+
+        bytes memory requestResult = IFunctionGateway(gateway).verifiedCall(
+            functionNameToId["dataCommitment"],
+            input
+        );
+
+        // abi.encode matches abi.encodePacked for (bytes32, bytes32, bytes32).
         (
             bytes32 target_header_hash,
             bytes32 state_root_commitment,
             bytes32 data_root_commitment
-        ) = decodePackedData(output);
-        (uint32 trustedBlock, uint32 targetBlock) = abi.decode(
-            context,
-            (uint32, uint32)
-        );
+        ) = abi.decode(requestResult, (bytes32, bytes32, bytes32));
 
         blockHeightToHeaderHash[targetBlock] = target_header_hash;
 

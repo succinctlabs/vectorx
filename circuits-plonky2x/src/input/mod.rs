@@ -65,6 +65,24 @@ impl RpcDataFetcher {
         headers
     }
 
+    pub async fn get_header(&self, block_number: u32) -> Header {
+        let block_hash = self.get_block_hash(block_number).await;
+        let header_result = self.client.rpc().header(Some(block_hash)).await;
+        header_result.unwrap().unwrap()
+    }
+
+    pub async fn get_head(&self) -> Header {
+        let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
+        let head_block = self
+            .client
+            .rpc()
+            .header(Some(head_block_hash))
+            .await
+            .unwrap()
+            .unwrap();
+        head_block
+    }
+
     pub async fn get_authority_set_id(&self, block_number: u32) -> u64 {
         let block_hash = self.get_block_hash(block_number).await;
 
@@ -223,6 +241,11 @@ impl RpcDataFetcher {
 
 #[cfg(test)]
 mod tests {
+    use std::cmp::Ordering;
+
+    use avail_subxt::config::substrate::DigestItem;
+    use avail_subxt::primitives::grandpa::ConsensusLog;
+
     use super::*;
 
     #[tokio::test]
@@ -247,5 +270,108 @@ mod tests {
             "signed_message len {:?}",
             simple_justification_data.signed_message.len()
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_new_authority_set() {
+        let fetcher = RpcDataFetcher::new().await;
+
+        // A binary search given a target_authority_set_id, returns the epoch end block number
+        let target_authority_set_id = 300;
+        println!("target_authority_set_id {:?}", target_authority_set_id);
+        let mut low = 0;
+        let head_block = fetcher.get_head().await;
+        let mut high = head_block.number;
+        let mut epoch_end_block_number = 0;
+
+        while low <= high {
+            let mid = (low + high) / 2;
+            let mid_authority_set_id = fetcher.get_authority_set_id(mid).await;
+
+            match mid_authority_set_id.cmp(&target_authority_set_id) {
+                Ordering::Equal => {
+                    if mid == 0 {
+                        // Special case: there is no block "mid - 1", so we just return the found block.
+                        epoch_end_block_number = mid;
+                        break;
+                    }
+                    let prev_authority_set_id = fetcher.get_authority_set_id(mid - 1).await;
+                    if prev_authority_set_id == target_authority_set_id - 1 {
+                        epoch_end_block_number = mid;
+                        break;
+                    } else {
+                        high = mid - 1;
+                    }
+                }
+                Ordering::Less => low = mid + 1,
+                Ordering::Greater => high = mid - 1,
+            }
+        }
+
+        // TODO: handle the case where the authority set id is not found
+        assert_ne!(epoch_end_block_number, 0);
+        println!("epoch_end_block_number {:?}", epoch_end_block_number);
+
+        // let epoch_end_block_number = 272535 + 180;
+        let previous_authority_set_id = fetcher
+            .get_authority_set_id(epoch_end_block_number - 1)
+            .await;
+        let authority_set_id = fetcher.get_authority_set_id(epoch_end_block_number).await;
+        assert_eq!(previous_authority_set_id + 1, authority_set_id);
+        assert_eq!(authority_set_id, target_authority_set_id);
+        let authorities = fetcher.get_authorities(epoch_end_block_number).await;
+
+        let header = fetcher.get_header(epoch_end_block_number).await;
+        let mut position = 0;
+        let number_encoded = header.number.encode();
+        // skip past parent_hash, number, state_root, extrinsics_root
+        position += 32 + number_encoded.len() + 32 + 32;
+
+        for log in header.digest.logs {
+            if let DigestItem::Consensus(consensus_id, value) = log {
+                if consensus_id == [70, 82, 78, 75] {
+                    println!("position {:?}", position);
+                    // TODO: have to figure out what value[0,1,2] means?
+                    println!("value prefix {:?}", &value[..3]);
+                    assert_eq!(value[0], 1); // To denote that it is a `ScheduledChange`
+                    let mut cursor = 3;
+                    let value_authories = &value[cursor..];
+                    println!("len {:?}", value_authories.len());
+                    let mut num_authorities = 0;
+                    for (i, authority_chunk) in value_authories.chunks_exact(32 + 8).enumerate() {
+                        let pubkey = &authority_chunk[..32];
+                        let weight = &authority_chunk[32..];
+
+                        assert_eq!(*pubkey, authorities.1[i]);
+                        // println!("pubkey {:?}", pubkey);
+                        // println!("weight {:?}", weight);
+                        // Assert weight's LE representation == 1
+                        for j in 0..8 {
+                            if j == 0 {
+                                assert_eq!(weight[j], 1);
+                            } else {
+                                assert_eq!(weight[j], 0);
+                            }
+                        }
+
+                        cursor += 32 + 8;
+                        num_authorities += 1;
+                    }
+                    let delay = &value[cursor..];
+                    println!("delay {:?}", delay);
+                    println!("num_authorities {:?}", num_authorities);
+                    // verify header[position..position+4] == [70, 82, 78, 75]
+                    // verify header[position+4] == 1
+                    // verify header[position+5..position+5+2] == random stuff, TODO what is this
+                    // hash(header[position+5+2..position+5+2+num_authorities*(32+8)])
+                    // verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
+                    break;
+                }
+            } else {
+                let encoded = log.encode();
+                println!("encoded {:?}", encoded);
+                position += encoded.len();
+            }
+        }
     }
 }

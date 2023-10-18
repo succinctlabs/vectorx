@@ -5,7 +5,7 @@ import "forge-std/Script.sol";
 import {GrandpaX} from "../src/GrandpaX.sol";
 
 // forge script script/LightClient.s.sol --rpc-url ${RPC_5} --private-key ${PRIVATE_KEY} --etherscan-api-key ${ETHERSCAN_API_KEY} --broadcast
-// forge verify-contract 0xCC7FB73e5df7519E9B7f0A7297db65F52D968d36 GrandpaLightClient --chain 5 --etherscan-api-key ${ETHERSCAN_API_KEY} --constructor-args "0x000000000000000000000000852a94f8309d445d27222edb1e92a4e83dddd2a8"
+// forge verify-contract 0xCC7FB73e5df7519E9B7f0A7297db65F52D968d36 GrandpaX --chain 5 --etherscan-api-key ${ETHERSCAN_API_KEY} --constructor-args "0x000000000000000000000000852a94f8309d445d27222edb1e92a4e83dddd2a8"
 contract DeployScript is Script {
     function setUp() public {}
 
@@ -17,7 +17,7 @@ contract DeployScript is Script {
         );
 
         // Use the below to interact with an already deployed ZK light client
-        // GrandpaX lightClient = GrandpaLightClient(
+        // GrandpaX lightClient = GrandpaX(
         //     0xB1cdc97E3C9fC29a30da31e49B4e2304b011d631
         // );
 

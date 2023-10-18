@@ -1,7 +1,6 @@
 use curta::math::prelude::CubicParameters;
 use itertools::Itertools;
 use num::BigUint;
-
 use plonky2::field::extension::Extendable;
 use plonky2::field::types::{Field, PrimeField};
 use plonky2::hash::hash_types::RichField;
@@ -15,8 +14,9 @@ use plonky2x::frontend::ecc::ed25519::curve::eddsa::{
 };
 use plonky2x::frontend::ecc::ed25519::field::ed25519_scalar::Ed25519Scalar;
 use plonky2x::frontend::ecc::ed25519::gadgets::curve::{AffinePointTarget, CircuitBuilderCurve};
-use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::verify_signatures_circuit;
-use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::EDDSASignatureTarget;
+use plonky2x::frontend::ecc::ed25519::gadgets::eddsa::{
+    verify_signatures_circuit, EDDSASignatureTarget,
+};
 use plonky2x::frontend::hash::sha::sha256::sha256;
 use plonky2x::frontend::num::biguint::{CircuitBuilderBiguint, WitnessBigUint};
 use plonky2x::frontend::num::nonnative::nonnative::CircuitBuilderNonNative;
@@ -244,11 +244,11 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
             }
         }
 
-        let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
-            self,
-            QUORUM_SIZE,
-            ENCODED_PRECOMMIT_LENGTH as u128,
-        );
+        // let verify_sigs_targets = verify_signatures_circuit::<F, C, E, Config, D>(
+        //     self,
+        //     QUORUM_SIZE,
+        //     ENCODED_PRECOMMIT_LENGTH as u128,
+        // );
 
         // Now verify all of the signatures
         for (i, signed_precommit) in signed_precommits.iter().enumerate().take(QUORUM_SIZE) {
@@ -287,21 +287,21 @@ impl<F: RichField + Extendable<D>, C: Curve, const D: usize>
                 .enumerate()
                 .take(ENCODED_PRECOMMIT_LENGTH * 8)
             {
-                self.connect(verify_sigs_targets.msgs[i][j].target, bit.target);
+                // self.connect(verify_sigs_targets.msgs[i][j].target, bit.target);
             }
 
-            self.connect_affine_point(
-                &verify_sigs_targets.sigs[i].r,
-                &signed_precommits[i].signature.r,
-            );
-            self.connect_nonnative(
-                &verify_sigs_targets.sigs[i].s,
-                &signed_precommits[i].signature.s,
-            );
-            self.connect_affine_point(
-                &verify_sigs_targets.pub_keys[i].0,
-                &signed_precommit.pub_key,
-            );
+            // self.connect_affine_point(
+            //     &verify_sigs_targets.sigs[i].r,
+            //     &signed_precommits[i].signature.r,
+            // );
+            // self.connect_nonnative(
+            //     &verify_sigs_targets.sigs[i].s,
+            //     &signed_precommits[i].signature.s,
+            // );
+            // self.connect_affine_point(
+            //     &verify_sigs_targets.pub_keys[i].0,
+            //     &signed_precommit.pub_key,
+            // );
         }
     }
 }

@@ -1,252 +1,162 @@
-pragma solidity 0.8.17;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
 
-import "solidity-merkle-trees/src/trie/substrate/Blake2b.sol";
-import { Pairing, StepVerifier } from "src/StepVerifier.sol";
-import { SubstrateTrie } from "src/SubstrateTrie.sol";
-import { NUM_AUTHORITIES, GRANDPA_AUTHORITIES_SETID_KEY, SYSTEM_EVENTS_KEY, EVENT_LIST_PROOF_ADDRESS, AUTHORITY_SETID_PROOF_ADDRESS } from "src/Constants.sol";
+import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
 
+contract GrandpaLightClient {
+    // Information related to ZK circuits
+    address public gateway;
+    mapping(string => bytes32) public functionNameToId;
 
-struct Groth16Proof {
-    uint256[2] a;
-    uint256[2][2] b;
-    uint256[2] c;
-}
+    // Mappings to store header information and commitments
+    mapping(uint32 => bytes32) public blockHeightToHeaderHash;
+    mapping(uint32 => uint64) public blockHeightToAuthoritySetId;
+    mapping(uint64 => bytes32) public authoritySetIdToHash;
+    mapping(bytes32 => bytes32) public dataRootCommitments;
+    mapping(bytes32 => bytes32) public stateRootCommitments;
 
-struct Step {
-    // This field specifies and proves the last header's authority set id.
-    // Note that this is proven aginst the state root of the 2nd to last header (which may already be saved in the smart contract's state).
-    // Note that we can move this verfiication logic into the proof field, if we need to save on the gas.
-    bytes[] authoritySetIDProof;
-
-    uint32 head;
-
-    bytes32 headHash;
-
-    // This is needed to verify the authoritySetIDProof;
-    bytes32 previousStateRoot;
-
-    bytes32 stateRoot;
-
-    bytes32 updatedDataRootsCommitment;
-
-    // This proof is used to verify the following:
-    // 1) There exists a sequence of block headers that have the following properties:
-    //     a) Those headers are chained together via the parent_hash field and have sequential block numbers.
-    //     b) The first header has the block number and parent hash that is stored in the smart contract.
-    //     c) Those headers have the submitted headerRoots (basically that those roots are the blake2 digest of those headers).
-    //     d) Those headers have the submitted executionStateRoots and dataRoots.
-    // 2) There exist a valid GRANDPA justification that finalized the last block in the headers field
-    //     a) This GRANDPA justification has been signed by the validators within the authority set ID within the authoritySetIDProof field.
-    Groth16Proof proof;
-}
-
-
-// This is used to update the light client's authority set.
-// Note that the verification logic is currently done purely in solidity since the Avail testnet's authority set is small,
-// but this will need to be converted into a snark proof.
-struct Rotate {
-    // This field proves the new authority set's ID (proved against the state root of the blockNumber).
-    bytes[] authoritySetIDProof;
-
-    // This field proves the scale encoded systems::events list for the block (this will contain the NewAuthorities event).
-    bytes[] eventListProof;
-
-    // This field updates the light client's headers up to Rotate.blocknumber.
-    //Step step;
-}
-
-
-/// @title Light Client for Avail Blockchain
-/// @author Succinct Labs
-/// @notice Uses Substrate's BABE and GRANDPA protocol to keep up-to-date with block headers from
-///         the Avail blockchain. This is done in a gas-efficient manner using zero-knowledge proofs.
-contract LightClient is StepVerifier, SubstrateTrie {
-    uint256 public immutable START_CHECKPOINT_BLOCK_NUMBER;
-    bytes32 public immutable START_CHECKPOINT_HEADER_HASH;
-
-    /// @notice The latest finalized header's block number.
     uint32 public head;
 
-    /// @notice The latest finalized header hash.
-    bytes32 public headHash;
+    uint32 public constant MAX_RANGE = 128;
 
-    /// @notice Maps from a block number to the state root.
-    mapping(uint32 => bytes32) public stateRoots;
+    event DataCommitmentRequested(
+        uint32 trustedBlock,
+        uint32 targetBlock,
+        bytes32 requestId
+    );
 
-    /// @notice Commitment of the data root merkle mountain trie
-    bytes32 public dataRootsCommitment;
+    event DataCommitmentFulfilled(
+        uint32 trustedBlock,
+        uint32 targetBlock,
+        bytes32 targetHeaderHash,
+        bytes32 dataRootCommitment,
+        bytes32 stateRootCommitment
+    );
 
-    /// @notice The active authority set ID.
-    uint64 public activeAuthoritySetID;
-
-    /// @notice Maps from an authority set id to the sha256 hash of the authorities' pub keys
-    mapping(uint64 => bytes32) public authoritySetCommitments;
-
-    /// @notice The plonky2 step circuit digest
-    uint256[4] public stepCircuitDigest;
-
-    event HeadUpdate(uint32 indexed blockNumber, bytes32 indexed root);
-    event AuthoritySetUpdate(uint64 indexed authoritySetID);
-    event StepCircuitDigestUpdate(uint256[4] indexed circuitDigest);
-
-    constructor(
-        uint32 startHead,
-        bytes32 startHeadHash,
-        uint64 startAuthoritySetID,
-        bytes32 startAuthoritiesCommitment
-    ) {
-        START_CHECKPOINT_BLOCK_NUMBER = startHead;
-        START_CHECKPOINT_HEADER_HASH = startHeadHash;
-        head = startHead;
-        headHash = startHeadHash;
-        emit HeadUpdate(head, headHash);
-
-        activeAuthoritySetID = startAuthoritySetID;
-        authoritySetCommitments[activeAuthoritySetID] = startAuthoritiesCommitment;
-        emit AuthoritySetUpdate(activeAuthoritySetID);
+    modifier onlyGateway() {
+        require(msg.sender == gateway, "Only gateway can call this function");
+        _;
     }
 
-    /// @notice Updates the step circuit digest.
-    function setStepCircuitDigest(uint256[4] memory _stepCircuitDigest) external {
-        stepCircuitDigest = _stepCircuitDigest;
-        emit StepCircuitDigestUpdate(_stepCircuitDigest);
+    constructor(address _gateway) {
+        gateway = _gateway;
     }
 
-    function step(Step calldata update) external {
-        doStep(update);
+    // TODO: In production, this would be `onlyOwner`
+    function updateGateway(address _gateway) external {
+        gateway = _gateway;
     }
 
-    /// @notice Updates the head of the light client with the provided list of headers.
-    function doStep(Step calldata update) internal {
-        uint256 authoritySetIDProofAddress;
-        assembly {
-            authoritySetIDProofAddress := add(calldataload(AUTHORITY_SETID_PROOF_ADDRESS), 36)
+    // TODO: In production, this would be `onlyOwner`
+    function updateFunctionId(
+        string memory name,
+        bytes32 _functionId
+    ) external {
+        functionNameToId[name] = _functionId;
+    }
+
+    // TODO: In proudction, this would be part of a constructor and/or `onlyOwner`
+    function setGensisInfo(
+        uint32 blockHeight,
+        bytes32 header,
+        uint64 authoritySetId,
+        bytes32 authoritySetHash
+    ) external {
+        blockHeightToHeaderHash[blockHeight] = header;
+        blockHeightToAuthoritySetId[blockHeight] = authoritySetId;
+        authoritySetIdToHash[authoritySetId] = authoritySetHash;
+    }
+
+    // Requests a header update and data commitment from the range (trustedBlock, requestedBlock)
+    function requestDataCommitment(
+        uint32 _trustedBlock,
+        uint32 _requestedBlock
+    ) external payable {
+        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        if (trustedHeader == bytes32(0)) {
+            revert("Trusted header not found");
         }
-
-        // Verify and extract the new authority set id
-        (uint64 authoritySetID, ) = VerifySubstrateProof(
-                authoritySetIDProofAddress,
-                GRANDPA_AUTHORITIES_SETID_KEY,
-                update.previousStateRoot,
-                false);
-
-        // Verify that the authority set is correct.
-        if (authoritySetID != activeAuthoritySetID) {
-            revert("Authority set ID is not currently active");
+        uint64 authoritySetId = blockHeightToAuthoritySetId[_trustedBlock];
+        if (authoritySetId == 0) {
+            revert("Authority set ID not found");
         }
+        bytes32 authoritySetHash = authoritySetIdToHash[authoritySetId];
+        if (authoritySetHash == bytes32(0)) {
+            revert("Authority set hash not found");
+        }
+        bytes32 id = functionNameToId["dataCommitment"];
+        if (id == bytes32(0)) {
+            revert("Function ID for dataCommitment not found");
+        }
+        require(_requestedBlock > _trustedBlock);
+        require(_requestedBlock - _trustedBlock <= MAX_RANGE);
+        // NOTE: this is needed to prevent a long-range attack on the light client
+        require(_requestedBlock > head);
+        bytes32 requestId = IFunctionGateway(gateway).request{value: msg.value}(
+            id,
+            abi.encodePacked(
+                _trustedBlock,
+                trustedHeader,
+                authoritySetId,
+                authoritySetHash,
+                _requestedBlock
+            ),
+            this.callbackDataCommitment.selector,
+            abi.encode(_trustedBlock, _requestedBlock)
+        );
+        emit DataCommitmentRequested(_trustedBlock, _requestedBlock, requestId);
+    }
 
-        Proof memory proof;
-        proof.A = Pairing.G1Point(update.proof.a[0], update.proof.a[1]);
-        proof.B = Pairing.G2Point(update.proof.b[0], update.proof.b[1]);
-        proof.C = Pairing.G1Point(update.proof.c[0], update.proof.c[1]);
-
-        verifyStepProof(
-            update.head,
-            update.headHash,
-            update.previousStateRoot,
-            update.stateRoot,
-            update.updatedDataRootsCommitment,
-            proof
+    function callbackDataCommitment(
+        bytes memory output,
+        bytes memory context
+    ) external onlyGateway {
+        (
+            bytes32 target_header_hash,
+            bytes32 state_root_commitment,
+            bytes32 data_root_commitment
+        ) = decodePackedData(output);
+        (uint32 trustedBlock, uint32 targetBlock) = abi.decode(
+            context,
+            (uint32, uint32)
         );
 
-        // Note that the snark proof above verifies that the first header is correctly linked to the current head.
-        // Update the light client storage
-        head = update.head;
-        headHash = update.headHash;
-        stateRoots[head] = update.stateRoot;
-        dataRootsCommitment = update.updatedDataRootsCommitment;
+        blockHeightToHeaderHash[targetBlock] = target_header_hash;
 
-        emit HeadUpdate(head, headHash);
+        bytes32 key = keccak256(abi.encode(trustedBlock, targetBlock));
+        dataRootCommitments[key] = data_root_commitment;
+        stateRootCommitments[key] = state_root_commitment;
+
+        head = targetBlock;
+        emit DataCommitmentFulfilled(
+            trustedBlock,
+            targetBlock,
+            target_header_hash,
+            data_root_commitment,
+            state_root_commitment
+        );
     }
 
-    function verifyStepProof(
-        uint32 updatedHead,
-        bytes32 updatedHeadHash,
-        bytes32 previousStateRoot,
-        bytes32 newStateRoot,
-        bytes32 updatedDataRootsCommitment,
-        Proof memory proof) internal view
-    {
-        uint256[8] memory inputs;
+    function decodePackedData(
+        bytes memory packedData
+    ) public pure returns (bytes32, bytes32, bytes32) {
+        require(packedData.length == 96, "Invalid packed data length"); // 3 * 32 = 96
 
-        // hashInput will be a concatenation of the following
-        // 1) current head hash (32 bytes)
-        // 2) updated head hash (32 bytes)
-        // 3) data root commitment (32 bytes)
-        // 4) updated data root commitment (32 bytes)
-        // 5) previous state root (32 bytes)
-        // 6) new state root (32 bytes)
-        // 7) authority set commitment (32 bytes)
-        // 8) active authority set id (8 bytes)
-        // 9) current head number (4 bytes)
-        // 10) updated head number (4 bytes)
-        bytes memory hashInput = bytes.concat(
-            headHash,
-            updatedHeadHash,
-            dataRootsCommitment,
-            updatedDataRootsCommitment,
-            previousStateRoot,
-            newStateRoot,
-            authoritySetCommitments[activeAuthoritySetID],
-            bytes8(activeAuthoritySetID),
-            bytes4(head),
-            bytes4(updatedHead));
+        bytes32 decodedData1;
+        bytes32 decodedData2;
+        bytes32 decodedData3;
 
-        bytes32[1] memory hashResult;
+        // Assembly is used to efficiently decode bytes to bytes32
         assembly {
-            let gasLeft := gas()
-            pop(staticcall(gasLeft, 0x02, hashInput, 240, hashResult, 32))
+            // Load the first 32 bytes from packedData at position 0x20
+            decodedData1 := mload(add(packedData, 0x20))
+
+            // Load the next 32 bytes
+            decodedData2 := mload(add(packedData, 0x40))
+
+            // Load the last 32 bytes
+            decodedData3 := mload(add(packedData, 0x60))
         }
-
-        bytes32 publicInputsHash = hashResult[0];
-        inputs[0] = (uint256(publicInputsHash) >> 192) & 0xffffffffffffffff;
-        inputs[1] = (uint256(publicInputsHash) >> 128) & 0xffffffffffffffff;
-        inputs[2] = (uint256(publicInputsHash) >> 64) & 0xffffffffffffffff;
-        inputs[3] = uint256(publicInputsHash) & 0xffffffffffffffff;
-
-        // Add in the plonky2 step circuit digest
-        inputs[4] = stepCircuitDigest[0];
-        inputs[5] = stepCircuitDigest[1];
-        inputs[6] = stepCircuitDigest[2];
-        inputs[7] = stepCircuitDigest[3];
-
-        require(verifyProof(proof, inputs));
-    }
-
-    /// @notice Rotates the authority set and will optionally execute a step.
-    function rotate(Rotate calldata update) external {
-        // First call step
-        /*
-        if (update.step.headers.length > 0) {
-            doStep(update.step);
-        }
-        */
-
-        uint256 authoritySetIDProofAddress;
-        uint256 eventListProofAddress;
-        assembly {
-            authoritySetIDProofAddress := add(calldataload(AUTHORITY_SETID_PROOF_ADDRESS), 36)
-            eventListProofAddress := add(calldataload(EVENT_LIST_PROOF_ADDRESS), 36)
-        }
-
-        bytes32 stateRoot = 0xb237d8cc3098c339a59f782f9a02137cc98522ee3c7c49b73f2ff6120fabf4da;
-        //bytes32 stateRoot = stateRoots[head];
-
-        // Verify and extract the new authority set id
-        (uint64 authoritySetID, ) = SubstrateTrie.VerifySubstrateProof(
-                authoritySetIDProofAddress,
-                GRANDPA_AUTHORITIES_SETID_KEY,
-                stateRoot,
-                false);
-
-        // Verify and extract the encoded event list
-        (, bytes32 digest) = SubstrateTrie.VerifySubstrateProof(
-                eventListProofAddress,
-                SYSTEM_EVENTS_KEY,
-                stateRoot,
-                true);
-
-        authoritySetCommitments[authoritySetID] = digest;
-        emit AuthoritySetUpdate(activeAuthoritySetID);
+        return (decodedData1, decodedData2, decodedData3);
     }
 }

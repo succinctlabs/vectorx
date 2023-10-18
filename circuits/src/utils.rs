@@ -1,17 +1,14 @@
+use std::marker::PhantomData;
+
+use plonky2::field::extension::Extendable;
+use plonky2::field::types::{PrimeField, PrimeField64};
 use plonky2::hash::hash_types::RichField;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
 use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
+use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
-use plonky2::{
-    field::{
-        extension::Extendable,
-        types::{PrimeField, PrimeField64},
-    },
-    plonk::circuit_data::CommonCircuitData,
-};
-use std::marker::PhantomData;
 
 pub const NUM_AUTHORITIES: usize = 76;
 pub const QUORUM_SIZE: usize = 51; // 2/3 + 1 of NUM_VALIDATORS
@@ -181,6 +178,17 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         }
     }
 
+    fn random_access_avail_hash(
+        &mut self,
+        access_index: Target,
+        v: Vec<AvailHashTarget>,
+    ) -> AvailHashTarget {
+        let selected = core::array::from_fn(|i| {
+            self.random_access(access_index, v.iter().map(|hash| hash.0[i]).collect())
+        });
+        selected.into()
+    }
+
     fn int_div(&mut self, dividend: Target, divisor: Target) -> Target {
         let quotient = self.add_virtual_target();
         let remainder = self.add_virtual_target();
@@ -197,17 +205,6 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderUtils for Circu
         let is_equal = self.is_equal(rhs, dividend);
         self.assert_one(is_equal.target);
         quotient
-    }
-
-    fn random_access_avail_hash(
-        &mut self,
-        access_index: Target,
-        v: Vec<AvailHashTarget>,
-    ) -> AvailHashTarget {
-        let selected = core::array::from_fn(|i| {
-            self.random_access(access_index, v.iter().map(|hash| hash.0[i]).collect())
-        });
-        selected.into()
     }
 }
 

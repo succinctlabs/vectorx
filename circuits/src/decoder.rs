@@ -1,17 +1,18 @@
 use std::marker::PhantomData;
 
+use plonky2::field::extension::Extendable;
+use plonky2::hash::hash_types::RichField;
 use plonky2::hash::poseidon::PoseidonHash;
 use plonky2::iop::challenger::RecursiveChallenger;
 use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
+use plonky2::iop::target::Target;
 use plonky2::iop::witness::{PartitionWitness, Witness, WitnessWrite};
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
+use plonky2::plonk::plonk_common::reduce_with_powers_circuit;
 use plonky2::util::serialization::{Buffer, IoResult};
 
 use crate::utils::{AvailHashTarget, CircuitBuilderUtils, EncodedHeaderTarget, HASH_SIZE};
-use plonky2::field::extension::Extendable;
-use plonky2::hash::hash_types::RichField;
-use plonky2::iop::target::Target;
-use plonky2::plonk::{circuit_builder::CircuitBuilder, plonk_common::reduce_with_powers_circuit};
 
 const DATA_ROOT_OFFSET_FROM_END: usize = 132;
 
@@ -124,6 +125,8 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderHeaderDecoder
         let state_root_target =
             self.random_access_avail_hash(compress_mode, all_possible_state_roots);
 
+        // NOTE: In the future, it would nice to have these sorts of methods separated out as modular units
+        // especially if they would be used in different parts of the codebase
         // Parse the data root field.
         // For this, we will use a generator to extract the data root field from the header bytes.
         // To verify that it is correct, we will use a method similar to reduce a row to a value
@@ -299,13 +302,14 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderPrecommitDecode
 
 #[cfg(test)]
 mod tests {
-    use crate::decoder::CircuitBuilderScaleDecoder;
     use anyhow::Result;
     use plonky2::field::types::Field;
     use plonky2::iop::witness::PartialWitness;
     use plonky2::plonk::circuit_builder::CircuitBuilder;
     use plonky2::plonk::circuit_data::CircuitConfig;
     use plonky2::plonk::config::{GenericConfig, PoseidonGoldilocksConfig};
+
+    use crate::decoder::CircuitBuilderScaleDecoder;
 
     fn test_compact_int(
         encoded_bytes: [u8; 5],

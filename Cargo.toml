@@ -1,0 +1,15 @@
+[workspace]
+members = ["circuits-plonky2x", "circuits", "utils"]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+incremental = true
+#lto = "fat"
+#codegen-units = 1
+
+[profile.bench]
+opt-level = 3
+
+[patch."https://github.com/mir-protocol/plonky2.git"]
+plonky2 = { git = "https://github.com/succinctlabs/plonky2.git",  branch = "uma/selector-pub" }

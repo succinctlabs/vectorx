@@ -19,7 +19,13 @@ contract GrandpaX {
 
     uint32 public constant MAX_RANGE = 128;
 
-    event DataCommitmentRequested(uint32 trustedBlock, uint32 targetBlock);
+    event DataCommitmentRequested(
+        uint32 trustedBlock,
+        bytes32 trustedHeader,
+        uint64 authoritySetId,
+        bytes32 authoritySetHash,
+        uint32 targetBlock
+    );
 
     event DataCommitmentFulfilled(
         uint32 trustedBlock,
@@ -109,7 +115,13 @@ contract GrandpaX {
             ),
             500000
         );
-        emit DataCommitmentRequested(_trustedBlock, _requestedBlock);
+        emit DataCommitmentRequested(
+            _trustedBlock,
+            trustedHeader,
+            authoritySetId,
+            authoritySetHash,
+            _requestedBlock
+        );
     }
 
     function callbackDataCommitment(

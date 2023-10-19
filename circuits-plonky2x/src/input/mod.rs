@@ -2,8 +2,10 @@ pub mod types;
 
 use std::collections::HashMap;
 
+use avail_subxt::avail::Client;
 use avail_subxt::primitives::Header;
-use avail_subxt::{api, build_client, AvailConfig};
+use avail_subxt::rpc::RpcParams;
+use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use hex::encode;
@@ -11,16 +13,14 @@ use log::debug;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use sp_application_crypto::RuntimeAppPublic;
-use subxt::rpc::RpcParams;
 use subxt::utils::H256;
-use subxt::OnlineClient;
 
 use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
 pub struct RpcDataFetcher {
-    pub client: OnlineClient<AvailConfig>,
+    pub client: Client,
     pub save: Option<String>,
 }
 
@@ -67,6 +67,7 @@ impl RpcDataFetcher {
 
     pub async fn get_header(&self, block_number: u32) -> Header {
         let block_hash = self.get_block_hash(block_number).await;
+        println!("block_hash {:?}", block_hash);
         let header_result = self.client.rpc().header(Some(block_hash)).await;
         header_result.unwrap().unwrap()
     }
@@ -75,7 +76,6 @@ impl RpcDataFetcher {
         let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
         println!("head_block_hash {:?}", head_block_hash);
         let header = self.client.rpc().header(Some(head_block_hash)).await;
-        println!("header {:?}", header);
         header.unwrap().unwrap()
     }
 
@@ -85,9 +85,7 @@ impl RpcDataFetcher {
         let set_id_key = api::storage().grandpa().current_set_id();
         self.client
             .storage()
-            .at(Some(block_hash))
-            .await
-            .unwrap()
+            .at(block_hash)
             .fetch(&set_id_key)
             .await
             .unwrap()
@@ -104,9 +102,7 @@ impl RpcDataFetcher {
         let grandpa_authorities_bytes = self
             .client
             .storage()
-            .at(Some(block_hash))
-            .await
-            .unwrap()
+            .at(block_hash)
             .fetch_raw(b":grandpa_authorities")
             .await
             .unwrap()
@@ -323,8 +319,11 @@ mod tests {
         position += 32 + number_encoded.len() + 32 + 32;
 
         for log in header.digest.logs {
+            let log_clone_2 = log.clone();
             if let DigestItem::Consensus(consensus_id, value) = log {
                 if consensus_id == [70, 82, 78, 75] {
+                    println!("log {:?}", hex::encode(log_clone_2.encode()));
+
                     println!("position {:?}", position);
                     // TODO: have to figure out what value[0,1,2] means?
                     println!("value prefix {:?}", &value[..3]);

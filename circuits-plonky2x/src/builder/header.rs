@@ -59,6 +59,50 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
     }
 }
 
+// Fetch a single header.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SingleHeaderFetcherHint<const HEADER_LENGTH: usize> {}
+
+#[async_trait]
+impl<const HEADER_LENGTH: usize, L: PlonkParameters<D>, const D: usize> AsyncHint<L, D>
+    for SingleHeaderFetcherHint<HEADER_LENGTH>
+{
+    async fn hint(
+        &self,
+        input_stream: &mut ValueStream<L, D>,
+        output_stream: &mut ValueStream<L, D>,
+    ) {
+        let block_number = input_stream.read_value::<U32Variable>();
+
+        debug!(
+            "SingleHeaderFetcherHint: downloading header range of block={}",
+            block_number
+        );
+
+        let data_fetcher = RpcDataFetcher::new().await;
+
+        let header = data_fetcher.get_header(block_number).await;
+
+        // TODO: replace with `to_header_variable` from vars.rs
+        let mut header_bytes = header.encode();
+        let header_size = header_bytes.len();
+        if header_size > HEADER_LENGTH {
+            panic!(
+                "header size {} is greater than HEADER_LENGTH {}",
+                header_size, HEADER_LENGTH
+            );
+        }
+        header_bytes.resize(HEADER_LENGTH, 0);
+        let header_variable = EncodedHeader {
+            header_bytes,
+            header_size: L::Field::from_canonical_usize(header_size),
+        };
+
+        output_stream.write_value::<EncodedHeaderVariable<HEADER_LENGTH>>(header_variable);
+    }
+}
+
+// Fetch a range of headers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 

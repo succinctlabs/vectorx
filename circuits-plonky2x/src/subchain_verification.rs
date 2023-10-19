@@ -9,7 +9,7 @@ use plonky2x::prelude::{
 };
 
 use crate::builder::decoder::DecodingMethods;
-use crate::builder::header::HeaderFetcherHint;
+use crate::builder::header::{HeaderFetcherHint, HeaderMethods};
 use crate::consts::{HASH_SIZE, HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
 use crate::vars::EncodedHeaderVariable;
 
@@ -140,10 +140,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     for (i, header) in headers.as_vec().iter().enumerate() {
                         // Calculate and save the block hash.
-                        let hash = builder.curta_blake2b_variable::<MAX_HEADER_CHUNK_SIZE>(
-                            header.header_bytes.as_slice(),
-                            header.header_size,
-                        );
+                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
                         block_hashes.push(hash);
 
                         // Decode the header and save relevant fields.

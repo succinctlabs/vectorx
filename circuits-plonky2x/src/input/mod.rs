@@ -2,7 +2,9 @@ pub mod types;
 
 use std::collections::HashMap;
 
+use avail_subxt::avail::Client;
 use avail_subxt::primitives::Header;
+use avail_subxt::rpc::RpcParams;
 use avail_subxt::{api, build_client, AvailConfig};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
@@ -11,16 +13,16 @@ use log::debug;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use sp_application_crypto::RuntimeAppPublic;
-use subxt::rpc::RpcParams;
+// use subxt::rpc::RpcParams;
 use subxt::utils::H256;
-use subxt::OnlineClient;
 
+// use subxt::OnlineClient;
 use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
 pub struct RpcDataFetcher {
-    pub client: OnlineClient<AvailConfig>,
+    pub client: Client,
     pub save: Option<String>,
 }
 
@@ -87,9 +89,7 @@ impl RpcDataFetcher {
         let set_id_key = api::storage().grandpa().current_set_id();
         self.client
             .storage()
-            .at(Some(block_hash))
-            .await
-            .unwrap()
+            .at(block_hash)
             .fetch(&set_id_key)
             .await
             .unwrap()
@@ -106,9 +106,7 @@ impl RpcDataFetcher {
         let grandpa_authorities_bytes = self
             .client
             .storage()
-            .at(Some(block_hash))
-            .await
-            .unwrap()
+            .at(block_hash)
             .fetch_raw(b":grandpa_authorities")
             .await
             .unwrap()
@@ -319,14 +317,19 @@ mod tests {
         let authorities = fetcher.get_authorities(epoch_end_block_number).await;
 
         let header = fetcher.get_header(epoch_end_block_number).await;
+        println!("header {:?}", hex::encode(header.encode()));
         let mut position = 0;
         let number_encoded = header.number.encode();
         // skip past parent_hash, number, state_root, extrinsics_root
         position += 32 + number_encoded.len() + 32 + 32;
 
         for log in header.digest.logs {
-            if let DigestItem::Consensus(consensus_id, value) = log {
+            let log_clone = log.clone();
+            let log_clone_2 = log.clone();
+            if let DigestItem::Consensus(consensus_id, value) = log_clone {
+                // 0x4652..
                 if consensus_id == [70, 82, 78, 75] {
+                    println!("log {:?}", hex::encode(log_clone_2.encode()));
                     println!("position {:?}", position);
                     // TODO: have to figure out what value[0,1,2] means?
                     println!("value prefix {:?}", &value[..3]);

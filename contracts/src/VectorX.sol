@@ -3,10 +3,9 @@ pragma solidity ^0.8.13;
 
 import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
 
-contract GrandpaLightClient {
+contract VectorX {
     // Information related to ZK circuits
     address public gateway;
-    mapping(string => bytes32) public functionNameToId;
 
     // Mappings to store header information and commitments
     mapping(uint32 => bytes32) public blockHeightToHeaderHash;
@@ -19,13 +18,17 @@ contract GrandpaLightClient {
 
     uint32 public constant MAX_RANGE = 128;
 
-    event DataCommitmentRequested(
+    bytes32 public headerRangeFunctionId;
+
+    event HeaderRangeRequested(
         uint32 trustedBlock,
-        uint32 targetBlock,
-        bytes32 requestId
+        bytes32 trustedHeader,
+        uint64 authoritySetId,
+        bytes32 authoritySetHash,
+        uint32 targetBlock
     );
 
-    event DataCommitmentFulfilled(
+    event HeaderRangeFulfilled(
         uint32 trustedBlock,
         uint32 targetBlock,
         bytes32 targetHeaderHash,
@@ -48,27 +51,24 @@ contract GrandpaLightClient {
     }
 
     // TODO: In production, this would be `onlyOwner`
-    function updateFunctionId(
-        string memory name,
-        bytes32 _functionId
-    ) external {
-        functionNameToId[name] = _functionId;
+    function updateHeaderRangeFunctionId(bytes32 _functionId) external {
+        headerRangeFunctionId = _functionId;
     }
 
     // TODO: In proudction, this would be part of a constructor and/or `onlyOwner`
     function setGensisInfo(
-        uint32 blockHeight,
-        bytes32 header,
-        uint64 authoritySetId,
-        bytes32 authoritySetHash
+        uint32 _blockHeight,
+        bytes32 _header,
+        uint64 _authoritySetId,
+        bytes32 _authoritySetHash
     ) external {
-        blockHeightToHeaderHash[blockHeight] = header;
-        blockHeightToAuthoritySetId[blockHeight] = authoritySetId;
-        authoritySetIdToHash[authoritySetId] = authoritySetHash;
+        blockHeightToHeaderHash[_blockHeight] = _header;
+        blockHeightToAuthoritySetId[_blockHeight] = _authoritySetId;
+        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
     }
 
     // Requests a header update and data commitment from the range (trustedBlock, requestedBlock)
-    function requestDataCommitment(
+    function requestHeaderRange(
         uint32 _trustedBlock,
         uint32 _requestedBlock
     ) external payable {
@@ -84,16 +84,14 @@ contract GrandpaLightClient {
         if (authoritySetHash == bytes32(0)) {
             revert("Authority set hash not found");
         }
-        bytes32 id = functionNameToId["dataCommitment"];
-        if (id == bytes32(0)) {
-            revert("Function ID for dataCommitment not found");
-        }
+
         require(_requestedBlock > _trustedBlock);
         require(_requestedBlock - _trustedBlock <= MAX_RANGE);
         // NOTE: this is needed to prevent a long-range attack on the light client
         require(_requestedBlock > head);
-        bytes32 requestId = IFunctionGateway(gateway).request{value: msg.value}(
-            id,
+
+        IFunctionGateway(gateway).requestCall{value: msg.value}(
+            headerRangeFunctionId,
             abi.encodePacked(
                 _trustedBlock,
                 trustedHeader,
@@ -101,36 +99,63 @@ contract GrandpaLightClient {
                 authoritySetHash,
                 _requestedBlock
             ),
-            this.callbackDataCommitment.selector,
-            abi.encode(_trustedBlock, _requestedBlock)
+            address(this),
+            abi.encodeWithSelector(
+                this.callbackHeaderRange.selector,
+                _trustedBlock,
+                trustedHeader,
+                authoritySetId,
+                authoritySetHash,
+                _requestedBlock
+            ),
+            500000
         );
-        emit DataCommitmentRequested(_trustedBlock, _requestedBlock, requestId);
+        emit HeaderRangeRequested(
+            _trustedBlock,
+            trustedHeader,
+            authoritySetId,
+            authoritySetHash,
+            _requestedBlock
+        );
     }
 
-    function callbackDataCommitment(
-        bytes memory output,
-        bytes memory context
+    function callbackHeaderRange(
+        uint32 _trustedBlock,
+        bytes32 _trustedHeader,
+        uint64 _authoritySetId,
+        bytes32 _authoritySetHash,
+        uint32 _targetBlock
     ) external onlyGateway {
+        bytes memory input = abi.encodePacked(
+            _trustedBlock,
+            _trustedHeader,
+            _authoritySetId,
+            _authoritySetHash,
+            _targetBlock
+        );
+
+        bytes memory output = IFunctionGateway(gateway).verifiedCall(
+            headerRangeFunctionId,
+            input
+        );
+
+        // abi.encode matches abi.encodePacked for (bytes32, bytes32, bytes32).
         (
             bytes32 target_header_hash,
             bytes32 state_root_commitment,
             bytes32 data_root_commitment
-        ) = decodePackedData(output);
-        (uint32 trustedBlock, uint32 targetBlock) = abi.decode(
-            context,
-            (uint32, uint32)
-        );
+        ) = abi.decode(output, (bytes32, bytes32, bytes32));
 
-        blockHeightToHeaderHash[targetBlock] = target_header_hash;
+        blockHeightToHeaderHash[_targetBlock] = target_header_hash;
 
-        bytes32 key = keccak256(abi.encode(trustedBlock, targetBlock));
+        bytes32 key = keccak256(abi.encode(_trustedBlock, _targetBlock));
         dataRootCommitments[key] = data_root_commitment;
         stateRootCommitments[key] = state_root_commitment;
 
-        head = targetBlock;
-        emit DataCommitmentFulfilled(
-            trustedBlock,
-            targetBlock,
+        head = _targetBlock;
+        emit HeaderRangeFulfilled(
+            _trustedBlock,
+            _targetBlock,
             target_header_hash,
             data_root_commitment,
             state_root_commitment
@@ -138,9 +163,9 @@ contract GrandpaLightClient {
     }
 
     function decodePackedData(
-        bytes memory packedData
+        bytes memory _packedData
     ) public pure returns (bytes32, bytes32, bytes32) {
-        require(packedData.length == 96, "Invalid packed data length"); // 3 * 32 = 96
+        require(_packedData.length == 96, "Invalid packed data length"); // 3 * 32 = 96
 
         bytes32 decodedData1;
         bytes32 decodedData2;
@@ -149,13 +174,13 @@ contract GrandpaLightClient {
         // Assembly is used to efficiently decode bytes to bytes32
         assembly {
             // Load the first 32 bytes from packedData at position 0x20
-            decodedData1 := mload(add(packedData, 0x20))
+            decodedData1 := mload(add(_packedData, 0x20))
 
             // Load the next 32 bytes
-            decodedData2 := mload(add(packedData, 0x40))
+            decodedData2 := mload(add(_packedData, 0x40))
 
             // Load the last 32 bytes
-            decodedData3 := mload(add(packedData, 0x60))
+            decodedData3 := mload(add(_packedData, 0x60))
         }
         return (decodedData1, decodedData2, decodedData3);
     }

@@ -1,14 +1,12 @@
 use std::ops::Deref;
 
-use avail_subxt::{api, build_client, primitives::Header};
+use avail_subxt::primitives::Header;
+use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use serde::de::Error;
 use serde::Deserialize;
-use sp_core::{
-    blake2_256, bytes,
-    ed25519::{self, Public as EdPublic, Signature},
-    Pair, H256,
-};
+use sp_core::ed25519::{self, Public as EdPublic, Signature};
+use sp_core::{blake2_256, bytes, Pair, H256};
 use subxt::rpc::RpcParams;
 // use anyhow::Result;
 
@@ -136,7 +134,7 @@ pub async fn main() {
                 let is_ok = <ed25519::Pair as Pair>::verify_weak(
                     &precommit.clone().signature.0[..],
                     signed_message.as_slice(),
-                    &precommit.clone().id,
+                    precommit.clone().id,
                 );
                 if is_ok {
                     Some(precommit.clone().id.0)

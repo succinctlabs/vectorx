@@ -1,3 +1,5 @@
+#![allow(clippy::needless_range_loop)]
+
 pub mod builder;
 pub mod consts;
 pub mod input;

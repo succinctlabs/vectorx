@@ -7,6 +7,9 @@ edition = "2021"
 name = "step"
 path = "bin/step.rs"
 
+[features]
+ci = []
+
 [dependencies]
 env_logger = { version = "0.9.0", default-features = false }
 futures-util = { version = "0.3", default-features = false, features = [

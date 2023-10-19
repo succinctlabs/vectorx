@@ -10,7 +10,7 @@ use crate::builder::header::HeaderFetcherHint;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::consts::HEADERS_PER_MAP;
 use crate::subchain_verification::{
-    SubChainVerifier, SubchainVerificationCtx, SubchainVerificationOutput,
+    MapReduceSubchainVariable, SubChainVerifier, SubchainVerificationCtx,
 };
 
 #[derive(Clone, Debug)]
@@ -124,7 +124,7 @@ impl<
             L,
             SubchainVerificationCtx,
             U32Variable,
-            SubchainVerificationOutput,
+            MapReduceSubchainVariable,
             Self,
             HEADERS_PER_MAP,
             D,
@@ -133,7 +133,7 @@ impl<
             L,
             SubchainVerificationCtx,
             U32Variable,
-            SubchainVerificationOutput,
+            MapReduceSubchainVariable,
             Self,
             HEADERS_PER_MAP,
             D,

@@ -1,5 +1,5 @@
 [workspace]
-members = ["circuits-plonky2x", "circuits", "utils"]
+members = ["circuits-plonky2x", "utils"]
 resolver = "2"
 
 [profile.release]
@@ -12,4 +12,4 @@ incremental = true
 opt-level = 3
 
 [patch."https://github.com/mir-protocol/plonky2.git"]
-plonky2 = { git = "https://github.com/succinctlabs/plonky2.git",  branch = "uma/selector-pub" }
+plonky2 = { git = "https://github.com/succinctlabs/plonky2.git", branch = "uma/selector-pub" }

@@ -32,16 +32,17 @@ pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
             AlgebraicHasher<<L as PlonkParameters<D>>::Field>;
 }
 
-pub type SubchainVerificationOutput = (
-    Variable,        // num headers
-    U32Variable,     // first block's num
-    Bytes32Variable, // first block's hash
-    Bytes32Variable, // first block's parent hash
-    U32Variable,     // last block's num
-    Bytes32Variable, // last block's hash
-    Bytes32Variable, // state merkle root
-    Bytes32Variable, // data merkle root
-);
+#[derive(Clone, Debug, CircuitVariable)]
+pub struct MapReduceSubchainVariable {
+    pub num_blocks: Variable,
+    pub start_block: U32Variable,
+    pub start_header_hash: Bytes32Variable,
+    pub start_parent: Bytes32Variable,
+    pub end_block: U32Variable,
+    pub end_header_hash: Bytes32Variable,
+    pub state_merkle_root: Bytes32Variable,
+    pub data_merkle_root: Bytes32Variable,
+}
 
 impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBuilder<L, D> {
     fn verify_subchain<C: Circuit, const MAX_NUM_HEADERS: usize>(
@@ -74,8 +75,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         let relative_block_nums =
             (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();
 
-        let (_, _, _, first_parent_hash, _, end_header_hash, state_merkle_root, data_merkle_root) =
-            self.mapreduce::<SubchainVerificationCtx, U32Variable, SubchainVerificationOutput, C, HEADERS_PER_MAP, _, _>(
+        let output =
+            self.mapreduce::<SubchainVerificationCtx, U32Variable, MapReduceSubchainVariable, C, HEADERS_PER_MAP, _, _>(
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
@@ -208,56 +209,56 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         leaves_enabled,
                     );
 
-                    (
-                        num_headers,
-                        block_nums[0],
-                        block_hashes[0],
-                        block_parent_hashes[0],
-                        end_block_num,
+                    MapReduceSubchainVariable {
+                        num_blocks: num_headers,
+                        start_block: block_nums[0],
+                        start_header_hash: block_hashes[0],
+                        start_parent: block_parent_hashes[0],
+                        end_block: end_block_num,
                         end_header_hash,
                         state_merkle_root,
                         data_merkle_root,
-                    )
+                    }
                 },
-                |_, left_output, right_output, builder| {
-                    let (
-                        left_num_blocks,
-                        left_first_block,
-                        left_first_header_hash,
-                        left_first_block_parent,
-                        left_end_block,
-                        left_end_header_hash,
-                        left_state_merkle_root,
-                        left_data_merkle_root,
-                    ) = left_output;
+                |_, left, right, builder| {
+                    // let (
+                    //     left_num_blocks,
+                    //     left_first_block,
+                    //     left_first_header_hash,
+                    //     left_first_block_parent,
+                    //     left_end_block,
+                    //     left_end_header_hash,
+                    //     left_state_merkle_root,
+                    //     left_data_merkle_root,
+                    // ) = left_output;
 
-                    let (
-                        right_num_blocks,
-                        right_first_block,
-                        _,
-                        right_first_block_parent,
-                        right_end_block,
-                        right_end_header_hash,
-                        right_state_merkle_root,
-                        right_data_merkle_root,
-                    ) = right_output;
+                    // let (
+                    //     right_num_blocks,
+                    //     right_first_block,
+                    //     _,
+                    //     right_first_block_parent,
+                    //     right_end_block,
+                    //     right_end_header_hash,
+                    //     right_state_merkle_root,
+                    //     right_data_merkle_root,
+                    // ) = right_output;
 
-                    builder.watch_with_level(&left_num_blocks, "reduce job - left node num blocks", Level::Debug);
-                    builder.watch_with_level(&left_end_block, "reduce job - left node end block num", Level::Debug);
-                    builder.watch_with_level(&left_end_header_hash, "reduce job - left node end header hash", Level::Debug);
-                    builder.watch_with_level(&right_num_blocks, "reduce job - right node num blocks", Level::Debug);
-                    builder.watch_with_level(&right_first_block, "reduce job - right node first block num", Level::Debug);
-                    builder.watch_with_level(&right_first_block_parent, "reduce job - right num first block parent hash", Level::Debug);
+                    builder.watch_with_level(&left.num_blocks, "reduce job - left node num blocks", Level::Debug);
+                    builder.watch_with_level(&left.end_block, "reduce job - left node end block num", Level::Debug);
+                    builder.watch_with_level(&left.end_header_hash, "reduce job - left node end header hash", Level::Debug);
+                    builder.watch_with_level(&right.num_blocks, "reduce job - right node num blocks", Level::Debug);
+                    builder.watch_with_level(&right.end_block, "reduce job - right node first block num", Level::Debug);
+                    builder.watch_with_level(&right.start_parent, "reduce job - right num first block parent hash", Level::Debug);
 
-                    let total_num_blocks = builder.add(left_num_blocks, right_num_blocks);
-                    let is_right_empty = builder.is_zero(right_num_blocks);
+                    let total_num_blocks = builder.add(left.num_blocks, right.num_blocks);
+                    let is_right_empty = builder.is_zero(right.num_blocks);
 
                     // Check to see if the left and right nodes are correctly linked.
                     let nodes_linked =
-                        builder.is_equal(left_end_header_hash, right_first_block_parent);
+                        builder.is_equal(left.end_header_hash, right.start_parent);
                     let one = builder.one();
-                    let expected_block_num = builder.sub(right_first_block, one);
-                    let nodes_sequential = builder.is_equal(left_end_block, expected_block_num);
+                    let expected_block_num = builder.sub(right.start_block, one);
+                    let nodes_sequential = builder.is_equal(left.end_block, expected_block_num);
                     let nodes_correctly_linked = builder.and(nodes_linked, nodes_sequential);
 
                     // If the right node is empty, then don't need to check the "node_correctly_linked"
@@ -269,47 +270,51 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     // Get the right most block num and hash between the two nodes.
                     // If the right node is not empty, this will be the right node's rightmost entry,
                     // otherwise it will be the left block's rightmost entry.
-                    let end_block = builder.select(is_right_empty, left_end_block, right_end_block);
+                    let end_block = builder.select(is_right_empty, left.end_block, right.end_block);
                     let end_header_hash =
-                        builder.select(is_right_empty, left_end_header_hash, right_end_header_hash);
+                        builder.select(is_right_empty, left.end_header_hash, right.end_header_hash);
 
                     // Compute the merkle roots where the left and right nodes are the merkle roots
                     // from the left and right nodes respectively.
-                    let mut state_root_bytes = left_state_merkle_root.as_bytes().to_vec();
-                    state_root_bytes.extend(&right_state_merkle_root.as_bytes());
+                    let mut state_root_bytes = left.state_merkle_root.as_bytes().to_vec();
+                    state_root_bytes.extend(&right.state_merkle_root.as_bytes());
                     let state_merkle_root = builder.sha256(&state_root_bytes);
 
-                    let mut data_root_bytes = left_data_merkle_root.as_bytes().to_vec();
-                    data_root_bytes.extend(&right_data_merkle_root.as_bytes());
+                    let mut data_root_bytes = left.data_merkle_root.as_bytes().to_vec();
+                    data_root_bytes.extend(&right.data_merkle_root.as_bytes());
                     let data_merkle_root = builder.sha256(&data_root_bytes);
 
                     builder.watch_with_level(&total_num_blocks, "reduce job - total num blocks", Level::Debug);
-                    builder.watch_with_level(&left_first_block, "reduce job - first block num", Level::Debug);
-                    builder.watch_with_level(&left_first_block_parent, "reduce job - first block parent hash", Level::Debug);
+                    builder.watch_with_level(&left.start_block, "reduce job - first block num", Level::Debug);
+                    builder.watch_with_level(&left.start_parent, "reduce job - first block parent hash", Level::Debug);
                     builder.watch_with_level(&end_block, "reduce job - end block num", Level::Debug);
                     builder.watch_with_level(&end_header_hash, "reduce job - end block hash", Level::Debug);
 
-                    (
-                        total_num_blocks,
-                        left_first_block,
-                        left_first_header_hash,
-                        left_first_block_parent,
+                    MapReduceSubchainVariable {
+                        num_blocks: total_num_blocks,
+                        start_block: left.start_block,
+                        start_header_hash: left.start_header_hash,
+                        start_parent: left.start_parent,
                         end_block,
                         end_header_hash,
                         state_merkle_root,
                         data_merkle_root,
-                    )
+                    }
                 },
             );
 
         self.watch_with_level(
-            &first_parent_hash,
+            &output.start_parent,
             "verify_subchain - first parent hash",
             Level::Debug,
         );
-        self.assert_is_equal(trusted_header_hash, first_parent_hash);
+        self.assert_is_equal(trusted_header_hash, output.start_parent);
 
-        (end_header_hash, state_merkle_root, data_merkle_root)
+        (
+            output.end_header_hash,
+            output.state_merkle_root,
+            output.data_merkle_root,
+        )
     }
 }
 
@@ -364,7 +369,7 @@ mod tests {
                 L,
                 SubchainVerificationCtx,
                 U32Variable,
-                SubchainVerificationOutput,
+                MapReduceSubchainVariable,
                 Self,
                 HEADERS_PER_MAP,
                 D,
@@ -373,7 +378,7 @@ mod tests {
                 L,
                 SubchainVerificationCtx,
                 U32Variable,
-                SubchainVerificationOutput,
+                MapReduceSubchainVariable,
                 Self,
                 HEADERS_PER_MAP,
                 D,

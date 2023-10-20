@@ -363,7 +363,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha256",
- "sp-application-crypto 25.0.0",
  "sp-core 23.0.0",
  "subxt 0.27.1",
  "tokio",

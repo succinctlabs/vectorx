@@ -35,7 +35,6 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
 ] }
 ethers = "2.0.10"
 pallet-grandpa = "23.0.0"
-sp-application-crypto = "25.0.0"
 sp-core = "23.0.0"
 sha256 = "1.4.0"
 primitive-types = "0.12.1"

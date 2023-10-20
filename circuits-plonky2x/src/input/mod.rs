@@ -3,6 +3,7 @@ pub mod types;
 use std::collections::HashMap;
 
 use avail_subxt::avail::Client;
+use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
 use avail_subxt::utils::H256;
@@ -13,7 +14,9 @@ use hex::encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 
-use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
+use self::types::{
+    EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
+};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
@@ -235,6 +238,102 @@ impl RpcDataFetcher {
             validator_signed,
             pubkeys: padded_pubkeys,
             signatures: padded_signatures,
+        }
+    }
+
+    pub async fn get_header_rotate<const HEADER_LENGTH: usize>(
+        &self,
+        block_number: u32,
+    ) -> HeaderRotateData {
+        // let authority_set_id = fetcher.get_authority_set_id(header.number).await;
+
+        let header = self.get_header(block_number).await;
+
+        let mut header_bytes = header.encode();
+        let header_size = header_bytes.len();
+        if header_size > HEADER_LENGTH {
+            panic!(
+                "header size {} is greater than HEADER_LENGTH {}",
+                header_size, HEADER_LENGTH
+            );
+        }
+        header_bytes.resize(HEADER_LENGTH, 0);
+
+        let authorities = self.get_authorities(block_number).await;
+
+        let mut position = 0;
+        let number_encoded = block_number.encode();
+        // skip past parent_hash, number, state_root, extrinsics_root
+        position += 32 + number_encoded.len() + 32 + 32;
+
+        for log in header.digest.logs {
+            let log_clone_2 = log.clone();
+            if let DigestItem::Consensus(consensus_id, value) = log {
+                if consensus_id == [70, 82, 78, 75] {
+                    println!("log {:?}", hex::encode(log_clone_2.encode()));
+
+                    println!("position {:?}", position);
+                    // TODO: have to figure out what value[0,1,2] means?
+                    println!("value prefix {:?}", &value[..3]);
+                    assert_eq!(value[0], 1); // To denote that it is a `ScheduledChange`
+                    let mut cursor = 3;
+                    let value_authories = &value[cursor..];
+                    println!("len {:?}", value_authories.len());
+                    let mut num_authorities = 0;
+                    for (i, authority_chunk) in value_authories.chunks_exact(32 + 8).enumerate() {
+                        let pubkey = &authority_chunk[..32];
+                        let weight = &authority_chunk[32..];
+
+                        assert_eq!(*pubkey, authorities.1[i]);
+                        // println!("pubkey {:?}", pubkey);
+                        // println!("weight {:?}", weight);
+                        // Assert weight's LE representation == 1
+                        for j in 0..8 {
+                            if j == 0 {
+                                assert_eq!(weight[j], 1);
+                            } else {
+                                assert_eq!(weight[j], 0);
+                            }
+                        }
+
+                        cursor += 32 + 8;
+                        num_authorities += 1;
+                    }
+                    let delay = &value[cursor..];
+                    println!("delay {:?}", delay);
+                    println!("num_authorities {:?}", num_authorities);
+                    // verify header[position..position+4] == [70, 82, 78, 75]
+                    // verify header[position+4] == 1
+                    // verify header[position+5..position+5+2] == random stuff, TODO what is this
+                    // hash(header[position+5+2..position+5+2+num_authorities*(32+8)])
+                    // verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
+                    break;
+                }
+            } else {
+                let encoded = log.encode();
+                println!("encoded {:?}", encoded);
+                position += encoded.len();
+            }
+        }
+
+        // let authority_set_hash_input = authorities
+        //     .1
+        //     .clone()
+        //     .into_iter()
+        //     .flatten()
+        //     .collect::<Vec<_>>();
+        // // TODO: Return authority_set_commitment to verify validity.
+        // let authority_set_commitment =
+        //     avail_subxt::config::substrate::BlakeTwo256::hash(&authority_set_hash_input);
+
+        let end_position = position + ((32 + 8) * authorities.1.len()) + 4;
+
+        HeaderRotateData {
+            header_bytes,
+            header_size,
+            num_authorities: authorities.1.len(),
+            start_position: position,
+            end_position,
         }
     }
 }

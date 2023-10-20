@@ -7,6 +7,14 @@ use sp_core::Bytes;
 
 use crate::vars::{AffinePoint, Curve};
 
+pub struct HeaderRotateData {
+    pub header_bytes: Vec<u8>,
+    pub header_size: usize,
+    pub num_authorities: usize,
+    pub start_position: usize,
+    pub end_position: usize,
+}
+
 pub struct SimpleJustificationData {
     pub authority_set_id: u64,
     pub signed_message: Vec<u8>,

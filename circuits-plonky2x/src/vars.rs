@@ -88,6 +88,15 @@ pub struct HeaderVariable {
     pub data_root: Bytes32Variable,
 }
 
+// #[derive(Clone, Debug, CircuitVariable)]
+// #[value_name(RotateData)]
+// pub struct RotateVariable<const HEADER_LENGTH: usize> {
+//     pub header: EncodedHeaderVariable<HEADER_LENGTH>,
+//     pub num_authorities: Variable,
+//     pub start_position: Variable,
+//     pub end_position: Variable,
+// }
+
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct PrecommitVariable {
     pub block_hash: Bytes32Variable,

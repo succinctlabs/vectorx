@@ -16,23 +16,27 @@ env_logger = { version = "0.9.0", default-features = false }
 ethers = { version = "2.0", features = ["rustls"] }
 ethers-core = { version = "2.0.7" }
 log = { version = "0.4.14", default-features = false }
-num = { version = "0.4", features = [ "rand" ] }
-serde = { version = "1", features= ["derive"] }
+num = { version = "0.4", features = ["rand"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.86"
 structopt = "0.3.26"
 tarpc = { version = "0.33", features = ["full"] }
 tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 
 # Avail/Substrate dependencies
-avail-subxt = {git = "https://github.com/availproject/avail.git", rev = "b68af9607e3d0db972eb54b1ccea70223584cfe9"}
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = ["derive", "full", "bit-vec"] }
+avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "b68af9607e3d0db972eb54b1ccea70223584cfe9" }
+codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+    "derive",
+    "full",
+    "bit-vec",
+] }
 pallet-grandpa = "21.0.0"
 sp-core = { version = "16.0.0", default-features = false }
 sp-state-machine = "0.12.0"
 subxt = "0.27"
 
 # Avail circuits
-succinct_avail_circuits = { path = "../circuits" }
+succinct_avail_circuits = { path = "../cicuits-plonky2x" }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2x = { git = "https://github.com/succinctlabs/sdk.git" }
 

@@ -342,10 +342,10 @@ impl RpcDataFetcher {
 mod tests {
     use std::cmp::Ordering;
 
-    use avail_subxt::config::substrate::DigestItem;
-    use avail_subxt::config::Hasher;
+    use sha2::Digest;
 
     use super::*;
+    use crate::consts::MAX_HEADER_SIZE;
 
     #[tokio::test]
     async fn test_get_block_headers_range() {
@@ -422,73 +422,22 @@ mod tests {
         assert_eq!(authority_set_id, target_authority_set_id);
         let authorities = fetcher.get_authorities(epoch_end_block_number).await;
 
-        let header = fetcher.get_header(epoch_end_block_number).await;
-        let mut position = 0;
-        let number_encoded = header.number.encode();
-        // skip past parent_hash, number, state_root, extrinsics_root
-        position += 32 + number_encoded.len() + 32 + 32;
+        let rotate_data = fetcher
+            .get_header_rotate::<MAX_HEADER_SIZE>(epoch_end_block_number)
+            .await;
 
-        for log in header.digest.logs {
-            let log_clone_2 = log.clone();
-            if let DigestItem::Consensus(consensus_id, value) = log {
-                if consensus_id == [70, 82, 78, 75] {
-                    println!("log {:?}", hex::encode(log_clone_2.encode()));
+        println!("number of authorities: {:?}", rotate_data.num_authorities);
 
-                    println!("position {:?}", position);
-                    // TODO: have to figure out what value[0,1,2] means?
-                    println!("value prefix {:?}", &value[..3]);
-                    assert_eq!(value[0], 1); // To denote that it is a `ScheduledChange`
-                    let mut cursor = 3;
-                    let value_authories = &value[cursor..];
-                    println!("len {:?}", value_authories.len());
-                    let mut num_authorities = 0;
-                    for (i, authority_chunk) in value_authories.chunks_exact(32 + 8).enumerate() {
-                        let pubkey = &authority_chunk[..32];
-                        let weight = &authority_chunk[32..];
-
-                        assert_eq!(*pubkey, authorities.1[i]);
-                        // println!("pubkey {:?}", pubkey);
-                        // println!("weight {:?}", weight);
-                        // Assert weight's LE representation == 1
-                        for j in 0..8 {
-                            if j == 0 {
-                                assert_eq!(weight[j], 1);
-                            } else {
-                                assert_eq!(weight[j], 0);
-                            }
-                        }
-
-                        cursor += 32 + 8;
-                        num_authorities += 1;
-                    }
-                    let delay = &value[cursor..];
-                    println!("delay {:?}", delay);
-                    println!("num_authorities {:?}", num_authorities);
-                    // verify header[position..position+4] == [70, 82, 78, 75]
-                    // verify header[position+4] == 1
-                    // verify header[position+5..position+5+2] == random stuff, TODO what is this
-                    // hash(header[position+5+2..position+5+2+num_authorities*(32+8)])
-                    // verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
-                    break;
-                }
-            } else {
-                let encoded = log.encode();
-                println!("encoded {:?}", encoded);
-                position += encoded.len();
-            }
+        // Compute chained hash
+        let mut hash_so_far = Vec::new();
+        for i in 0..rotate_data.num_authorities {
+            let authority = authorities.1[i].clone();
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(hash_so_far);
+            hasher.update(authority);
+            hash_so_far = hasher.finalize().to_vec();
         }
 
-        let authority_set_hash_input = authorities
-            .1
-            .clone()
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        let authority_set_commitment =
-            avail_subxt::config::substrate::BlakeTwo256::hash(&authority_set_hash_input);
-        println!(
-            "authority_set_commitment {:?}",
-            hex::encode(authority_set_commitment)
-        );
+        println!("authority_set_commitment: {:?}", hash_so_far.clone());
     }
 }

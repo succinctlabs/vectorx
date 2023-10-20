@@ -91,7 +91,6 @@ impl<
     {
         // Read the on-chain inputs.
         // The validators that sign epoch_end_block_number are defined by authority_set_id and authority_set_hash.
-        // Note: If the user pass in a block number that is not an epoch end block, the circuit will error.
 
         let authority_set_id = builder.evm_read::<U64Variable>();
         builder.watch_with_level(
@@ -105,6 +104,7 @@ impl<
             "rotate circuit input - authority set hash",
             Level::Debug,
         );
+        // Note: If the user passes in a block number that is not an epoch end block, the circuit will error.
         let epoch_end_block_number = builder.evm_read::<U32Variable>();
         builder.watch_with_level(
             &epoch_end_block_number,

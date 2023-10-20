@@ -1,7 +1,6 @@
 use log::debug;
 use num::traits::ToBytes;
 use num::BigUint;
-use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSASignature};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
 use plonky2x::frontend::hint::simple::hint::Hint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -10,7 +9,6 @@ use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
     Field, PlonkParameters, RichField, Variable,
 };
-use plonky2x::utils::to_be_bits;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 

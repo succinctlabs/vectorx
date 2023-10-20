@@ -24,20 +24,19 @@ plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.86"
 tokio = { version = "1.2.0", features = ["full"] }
-avail-subxt = { git = "https://github.com/availproject/avail.git" }
-subxt = "0.27"
 async-trait = "0.1.73"
 reqwest = "0.11.20"
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+ethers = "2.0.10"
+sha256 = "1.4.0"
+primitive-types = "0.12.1"
+
+avail-subxt = { git = "https://github.com/availproject/avail.git" }
+sp-core = { version = "21", default-features = false }
+codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",
     "full",
     "bit-vec",
 ] }
-ethers = "2.0.10"
-pallet-grandpa = "23.0.0"
-sp-core = "23.0.0"
-sha256 = "1.4.0"
-primitive-types = "0.12.1"
 
 [dev-dependencies]
 anyhow = "1.0.68"

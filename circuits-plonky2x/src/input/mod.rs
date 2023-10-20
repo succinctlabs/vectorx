@@ -5,14 +5,13 @@ use std::collections::HashMap;
 use avail_subxt::avail::Client;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
+use avail_subxt::utils::H256;
 use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use hex::encode;
 use log::debug;
-use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
-use subxt::utils::H256;
 
 use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
 use crate::input::types::SimpleJustificationData;
@@ -98,6 +97,7 @@ impl RpcDataFetcher {
         block_number: u32,
     ) -> (Vec<AffinePoint<Curve>>, Vec<Vec<u8>>) {
         let block_hash = self.get_block_hash(block_number).await;
+
         let grandpa_authorities_bytes = self
             .client
             .storage()
@@ -107,23 +107,32 @@ impl RpcDataFetcher {
             .unwrap()
             .unwrap();
 
-        let grandpa_authorities =
-            VersionedAuthorityList::decode(&mut grandpa_authorities_bytes.as_slice()).unwrap();
-
         // The grandpa_authorities_bytes has the following format:
-        // [X, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
+        // [V, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
+        // Where V is a "Version" number (right now it's 1u8)
+        // Where XX is the compact scale encoding of the number of authorities
+        // NOTE: In some cases the compact scale encoding might be only 1 byte if the number of authorities is small
+        // This is a reference on how compact scale encoding works: https://docs.substrate.io/reference/scale-codec/#fn-1
+        // This is why we do the assert below to check that when we subtract the assumed prefix length of 3
+        // that the remainder is divisible by 32 + 8, which represents the number of bytes in an authority public key
+        // plus the number of bytes in the weight of the authority
+        assert!((grandpa_authorities_bytes.len() - 3) % (32 + 8) == 0);
 
-        let authority_list: AuthorityList = grandpa_authorities.into();
+        let pubkey_and_weight_bytes = grandpa_authorities_bytes[3..].to_vec();
+
         let mut authorities: Vec<AffinePoint<Curve>> = Vec::new();
         let mut authories_pubkey_bytes: Vec<Vec<u8>> = Vec::new();
-        for (authority_key, weight) in authority_list.iter() {
-            if *weight != 1 {
-                panic!("Weight for authority is not 1");
-            }
-            let pub_key_vec = authority_key.encode();
+        for authority_pubkey_weight in pubkey_and_weight_bytes.chunks(40) {
+            let pub_key_vec = authority_pubkey_weight[..32].to_vec();
             let pub_key_point = AffinePoint::<Curve>::new_from_compressed_point(&pub_key_vec);
             authorities.push(pub_key_point);
             authories_pubkey_bytes.push(pub_key_vec);
+
+            // Assert that the weight is 0x0100000000000000
+            assert_eq!(authority_pubkey_weight[32], 1);
+            for i in 33..40 {
+                assert_eq!(authority_pubkey_weight[i], 0);
+            }
         }
 
         (authorities, authories_pubkey_bytes)

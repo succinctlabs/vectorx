@@ -169,7 +169,7 @@ mod tests {
 
         let mut input = circuit.input();
         let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = ENCODED_HEADERS
-            [0..NUM_HEADERS - 1]
+            [0..NUM_HEADERS]
             .iter()
             .map(|x| {
                 let mut header: Vec<u8> = bytes!(x);
@@ -189,7 +189,7 @@ mod tests {
         let (proof, mut output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        for expected_hash in BLOCK_HASHES.iter() {
+        for expected_hash in BLOCK_HASHES[0..NUM_HEADERS].iter() {
             let calculated_hash = output.read::<Bytes32Variable>();
             assert_eq!(calculated_hash, bytes32!(expected_hash));
         }

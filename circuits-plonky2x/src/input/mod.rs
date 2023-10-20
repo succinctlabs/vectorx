@@ -3,7 +3,6 @@ pub mod types;
 use std::collections::HashMap;
 
 use avail_subxt::avail::Client;
-use avail_subxt::config::Hasher;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
 use avail_subxt::{api, build_client};
@@ -237,6 +236,7 @@ mod tests {
     use std::cmp::Ordering;
 
     use avail_subxt::config::substrate::DigestItem;
+    use avail_subxt::config::Hasher;
 
     use super::*;
 
@@ -308,7 +308,9 @@ mod tests {
         let previous_authority_set_id = fetcher
             .get_authority_set_id(epoch_end_block_number - 1)
             .await;
+        println!("previous_authority_set_id {:?}", previous_authority_set_id);
         let authority_set_id = fetcher.get_authority_set_id(epoch_end_block_number).await;
+        println!("authority_set_id {:?}", authority_set_id);
         assert_eq!(previous_authority_set_id + 1, authority_set_id);
         assert_eq!(authority_set_id, target_authority_set_id);
         let authorities = fetcher.get_authorities(epoch_end_block_number).await;

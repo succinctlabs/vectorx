@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use avail_subxt::config::substrate::DigestItem;
-use avail_subxt::config::Hasher;
 use avail_subxt::primitives::Header;
 use codec::Encode;
 use log::{debug, Level};
@@ -159,14 +158,22 @@ impl<const HEADER_LENGTH: usize, L: PlonkParameters<D>, const D: usize> AsyncHin
 pub struct RotateCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_LENGTH: usize,
+    const MAX_CHUNKS_AUTHORITY_SET: usize,
     const MAX_NUM_HEADERS: usize,
 > {}
 
 impl<
         const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_HEADER_LENGTH: usize,
+        const MAX_CHUNKS_AUTHORITY_SET: usize,
         const MAX_NUM_HEADERS: usize,
-    > Circuit for RotateCircuit<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_LENGTH, MAX_NUM_HEADERS>
+    > Circuit
+    for RotateCircuit<
+        MAX_AUTHORITY_SET_SIZE,
+        MAX_HEADER_LENGTH,
+        MAX_CHUNKS_AUTHORITY_SET,
+        MAX_NUM_HEADERS,
+    >
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
@@ -174,6 +181,7 @@ impl<
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         // Read the on-chain inputs.
+        // Old authority set id
         let authority_set_id = builder.evm_read::<U64Variable>();
         builder.watch_with_level(
             &authority_set_id,
@@ -181,6 +189,7 @@ impl<
             Level::Debug,
         );
 
+        // Old authority set hash
         let authority_set_hash = builder.evm_read::<Bytes32Variable>();
         builder.watch_with_level(
             &authority_set_hash,
@@ -211,13 +220,14 @@ impl<
             builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
 
         // Call rotate on the header.
-        let new_authority_set_hash = builder.rotate::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(
-            &target_header,
-            &target_header_hash,
-            &num_authorities,
-            &start_position,
-            &end_position,
-        );
+        let new_authority_set_hash = builder
+            .rotate::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_CHUNKS_AUTHORITY_SET>(
+                &target_header,
+                &target_header_hash,
+                &num_authorities,
+                &start_position,
+                &end_position,
+            );
 
         // Verify the epoch end block header is valid.
         builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
@@ -250,8 +260,6 @@ mod tests {
     use std::env;
 
     use ethers::types::H256;
-    use ethers::utils::hex;
-    use plonky2x::backend::circuit::PublicInput;
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;
@@ -265,21 +273,24 @@ mod tests {
 
         const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const MAX_AUTHORITY_CHUNKS: usize = 30;
         const NUM_HEADERS: usize = 36;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_AUTHORITY_CHUNKS, NUM_HEADERS>::define(
+            &mut builder,
+        );
         let circuit = builder.build();
         log::debug!("Done building circuit");
 
         let mut hint_registry = HintRegistry::new();
         let mut gate_registry = GateRegistry::new();
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_generators(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, NUM_HEADERS>::register_generators(
             &mut hint_registry,
         );
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_gates(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, NUM_HEADERS>::register_gates(
             &mut gate_registry,
         );
 
@@ -288,17 +299,18 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_circuit_function_rotate_fixture() {
+    fn test_rotate() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 76;
+        const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const MAX_AUTHORITY_CHUNKS: usize = 30;
         const NUM_HEADERS: usize = 36;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_AUTHORITY_CHUNKS, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();
@@ -306,32 +318,20 @@ mod tests {
 
         // These inputs are taken from: https://kate.avail.tools/#/explorer/query/485710
         let mut input = circuit.input();
-        let trusted_header: [u8; 32] =
-            hex::decode("9a69988124baf188d9d6bbbc579977815086a5d9dfa3b91bafa6d315f31047dc")
-                .unwrap()
-                .try_into()
-                .unwrap();
-        let trusted_block = 272502u32;
-        let target_block = 272534u32; // mimics test_rotate_small
-        let authority_set_id = 256u64;
+        let authority_set_id = 299u64;
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
+        let epoch_end_block_number = 318937u32;
 
-        input.evm_write::<U32Variable>(trusted_block);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
-        input.evm_write::<U32Variable>(target_block);
+        input.evm_write::<U32Variable>(epoch_end_block_number);
 
         log::debug!("Generating proof");
         let (proof, mut output) = circuit.prove(&input);
         log::debug!("Done generating proof");
 
         circuit.verify(&proof, &input, &output);
-        let target_header = output.evm_read::<Bytes32Variable>();
-        let state_root_merkle_root = output.evm_read::<Bytes32Variable>();
-        let data_root_merkle_root = output.evm_read::<Bytes32Variable>();
-        println!("target_header {:?}", target_header);
-        println!("state root merkle root {:?}", state_root_merkle_root);
-        println!("data root merkle root {:?}", data_root_merkle_root);
+        let new_authority_set_hash = output.evm_read::<Bytes32Variable>();
+        println!("new_authority_set_hash {:?}", new_authority_set_hash);
     }
 }

@@ -3,6 +3,7 @@ pub mod types;
 use std::collections::HashMap;
 
 use avail_subxt::avail::Client;
+use avail_subxt::config::Hasher;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
 use avail_subxt::{api, build_client};
@@ -367,5 +368,18 @@ mod tests {
                 position += encoded.len();
             }
         }
+
+        let authority_set_hash_input = authorities
+            .1
+            .clone()
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        let authority_set_commitment =
+            avail_subxt::config::substrate::BlakeTwo256::hash(&authority_set_hash_input);
+        println!(
+            "authority_set_commitment {:?}",
+            hex::encode(authority_set_commitment)
+        );
     }
 }

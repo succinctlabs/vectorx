@@ -70,19 +70,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
             &justification_data.signatures[0],
         );
 
-        let value_type = signature_to_value_type::<L::Field>(&justification_data.signatures[0]);
-
-        verify_message(
-            &to_be_bits(&encoded_precommit),
-            &EDDSASignature::<Ed25519> {
-                r: value_type.r,
-                s: value_type.s,
-            },
-            &plonky2x::frontend::ecc::ed25519::curve::eddsa::EDDSAPublicKey(
-                justification_data.pubkeys[0],
-            ),
-        );
-
         output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
             encoded_precommit.try_into().unwrap(),
         );

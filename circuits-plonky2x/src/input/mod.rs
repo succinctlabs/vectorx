@@ -73,9 +73,7 @@ impl RpcDataFetcher {
 
     pub async fn get_head(&self) -> Header {
         let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
-        println!("head_block_hash {:?}", head_block_hash);
         let header = self.client.rpc().header(Some(head_block_hash)).await;
-        println!("header {:?}", header);
         header.unwrap().unwrap()
     }
 

@@ -325,7 +325,6 @@ dependencies = [
  "serde_json",
  "sha256",
  "sp-core",
- "subxt",
  "tokio",
 ]
 

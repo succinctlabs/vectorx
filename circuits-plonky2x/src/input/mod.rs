@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use avail_subxt::avail::Client;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
+use avail_subxt::utils::H256;
 use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use hex::encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
-use subxt::utils::H256;
 
 use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
 use crate::input::types::SimpleJustificationData;

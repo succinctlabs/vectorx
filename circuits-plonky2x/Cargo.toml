@@ -31,9 +31,12 @@ sha256 = "1.4.0"
 primitive-types = "0.12.1"
 
 avail-subxt = { git = "https://github.com/availproject/avail.git" }
-subxt = "0.29"
 sp-core = { version = "21", default-features = false }
-codec = { package = "parity-scale-codec", version = "3", default-features = false, features = ["derive", "full", "bit-vec"] }
+codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
+    "derive",
+    "full",
+    "bit-vec",
+] }
 
 [dev-dependencies]
 anyhow = "1.0.68"

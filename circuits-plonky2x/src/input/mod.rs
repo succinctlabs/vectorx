@@ -12,7 +12,6 @@ use hex::encode;
 use log::debug;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
-use sp_application_crypto::RuntimeAppPublic;
 use subxt::utils::H256;
 
 use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};
@@ -121,7 +120,7 @@ impl RpcDataFetcher {
             if *weight != 1 {
                 panic!("Weight for authority is not 1");
             }
-            let pub_key_vec = authority_key.to_raw_vec();
+            let pub_key_vec = authority_key.encode();
             let pub_key_point = AffinePoint::<Curve>::new_from_compressed_point(&pub_key_vec);
             authorities.push(pub_key_point);
             authories_pubkey_bytes.push(pub_key_vec);

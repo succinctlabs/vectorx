@@ -36,7 +36,7 @@ sp-state-machine = "0.12.0"
 subxt = "0.27"
 
 # Avail circuits
-succinct_avail_circuits = { path = "../circuits-plonky2x" }
+avail_plonky2x = { path = "../cicuits-plonky2x" }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2x = { git = "https://github.com/succinctlabs/sdk.git" }
 

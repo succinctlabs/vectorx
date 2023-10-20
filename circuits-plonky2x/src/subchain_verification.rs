@@ -218,27 +218,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     }
                 },
                 |_, left, right, builder| {
-                    // let (
-                    //     left_num_blocks,
-                    //     left_first_block,
-                    //     left_first_header_hash,
-                    //     left_first_block_parent,
-                    //     left_end_block,
-                    //     left_end_header_hash,
-                    //     left_state_merkle_root,
-                    //     left_data_merkle_root,
-                    // ) = left_output;
-
-                    // let (
-                    //     right_num_blocks,
-                    //     right_first_block,
-                    //     _,
-                    //     right_first_block_parent,
-                    //     right_end_block,
-                    //     right_end_header_hash,
-                    //     right_state_merkle_root,
-                    //     right_data_merkle_root,
-                    // ) = right_output;
 
                     builder.watch_with_level(&left.num_blocks, "reduce job - left node num blocks", Level::Debug);
                     builder.watch_with_level(&left.end_block, "reduce job - left node end block num", Level::Debug);

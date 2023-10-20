@@ -98,7 +98,7 @@ async fn parse_single_header_rotate(header: Header) -> (usize, usize, usize) {
 }
 
 // Fetch a single header.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Send)]
 pub struct RotateHint<const HEADER_LENGTH: usize> {}
 
 #[async_trait]

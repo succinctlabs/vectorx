@@ -12,7 +12,6 @@ use hex::encode;
 use log::debug;
 use pallet_grandpa::{AuthorityList, VersionedAuthorityList};
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
-use sp_application_crypto::RuntimeAppPublic;
 use subxt::utils::H256;
 
 use self::types::{EncodedFinalityProof, FinalityProof, GrandpaJustification, SignerMessage};

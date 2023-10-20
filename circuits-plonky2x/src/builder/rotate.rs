@@ -2,7 +2,6 @@ use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
 
-use super::decoder::DecodingMethods;
 use crate::vars::*;
 
 pub trait RotateMethods {

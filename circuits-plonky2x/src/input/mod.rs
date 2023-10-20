@@ -242,13 +242,13 @@ impl RpcDataFetcher {
         }
     }
 
+    /// This function takes in a block_number as input, fetches the authority set for the epoch end block.
+    /// Additionally, it computes the new authority set hash from the epoch end block.
     pub async fn get_header_rotate<const HEADER_LENGTH: usize>(
         &self,
-        block_number: u32,
+        epoch_end_block: u32,
     ) -> HeaderRotateData {
-        // let authority_set_id = fetcher.get_authority_set_id(header.number).await;
-
-        let header = self.get_header(block_number).await;
+        let header = self.get_header(epoch_end_block).await;
 
         let mut header_bytes = header.encode();
         let header_size = header_bytes.len();
@@ -260,10 +260,10 @@ impl RpcDataFetcher {
         }
         header_bytes.resize(HEADER_LENGTH, 0);
 
-        let authorities = self.get_authorities(block_number).await;
+        let authorities = self.get_authorities(epoch_end_block).await;
 
         let mut position = 0;
-        let number_encoded = block_number.encode();
+        let number_encoded = epoch_end_block.encode();
         // skip past parent_hash, number, state_root, extrinsics_root
         position += 32 + number_encoded.len() + 32 + 32;
 
@@ -320,11 +320,11 @@ impl RpcDataFetcher {
         if !found_correct_log {
             panic!(
                 "Block: {:?} is not an epoch end block, did not find corresponding consensus log!",
-                block_number
+                epoch_end_block
             );
         }
 
-        // Compute chained hash
+        // Compute chained hash of the authorities.
         let mut hash_so_far = Vec::new();
         for i in 0..authorities.1.len() {
             let authority = authorities.1[i].clone();

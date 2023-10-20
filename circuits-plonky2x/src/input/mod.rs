@@ -13,6 +13,7 @@ use ed25519_dalek::{PublicKey, Signature, Verifier};
 use hex::encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
+use sha2::Digest;
 
 use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
@@ -266,12 +267,11 @@ impl RpcDataFetcher {
         // skip past parent_hash, number, state_root, extrinsics_root
         position += 32 + number_encoded.len() + 32 + 32;
 
+        let mut found_correct_log = false;
         for log in header.digest.logs {
-            let log_clone_2 = log.clone();
             if let DigestItem::Consensus(consensus_id, value) = log {
                 if consensus_id == [70, 82, 78, 75] {
-                    println!("log {:?}", hex::encode(log_clone_2.encode()));
-
+                    found_correct_log = true;
                     println!("position {:?}", position);
                     // TODO: have to figure out what value[0,1,2] means?
                     println!("value prefix {:?}", &value[..3]);
@@ -316,15 +316,23 @@ impl RpcDataFetcher {
             }
         }
 
-        // let authority_set_hash_input = authorities
-        //     .1
-        //     .clone()
-        //     .into_iter()
-        //     .flatten()
-        //     .collect::<Vec<_>>();
-        // // TODO: Return authority_set_commitment to verify validity.
-        // let authority_set_commitment =
-        //     avail_subxt::config::substrate::BlakeTwo256::hash(&authority_set_hash_input);
+        // Panic if this is not an epoch end block.
+        if !found_correct_log {
+            panic!(
+                "Block: {:?} is not an epoch end block, did not find corresponding consensus log!",
+                block_number
+            );
+        }
+
+        // Compute chained hash
+        let mut hash_so_far = Vec::new();
+        for i in 0..authorities.1.len() {
+            let authority = authorities.1[i].clone();
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(hash_so_far);
+            hasher.update(authority);
+            hash_so_far = hasher.finalize().to_vec();
+        }
 
         let end_position = position + ((32 + 8) * authorities.1.len()) + 4;
 
@@ -334,6 +342,7 @@ impl RpcDataFetcher {
             num_authorities: authorities.1.len(),
             start_position: position,
             end_position,
+            new_authority_set_hash: hash_so_far,
         }
     }
 }
@@ -341,8 +350,6 @@ impl RpcDataFetcher {
 #[cfg(test)]
 mod tests {
     use std::cmp::Ordering;
-
-    use sha2::Digest;
 
     use super::*;
     use crate::consts::MAX_HEADER_SIZE;
@@ -420,24 +427,14 @@ mod tests {
         println!("authority_set_id {:?}", authority_set_id);
         assert_eq!(previous_authority_set_id + 1, authority_set_id);
         assert_eq!(authority_set_id, target_authority_set_id);
-        let authorities = fetcher.get_authorities(epoch_end_block_number).await;
 
         let rotate_data = fetcher
             .get_header_rotate::<MAX_HEADER_SIZE>(epoch_end_block_number)
             .await;
 
-        println!("number of authorities: {:?}", rotate_data.num_authorities);
-
-        // Compute chained hash
-        let mut hash_so_far = Vec::new();
-        for i in 0..rotate_data.num_authorities {
-            let authority = authorities.1[i].clone();
-            let mut hasher = sha2::Sha256::new();
-            hasher.update(hash_so_far);
-            hasher.update(authority);
-            hash_so_far = hasher.finalize().to_vec();
-        }
-
-        println!("authority_set_commitment: {:?}", hash_so_far.clone());
+        println!(
+            "authority_set_commitment: {:?}",
+            rotate_data.new_authority_set_hash
+        );
     }
 }

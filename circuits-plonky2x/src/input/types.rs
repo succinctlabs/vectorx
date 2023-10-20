@@ -13,6 +13,7 @@ pub struct HeaderRotateData {
     pub num_authorities: usize,
     pub start_position: usize,
     pub end_position: usize,
+    pub new_authority_set_hash: Vec<u8>,
 }
 
 pub struct SimpleJustificationData {

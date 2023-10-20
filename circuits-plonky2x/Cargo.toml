@@ -34,7 +34,6 @@ avail-subxt = { git = "https://github.com/availproject/avail.git" }
 subxt = "0.29"
 sp-core = { version = "21", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = ["derive", "full", "bit-vec"] }
-pallet-grandpa = "23.0.0"
 
 [dev-dependencies]
 anyhow = "1.0.68"

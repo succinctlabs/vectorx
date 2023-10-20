@@ -41,14 +41,18 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify the first byte is 0x04 (enum DigestItemType, Consensus = 4u32).
         let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
-        self.assert_is_equal(header_bytes[0], consensus_enum_flag);
+        let header_consensus_flag = self.select_array(&header_bytes.data, cursor);
+        self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
+        cursor = self.add(cursor, one);
 
         // Verify the next 4 bytes are 0x46524e4b [70, 82, 78, 75], the consensus_id_bytes.
         // TODO: Verify that these 4 bytes are the consensus id bytes? Or what are they
         let consensus_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         for i in 0..4 {
-            self.assert_is_equal(header_bytes[i + 1], consensus_id_bytes[i]);
+            let header_consensus_id_byte = self.select_array(&header_bytes.data, cursor);
+            self.assert_is_equal(header_consensus_id_byte, consensus_id_bytes[i]);
+            cursor = self.add(cursor, one);
         }
 
         // Skip 5 bytes

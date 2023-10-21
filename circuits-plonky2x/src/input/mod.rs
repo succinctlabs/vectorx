@@ -69,7 +69,6 @@ impl RpcDataFetcher {
 
     pub async fn get_header(&self, block_number: u32) -> Header {
         let block_hash = self.get_block_hash(block_number).await;
-        println!("block_hash {:?}", block_hash);
         let header_result = self.client.rpc().header(Some(block_hash)).await;
         header_result.unwrap().unwrap()
     }

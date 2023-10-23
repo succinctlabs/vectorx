@@ -9,7 +9,7 @@ use plonky2x::prelude::{
 };
 
 use crate::builder::decoder::DecodingMethods;
-use crate::builder::header::{HeaderFetcherHint, HeaderMethods};
+use crate::builder::header::{HeaderMethods, HeaderRangeFetcherHint};
 use crate::consts::{HASH_SIZE, HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
 use crate::vars::EncodedHeaderVariable;
 
@@ -103,7 +103,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     input_stream.write(&start_block);
                     input_stream.write(&last_block);
                     input_stream.write(&max_block);
-                    let header_fetcher = HeaderFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
+                    let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
 
                     // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
                     // Note that the latter number may be greater than start_block.
@@ -337,7 +337,8 @@ mod tests {
             <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
                 AlgebraicHasher<L::Field>,
         {
-            registry.register_async_hint::<HeaderFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
+            registry
+                .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
             let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
             registry.register_simple::<FloorDivGenerator<L::Field, D>>(floor_div_id);
 

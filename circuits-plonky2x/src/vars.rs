@@ -80,8 +80,8 @@ pub struct EncodedHeaderVariable<const S: usize> {
     pub header_size: Variable,
 }
 
-/// The message signed by the validator as a variable.
-pub type AvailPubkeyVariable = BytesVariable<HASH_SIZE>;
+/// The public key of the validator as a variable.
+pub type AvailPubkeyVariable = ArrayVariable<ByteVariable, HASH_SIZE>;
 
 #[derive(Clone, Debug, CircuitVariable)]
 #[value_name(HeaderValueType)]

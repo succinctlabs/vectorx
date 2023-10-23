@@ -61,7 +61,7 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
 
 // Fetch a range of headers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HeaderFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
+pub struct HeaderRangeFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 
 #[async_trait]
 impl<
@@ -69,7 +69,7 @@ impl<
         const NUM_HEADERS: usize,
         L: PlonkParameters<D>,
         const D: usize,
-    > AsyncHint<L, D> for HeaderFetcherHint<HEADER_LENGTH, NUM_HEADERS>
+    > AsyncHint<L, D> for HeaderRangeFetcherHint<HEADER_LENGTH, NUM_HEADERS>
 {
     async fn hint(
         &self,

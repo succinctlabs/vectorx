@@ -1,9 +1,10 @@
+use async_trait::async_trait;
 use log::debug;
 use num::traits::ToBytes;
 use num::BigUint;
 use plonky2x::frontend::ecc::ed25519::gadgets::curve::CircuitBuilderCurveGadget;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
-use plonky2x::frontend::hint::simple::hint::Hint;
+use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
@@ -34,10 +35,15 @@ fn signature_to_value_type<F: RichField>(sig_bytes: &[u8]) -> SignatureValueType
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
 
-impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L, D>
+#[async_trait]
+impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncHint<L, D>
     for HintSimpleJustification<NUM_AUTHORITIES>
 {
-    fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
+    async fn hint(
+        &self,
+        input_stream: &mut ValueStream<L, D>,
+        output_stream: &mut ValueStream<L, D>,
+    ) {
         let block_number = input_stream.read_value::<U32Variable>();
         let authority_set_id = input_stream.read_value::<U64Variable>();
 
@@ -92,6 +98,8 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
 }
 
 pub trait GrandpaJustificationVerifier {
+    /// Verify the authority set commitment of an authority set. This is the chained hash of the first num_active_authorities public keys.
+    /// Specifically, the chained hash takes the form: SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])...
     fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
@@ -115,7 +123,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         authority_set_commitment: Bytes32Variable,
         authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>,
     ) {
-        let mut enabled = self._true();
+        let mut authority_enabled = self._true();
 
         let first_compressed_point = self.compress_point(&authority_set_signers[0]);
 
@@ -126,24 +134,25 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             let at_end = self.is_equal(curr_idx, num_active_authorities);
             let not_at_end = self.not(at_end);
 
-            enabled = self.and(enabled, not_at_end);
+            // Once reaching the last validator, turn enabled to false to ensure that the commitment_so_far is not updated.
+            // This is because the authority set commitment is the chained hash of the first num_active_authorities public keys.
+            authority_enabled = self.and(authority_enabled, not_at_end);
 
             let compressed_point = self.compress_point(&authority_set_signers[i]);
             let mut input_to_hash = Vec::new();
-            input_to_hash.extend_from_slice(&commitment_so_far.0 .0);
-            input_to_hash.extend_from_slice(&compressed_point.0 .0 .0);
+            input_to_hash.extend_from_slice(&commitment_so_far.as_bytes());
+            input_to_hash.extend_from_slice(&compressed_point.0.as_bytes());
 
             // Compute the chained hash of the authority set commitment.
             let chained_hash = self.curta_sha256(&input_to_hash);
 
             // If we are before the end, update the commitment_so_far.
-            commitment_so_far = self.select(enabled, chained_hash, commitment_so_far);
+            commitment_so_far = self.select(authority_enabled, chained_hash, commitment_so_far);
         }
 
         self.assert_is_equal(authority_set_commitment, commitment_so_far);
     }
 
-    // This assumes
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
@@ -154,7 +163,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         let mut input_stream = VariableStream::new();
         input_stream.write(&block_number);
         input_stream.write(&authority_set_id);
-        let output_stream = self.hint(
+        let output_stream = self.async_hint(
             input_stream,
             HintSimpleJustification::<MAX_NUM_AUTHORITIES> {},
         );

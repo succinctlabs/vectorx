@@ -60,9 +60,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
+checksum = "5a824f2aa7e75a0c98c5a504fceb80649e9c35265d44525b5f94de4771a395cd"
 dependencies = [
  "getrandom 0.2.10",
  "once_cell",
@@ -319,7 +319,7 @@ dependencies = [
  "parity-scale-codec",
  "plonky2",
  "plonky2x",
- "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "plonky2x-derive",
  "primitive-types 0.12.2",
  "reqwest",
  "serde",
@@ -2240,7 +2240,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
- "ahash 0.7.6",
+ "ahash 0.7.7",
 ]
 
 [[package]]
@@ -3682,7 +3682,7 @@ source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/compress-point-variable#809c652ef3d6b5577d9ef5ea1c06e89d09791488"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/get-fixed-subarray-fix#bfb6bd3e04013b903dd8c3bd8aa8abdf068f0a2f"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -3707,7 +3707,7 @@ dependencies = [
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=ratan/compress-point-variable)",
+ "plonky2x-derive",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -3724,17 +3724,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/compress-point-variable#809c652ef3d6b5577d9ef5ea1c06e89d09791488"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.38",
-]
-
-[[package]]
-name = "plonky2x-derive"
-version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#d75bfd6855e01e7cb0c616b6279c26d94e2525b4"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/get-fixed-subarray-fix#bfb6bd3e04013b903dd8c3bd8aa8abdf068f0a2f"
 dependencies = [
  "proc-macro2",
  "quote",

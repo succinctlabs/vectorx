@@ -14,6 +14,7 @@ use plonky2x::prelude::{
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Runtime;
 
+use super::decoder::DecodingMethods;
 use crate::consts::ENCODED_PRECOMMIT_LENGTH;
 use crate::input::types::SimpleJustificationData;
 use crate::input::{verify_signature, RpcDataFetcher};
@@ -153,7 +154,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
-        _block_hash: Bytes32Variable,
+        block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
     ) {
@@ -189,7 +190,11 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             &compressed_pubkeys,
         );
 
-        // TODO: decode the encoded_precommit and ensure that it matches the block_hash, block_number, and authority_set_id
+        // Verify the correctness of the encoded_precommit message.
+        let decoded_precommit = self.decode_precommit(encoded_precommit);
+        self.assert_is_equal(decoded_precommit.block_number, block_number);
+        self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
+        self.assert_is_equal(decoded_precommit.block_hash, block_hash);
 
         // We verify the signatures of the validators on the encoded_precommit message.
         // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
@@ -202,7 +207,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             ]);
         let messages = vec![encoded_precommit; MAX_NUM_AUTHORITIES];
         self.conditional_batch_eddsa_verify::<MAX_NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
-            validator_signed,
+            validator_signed.clone(),
             message_byte_lengths,
             messages.into(),
             signatures,
@@ -210,6 +215,18 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         );
 
         // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`
+        let two_v = self.constant::<Variable>(L::Field::from_canonical_usize(2));
+        let three_v = self.constant::<Variable>(L::Field::from_canonical_usize(3));
+        let true_v = self._true();
+        let mut num_signed: Variable = self.zero();
+        for i in 0..MAX_NUM_AUTHORITIES {
+            num_signed = self.add(num_signed, validator_signed[i].variable);
+        }
+
+        let scaled_num_signed = self.mul(num_signed, three_v);
+        let scaled_threshold = self.mul(num_active_authorities, two_v);
+        let is_valid_num_signed = self.gte(scaled_num_signed, scaled_threshold);
+        self.assert_is_equal(is_valid_num_signed, true_v);
     }
 }
 

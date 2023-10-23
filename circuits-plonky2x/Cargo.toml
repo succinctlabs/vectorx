@@ -20,8 +20,9 @@ log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = ["rand"] }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 # plonky2x = { path = "../../succinct-sdk/plonky2x/core" }
-plonky2x = { git = "https://github.com/succinctlabs/succinctx.git", branch = "ratan/compress-point-variable" }
-plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }
+# plonky2x-derive = { path = "../../succinct-sdk/plonky2x/derive" }
+plonky2x = { git = "https://github.com/succinctlabs/succinctx.git", branch = "ratan/get-fixed-subarray-fix" }
+plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git", branch = "ratan/get-fixed-subarray-fix" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.86"
 tokio = { version = "1.2.0", features = ["full"] }
@@ -32,7 +33,7 @@ sha256 = "1.4.0"
 primitive-types = "0.12.1"
 
 avail-subxt = { git = "https://github.com/availproject/avail.git" }
-sp-core = { version = "21", default-features = false }
+sp-core = { version = "21.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",
     "full",

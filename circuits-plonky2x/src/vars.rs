@@ -105,8 +105,8 @@ pub struct HeaderVariable {
 pub struct PrecommitVariable {
     pub block_hash: Bytes32Variable,
     pub block_number: U32Variable,
-    pub justification_round: Variable,
-    pub authority_set_id: Variable,
+    pub justification_round: U64Variable,
+    pub authority_set_id: U64Variable,
 }
 
 pub type Curve = Ed25519;

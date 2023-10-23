@@ -6,10 +6,10 @@ use plonky2::iop::witness::PartitionWitness;
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
-use plonky2x::frontend::vars::U32Variable;
+use plonky2x::frontend::vars::{EvmVariable, U32Variable};
 use plonky2x::prelude::{
-    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, Field,
-    PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
+    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
+    Field, PlonkParameters, RichField, Target, U64Variable, Variable, Witness, WitnessWrite,
 };
 
 use crate::consts::{DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE};
@@ -248,7 +248,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let data_root = Bytes32Variable::from(data_root_byte_vars.as_slice());
 
         HeaderVariable {
-            block_number: U32Variable(Variable(block_number_target)), // TODO: do we need to do a range-check here?
+            block_number: U32Variable::from_variables_unsafe(&[Variable(block_number_target)]), // TODO: do we need to do a range-check here?
             parent_hash,
             state_root,
             data_root,
@@ -259,29 +259,26 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         &mut self,
         precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
     ) -> PrecommitVariable {
-        // TODO: when we have seamless conversion between BytesVariable and U32/U64 variables, use those instead
-
-        // The first byte is the variant number and should be 1
-        let one = self.one::<Variable>();
-        let precommit_first_byte = to_variable(&mut self.api, precommit[0]);
+        // The first byte is the varint number and should be 1.
+        let one = self.one();
+        let precommit_first_byte = precommit[0].to_variable(self);
         self.assert_is_equal(precommit_first_byte, one);
 
-        // The next 32 bytes is the block hash
+        // The next 32 bytes is the block hash.
         let block_hash: Bytes32Variable = precommit[1..33].into();
 
-        // The next 4 bytes is the block number
-        let block_number = to_variable_unsafe(&mut self.api, &precommit[33..37]);
+        // The next 4 bytes is the block number.
+        let block_number = U32Variable::decode(self, &precommit[33..37]);
 
-        // The next 8 bytes is the justification round
-        let justification_round = to_variable_unsafe(&mut self.api, &precommit[37..45]);
+        // The next 8 bytes is the justification round.
+        let justification_round = U64Variable::decode(self, &precommit[37..45]);
 
-        // The next 8 bytes is the authority set id
-        let authority_set_id = to_variable_unsafe(&mut self.api, &precommit[45..53]);
+        // The next 8 bytes is the authority set id.
+        let authority_set_id = U64Variable::decode(self, &precommit[45..53]);
 
-        // It's okay that we're not range checking any of these because the inputs to this function are range-checked
         PrecommitVariable {
             block_hash,
-            block_number: U32Variable(block_number),
+            block_number,
             justification_round,
             authority_set_id,
         }

@@ -104,7 +104,7 @@ pub trait GrandpaJustificationVerifier {
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
     );
 
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
@@ -121,13 +121,11 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
     ) {
         let mut authority_enabled = self._true();
 
-        let first_compressed_point = self.compress_point(&authority_set_signers[0]);
-
-        let mut commitment_so_far = self.curta_sha256(&first_compressed_point.0 .0 .0);
+        let mut commitment_so_far = self.curta_sha256(&authority_set_signers[0].as_bytes());
 
         for i in 1..MAX_NUM_AUTHORITIES {
             let curr_idx = self.constant::<Variable>(L::Field::from_canonical_usize(i));
@@ -138,10 +136,9 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             // This is because the authority set commitment is the chained hash of the first num_active_authorities public keys.
             authority_enabled = self.and(authority_enabled, not_at_end);
 
-            let compressed_point = self.compress_point(&authority_set_signers[i]);
             let mut input_to_hash = Vec::new();
             input_to_hash.extend_from_slice(&commitment_so_far.as_bytes());
-            input_to_hash.extend_from_slice(&compressed_point.0.as_bytes());
+            input_to_hash.extend_from_slice(&authority_set_signers[i].as_bytes());
 
             // Compute the chained hash of the authority set commitment.
             let chained_hash = self.curta_sha256(&input_to_hash);
@@ -177,8 +174,20 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>>(self);
         let num_active_authorities = output_stream.read::<Variable>(self);
 
+        let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>::from(
+            pubkeys
+                .as_vec()
+                .iter()
+                .map(|x| self.compress_point(x).0)
+                .collect::<Vec<Bytes32Variable>>(),
+        );
+
         // Call verify_authority_set_commitment
-        self.verify_authority_set_commitment(num_active_authorities, authority_set_hash, &pubkeys);
+        self.verify_authority_set_commitment(
+            num_active_authorities,
+            authority_set_hash,
+            &compressed_pubkeys,
+        );
 
         // TODO: decode the encoded_precommit and ensure that it matches the block_hash, block_number, and authority_set_id
 

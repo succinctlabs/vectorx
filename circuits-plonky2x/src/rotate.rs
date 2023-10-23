@@ -16,7 +16,7 @@ use crate::builder::decoder::FloorDivGenerator;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::builder::rotate::RotateMethods;
 use crate::input::RpcDataFetcher;
-use crate::vars::{EDDSAPublicKeyVariable, EncodedHeader, EncodedHeaderVariable};
+use crate::vars::{AvailPubkeyVariable, EncodedHeader, EncodedHeaderVariable};
 
 // Fetch a single header.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,7 +72,7 @@ impl<
         ));
 
         // Pubkeys of the new authority set.
-        output_stream.write_value::<ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>>(
+        output_stream.write_value::<ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>>(
             rotate_data.padded_pubkeys,
         );
     }
@@ -131,7 +131,7 @@ impl<
         let end_position = output_stream.read::<Variable>(builder);
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(builder);
         let new_pubkeys = output_stream
-            .read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
+            .read::<ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
 
         // TODO: USE target_header_hash as randomness!
         // // Hash the header at epoch_end_block.

@@ -336,15 +336,11 @@ impl RpcDataFetcher {
             hasher.update(authority);
             hash_so_far = hasher.finalize().to_vec();
 
-            padded_pubkeys.push(AffinePoint::<Curve>::new_from_compressed_point(
-                &authorities.1[i],
-            ));
+            padded_pubkeys.push(H256::from_slice(&authorities.1[i].clone()));
         }
 
         for _ in authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
-            padded_pubkeys.push(AffinePoint::<Curve>::new_from_compressed_point(
-                &DUMMY_PUBLIC_KEY,
-            ));
+            padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
         let end_position = position + ((32 + 8) * authorities.1.len()) + 4;

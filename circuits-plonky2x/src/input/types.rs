@@ -1,5 +1,6 @@
 use avail_subxt::primitives::Header;
 use codec::{Decode, Encode};
+use ethers::types::H256 as EthersH256;
 use primitive_types::H256;
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519::{Public as EdPublic, Signature};
@@ -14,7 +15,7 @@ pub struct HeaderRotateData {
     pub start_position: usize,
     pub end_position: usize,
     pub new_authority_set_hash: Vec<u8>,
-    pub padded_pubkeys: Vec<AffinePoint<Curve>>,
+    pub padded_pubkeys: Vec<EthersH256>,
 }
 
 pub struct SimpleJustificationData {

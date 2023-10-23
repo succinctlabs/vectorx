@@ -1,4 +1,3 @@
-use plonky2x::frontend::ecc::ed25519::gadgets::curve::CircuitBuilderCurveGadget;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
@@ -14,7 +13,7 @@ pub trait RotateMethods {
         num_authorities: &Variable,
         start_position: &Variable,
         end_position: &Variable,
-        new_pubkeys: &ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>,
+        new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) -> Bytes32Variable;
 }
@@ -28,7 +27,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         num_authorities: &Variable,
         start_position: &Variable,
         end_position: &Variable,
-        new_pubkeys: &ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>,
+        new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) -> Bytes32Variable {
         // let header_variable = self.decode_header::<MAX_HEADER_SIZE>(header, header_hash);
@@ -112,10 +111,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
                     .collect::<Vec<_>>()
                     .as_slice(),
             );
-            // Verify the pubkey is valid.
-            let compressed_pubkey = self.compress_point(&new_pubkeys[i]);
             // Check if pubkey matches new_pubkey (which forms the new authority set commitment).
-            let correct_pubkey = self.is_equal(pubkey, compressed_pubkey.0);
+            let correct_pubkey = self.is_equal(pubkey, new_pubkeys[i]);
             let is_valid_pubkey = self.or(validator_disabled, correct_pubkey);
             self.assert_is_equal(is_valid_pubkey, true_v);
 

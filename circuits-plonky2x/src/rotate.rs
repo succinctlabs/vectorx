@@ -1,29 +1,34 @@
 use async_trait::async_trait;
+use ethers::types::H256;
 use log::{debug, Level};
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    Bytes32Variable, CircuitBuilder, Field, PlonkParameters, ValueStream, Variable, VariableStream,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, ValueStream, Variable,
+    VariableStream,
 };
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 
 use crate::builder::decoder::FloorDivGenerator;
-use crate::builder::header::HeaderMethods;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::builder::rotate::RotateMethods;
-use crate::consts::MAX_HEADER_CHUNK_SIZE;
 use crate::input::RpcDataFetcher;
-use crate::vars::{EncodedHeader, EncodedHeaderVariable};
+use crate::vars::{EDDSAPublicKeyVariable, EncodedHeader, EncodedHeaderVariable};
 
 // Fetch a single header.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RotateHint<const HEADER_LENGTH: usize> {}
+pub struct RotateHint<const HEADER_LENGTH: usize, const MAX_AUTHORITY_SET_SIZE: usize> {}
 
 #[async_trait]
-impl<const HEADER_LENGTH: usize, L: PlonkParameters<D>, const D: usize> AsyncHint<L, D>
-    for RotateHint<HEADER_LENGTH>
+impl<
+        const HEADER_LENGTH: usize,
+        const MAX_AUTHORITY_SET_SIZE: usize,
+        L: PlonkParameters<D>,
+        const D: usize,
+    > AsyncHint<L, D> for RotateHint<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>
 {
     async fn hint(
         &self,
@@ -40,7 +45,7 @@ impl<const HEADER_LENGTH: usize, L: PlonkParameters<D>, const D: usize> AsyncHin
         let data_fetcher = RpcDataFetcher::new().await;
 
         let rotate_data = data_fetcher
-            .get_header_rotate::<HEADER_LENGTH>(block_number)
+            .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(block_number)
             .await;
 
         // Encoded header.
@@ -60,6 +65,16 @@ impl<const HEADER_LENGTH: usize, L: PlonkParameters<D>, const D: usize> AsyncHin
         // End position.
         output_stream
             .write_value::<Variable>(L::Field::from_canonical_usize(rotate_data.end_position));
+
+        // Expected new authority set hash.
+        output_stream.write_value::<Bytes32Variable>(H256::from_slice(
+            rotate_data.new_authority_set_hash.as_slice(),
+        ));
+
+        // Pubkeys of the new authority set.
+        output_stream.write_value::<ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>>(
+            rotate_data.padded_pubkeys,
+        );
     }
 }
 
@@ -67,22 +82,14 @@ impl<const HEADER_LENGTH: usize, L: PlonkParameters<D>, const D: usize> AsyncHin
 pub struct RotateCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_LENGTH: usize,
-    const MAX_CHUNKS_AUTHORITY_SET: usize,
     const MAX_NUM_HEADERS: usize,
 > {}
 
 impl<
         const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_HEADER_LENGTH: usize,
-        const MAX_CHUNKS_AUTHORITY_SET: usize,
         const MAX_NUM_HEADERS: usize,
-    > Circuit
-    for RotateCircuit<
-        MAX_AUTHORITY_SET_SIZE,
-        MAX_HEADER_LENGTH,
-        MAX_CHUNKS_AUTHORITY_SET,
-        MAX_NUM_HEADERS,
-    >
+    > Circuit for RotateCircuit<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_LENGTH, MAX_NUM_HEADERS>
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
@@ -113,7 +120,7 @@ impl<
         );
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -122,20 +129,29 @@ impl<
         let num_authorities = output_stream.read::<Variable>(builder);
         let start_position = output_stream.read::<Variable>(builder);
         let end_position = output_stream.read::<Variable>(builder);
+        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(builder);
+        let new_pubkeys = output_stream
+            .read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        // Hash the header at epoch_end_block.
+        // TODO: USE target_header_hash as randomness!
+        // // Hash the header at epoch_end_block.
+        // let target_header_hash =
+        //     builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
+        let mut hasher = sha2::Sha256::new();
+        hasher.update("Hello World");
         let target_header_hash =
-            builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
+            builder.constant::<Bytes32Variable>(H256::from_slice(&hasher.finalize()));
 
         // Call rotate on the header.
-        let new_authority_set_hash = builder
-            .rotate::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_CHUNKS_AUTHORITY_SET>(
-                &target_header,
-                &target_header_hash,
-                &num_authorities,
-                &start_position,
-                &end_position,
-            );
+        builder.rotate::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(
+            &target_header,
+            &target_header_hash,
+            &num_authorities,
+            &start_position,
+            &end_position,
+            &new_pubkeys,
+            &expected_new_authority_set_hash,
+        );
 
         // Verify the epoch end block header is valid.
         builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
@@ -146,7 +162,7 @@ impl<
         );
 
         // TODO: Write the hash of the authority set to the output
-        builder.evm_write::<Bytes32Variable>(new_authority_set_hash);
+        builder.evm_write::<Bytes32Variable>(expected_new_authority_set_hash);
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
@@ -155,7 +171,8 @@ impl<
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        generator_registry.register_async_hint::<RotateHint<MAX_HEADER_LENGTH>>();
+        generator_registry
+            .register_async_hint::<RotateHint<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>>();
         generator_registry.register_hint::<HintSimpleJustification<MAX_AUTHORITY_SET_SIZE>>();
 
         let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
@@ -181,24 +198,21 @@ mod tests {
 
         const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_AUTHORITY_CHUNKS: usize = 30;
         const NUM_HEADERS: usize = 36;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_AUTHORITY_CHUNKS, NUM_HEADERS>::define(
-            &mut builder,
-        );
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
         let circuit = builder.build();
         log::debug!("Done building circuit");
 
         let mut hint_registry = HintRegistry::new();
         let mut gate_registry = GateRegistry::new();
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, NUM_HEADERS>::register_generators(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_generators(
             &mut hint_registry,
         );
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, NUM_HEADERS>::register_gates(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_gates(
             &mut gate_registry,
         );
 
@@ -213,12 +227,11 @@ mod tests {
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_AUTHORITY_CHUNKS: usize = 30;
         const NUM_HEADERS: usize = 36;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_AUTHORITY_CHUNKS, NUM_HEADERS>::define(&mut builder);
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();

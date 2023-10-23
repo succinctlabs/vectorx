@@ -71,15 +71,16 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.3"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c99f64d1e06488f620f932677e24bc6e2897582980441ae90a671415bd7ec2f"
+checksum = "cd7d5a2cecb58716e47d67d5703a249964b14c7be1ec3cad3affc295b2d1c35d"
 dependencies = [
  "cfg-if",
  "const-random",
  "getrandom 0.2.10",
  "once_cell",
  "version_check",
+ "zerocopy",
 ]
 
 [[package]]
@@ -280,7 +281,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 [[package]]
 name = "avail-subxt"
 version = "0.4.0"
-source = "git+https://github.com/availproject/avail.git#ad898ee3dc9d8c21d6bdb04ba4d5977fe04e96bd"
+source = "git+https://github.com/availproject/avail.git#841e974dab6a84a7d1cd93f57c5e40f071742971"
 dependencies = [
  "anyhow",
  "curve25519-dalek 2.1.3",
@@ -318,7 +319,7 @@ dependencies = [
  "parity-scale-codec",
  "plonky2",
  "plonky2x",
- "plonky2x-derive",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
  "primitive-types 0.12.2",
  "reqwest",
  "serde",
@@ -364,9 +365,9 @@ checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
-version = "0.21.4"
+version = "0.21.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba43ea6f343b788c8764558649e08df62f86c6ef251fdaeb1ffd010a9ae50a2"
+checksum = "35636a1494ede3b646cc98f74f8e62c773a38a659ebc777a2cf26b9b74171df9"
 
 [[package]]
 name = "base64ct"
@@ -742,7 +743,7 @@ version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5286a0843c21f8367f7be734f89df9b822e0321d8bcce8d6e735aadff7d74979"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.21.5",
  "bech32",
  "bs58 0.5.0",
  "digest 0.10.7",
@@ -782,23 +783,21 @@ checksum = "28c122c3980598d243d63d9a704629a2d748d101f278052ff068be5a4423ab6f"
 
 [[package]]
 name = "const-random"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "368a7a772ead6ce7e1de82bfb04c485f3db8ec744f72925af5735e29a22cc18e"
+checksum = "11df32a13d7892ec42d51d3d175faba5211ffe13ed25d4fb348ac9e9ce835593"
 dependencies = [
  "const-random-macro",
- "proc-macro-hack",
 ]
 
 [[package]]
 name = "const-random-macro"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d7d6ab3c3a2282db210df5f02c4dab6e0a7057af0fb7ebd4070f30fe05c0ddb"
+checksum = "f9d839f2a20b0aee515dc581a6172f2321f96cab76c1a38a4c584a194955390e"
 dependencies = [
  "getrandom 0.2.10",
  "once_cell",
- "proc-macro-hack",
  "tiny-keccak",
 ]
 
@@ -1165,12 +1164,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diff"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
-
-[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1396,7 +1389,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe81b5c06ecfdbc71dd845216f225f53b62a10cb8a16c946836a3467f701d05b"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.21.5",
  "bytes",
  "hex",
  "k256",
@@ -1689,7 +1682,7 @@ checksum = "6838fa110e57d572336178b7c79e94ff88ef976306852d8cb87d9e5b1fc7c0b5"
 dependencies = [
  "async-trait",
  "auto_impl",
- "base64 0.21.4",
+ "base64 0.21.5",
  "bytes",
  "const-hex",
  "enr",
@@ -2256,7 +2249,7 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
- "ahash 0.8.3",
+ "ahash 0.8.5",
 ]
 
 [[package]]
@@ -2265,7 +2258,7 @@ version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f93e7192158dbcda357bdec5fb5788eebf8bbac027f3f33e719d29135ae84156"
 dependencies = [
- "ahash 0.8.3",
+ "ahash 0.8.5",
  "rayon",
  "serde",
 ]
@@ -2603,9 +2596,9 @@ dependencies = [
 
 [[package]]
 name = "ipnet"
-version = "2.8.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28b29a3cd74f0f4598934efe3aeba42bae0eb4680554128851ebbecb02af14e6"
+checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
 
 [[package]]
 name = "is-terminal"
@@ -2800,7 +2793,7 @@ version = "8.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6971da4d9c3aa03c3d8f3ff0f4155b534aad021292003895a469716b2a230378"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.21.5",
  "pem",
  "ring",
  "serde",
@@ -2843,16 +2836,14 @@ dependencies = [
 
 [[package]]
 name = "lalrpop"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da4081d44f4611b66c6dd725e6de3169f9f63905421e8626fcb86b6a898998b8"
+checksum = "83be602e051ada38d90c7841092adabeb585197afe9dabb20e4f8375cc87846e"
 dependencies = [
  "ascii-canvas",
  "bit-set",
- "diff",
  "ena",
- "is-terminal",
- "itertools 0.10.5",
+ "itertools 0.11.0",
  "lalrpop-util",
  "petgraph",
  "regex",
@@ -2865,9 +2856,9 @@ dependencies = [
 
 [[package]]
 name = "lalrpop-util"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f35c735096c0293d313e8f2a641627472b83d01b937177fe76e5e2708d31e0d"
+checksum = "365d88f9d803538a06641e6736f21d95ecf9226dc1693421212e62c405cdd199"
 
 [[package]]
 name = "lazy_static"
@@ -3062,9 +3053,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.8"
+version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "927a765cd3fc26206e66b296465fa9d3e5ab003e651c1b3c060e7956d96b19d2"
+checksum = "3dce281c5e46beae905d4de1870d8b1509a9142b62eedf18b443b011ca8343d0"
 dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
@@ -3630,9 +3621,9 @@ checksum = "4503fa043bf02cee09a9582e9554b4c6403b2ef55e4612e96561d294419429f8"
 [[package]]
 name = "plonky2"
 version = "0.1.4"
-source = "git+https://github.com/mir-protocol/plonky2.git#49976ea2a98dcb6052bd6cf3a65f730e55727330"
+source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
 dependencies = [
- "ahash 0.8.3",
+ "ahash 0.8.5",
  "anyhow",
  "getrandom 0.2.10",
  "hashbrown 0.14.2",
@@ -3654,7 +3645,7 @@ dependencies = [
 [[package]]
 name = "plonky2_field"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#49976ea2a98dcb6052bd6cf3a65f730e55727330"
+source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -3678,7 +3669,7 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#49976ea2a98dcb6052bd6cf3a65f730e55727330"
+source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
 dependencies = [
  "rayon",
 ]
@@ -3686,12 +3677,12 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#49976ea2a98dcb6052bd6cf3a65f730e55727330"
+source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
 
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#12996cbac05795650dd6ee2226ba03d781025e83"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/compress-point-variable#809c652ef3d6b5577d9ef5ea1c06e89d09791488"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -3716,7 +3707,7 @@ dependencies = [
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=ratan/compress-point-variable)",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -3733,7 +3724,17 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#12996cbac05795650dd6ee2226ba03d781025e83"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/compress-point-variable#809c652ef3d6b5577d9ef5ea1c06e89d09791488"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
+]
+
+[[package]]
+name = "plonky2x-derive"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#d75bfd6855e01e7cb0c616b6279c26d94e2525b4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3825,12 +3826,6 @@ dependencies = [
  "quote",
  "version_check",
 ]
-
-[[package]]
-name = "proc-macro-hack"
-version = "0.5.20+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
@@ -4107,7 +4102,7 @@ version = "0.11.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "046cd98826c46c2ac8ddecae268eb5c2e58628688a5fc7a2643704a73faba95b"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.21.5",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -4284,7 +4279,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d3987094b1d07b653b7dfdc3f70ce9a1da9c51ac18c1b06b662e4f9a0e9f4b2"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.21.5",
 ]
 
 [[package]]
@@ -4465,7 +4460,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "772575a524feeb803e5b0fcbc6dd9f367e579488197c94c6e4023aad2305774d"
 dependencies = [
- "ahash 0.8.3",
+ "ahash 0.8.5",
  "cfg-if",
  "hashbrown 0.13.2",
 ]
@@ -4654,9 +4649,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "0.6.3"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96426c9936fd7a0124915f9185ea1d20aa9445cc9821142f0a73bc9207a2e186"
+checksum = "12022b835073e5b11e90a14f86838ceb1c8fb0325b72416845c487ac0fa95e80"
 dependencies = [
  "serde",
 ]
@@ -4679,7 +4674,7 @@ version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64cd236ccc1b7a29e7e2739f27c0b2dd199804abc4290e32f59f3b68d6405c23"
 dependencies = [
- "base64 0.21.4",
+ "base64 0.21.5",
  "chrono",
  "hex",
  "indexmap 1.9.3",
@@ -5189,7 +5184,7 @@ version = "22.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48e4eeb7ef23f79eba8609db79ef9cef242f994f1f87a3c0387b4b5f177fda74"
 dependencies = [
- "ahash 0.8.3",
+ "ahash 0.8.5",
  "hash-db",
  "hashbrown 0.13.2",
  "lazy_static",
@@ -5777,9 +5772,9 @@ dependencies = [
 
 [[package]]
 name = "toml_datetime"
-version = "0.6.3"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cda73e2f1397b1262d6dfdcef8aafae14d1de7748d66822d3bfeeb6d03e5e4b"
+checksum = "3550f4e9685620ac18a50ed434eb3aec30db8ba93b0287467bca5826ea25baf1"
 dependencies = [
  "serde",
 ]
@@ -5847,12 +5842,12 @@ dependencies = [
 
 [[package]]
 name = "tracing-log"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ddad33d2d10b1ed7eb9d1f518a5674713876e97e5bb9b7345a7984fbb4f922"
+checksum = "f751112709b4e791d8ce53e32c4ed2d353565a795ce84da2285393f41557bdf2"
 dependencies = [
- "lazy_static",
  "log",
+ "once_cell",
  "tracing-core",
 ]
 
@@ -6581,6 +6576,26 @@ name = "yap"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2a7eb6d82a11e4d0b8e6bda8347169aff4ccd8235d039bba7c47482d977dcf7"
+
+[[package]]
+name = "zerocopy"
+version = "0.7.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c19fae0c8a9efc6a8281f2e623db8af1db9e57852e04cde3e754dd2dc29340f"
+dependencies = [
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc56589e9ddd1f1c28d4b4b5c773ce232910a6bb67a70133d61c9e347585efe9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
+]
 
 [[package]]
 name = "zeroize"

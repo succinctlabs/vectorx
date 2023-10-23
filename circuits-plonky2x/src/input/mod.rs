@@ -237,12 +237,16 @@ impl RpcDataFetcher {
             validator_signed,
             pubkeys: padded_pubkeys,
             signatures: padded_signatures,
+            num_authorities: authorities.len(),
         }
     }
 
     /// This function takes in a block_number as input, fetches the authority set for the epoch end block.
     /// Additionally, it computes the new authority set hash from the epoch end block.
-    pub async fn get_header_rotate<const HEADER_LENGTH: usize>(
+    pub async fn get_header_rotate<
+        const HEADER_LENGTH: usize,
+        const VALIDATOR_SET_SIZE_MAX: usize,
+    >(
         &self,
         epoch_end_block: u32,
     ) -> HeaderRotateData {
@@ -322,6 +326,7 @@ impl RpcDataFetcher {
             );
         }
 
+        let mut padded_pubkeys = Vec::new();
         // Compute chained hash of the authorities.
         let mut hash_so_far = Vec::new();
         for i in 0..authorities.1.len() {
@@ -330,6 +335,16 @@ impl RpcDataFetcher {
             hasher.update(hash_so_far);
             hasher.update(authority);
             hash_so_far = hasher.finalize().to_vec();
+
+            padded_pubkeys.push(AffinePoint::<Curve>::new_from_compressed_point(
+                &authorities.1[i],
+            ));
+        }
+
+        for _ in authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
+            padded_pubkeys.push(AffinePoint::<Curve>::new_from_compressed_point(
+                &DUMMY_PUBLIC_KEY,
+            ));
         }
 
         let end_position = position + ((32 + 8) * authorities.1.len()) + 4;
@@ -341,6 +356,7 @@ impl RpcDataFetcher {
             start_position: position,
             end_position,
             new_authority_set_hash: hash_so_far,
+            padded_pubkeys,
         }
     }
 }
@@ -350,7 +366,7 @@ mod tests {
     use std::cmp::Ordering;
 
     use super::*;
-    use crate::consts::MAX_HEADER_SIZE;
+    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
 
     #[tokio::test]
     async fn test_get_block_headers_range() {
@@ -427,7 +443,7 @@ mod tests {
         assert_eq!(authority_set_id, target_authority_set_id);
 
         let rotate_data = fetcher
-            .get_header_rotate::<MAX_HEADER_SIZE>(epoch_end_block_number)
+            .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_number)
             .await;
 
         println!(

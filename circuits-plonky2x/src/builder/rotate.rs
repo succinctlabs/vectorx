@@ -1,37 +1,35 @@
+use plonky2x::frontend::ecc::ed25519::gadgets::curve::CircuitBuilderCurveGadget;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
 
+use crate::builder::justification::GrandpaJustificationVerifier;
 use crate::vars::*;
 
 pub trait RotateMethods {
-    fn rotate<
-        const MAX_HEADER_SIZE: usize,
-        const MAX_AUTHORITY_SET_SIZE: usize,
-        const MAX_AUTHORITY_CHUNKS: usize,
-    >(
+    fn rotate<const MAX_HEADER_SIZE: usize, const MAX_AUTHORITY_SET_SIZE: usize>(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
         header_hash: &Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
         end_position: &Variable,
+        new_pubkeys: &ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>,
+        expected_new_authority_set_hash: &Bytes32Variable,
     ) -> Bytes32Variable;
 }
 
 // Extracts the validators from the epoch end header and computes the validator hash.
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
-    fn rotate<
-        const MAX_HEADER_SIZE: usize,
-        const MAX_AUTHORITY_SET_SIZE: usize,
-        const MAX_AUTHORITY_CHUNKS: usize,
-    >(
+    fn rotate<const MAX_HEADER_SIZE: usize, const MAX_AUTHORITY_SET_SIZE: usize>(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
         header_hash: &Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
         end_position: &Variable,
+        new_pubkeys: &ArrayVariable<EDDSAPublicKeyVariable, MAX_AUTHORITY_SET_SIZE>,
+        expected_new_authority_set_hash: &Bytes32Variable,
     ) -> Bytes32Variable {
         // let header_variable = self.decode_header::<MAX_HEADER_SIZE>(header, header_hash);
         let header_bytes = &header.header_bytes;
@@ -73,8 +71,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             [1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8].to_vec(),
         );
 
-        let mut pubkeys = Vec::new();
-
         // Convert header to Variable from ByteVariable for get_fixed_subarray.
         let header_variables = header
             .header_bytes
@@ -90,16 +86,17 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         let delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
+
         // Verify num_authorities validators are present and valid.
+        for i in 0..(MAX_AUTHORITY_SET_SIZE + 1) {
+            let curr_validator = self.constant::<Variable>(L::Field::from_canonical_usize(i));
 
-        for i in 0..MAX_AUTHORITY_SET_SIZE {
-            let curr_idx = self.constant::<Variable>(L::Field::from_canonical_usize(i));
-
-            let at_delay = self.is_equal(curr_idx, *num_authorities);
+            let at_delay = self.is_equal(curr_validator, *num_authorities);
             let not_at_delay = self.not(at_delay);
 
             // Set validator to disabled once we are at the delay.
             validator_enabled = self.and(validator_enabled, not_at_delay);
+            let validator_disabled = self.not(validator_enabled);
 
             // Note: Use header_hash as seed for randomness (this works b/c headers are random).
             let pubkey_as_variables = self.get_fixed_subarray::<MAX_HEADER_SIZE, PUBKEY_LENGTH>(
@@ -115,6 +112,13 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
                     .collect::<Vec<_>>()
                     .as_slice(),
             );
+            // Verify the pubkey is valid.
+            let compressed_pubkey = self.compress_point(&new_pubkeys[i]);
+            // Check if pubkey matches new_pubkey (which forms the new authority set commitment).
+            let correct_pubkey = self.is_equal(pubkey, compressed_pubkey.0);
+            let is_valid_pubkey = self.or(validator_disabled, correct_pubkey);
+            self.assert_is_equal(is_valid_pubkey, true_v);
+
             // If we are at the delay, then the first 4 bytes of the "pubkey" should be 0.
             for j in 0..DELAY_LENGTH {
                 let correct_delay = self.is_equal(pubkey.0[j], delay_bytes[j]);
@@ -154,16 +158,15 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             }
             // Increment the cursor by the weight length.
             cursor = self.add(cursor, weight_len);
-
-            // Append pubkey to pubkeys.
-            pubkeys.extend(pubkey.0 .0);
         }
 
-        // Call curta_blake2b_variable on the appended pubkeys.
-        // The length to include should be num_authorities * PUBKEY_LEN.
-        let input_length = self.mul(*num_authorities, pubkey_len);
+        // Verify the new authority set commitment.
+        self.verify_authority_set_commitment(
+            *num_authorities,
+            *expected_new_authority_set_hash,
+            new_pubkeys,
+        );
 
-        // The new authority set id is the hash of the appended enabled pubkeys.
-        self.curta_blake2b_variable::<MAX_AUTHORITY_CHUNKS>(&pubkeys, input_length)
+        *expected_new_authority_set_hash
     }
 }

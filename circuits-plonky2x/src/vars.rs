@@ -15,7 +15,7 @@ use plonky2x::prelude::{
     Extendable, PlonkParameters, RichField, Variable,
 };
 
-use crate::consts::ENCODED_PRECOMMIT_LENGTH;
+use crate::consts::{ENCODED_PRECOMMIT_LENGTH, HASH_SIZE};
 
 trait ToField<F: RichField> {
     fn to_field(&self) -> F;
@@ -79,6 +79,10 @@ pub struct EncodedHeaderVariable<const S: usize> {
     pub header_bytes: ArrayVariable<ByteVariable, S>,
     pub header_size: Variable,
 }
+
+/// The message signed by the validator as a variable.
+pub type AvailPubkeyVariable = BytesVariable<HASH_SIZE>;
+
 #[derive(Clone, Debug, CircuitVariable)]
 #[value_name(HeaderValueType)]
 pub struct HeaderVariable {

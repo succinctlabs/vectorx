@@ -1,6 +1,7 @@
 use log::debug;
 use num::traits::ToBytes;
 use num::BigUint;
+use plonky2x::frontend::ecc::ed25519::gadgets::curve::CircuitBuilderCurveGadget;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
 use plonky2x::frontend::hint::simple::hint::Hint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -84,18 +85,21 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
         output_stream.write_value::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(
             justification_data.pubkeys,
         );
+        output_stream.write_value::<Variable>(L::Field::from_canonical_usize(
+            justification_data.num_authorities,
+        ));
     }
 }
 
 pub trait GrandpaJustificationVerifier {
-    fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
+    fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>,
     );
 
-    fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
+    fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
         block_hash: Bytes32Variable,
@@ -105,52 +109,81 @@ pub trait GrandpaJustificationVerifier {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for CircuitBuilder<L, D> {
-    fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
+    fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
-        _num_active_authorities: Variable,
-        _authority_set_commitment: Bytes32Variable,
-        _authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
+        num_active_authorities: Variable,
+        authority_set_commitment: Bytes32Variable,
+        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>,
     ) {
-        todo!()
+        let mut enabled = self._true();
+
+        let first_compressed_point = self.compress_point(&authority_set_signers[0]);
+
+        let mut commitment_so_far = self.curta_sha256(&first_compressed_point.0 .0 .0);
+
+        for i in 1..MAX_NUM_AUTHORITIES {
+            let curr_idx = self.constant::<Variable>(L::Field::from_canonical_usize(i));
+            let at_end = self.is_equal(curr_idx, num_active_authorities);
+            let not_at_end = self.not(at_end);
+
+            enabled = self.and(enabled, not_at_end);
+
+            let compressed_point = self.compress_point(&authority_set_signers[i]);
+            let mut input_to_hash = Vec::new();
+            input_to_hash.extend_from_slice(&commitment_so_far.0 .0);
+            input_to_hash.extend_from_slice(&compressed_point.0 .0 .0);
+
+            // Compute the chained hash of the authority set commitment.
+            let chained_hash = self.curta_sha256(&input_to_hash);
+
+            // If we are before the end, update the commitment_so_far.
+            commitment_so_far = self.select(enabled, chained_hash, commitment_so_far);
+        }
+
+        self.assert_is_equal(authority_set_commitment, commitment_so_far);
     }
 
     // This assumes
-    fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
+    fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
         _block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
-        _authority_set_hash: Bytes32Variable,
+        authority_set_hash: Bytes32Variable,
     ) {
         let mut input_stream = VariableStream::new();
         input_stream.write(&block_number);
         input_stream.write(&authority_set_id);
-        let output_stream = self.hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
+        let output_stream = self.hint(
+            input_stream,
+            HintSimpleJustification::<MAX_NUM_AUTHORITIES> {},
+        );
 
         let encoded_precommit = output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(self);
         let validator_signed =
-            output_stream.read::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(self);
-        let signatures =
-            output_stream.read::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(self);
+            output_stream.read::<ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>>(self);
+        let signatures = output_stream
+            .read::<ArrayVariable<EDDSASignatureTarget<Curve>, MAX_NUM_AUTHORITIES>>(self);
         let pubkeys =
-            output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(self);
-        // TODO: read `num_active_authorities` from output stream
+            output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>>(self);
+        let num_active_authorities = output_stream.read::<Variable>(self);
 
-        // TODO: call verify_authority_set_commitment
+        // Call verify_authority_set_commitment
+        self.verify_authority_set_commitment(num_active_authorities, authority_set_hash, &pubkeys);
 
         // TODO: decode the encoded_precommit and ensure that it matches the block_hash, block_number, and authority_set_id
 
         // We verify the signatures of the validators on the encoded_precommit message.
         // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
         // and they are also constant length, so we can have `message_byte_lengths` be a constant array
-        let message_byte_lengths =
-            self.constant::<ArrayVariable<U32Variable, NUM_AUTHORITIES>>(vec![
+        let message_byte_lengths = self
+            .constant::<ArrayVariable<U32Variable, MAX_NUM_AUTHORITIES>>(vec![
                 ENCODED_PRECOMMIT_LENGTH
                     as u32;
-                NUM_AUTHORITIES
+                MAX_NUM_AUTHORITIES
             ]);
-        let messages = vec![encoded_precommit; NUM_AUTHORITIES];
-        self.conditional_batch_eddsa_verify::<NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
+        let messages = vec![encoded_precommit; MAX_NUM_AUTHORITIES];
+        self.conditional_batch_eddsa_verify::<MAX_NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
             validator_signed,
             message_byte_lengths,
             messages.into(),

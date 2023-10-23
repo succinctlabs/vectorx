@@ -14,6 +14,7 @@ pub struct HeaderRotateData {
     pub start_position: usize,
     pub end_position: usize,
     pub new_authority_set_hash: Vec<u8>,
+    pub padded_pubkeys: Vec<AffinePoint<Curve>>,
 }
 
 pub struct SimpleJustificationData {
@@ -22,6 +23,7 @@ pub struct SimpleJustificationData {
     pub validator_signed: Vec<bool>,
     pub pubkeys: Vec<AffinePoint<Curve>>,
     pub signatures: Vec<[u8; 64]>,
+    pub num_authorities: usize,
 }
 
 #[derive(Clone, Debug, Decode, Encode, Deserialize)]

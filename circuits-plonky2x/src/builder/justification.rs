@@ -183,7 +183,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                 .collect::<Vec<Bytes32Variable>>(),
         );
 
-        // Call verify_authority_set_commitment
+        // Verify the authority set commitment is valid.
         self.verify_authority_set_commitment(
             num_active_authorities,
             authority_set_hash,
@@ -214,7 +214,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             pubkeys,
         );
 
-        // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`
+        // Ensure that at least 2/3 signed based on the `num_active_authorities`
         let two_v = self.constant::<Variable>(L::Field::from_canonical_usize(2));
         let three_v = self.constant::<Variable>(L::Field::from_canonical_usize(3));
         let true_v = self._true();

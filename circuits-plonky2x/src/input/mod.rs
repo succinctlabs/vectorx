@@ -348,12 +348,8 @@ impl RpcDataFetcher {
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
-        // 1 unknown byte, 1 consensus id, 4 consensus id, 5 unknown, pubkeys, delay
-        let end_position = position + 11 + ((32 + 8) * authorities.1.len()) + 4;
-
-        // println!("header bytes {:?}", &header_bytes);
-
-        // println!("subarray {:?}", &header_bytes[position..end_position]);
+        // 1 unknown byte, 1 consensus id, 4 consensus id, 5 unknown bytes, encoded pubkeys, 4 delay bytes
+        let end_position = position + (1 + 1 + 4 + 5) + ((32 + 8) * authorities.1.len()) + 4;
 
         HeaderRotateData {
             header_bytes,

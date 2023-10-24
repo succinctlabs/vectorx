@@ -133,20 +133,20 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             let at_end = self.is_equal(curr_validator, *num_authorities);
             validator_disabled = self.select(at_end, true_v, validator_disabled);
 
-            // Verify the correctness of the pubkey for each enabled validator and increment the
-            // cursor by the pubkey length.
-            let pubkey = Bytes32Variable::from(&subarray[idx..idx + PUBKEY_LENGTH]);
-            let pubkey_match = self.is_equal(pubkey, new_pubkeys[i]);
+            // Verify the correctness of the extracted pubkey for each enabled validator and
+            // increment the cursor by the pubkey length.
+            let extracted_pubkey = Bytes32Variable::from(&subarray[idx..idx + PUBKEY_LENGTH]);
+            let pubkey_match = self.is_equal(extracted_pubkey, new_pubkeys[i]);
             let pubkey_check = self.or(pubkey_match, validator_disabled);
             self.assert_is_equal(pubkey_check, true_v);
             cursor = self.add(cursor, pubkey_len);
 
-            // Verify the correctness of the weight for each enabled validator and increment the
-            // cursor by the weight length.
-            let weight = ArrayVariable::<ByteVariable, WEIGHT_LENGTH>::from(
+            // Verify the correctness of the extracted weight for each enabled validator and
+            // increment the cursor by the weight length.
+            let extracted_weight = ArrayVariable::<ByteVariable, WEIGHT_LENGTH>::from(
                 subarray[idx + PUBKEY_LENGTH..idx + VALIDATOR_LENGTH].to_vec(),
             );
-            let weight_match = self.is_equal(weight, expected_weight_bytes.clone());
+            let weight_match = self.is_equal(extracted_weight, expected_weight_bytes.clone());
             let weight_check = self.or(weight_match, validator_disabled);
             self.assert_is_equal(weight_check, true_v);
             cursor = self.add(cursor, weight_len);

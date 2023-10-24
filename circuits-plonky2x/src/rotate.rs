@@ -10,7 +10,6 @@ use plonky2x::prelude::{
     VariableStream,
 };
 use serde::{Deserialize, Serialize};
-use sha2::Digest;
 
 use crate::builder::decoder::FloorDivGenerator;
 use crate::builder::header::HeaderMethods;
@@ -158,13 +157,13 @@ impl<
             &expected_new_authority_set_hash,
         );
 
-        // // Verify the epoch end block header is valid.
-        // builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
-        //     epoch_end_block_number,
-        //     target_header_hash,
-        //     authority_set_id,
-        //     authority_set_hash,
-        // );
+        // Verify the epoch end block header is valid.
+        builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
+            epoch_end_block_number,
+            target_header_hash,
+            authority_set_id,
+            authority_set_hash,
+        );
 
         // TODO: Write the hash of the authority set to the output
         builder.evm_write::<Bytes32Variable>(expected_new_authority_set_hash);

@@ -180,7 +180,15 @@ impl RpcDataFetcher {
         let justification: GrandpaJustification =
             Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
 
-        let authority_set_id = self.get_authority_set_id(block_number).await;
+        let mut authority_set_id = self.get_authority_set_id(block_number).await;
+        // If this is an epoch end block, then we need to use the previous authority set id.
+        // Specifically, if epoch_end_block is 500 and the new authority set specified in block 500 is id 2, we need to use id=1.
+        let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
+        if authority_set_id - prev_authority_set_id == 1 {
+            // This is an epoch end block, so we use the previous authority set id
+            authority_set_id = prev_authority_set_id;
+        }
+
         let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number).await;
 
         if authorities.len() > VALIDATOR_SET_SIZE_MAX {

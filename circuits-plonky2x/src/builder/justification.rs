@@ -244,8 +244,8 @@ mod tests {
 
         // There are only 7 authories in the 10,000-th block
         // But we set NUM_AUTHORITIES=10 so that we can test padding
-        const BLOCK_NUMBER: u32 = 272535u32;
-        const NUM_AUTHORITIES: usize = 76;
+        const BLOCK_NUMBER: u32 = 317857u32;
+        const NUM_AUTHORITIES: usize = 80;
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let justification_data: SimpleJustificationData = rt.block_on(async {

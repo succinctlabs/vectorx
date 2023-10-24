@@ -7,6 +7,11 @@ use crate::consts::{DELAY_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH
 use crate::vars::*;
 
 pub trait RotateMethods {
+    fn verify_prefix_epoch_end_header<const MAX_SUBARRAY_SIZE: usize>(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>,
+    );
+
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -25,6 +30,39 @@ pub trait RotateMethods {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
+    /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
+    /// for the epoch end header.
+    ///
+    /// TODO: Find the spec for this prefix!
+    fn verify_prefix_epoch_end_header<const MAX_SUBARRAY_SIZE: usize>(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>,
+    ) {
+        // Skip 1 unknown byte.
+
+        // Verify subarray[1] is 0x04 (Consensus Flag = 4u32).
+        let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
+        let header_consensus_flag = subarray[1];
+        self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
+
+        // Verify subarray[2..6] is the Consensus Engine ID: 0x46524e4b [70, 82, 78, 75].
+        // TODO: Link to the Consensus Engine ID in subxt for Grandpa.
+        let consensus_id_bytes =
+            self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
+        self.assert_is_equal(
+            ArrayVariable::<ByteVariable, 4>::from(subarray[2..6].to_vec()),
+            consensus_id_bytes,
+        );
+
+        // Skip 2 unknown bytes.
+
+        // Verify subarray[8] is 0x01, denoting a ScheduledChange.
+        let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
+        let header_schedule_change_flag = subarray[8];
+        self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
+
+        // Skip 2 unknown bytes.
+    }
     /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
@@ -40,27 +78,21 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) {
-        let header_bytes = &header.header_bytes;
-
         let one = self.one();
         let true_v = self._true();
 
-        let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
-        let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
-        let delay_len = self.constant::<Variable>(L::Field::from_canonical_usize(DELAY_LENGTH));
-        let consensus_engine_id_len = self.constant::<Variable>(L::Field::from_canonical_usize(4));
-
-        // Initialize the cursor to the start position.
-        let mut cursor = *start_position;
-
         // Convert header to Variables from ByteVariables for get_fixed_subarray.
-        let header_variables = header_bytes
+        let header_variables = header
+            .header_bytes
             .as_vec()
             .iter()
             .map(|x: &ByteVariable| x.to_variable(self))
             .collect::<Vec<_>>();
         let header_as_variables =
             ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
+
+        // Initialize the cursor to the start position.
+        let mut cursor = *start_position;
 
         // Get the subarray of the header bytes that we want to verify. The header_hash is used as
         // the seed for randomness.
@@ -77,40 +109,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
                 .collect::<Vec<_>>(),
         );
 
-        // Skip 1 unknown byte.
-        cursor = self.add(cursor, one);
-
-        // Verify the next byte is 0x04 (Consensus Flag = 4u32).
-        let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
-        let header_consensus_flag = subarray[1];
-        self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
-        cursor = self.add(cursor, one);
-
-        // Verify the next 4 bytes are the Consensus Engine ID: 0x46524e4b [70, 82, 78, 75].
-        // TODO: Link to the Consensus Engine ID in subxt for Grandpa.
-        let consensus_id_bytes =
-            self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
-        self.assert_is_equal(
-            ArrayVariable::<ByteVariable, 4>::from(subarray[2..6].to_vec()),
-            consensus_id_bytes,
-        );
-        cursor = self.add(cursor, consensus_engine_id_len);
-
-        // Skip 2 unknown bytes.
-        for _ in 0..2 {
-            cursor = self.add(cursor, one);
-        }
-
-        // Verify the next byte is 0x01, denoting a ScheduledChange.
-        let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
-        let header_schedule_change_flag = subarray[8];
-        self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
-        cursor = self.add(cursor, one);
-
-        // Skip 2 unknown bytes.
-        for _ in 0..2 {
-            cursor = self.add(cursor, one);
-        }
+        // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
+        self.verify_prefix_epoch_end_header(&subarray);
 
         // Expected weight for each authority.
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
@@ -120,8 +120,16 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let expected_delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
 
-        // The length of the bytes before the encoded authority set.
-        const PREFIX_LENGTH: usize = 1 + 1 + 4 + 2 + 1 + 2;
+        // The prefix length before the encoded authority set.
+        const PREFIX_LENGTH: usize = 11;
+
+        let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
+        let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
+        let delay_len = self.constant::<Variable>(L::Field::from_canonical_usize(DELAY_LENGTH));
+        let prefix_len = self.constant::<Variable>(L::Field::from_canonical_usize(PREFIX_LENGTH));
+
+        // Increment the cursor by the prefix length.
+        cursor = self.add(cursor, prefix_len);
 
         let mut validator_disabled = self._false();
         // Verify num_authorities validators are present and valid.
@@ -156,7 +164,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let mut delay_cursor = self.sub(*end_position, delay_len);
         for j in 0..DELAY_LENGTH {
             // TODO: select_array is inefficient, see if there's a better way to do this.
-            let extracted_delay_byte = self.select_array(&header_bytes.data, delay_cursor);
+            let extracted_delay_byte = self.select_array(&header.header_bytes.data, delay_cursor);
             self.assert_is_equal(extracted_delay_byte, expected_delay_bytes[j]);
             delay_cursor = self.add(delay_cursor, one);
         }

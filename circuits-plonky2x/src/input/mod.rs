@@ -35,6 +35,19 @@ pub fn verify_signature(pubkey_bytes: &[u8], signed_message: &[u8], signature: &
     }
 }
 
+// Compute the chained hash of the authority set.
+fn compute_authority_set_hash(authorities: Vec<Vec<u8>>) -> Vec<u8> {
+    let mut hash_so_far = Vec::new();
+    for i in 0..authorities.len() {
+        let authority = authorities[i].clone();
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(hash_so_far);
+        hasher.update(authority);
+        hash_so_far = hasher.finalize().to_vec();
+    }
+    hash_so_far
+}
+
 impl RpcDataFetcher {
     pub async fn new() -> Self {
         // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
@@ -231,6 +244,8 @@ impl RpcDataFetcher {
             padded_signatures.push(DUMMY_SIGNATURE);
         }
 
+        let current_authority_set_hash = compute_authority_set_hash(authorities_pubkey_bytes);
+
         SimpleJustificationData {
             authority_set_id,
             signed_message,
@@ -238,6 +253,7 @@ impl RpcDataFetcher {
             pubkeys: padded_pubkeys,
             signatures: padded_signatures,
             num_authorities: authorities.len(),
+            current_authority_set_hash,
         }
     }
 
@@ -331,19 +347,11 @@ impl RpcDataFetcher {
             );
         }
 
+        let new_authority_set_hash = compute_authority_set_hash(authorities.1.clone());
         let mut padded_pubkeys = Vec::new();
-        // Compute chained hash of the authorities.
-        let mut hash_so_far = Vec::new();
         for i in 0..authorities.1.len() {
-            let authority = authorities.1[i].clone();
-            let mut hasher = sha2::Sha256::new();
-            hasher.update(hash_so_far);
-            hasher.update(authority);
-            hash_so_far = hasher.finalize().to_vec();
-
             padded_pubkeys.push(H256::from_slice(&authorities.1[i].clone()));
         }
-
         for _ in authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
@@ -357,7 +365,7 @@ impl RpcDataFetcher {
             num_authorities: authorities.1.len(),
             start_position: position,
             end_position,
-            new_authority_set_hash: hash_so_far,
+            new_authority_set_hash,
             padded_pubkeys,
         }
     }
@@ -399,7 +407,7 @@ mod tests {
         let fetcher = RpcDataFetcher::new().await;
 
         // A binary search given a target_authority_set_id, returns the epoch end block number
-        let target_authority_set_id = 300;
+        let target_authority_set_id = 299;
         println!("target_authority_set_id {:?}", target_authority_set_id);
         let mut low = 0;
         let head_block = fetcher.get_head().await;

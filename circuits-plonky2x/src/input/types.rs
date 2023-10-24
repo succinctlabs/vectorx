@@ -25,6 +25,7 @@ pub struct SimpleJustificationData {
     pub pubkeys: Vec<AffinePoint<Curve>>,
     pub signatures: Vec<[u8; 64]>,
     pub num_authorities: usize,
+    pub current_authority_set_hash: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Decode, Encode, Deserialize)]

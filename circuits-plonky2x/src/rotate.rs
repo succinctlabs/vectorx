@@ -251,10 +251,10 @@ mod tests {
 
         // These inputs are taken from: https://kate.avail.tools/#/explorer/query/485710
         let mut input = circuit.input();
-        let authority_set_id = 299u64;
+        let authority_set_id = 298u64;
         // TODO: Update authority_set_hash
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
-        let epoch_end_block_number = 318937u32;
+        let epoch_end_block_number = 317857u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));

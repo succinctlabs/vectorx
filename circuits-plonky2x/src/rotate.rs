@@ -147,7 +147,7 @@ impl<
             builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
 
         // Call rotate on the header.
-        builder.rotate::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+        builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
             &target_header,
             &target_header_hash,
             &num_authorities,

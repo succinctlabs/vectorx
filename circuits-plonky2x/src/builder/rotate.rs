@@ -6,7 +6,7 @@ use crate::builder::justification::GrandpaJustificationVerifier;
 use crate::vars::*;
 
 pub trait RotateMethods {
-    fn rotate<
+    fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
         // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH)
@@ -20,12 +20,12 @@ pub trait RotateMethods {
         end_position: &Variable,
         new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
-    ) -> Bytes32Variable;
+    );
 }
 
-// Extracts the validators from the epoch end header and computes the validator hash.
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
-    fn rotate<
+    /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
+    fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_SUBARRAY_SIZE: usize,
@@ -38,13 +38,12 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         end_position: &Variable,
         new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
-    ) -> Bytes32Variable {
+    ) {
         assert_eq!(
             (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH),
             MAX_SUBARRAY_SIZE
         );
 
-        // let header_variable = self.decode_header::<MAX_HEADER_SIZE>(header, header_hash);
         let header_bytes = &header.header_bytes;
         let one = self.one();
 
@@ -53,14 +52,14 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // Skip 1 byte, TODO: Figure out what this byte is.
         cursor = self.add(cursor, one);
 
-        // Verify the next byte is 0x04 (enum DigestItemType, Consensus = 4u32).
+        // Verify the next byte is 0x04 (Consensus Flag = 4u32).
         let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
         let header_consensus_flag = self.select_array(&header_bytes.data, cursor);
         self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
         cursor = self.add(cursor, one);
 
-        // Verify the next 4 bytes are 0x46524e4b [70, 82, 78, 75], the consensus_id_bytes.
-        // TODO: Verify that these 4 bytes are the consensus id bytes and link to reference.
+        // Verify the next 4 bytes are the Consensus Engine ID: 0x46524e4b [70, 82, 78, 75].
+        // TODO: Link to the Consensus Engine ID in subxt for Grandpa.
         let consensus_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         for i in 0..4 {
@@ -69,9 +68,21 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             cursor = self.add(cursor, one);
         }
 
-        // Skip 5 bytes
-        // TODO: Validate what the 5 bytes are. Not sure if this is ncessary.
-        for _ in 0..5 {
+        // Skip 2 bytes
+        // TODO: Validate what the 2 bytes are. Not sure if this is ncessary.
+        for _ in 0..2 {
+            cursor = self.add(cursor, one);
+        }
+
+        // Verify the next byte is 0x01, denoting a ScheduledChange.
+        let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
+        let header_schedule_change_flag = self.select_array(&header_bytes.data, cursor);
+        self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
+        cursor = self.add(cursor, one);
+
+        // Skip 2 bytes
+        // TODO: Validate what the 2 bytes are. Not sure if this is ncessary.
+        for _ in 0..2 {
             cursor = self.add(cursor, one);
         }
 
@@ -188,7 +199,74 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             *expected_new_authority_set_hash,
             new_pubkeys,
         );
+    }
+}
 
-        *expected_new_authority_set_hash
+#[cfg(test)]
+pub mod tests {
+    use std::env;
+
+    use plonky2x::prelude::{
+        ArrayVariable, Bytes32Variable, DefaultBuilder, U32Variable, Variable, VariableStream,
+    };
+
+    use crate::builder::rotate::RotateMethods;
+    use crate::consts::MAX_HEADER_SIZE;
+    use crate::rotate::RotateHint;
+    use crate::vars::{AvailPubkeyVariable, EncodedHeaderVariable};
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_verify_epoch_end_header() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const NUM_AUTHORITIES: usize = 100;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * 40;
+
+        let mut builder = DefaultBuilder::new();
+
+        let epoch_end_block_number = builder.read::<U32Variable>();
+
+        // Fetch the header at epoch_end_block.
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let mut input_stream = VariableStream::new();
+        input_stream.write(&epoch_end_block_number);
+        let output_stream = builder.async_hint(input_stream, header_fetcher);
+
+        let target_header =
+            output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
+        builder.watch(&target_header.header_bytes, "target_header_bytes");
+
+        let num_authorities = output_stream.read::<Variable>(&mut builder);
+        let start_position = output_stream.read::<Variable>(&mut builder);
+        let end_position = output_stream.read::<Variable>(&mut builder);
+        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
+        let new_pubkeys =
+            output_stream.read::<ArrayVariable<AvailPubkeyVariable, NUM_AUTHORITIES>>(&mut builder);
+
+        // Note: In verify_epoch_end_header, we use the header_hash as the seed for randomness, so
+        // it's fine to just use the expected_new_authority_set_hash during the test.
+        let target_header_hash = expected_new_authority_set_hash;
+
+        builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
+            &target_header,
+            &target_header_hash,
+            &num_authorities,
+            &start_position,
+            &end_position,
+            &new_pubkeys,
+            &expected_new_authority_set_hash,
+        );
+
+        let circuit = builder.build();
+        let mut input = circuit.input();
+
+        let epoch_end_block_number = 317857u32;
+        input.write::<U32Variable>(epoch_end_block_number);
+        let (proof, output) = circuit.prove(&input);
+
+        circuit.verify(&proof, &input, &output);
     }
 }

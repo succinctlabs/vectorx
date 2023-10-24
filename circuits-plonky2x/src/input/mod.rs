@@ -291,7 +291,7 @@ impl RpcDataFetcher {
         }
         header_bytes.resize(HEADER_LENGTH, 0);
 
-        let authorities = self.get_authorities(epoch_end_block).await;
+        let fetched_authorities = self.get_authorities(epoch_end_block).await;
 
         let mut position = 0;
         let number_encoded = epoch_end_block.encode();
@@ -301,27 +301,22 @@ impl RpcDataFetcher {
         let mut found_correct_log = false;
         for log in header.digest.logs {
             let log_1 = log.clone();
+            // Note: Two bytes are skipped between the consensus id and value.
             if let DigestItem::Consensus(consensus_id, value) = log {
                 if consensus_id == [70, 82, 78, 75] {
                     found_correct_log = true;
-                    println!("position {:?}", position);
 
-                    let encoded = log_1.encode();
-                    // println!("encoded {:?}", encoded);
-                    // TODO: have to figure out what value[0,1,2] means?
-                    // println!("value prefix {:?}", &value[..3]);
+                    // TODO: have to figure out what value[1,2] means?
                     assert_eq!(value[0], 1); // To denote that it is a `ScheduledChange`
                     let mut cursor = 3;
-                    let value_authories = &value[cursor..];
-                    // println!("len {:?}", value_authories.len());
-                    let mut num_authorities = 0;
-                    for (i, authority_chunk) in value_authories.chunks_exact(32 + 8).enumerate() {
+                    let authorities_bytes = &value[cursor..];
+
+                    for (i, authority_chunk) in authorities_bytes.chunks_exact(32 + 8).enumerate() {
                         let pubkey = &authority_chunk[..32];
                         let weight = &authority_chunk[32..];
 
-                        assert_eq!(*pubkey, authorities.1[i]);
-                        // println!("pubkey {:?}", pubkey);
-                        // println!("weight {:?}", weight);
+                        assert_eq!(*pubkey, fetched_authorities.1[i]);
+
                         // Assert weight's LE representation == 1
                         for j in 0..8 {
                             if j == 0 {
@@ -332,16 +327,22 @@ impl RpcDataFetcher {
                         }
 
                         cursor += 32 + 8;
-                        num_authorities += 1;
                     }
-                    // let delay = &value[cursor..];
-                    // println!("delay {:?}", delay);
-                    println!("num_authorities {:?}", num_authorities);
-                    // verify header[position..position+4] == [70, 82, 78, 75]
-                    // verify header[position+4] == 1
-                    // verify header[position+5..position+5+2] == random stuff, TODO what is this
-                    // hash(header[position+5+2..position+5+2+num_authorities*(32+8)])
-                    // verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
+
+                    // Assert delay is [0, 0, 0, 0]
+                    let delay = &value[cursor..];
+                    for i in 0..4 {
+                        assert_eq!(delay[i], 0);
+                    }
+
+                    // Circuit should verify the following:
+                    //  1) header[position+1] == 4
+                    //  2) verify header[position+2..position+6] == [70, 82, 78, 75]
+                    //  3) skip header[position+6..position+6+2] == random stuff, TODO what is this
+                    //  4) verify header[position+8] == 1
+                    //  5) verify header[position+8..position+8+2] == random stuff, TODO what is this
+                    //  6) hash(header[position+10..position+10+num*(40)]) == new_authority_set_hash
+                    //  7) verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
                     break;
                 }
             }
@@ -359,22 +360,23 @@ impl RpcDataFetcher {
             );
         }
 
-        let new_authority_set_hash = compute_authority_set_hash(authorities.1.clone());
+        let new_authority_set_hash = compute_authority_set_hash(fetched_authorities.1.clone());
         let mut padded_pubkeys = Vec::new();
-        for i in 0..authorities.1.len() {
-            padded_pubkeys.push(H256::from_slice(&authorities.1[i].clone()));
+        for i in 0..fetched_authorities.1.len() {
+            padded_pubkeys.push(H256::from_slice(&fetched_authorities.1[i].clone()));
         }
-        for _ in authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
+        for _ in fetched_authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
         // 1 unknown byte, 1 consensus id, 4 consensus id, 5 unknown bytes, encoded pubkeys, 4 delay bytes
-        let end_position = position + (1 + 1 + 4 + 5) + ((32 + 8) * authorities.1.len()) + 4;
+        let end_position =
+            position + (1 + 1 + 4 + 5) + ((32 + 8) * fetched_authorities.1.len()) + 4;
 
         HeaderRotateData {
             header_bytes,
             header_size,
-            num_authorities: authorities.1.len(),
+            num_authorities: fetched_authorities.1.len(),
             start_position: position,
             end_position,
             new_authority_set_hash,
@@ -419,7 +421,7 @@ mod tests {
         let fetcher = RpcDataFetcher::new().await;
 
         // A binary search given a target_authority_set_id, returns the epoch end block number
-        let target_authority_set_id = 299;
+        let target_authority_set_id = 513;
         println!("target_authority_set_id {:?}", target_authority_set_id);
         let mut low = 0;
         let head_block = fetcher.get_head().await;
@@ -458,9 +460,9 @@ mod tests {
         let previous_authority_set_id = fetcher
             .get_authority_set_id(epoch_end_block_number - 1)
             .await;
-        println!("previous_authority_set_id {:?}", previous_authority_set_id);
+        // println!("previous_authority_set_id {:?}", previous_authority_set_id);
         let authority_set_id = fetcher.get_authority_set_id(epoch_end_block_number).await;
-        println!("authority_set_id {:?}", authority_set_id);
+        // println!("authority_set_id {:?}", authority_set_id);
         assert_eq!(previous_authority_set_id + 1, authority_set_id);
         assert_eq!(authority_set_id, target_authority_set_id);
 
@@ -469,8 +471,9 @@ mod tests {
             .await;
 
         println!(
-            "new authority set hash: {:?}",
-            rotate_data.new_authority_set_hash
+            "first 40 bytes of header_bytes: {:?}",
+            rotate_data.header_bytes[rotate_data.start_position..rotate_data.start_position + 40]
+                .to_vec()
         );
     }
 }

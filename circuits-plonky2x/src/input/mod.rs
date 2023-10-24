@@ -346,16 +346,15 @@ impl RpcDataFetcher {
                 }
             }
             let encoded = log_1.encode();
-            // println!("encoded {:?}", encoded);
             if !found_correct_log {
                 position += encoded.len();
             }
         }
 
-        // Panic if this is not an epoch end block.
+        // Panic if we did not find the correct log.
         if !found_correct_log {
             panic!(
-                "Block: {:?} is not an epoch end block, did not find corresponding consensus log!",
+                "Block: {:?} should be an epoch end block, but did not find corresponding consensus log!",
                 epoch_end_block
             );
         }

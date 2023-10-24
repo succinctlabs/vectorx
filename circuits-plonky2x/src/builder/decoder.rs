@@ -269,13 +269,22 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let block_hash: Bytes32Variable = precommit[1..33].into();
 
         // The next 4 bytes is the block number.
-        let block_number = U32Variable::decode(self, &precommit[33..37]);
+        let mut block_number_bytes = precommit[33..37].to_vec();
+        // Need to reverse the bytes since the block number is little endian.
+        block_number_bytes.reverse();
+        let block_number = U32Variable::decode(self, &block_number_bytes);
 
         // The next 8 bytes is the justification round.
+        let mut justification_round_bytes = precommit[37..45].to_vec();
+        // Need to reverse the bytes since the justification round is little endian.
+        justification_round_bytes.reverse();
         let justification_round = U64Variable::decode(self, &precommit[37..45]);
 
         // The next 8 bytes is the authority set id.
-        let authority_set_id = U64Variable::decode(self, &precommit[45..53]);
+        let mut authority_set_id_bytes = precommit[45..53].to_vec();
+        // Need to reverse the bytes since the authority set id is little endian.
+        authority_set_id_bytes.reverse();
+        let authority_set_id = U64Variable::decode(self, &authority_set_id_bytes);
 
         PrecommitVariable {
             block_hash,
@@ -292,7 +301,8 @@ pub mod tests {
 
     use plonky2x::frontend::vars::U32Variable;
     use plonky2x::prelude::{
-        ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
+        ArrayVariable, Bytes32Variable, BytesVariable, DefaultBuilder, Field, GoldilocksField,
+        U64Variable,
     };
     use plonky2x::utils::{bytes, bytes32};
     use testing_utils::tests::{
@@ -300,7 +310,7 @@ pub mod tests {
     };
 
     use super::DecodingMethods;
-    use crate::consts::MAX_HEADER_SIZE;
+    use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE};
     use crate::testing_utils;
     use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
@@ -390,5 +400,40 @@ pub mod tests {
         let (proof, output) = circuit.prove(&input);
 
         circuit.verify(&proof, &input, &output);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_decode_precommit() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        let mut builder = DefaultBuilder::new();
+
+        let precommit = builder.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>();
+        let decoded_precommit = builder.decode_precommit(precommit);
+        builder.write::<U32Variable>(decoded_precommit.block_number);
+        builder.write::<U64Variable>(decoded_precommit.authority_set_id);
+
+        let circuit = builder.build();
+
+        let mut input = circuit.input();
+
+        let encoded_precommit = [
+            1u8, 38, 27, 45, 113, 196, 242, 16, 36, 228, 137, 117, 93, 79, 157, 136, 222, 239, 71,
+            241, 37, 152, 13, 194, 159, 190, 169, 38, 234, 124, 89, 223, 233, 161, 217, 4, 0, 75,
+            58, 0, 0, 0, 0, 0, 0, 42, 1, 0, 0, 0, 0, 0, 0,
+        ];
+
+        input.write::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(encoded_precommit);
+
+        let (proof, mut output) = circuit.prove(&input);
+
+        circuit.verify(&proof, &input, &output);
+
+        let block_number = output.read::<U32Variable>();
+        let authority_set_id = output.read::<U64Variable>();
+        println!("block_number: {:?}", block_number);
+        println!("authority_set_id: {:?}", authority_set_id);
     }
 }

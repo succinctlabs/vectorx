@@ -188,6 +188,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 
         // Verify the correctness of the encoded_precommit message.
         let decoded_precommit = self.decode_precommit(encoded_precommit);
+
         self.assert_is_equal(decoded_precommit.block_number, block_number);
         self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
         self.assert_is_equal(decoded_precommit.block_hash, block_hash);

@@ -54,12 +54,10 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         );
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
-        let justification_data: SimpleJustificationData = rt.block_on(async {
-            let data_fetcher = RpcDataFetcher::new().await;
-            data_fetcher
-                .get_simple_justification::<NUM_AUTHORITIES>(block_number)
-                .await
-        });
+        let data_fetcher = RpcDataFetcher::new().await;
+        let justification_data: SimpleJustificationData = data_fetcher
+            .get_simple_justification::<NUM_AUTHORITIES>(block_number)
+            .await;
 
         if justification_data.authority_set_id != authority_set_id {
             panic!("Authority set id does not match");
@@ -251,12 +249,10 @@ mod tests {
         const NUM_AUTHORITIES: usize = 76;
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
-        let justification_data: SimpleJustificationData = rt.block_on(async {
-            let fetcher = RpcDataFetcher::new().await;
-            fetcher
-                .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
-                .await
-        });
+        let fetcher = RpcDataFetcher::new().await;
+        let justification_data: SimpleJustificationData = fetcher
+            .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
+            .await;
         let fetched_authority_set_id = justification_data.authority_set_id;
 
         info!("Defining circuit");

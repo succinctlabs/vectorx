@@ -6,7 +6,11 @@ use crate::builder::justification::GrandpaJustificationVerifier;
 use crate::vars::*;
 
 pub trait RotateMethods {
-    fn rotate<const MAX_HEADER_SIZE: usize, const MAX_AUTHORITY_SET_SIZE: usize>(
+    fn rotate<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_AUTHORITY_SET_SIZE: usize,
+        const MAX_SUBARRAY_SIZE: usize,
+    >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
         header_hash: &Bytes32Variable,
@@ -20,7 +24,11 @@ pub trait RotateMethods {
 
 // Extracts the validators from the epoch end header and computes the validator hash.
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
-    fn rotate<const MAX_HEADER_SIZE: usize, const MAX_AUTHORITY_SET_SIZE: usize>(
+    fn rotate<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_AUTHORITY_SET_SIZE: usize,
+        const MAX_SUBARRAY_SIZE: usize,
+    >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
         header_hash: &Bytes32Variable,
@@ -43,7 +51,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         cursor = self.add(cursor, one);
 
         // Verify the next 4 bytes are 0x46524e4b [70, 82, 78, 75], the consensus_id_bytes.
-        // TODO: Verify that these 4 bytes are the consensus id bytes? Or what are they
+        // TODO: Verify that these 4 bytes are the consensus id bytes and link to reference.
         let consensus_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         for i in 0..4 {
@@ -53,8 +61,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         }
 
         // Skip 5 bytes
-        // TODO: Figure out what the 5 bytes are
-
+        // TODO: Validate what the 5 bytes are. Not sure if this is ncessary.
         for _ in 0..5 {
             cursor = self.add(cursor, one);
         }
@@ -86,8 +93,22 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
 
+        let subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
+            &header_as_variables,
+            cursor,
+            &header_hash.0 .0,
+        );
+        let subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
+            subarray
+                .data
+                .iter()
+                .map(|x| ByteVariable::from_target(self, x.0))
+                .collect::<Vec<_>>(),
+        );
+
         // Verify num_authorities validators are present and valid.
-        for i in 0..(MAX_AUTHORITY_SET_SIZE + 1) {
+        for i in 0..(MAX_AUTHORITY_SET_SIZE) {
+            let idx = i * (PUBKEY_LENGTH + WEIGHT_LENGTH);
             let curr_validator = self.constant::<Variable>(L::Field::from_canonical_usize(i));
 
             let at_delay = self.is_equal(curr_validator, *num_authorities);
@@ -98,19 +119,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             let validator_disabled = self.not(validator_enabled);
 
             // Note: Use header_hash as seed for randomness (this works b/c headers are random).
-            let pubkey_as_variables = self.get_fixed_subarray::<MAX_HEADER_SIZE, PUBKEY_LENGTH>(
-                &header_as_variables,
-                cursor,
-                &header_hash.0 .0,
-            );
-            let pubkey = Bytes32Variable::from(
-                pubkey_as_variables
-                    .data
-                    .iter()
-                    .map(|x| ByteVariable::from_target(self, x.0))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            );
+            let pubkey = Bytes32Variable::from(&subarray[idx..idx + PUBKEY_LENGTH]);
             // Check if pubkey matches new_pubkey (which forms the new authority set commitment).
             let correct_pubkey = self.is_equal(pubkey, new_pubkeys[i]);
             let is_valid_pubkey = self.or(validator_disabled, correct_pubkey);
@@ -130,17 +139,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             // Increment the cursor by the pubkey length.
             cursor = self.add(cursor, pubkey_len);
 
-            let weight_as_variables = self.get_fixed_subarray::<MAX_HEADER_SIZE, WEIGHT_LENGTH>(
-                &header_as_variables,
-                cursor,
-                &header_hash.0 .0,
-            );
             let weight = ArrayVariable::<ByteVariable, WEIGHT_LENGTH>::from(
-                weight_as_variables
-                    .data
-                    .iter()
-                    .map(|x| ByteVariable::from_target(self, x.0))
-                    .collect::<Vec<_>>(),
+                subarray[idx + PUBKEY_LENGTH..idx + PUBKEY_LENGTH + WEIGHT_LENGTH].to_vec(),
             );
 
             // We use validator_disabled to check if the weight should be valid.
@@ -156,6 +156,31 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             // Increment the cursor by the weight length.
             cursor = self.add(cursor, weight_len);
         }
+
+        // TODO: Add this check back in. It verifies the delay if the last validator is enabled.
+        // // If the last validator is enabled, then we need to verify the delay.
+        // let at_end_position = self.is_equal(cursor, *end_position);
+        // let not_at_end_position = self.not(at_end_position);
+        // let delay_end = self.get_fixed_subarray::<MAX_HEADER_SIZE, DELAY_LENGTH>(
+        //     &header_as_variables,
+        //     cursor,
+        //     &header_hash.0 .0,
+        // );
+        // let delay_end = ArrayVariable::<ByteVariable, DELAY_LENGTH>::from(
+        //     delay_end
+        //         .data
+        //         .iter()
+        //         .map(|x| ByteVariable::from_target(self, x.0))
+        //         .collect::<Vec<_>>(),
+        // );
+
+        // // If we are at the delay, then the first 4 bytes of the "pubkey" should be 0.
+        // for j in 0..DELAY_LENGTH {
+        //     let correct_delay = self.is_equal(delay_end[j], delay_bytes[j]);
+        //     // Either we are not at the delay, or we are at the delay and the byte matches.
+        //     let is_valid_delay = self.or(not_at_end_position, correct_delay);
+        //     self.assert_is_equal(is_valid_delay, true_v);
+        // }
 
         // Verify the new authority set commitment.
         self.verify_authority_set_commitment(

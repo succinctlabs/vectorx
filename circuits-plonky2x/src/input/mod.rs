@@ -18,6 +18,7 @@ use sha2::Digest;
 use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
 };
+use crate::consts::VALIDATOR_LENGTH;
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
@@ -137,7 +138,7 @@ impl RpcDataFetcher {
 
         let mut authorities: Vec<AffinePoint<Curve>> = Vec::new();
         let mut authories_pubkey_bytes: Vec<Vec<u8>> = Vec::new();
-        for authority_pubkey_weight in pubkey_and_weight_bytes.chunks(40) {
+        for authority_pubkey_weight in pubkey_and_weight_bytes.chunks(VALIDATOR_LENGTH) {
             let pub_key_vec = authority_pubkey_weight[..32].to_vec();
             let pub_key_point = AffinePoint::<Curve>::new_from_compressed_point(&pub_key_vec);
             authorities.push(pub_key_point);
@@ -145,7 +146,7 @@ impl RpcDataFetcher {
 
             // Assert that the weight is 0x0100000000000000
             assert_eq!(authority_pubkey_weight[32], 1);
-            for i in 33..40 {
+            for i in 33..VALIDATOR_LENGTH {
                 assert_eq!(authority_pubkey_weight[i], 0);
             }
         }
@@ -472,7 +473,8 @@ mod tests {
 
         println!(
             "first 40 bytes of header_bytes: {:?}",
-            rotate_data.header_bytes[rotate_data.start_position..rotate_data.start_position + 40]
+            rotate_data.header_bytes
+                [rotate_data.start_position..rotate_data.start_position + VALIDATOR_LENGTH]
                 .to_vec()
         );
     }

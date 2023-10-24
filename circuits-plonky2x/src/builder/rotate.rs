@@ -3,13 +3,14 @@ use plonky2x::prelude::{
 };
 
 use crate::builder::justification::GrandpaJustificationVerifier;
+use crate::consts::{DELAY_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
 use crate::vars::*;
 
 pub trait RotateMethods {
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
-        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH)
+        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH)
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
@@ -39,11 +40,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) {
-        assert_eq!(
-            (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH),
-            MAX_SUBARRAY_SIZE
-        );
-
         let header_bytes = &header.header_bytes;
         let one = self.one();
 
@@ -54,6 +50,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify the next byte is 0x04 (Consensus Flag = 4u32).
         let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
+        // TODO: This is inefficient, see if there's a better way to do this.
         let header_consensus_flag = self.select_array(&header_bytes.data, cursor);
         self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
         cursor = self.add(cursor, one);
@@ -63,6 +60,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let consensus_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         for i in 0..4 {
+            // TODO: This is inefficient, see if there's a better way to do this.
             let header_consensus_id_byte = self.select_array(&header_bytes.data, cursor);
             self.assert_is_equal(header_consensus_id_byte, consensus_id_bytes[i]);
             cursor = self.add(cursor, one);
@@ -76,6 +74,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify the next byte is 0x01, denoting a ScheduledChange.
         let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
+        // TODO: This is inefficient, see if there's a better way to do this.
         let header_schedule_change_flag = self.select_array(&header_bytes.data, cursor);
         self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
         cursor = self.add(cursor, one);
@@ -86,9 +85,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             cursor = self.add(cursor, one);
         }
 
-        const PUBKEY_LENGTH: usize = 32;
-        const WEIGHT_LENGTH: usize = 8;
-        const DELAY_LENGTH: usize = 4;
         let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
         let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
         let delay_len = self.constant::<Variable>(L::Field::from_canonical_usize(DELAY_LENGTH));
@@ -128,7 +124,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify num_authorities validators are present and valid.
         for i in 0..(MAX_AUTHORITY_SET_SIZE) {
-            let idx = i * (PUBKEY_LENGTH + WEIGHT_LENGTH);
+            let idx = i * VALIDATOR_LENGTH;
             let curr_validator = self.constant::<Variable>(L::Field::from_canonical_usize(i));
 
             let at_delay = self.is_equal(curr_validator, *num_authorities);
@@ -161,7 +157,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             cursor = self.add(cursor, pubkey_len);
 
             let weight = ArrayVariable::<ByteVariable, WEIGHT_LENGTH>::from(
-                subarray[idx + PUBKEY_LENGTH..idx + PUBKEY_LENGTH + WEIGHT_LENGTH].to_vec(),
+                subarray[idx + PUBKEY_LENGTH..idx + VALIDATOR_LENGTH].to_vec(),
             );
 
             // We use validator_disabled to check if the weight should be valid.
@@ -178,19 +174,13 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             cursor = self.add(cursor, weight_len);
         }
 
-        // TODO: Add this check back in. It verifies the delay if the last validator is enabled.
-        // If the last validator is enabled, then we need to verify the delay.
-        let at_end_position = self.is_equal(cursor, *end_position);
-        let not_at_end_position = self.not(at_end_position);
-        let delay_end = &subarray[(PUBKEY_LENGTH + WEIGHT_LENGTH) * MAX_AUTHORITY_SET_SIZE
-            ..(PUBKEY_LENGTH + WEIGHT_LENGTH) * MAX_AUTHORITY_SET_SIZE + 4];
-
-        // If we are at the delay, then the first 4 bytes of the "pubkey" should be 0.
+        // Verifies the delay is at header_bytes[end_position - 4..end_position].
+        let mut delay_cursor = self.sub(*end_position, delay_len);
         for j in 0..DELAY_LENGTH {
-            let correct_delay = self.is_equal(delay_end[j], delay_bytes[j]);
-            // Either we are not at the delay, or we are at the delay and the byte matches.
-            let is_valid_delay = self.or(not_at_end_position, correct_delay);
-            self.assert_is_equal(is_valid_delay, true_v);
+            // TODO: This is inefficient, see if there's a better way to do this.
+            let extracted_delay_byte = self.select_array(&header_bytes.data, delay_cursor);
+            self.assert_is_equal(extracted_delay_byte, delay_bytes[j]);
+            delay_cursor = self.add(delay_cursor, one);
         }
 
         // Verify the new authority set commitment.
@@ -211,7 +201,7 @@ pub mod tests {
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::MAX_HEADER_SIZE;
+    use crate::consts::{MAX_HEADER_SIZE, VALIDATOR_LENGTH};
     use crate::rotate::RotateHint;
     use crate::vars::{AvailPubkeyVariable, EncodedHeaderVariable};
 
@@ -223,7 +213,7 @@ pub mod tests {
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * 40;
+        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * VALIDATOR_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

@@ -15,6 +15,7 @@ use crate::builder::decoder::FloorDivGenerator;
 use crate::builder::header::HeaderMethods;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::builder::rotate::RotateMethods;
+use crate::consts::VALIDATOR_LENGTH;
 use crate::input::RpcDataFetcher;
 use crate::vars::{AvailPubkeyVariable, EncodedHeader, EncodedHeaderVariable};
 
@@ -83,7 +84,7 @@ pub struct RotateCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_LENGTH: usize,
     const MAX_HEADER_CHUNK_SIZE: usize,
-    // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH).
+    // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH).
     const MAX_SUBARRAY_SIZE: usize,
 > {}
 
@@ -105,9 +106,13 @@ impl<
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        // Read the on-chain inputs.
-        // The validators that sign epoch_end_block_number are defined by authority_set_id and authority_set_hash.
+        assert_eq!(
+            (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH),
+            MAX_SUBARRAY_SIZE
+        );
 
+        // Read the on-chain inputs. The validators that signed epoch_end_block_number are defined
+        // by authority_set_id and authority_set_hash.
         let authority_set_id = builder.evm_read::<U64Variable>();
         builder.watch_with_level(
             &authority_set_id,
@@ -120,7 +125,8 @@ impl<
             "rotate circuit input - authority set hash",
             Level::Debug,
         );
-        // Note: If the user passes in a block number that is not an epoch end block, the circuit will error.
+        // Note: If the user passes in a block number that is not an epoch end block, the circuit
+        // will error.
         let epoch_end_block_number = builder.evm_read::<U32Variable>();
         builder.watch_with_level(
             &epoch_end_block_number,
@@ -142,11 +148,11 @@ impl<
         let new_pubkeys = output_stream
             .read::<ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        // // Hash the header at epoch_end_block.
+        // Hash the header at epoch_end_block.
         let target_header_hash =
             builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
 
-        // Call rotate on the header.
+        // Verify the epoch end header and the new authority set are valid.
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
             &target_header,
             &target_header_hash,
@@ -157,7 +163,7 @@ impl<
             &expected_new_authority_set_hash,
         );
 
-        // Verify the epoch end block header is valid.
+        // Verify the justification from the current authority set on the epoch end header.
         builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
             epoch_end_block_number,
             target_header_hash,
@@ -165,7 +171,7 @@ impl<
             authority_set_hash,
         );
 
-        // TODO: Write the hash of the authority set to the output
+        // Write the hash of the new authority set to the output.
         builder.evm_write::<Bytes32Variable>(expected_new_authority_set_hash);
     }
 
@@ -203,7 +209,7 @@ mod tests {
         const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * 40;
+        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * VALIDATOR_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 
@@ -235,7 +241,7 @@ mod tests {
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * 40;
+        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * VALIDATOR_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

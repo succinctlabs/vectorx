@@ -14,6 +14,18 @@ pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
 // Digest byte size
 pub const HASH_SIZE: usize = 32;
 
+// Length of an Avail validator (pubkey + weight).
+pub const VALIDATOR_LENGTH: usize = PUBKEY_LENGTH + WEIGHT_LENGTH;
+
+// Length of an Avail pubkey.
+pub const PUBKEY_LENGTH: usize = 32;
+
+// Length of the weight of an Avail validator.
+pub const WEIGHT_LENGTH: usize = 8;
+
+// Length of the delay in an Avail header.
+pub const DELAY_LENGTH: usize = 4;
+
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;

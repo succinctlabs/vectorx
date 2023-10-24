@@ -12,7 +12,6 @@ use plonky2x::prelude::{
     Field, PlonkParameters, RichField, Variable,
 };
 use serde::{Deserialize, Serialize};
-use tokio::runtime::Runtime;
 
 use super::decoder::DecodingMethods;
 use crate::consts::ENCODED_PRECOMMIT_LENGTH;
@@ -53,7 +52,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             block_number, authority_set_id
         );
 
-        let rt = Runtime::new().expect("failed to create tokio runtime");
         let data_fetcher = RpcDataFetcher::new().await;
         let justification_data: SimpleJustificationData = data_fetcher
             .get_simple_justification::<NUM_AUTHORITIES>(block_number)
@@ -235,6 +233,7 @@ mod tests {
     use ethers::types::H256;
     use log::info;
     use plonky2x::prelude::{Bytes32Variable, DefaultBuilder};
+    use tokio::runtime::Runtime;
 
     use super::*;
 
@@ -249,10 +248,12 @@ mod tests {
         const NUM_AUTHORITIES: usize = 76;
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
-        let fetcher = RpcDataFetcher::new().await;
-        let justification_data: SimpleJustificationData = fetcher
-            .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
-            .await;
+        let justification_data: SimpleJustificationData = rt.block_on(async {
+            let fetcher = RpcDataFetcher::new().await;
+            fetcher
+                .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
+                .await
+        });
         let fetched_authority_set_id = justification_data.authority_set_id;
 
         info!("Defining circuit");

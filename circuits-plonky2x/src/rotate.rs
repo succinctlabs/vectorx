@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
 use crate::builder::decoder::FloorDivGenerator;
+use crate::builder::header::HeaderMethods;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::builder::rotate::RotateMethods;
 use crate::input::RpcDataFetcher;
@@ -82,7 +83,7 @@ impl<
 pub struct RotateCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_LENGTH: usize,
-    const MAX_NUM_HEADERS: usize,
+    const MAX_HEADER_CHUNK_SIZE: usize,
     // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH).
     const MAX_SUBARRAY_SIZE: usize,
 > {}
@@ -90,10 +91,15 @@ pub struct RotateCircuit<
 impl<
         const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_HEADER_LENGTH: usize,
-        const MAX_NUM_HEADERS: usize,
+        const MAX_HEADER_CHUNK_SIZE: usize,
         const MAX_SUBARRAY_SIZE: usize,
     > Circuit
-    for RotateCircuit<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_LENGTH, MAX_NUM_HEADERS, MAX_SUBARRAY_SIZE>
+    for RotateCircuit<
+        MAX_AUTHORITY_SET_SIZE,
+        MAX_HEADER_LENGTH,
+        MAX_HEADER_CHUNK_SIZE,
+        MAX_SUBARRAY_SIZE,
+    >
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
@@ -139,12 +145,12 @@ impl<
 
         // TODO: USE target_header_hash as randomness!
         // // Hash the header at epoch_end_block.
-        // let target_header_hash =
-        //     builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
-        let mut hasher = sha2::Sha256::new();
-        hasher.update("Hello World");
         let target_header_hash =
-            builder.constant::<Bytes32Variable>(H256::from_slice(&hasher.finalize()));
+            builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
+        // let mut hasher = sha2::Sha256::new();
+        // hasher.update("Hello World");
+        // let target_header_hash =
+        //     builder.constant::<Bytes32Variable>(H256::from_slice(&hasher.finalize()));
 
         // Call rotate on the header.
         builder.rotate::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
@@ -202,13 +208,13 @@ mod tests {
 
         const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const NUM_HEADERS: usize = 36;
+        const MAX_HEADER_CHUNK_SIZE: usize = 100;
         const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * 40;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, MAX_SUBARRAY_SIZE>::define(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
             &mut builder,
         );
         let circuit = builder.build();
@@ -216,10 +222,10 @@ mod tests {
 
         let mut hint_registry = HintRegistry::new();
         let mut gate_registry = GateRegistry::new();
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, MAX_SUBARRAY_SIZE>::register_generators(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::register_generators(
             &mut hint_registry,
         );
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, MAX_SUBARRAY_SIZE>::register_gates(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::register_gates(
             &mut gate_registry,
         );
 
@@ -234,13 +240,13 @@ mod tests {
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const NUM_HEADERS: usize = 36;
+        const MAX_HEADER_CHUNK_SIZE: usize = 100;
         const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * 40;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS, MAX_SUBARRAY_SIZE>::define(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
             &mut builder,
         );
 

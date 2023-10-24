@@ -21,8 +21,5 @@ pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 // Max number of authorities this circuit currently supports.
 pub const MAX_AUTHORITY_SET_SIZE: usize = 80;
 
-// Max number of chunks for an authority set input.
-pub const MAX_AUTHORITY_CHUNKS: usize = MAX_AUTHORITY_SET_SIZE * HASH_SIZE / 256;
-
 // Max number of headers this circuit currently supports.
 pub const MAX_NUM_HEADERS: usize = 180;

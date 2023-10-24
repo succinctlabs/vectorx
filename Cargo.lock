@@ -1165,6 +1165,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+
+[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2837,14 +2843,16 @@ dependencies = [
 
 [[package]]
 name = "lalrpop"
-version = "0.20.1"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83be602e051ada38d90c7841092adabeb585197afe9dabb20e4f8375cc87846e"
+checksum = "da4081d44f4611b66c6dd725e6de3169f9f63905421e8626fcb86b6a898998b8"
 dependencies = [
  "ascii-canvas",
  "bit-set",
+ "diff",
  "ena",
- "itertools 0.11.0",
+ "is-terminal",
+ "itertools 0.10.5",
  "lalrpop-util",
  "petgraph",
  "regex",
@@ -2857,9 +2865,9 @@ dependencies = [
 
 [[package]]
 name = "lalrpop-util"
-version = "0.20.1"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "365d88f9d803538a06641e6736f21d95ecf9226dc1693421212e62c405cdd199"
+checksum = "3f35c735096c0293d313e8f2a641627472b83d01b937177fe76e5e2708d31e0d"
 
 [[package]]
 name = "lazy_static"
@@ -3622,7 +3630,7 @@ checksum = "4503fa043bf02cee09a9582e9554b4c6403b2ef55e4612e96561d294419429f8"
 [[package]]
 name = "plonky2"
 version = "0.1.4"
-source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
+source = "git+https://github.com/mir-protocol/plonky2.git#8326db604c82b488792860fbbeea243fe212e0b7"
 dependencies = [
  "ahash 0.8.5",
  "anyhow",
@@ -3646,7 +3654,7 @@ dependencies = [
 [[package]]
 name = "plonky2_field"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
+source = "git+https://github.com/mir-protocol/plonky2.git#8326db604c82b488792860fbbeea243fe212e0b7"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -3670,7 +3678,7 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
+source = "git+https://github.com/mir-protocol/plonky2.git#8326db604c82b488792860fbbeea243fe212e0b7"
 dependencies = [
  "rayon",
 ]
@@ -3678,12 +3686,12 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#8af189b92721af7d568a04441d840c12156ae8b7"
+source = "git+https://github.com/mir-protocol/plonky2.git#8326db604c82b488792860fbbeea243fe212e0b7"
 
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/get-fixed-subarray-fix#bfb6bd3e04013b903dd8c3bd8aa8abdf068f0a2f"
+source = "git+https://github.com/succinctlabs/succinctx.git#e541d4a2398b6d4f0ffb3e22f30f008f38c84850"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -3725,7 +3733,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/get-fixed-subarray-fix#bfb6bd3e04013b903dd8c3bd8aa8abdf068f0a2f"
+source = "git+https://github.com/succinctlabs/succinctx.git#e541d4a2398b6d4f0ffb3e22f30f008f38c84850"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -271,16 +271,20 @@ impl RpcDataFetcher {
 
         let mut found_correct_log = false;
         for log in header.digest.logs {
+            let log_1 = log.clone();
             if let DigestItem::Consensus(consensus_id, value) = log {
                 if consensus_id == [70, 82, 78, 75] {
                     found_correct_log = true;
                     println!("position {:?}", position);
+
+                    let encoded = log_1.encode();
+                    // println!("encoded {:?}", encoded);
                     // TODO: have to figure out what value[0,1,2] means?
-                    println!("value prefix {:?}", &value[..3]);
+                    // println!("value prefix {:?}", &value[..3]);
                     assert_eq!(value[0], 1); // To denote that it is a `ScheduledChange`
                     let mut cursor = 3;
                     let value_authories = &value[cursor..];
-                    println!("len {:?}", value_authories.len());
+                    // println!("len {:?}", value_authories.len());
                     let mut num_authorities = 0;
                     for (i, authority_chunk) in value_authories.chunks_exact(32 + 8).enumerate() {
                         let pubkey = &authority_chunk[..32];
@@ -301,8 +305,8 @@ impl RpcDataFetcher {
                         cursor += 32 + 8;
                         num_authorities += 1;
                     }
-                    let delay = &value[cursor..];
-                    println!("delay {:?}", delay);
+                    // let delay = &value[cursor..];
+                    // println!("delay {:?}", delay);
                     println!("num_authorities {:?}", num_authorities);
                     // verify header[position..position+4] == [70, 82, 78, 75]
                     // verify header[position+4] == 1
@@ -311,9 +315,10 @@ impl RpcDataFetcher {
                     // verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
                     break;
                 }
-            } else {
-                let encoded = log.encode();
-                println!("encoded {:?}", encoded);
+            }
+            let encoded = log_1.encode();
+            // println!("encoded {:?}", encoded);
+            if !found_correct_log {
                 position += encoded.len();
             }
         }
@@ -344,6 +349,8 @@ impl RpcDataFetcher {
         }
 
         let end_position = position + ((32 + 8) * authorities.1.len()) + 4;
+
+        println!("header_bytes {:?}", &header_bytes[position..end_position]);
 
         HeaderRotateData {
             header_bytes,

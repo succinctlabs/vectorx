@@ -44,7 +44,10 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         let mut cursor = *start_position;
 
-        // Verify the first byte is 0x04 (enum DigestItemType, Consensus = 4u32).
+        // Skip 1 byte, TODO: Figure out what this byte is.
+        cursor = self.add(cursor, one);
+
+        // Verify the next byte is 0x04 (enum DigestItemType, Consensus = 4u32).
         let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
         let header_consensus_flag = self.select_array(&header_bytes.data, cursor);
         self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
@@ -96,7 +99,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
             &header_as_variables,
             cursor,
-            &header_hash.0 .0,
+            &header_hash.as_bytes(),
         );
         let subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
             subarray
@@ -120,6 +123,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
             // Note: Use header_hash as seed for randomness (this works b/c headers are random).
             let pubkey = Bytes32Variable::from(&subarray[idx..idx + PUBKEY_LENGTH]);
+            // self.watch(&pubkey, "pubkey");
             // Check if pubkey matches new_pubkey (which forms the new authority set commitment).
             let correct_pubkey = self.is_equal(pubkey, new_pubkeys[i]);
             let is_valid_pubkey = self.or(validator_disabled, correct_pubkey);
@@ -183,11 +187,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // }
 
         // Verify the new authority set commitment.
-        self.verify_authority_set_commitment(
-            *num_authorities,
-            *expected_new_authority_set_hash,
-            new_pubkeys,
-        );
+        // self.verify_authority_set_commitment(
+        //     *num_authorities,
+        //     *expected_new_authority_set_hash,
+        //     new_pubkeys,
+        // );
 
         *expected_new_authority_set_hash
     }

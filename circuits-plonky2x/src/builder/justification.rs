@@ -104,6 +104,14 @@ pub trait GrandpaJustificationVerifier {
         authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
     );
 
+    fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
+        &mut self,
+        num_active_authorities: Variable,
+        validator_signed: &ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>,
+        threshold_numerator: Variable,
+        threshold_denominator: Variable,
+    );
+
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
@@ -147,6 +155,25 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         self.assert_is_equal(authority_set_commitment, commitment_so_far);
     }
 
+    fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
+        &mut self,
+        num_active_authorities: Variable,
+        validator_signed: &ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>,
+        threshold_numerator: Variable,
+        threshold_denominator: Variable,
+    ) {
+        let true_v = self._true();
+        let mut num_signed: Variable = self.zero();
+        for i in 0..MAX_NUM_AUTHORITIES {
+            num_signed = self.add(num_signed, validator_signed[i].variable);
+        }
+
+        let scaled_num_signed = self.mul(num_signed, threshold_denominator);
+        let scaled_threshold = self.mul(num_active_authorities, threshold_numerator);
+        let is_valid_num_signed = self.gte(scaled_num_signed, scaled_threshold);
+        self.assert_is_equal(is_valid_num_signed, true_v);
+    }
+
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
@@ -171,6 +198,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>>(self);
         let num_active_authorities = output_stream.read::<Variable>(self);
 
+        // Compress the pubkeys from affine points to bytes.
         let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>::from(
             pubkeys
                 .as_vec()
@@ -211,19 +239,10 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             pubkeys,
         );
 
-        // Ensure that at least 2/3 signed based on the `num_active_authorities`
+        // Verify at least 2/3 of the validators have signed the message.
         let two_v = self.constant::<Variable>(L::Field::from_canonical_usize(2));
         let three_v = self.constant::<Variable>(L::Field::from_canonical_usize(3));
-        let true_v = self._true();
-        let mut num_signed: Variable = self.zero();
-        for i in 0..MAX_NUM_AUTHORITIES {
-            num_signed = self.add(num_signed, validator_signed[i].variable);
-        }
-
-        let scaled_num_signed = self.mul(num_signed, three_v);
-        let scaled_threshold = self.mul(num_active_authorities, two_v);
-        let is_valid_num_signed = self.gte(scaled_num_signed, scaled_threshold);
-        self.assert_is_equal(is_valid_num_signed, true_v);
+        self.verify_voting_threshold(num_active_authorities, &validator_signed, two_v, three_v)
     }
 }
 

@@ -60,7 +60,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let consensus_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         for i in 0..4 {
-            // TODO: This is inefficient, see if there's a better way to do this.
+            // TODO: select_array is inefficient, see if there's a better way to do this.
             let header_consensus_id_byte = self.select_array(&header_bytes.data, cursor);
             self.assert_is_equal(header_consensus_id_byte, consensus_id_bytes[i]);
             cursor = self.add(cursor, one);
@@ -74,7 +74,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify the next byte is 0x01, denoting a ScheduledChange.
         let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
-        // TODO: This is inefficient, see if there's a better way to do this.
+        // TODO: select_array is inefficient, see if there's a better way to do this.
         let header_schedule_change_flag = self.select_array(&header_bytes.data, cursor);
         self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
         cursor = self.add(cursor, one);
@@ -109,6 +109,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
 
+        // Note: Use header_hash as seed for randomness.
+        // Get the maximum size subarray of the header bytes that we want to verify.
         let subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
             &header_as_variables,
             cursor,
@@ -134,42 +136,21 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             validator_enabled = self.and(validator_enabled, not_at_delay);
             let validator_disabled = self.not(validator_enabled);
 
-            // Note: Use header_hash as seed for randomness (this works b/c headers are random).
-            let pubkey = Bytes32Variable::from(&subarray[idx..idx + PUBKEY_LENGTH]);
-            // self.watch(&pubkey, "pubkey");
             // Check if pubkey matches new_pubkey (which forms the new authority set commitment).
+            let pubkey = Bytes32Variable::from(&subarray[idx..idx + PUBKEY_LENGTH]);
             let correct_pubkey = self.is_equal(pubkey, new_pubkeys[i]);
             let is_valid_pubkey = self.or(validator_disabled, correct_pubkey);
             self.assert_is_equal(is_valid_pubkey, true_v);
-
-            // If we are at the delay, then the first 4 bytes of the "pubkey" should be 0.
-            for j in 0..DELAY_LENGTH {
-                let correct_delay = self.is_equal(pubkey.0[j], delay_bytes[j]);
-                // Either we are not at the delay, or we are at the delay and the byte matches.
-                let is_valid_delay = self.or(not_at_delay, correct_delay);
-                self.assert_is_equal(is_valid_delay, true_v);
-            }
-            // If we are at the delay, then cursor + 4 should be equal to end_position.
-            let cursor_plus_delay = self.add(cursor, delay_len);
-            let is_valid_delay = self.is_equal(cursor_plus_delay, *end_position);
-            self.assert_is_equal(is_valid_delay, at_delay);
             // Increment the cursor by the pubkey length.
             cursor = self.add(cursor, pubkey_len);
 
+            // Check the weight is [1, 0, 0, 0, 0, 0, 0, 0]
             let weight = ArrayVariable::<ByteVariable, WEIGHT_LENGTH>::from(
                 subarray[idx + PUBKEY_LENGTH..idx + VALIDATOR_LENGTH].to_vec(),
             );
-
-            // We use validator_disabled to check if the weight should be valid.
-            let validator_disabled = self.not(validator_enabled);
-
-            // If this validator is enabled, weight should be equal to weight_bytes.
-            for j in 0..WEIGHT_LENGTH {
-                let correct_weight = self.is_equal(weight[j], weight_bytes[j]);
-                // Either this validator is not enabled or the weight is correct.
-                let is_valid_weight = self.or(validator_disabled, correct_weight);
-                self.assert_is_equal(is_valid_weight, true_v);
-            }
+            let correct_weight = self.is_equal(weight, weight_bytes.clone());
+            let is_valid_weight = self.or(validator_disabled, correct_weight);
+            self.assert_is_equal(is_valid_weight, true_v);
             // Increment the cursor by the weight length.
             cursor = self.add(cursor, weight_len);
         }
@@ -177,7 +158,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // Verifies the delay is at header_bytes[end_position - 4..end_position].
         let mut delay_cursor = self.sub(*end_position, delay_len);
         for j in 0..DELAY_LENGTH {
-            // TODO: This is inefficient, see if there's a better way to do this.
+            // TODO: select_array is inefficient, see if there's a better way to do this.
             let extracted_delay_byte = self.select_array(&header_bytes.data, delay_cursor);
             self.assert_is_equal(extracted_delay_byte, delay_bytes[j]);
             delay_cursor = self.add(delay_cursor, one);
@@ -227,7 +208,6 @@ pub mod tests {
 
         let target_header =
             output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
-        builder.watch(&target_header.header_bytes, "target_header_bytes");
 
         let num_authorities = output_stream.read::<Variable>(&mut builder);
         let start_position = output_stream.read::<Variable>(&mut builder);

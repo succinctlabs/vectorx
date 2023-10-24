@@ -9,6 +9,7 @@ pub trait RotateMethods {
     fn rotate<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
+        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH)
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
@@ -38,6 +39,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) -> Bytes32Variable {
+        assert_eq!(
+            (MAX_AUTHORITY_SET_SIZE + 1) * (PUBKEY_LENGTH + WEIGHT_LENGTH),
+            MAX_SUBARRAY_SIZE
+        );
+
         // let header_variable = self.decode_header::<MAX_HEADER_SIZE>(header, header_hash);
         let header_bytes = &header.header_bytes;
         let one = self.one();
@@ -162,36 +168,26 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         }
 
         // TODO: Add this check back in. It verifies the delay if the last validator is enabled.
-        // // If the last validator is enabled, then we need to verify the delay.
-        // let at_end_position = self.is_equal(cursor, *end_position);
-        // let not_at_end_position = self.not(at_end_position);
-        // let delay_end = self.get_fixed_subarray::<MAX_HEADER_SIZE, DELAY_LENGTH>(
-        //     &header_as_variables,
-        //     cursor,
-        //     &header_hash.0 .0,
-        // );
-        // let delay_end = ArrayVariable::<ByteVariable, DELAY_LENGTH>::from(
-        //     delay_end
-        //         .data
-        //         .iter()
-        //         .map(|x| ByteVariable::from_target(self, x.0))
-        //         .collect::<Vec<_>>(),
-        // );
+        // If the last validator is enabled, then we need to verify the delay.
+        let at_end_position = self.is_equal(cursor, *end_position);
+        let not_at_end_position = self.not(at_end_position);
+        let delay_end = &subarray[(PUBKEY_LENGTH + WEIGHT_LENGTH) * MAX_AUTHORITY_SET_SIZE
+            ..(PUBKEY_LENGTH + WEIGHT_LENGTH) * MAX_AUTHORITY_SET_SIZE + 4];
 
-        // // If we are at the delay, then the first 4 bytes of the "pubkey" should be 0.
-        // for j in 0..DELAY_LENGTH {
-        //     let correct_delay = self.is_equal(delay_end[j], delay_bytes[j]);
-        //     // Either we are not at the delay, or we are at the delay and the byte matches.
-        //     let is_valid_delay = self.or(not_at_end_position, correct_delay);
-        //     self.assert_is_equal(is_valid_delay, true_v);
-        // }
+        // If we are at the delay, then the first 4 bytes of the "pubkey" should be 0.
+        for j in 0..DELAY_LENGTH {
+            let correct_delay = self.is_equal(delay_end[j], delay_bytes[j]);
+            // Either we are not at the delay, or we are at the delay and the byte matches.
+            let is_valid_delay = self.or(not_at_end_position, correct_delay);
+            self.assert_is_equal(is_valid_delay, true_v);
+        }
 
         // Verify the new authority set commitment.
-        // self.verify_authority_set_commitment(
-        //     *num_authorities,
-        //     *expected_new_authority_set_hash,
-        //     new_pubkeys,
-        // );
+        self.verify_authority_set_commitment(
+            *num_authorities,
+            *expected_new_authority_set_hash,
+            new_pubkeys,
+        );
 
         *expected_new_authority_set_hash
     }

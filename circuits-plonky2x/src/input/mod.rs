@@ -348,9 +348,12 @@ impl RpcDataFetcher {
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
-        let end_position = position + ((32 + 8) * authorities.1.len()) + 4;
+        // 1 unknown byte, 1 consensus id, 4 consensus id, 5 unknown, pubkeys, delay
+        let end_position = position + 11 + ((32 + 8) * authorities.1.len()) + 4;
 
-        println!("header_bytes {:?}", &header_bytes[position..end_position]);
+        // println!("header bytes {:?}", &header_bytes);
+
+        // println!("subarray {:?}", &header_bytes[position..end_position]);
 
         HeaderRotateData {
             header_bytes,
@@ -449,9 +452,6 @@ mod tests {
             .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_number)
             .await;
 
-        println!(
-            "authority_set_commitment: {:?}",
-            rotate_data.new_authority_set_hash
-        );
+        // println!("rotate_data: {:?}", rotate_data.header_bytes);
     }
 }

@@ -6,10 +6,10 @@ use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
-use avail_subxt::utils::H256;
 use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
+use ethers::types::H256;
 use hex::encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
@@ -274,6 +274,11 @@ impl RpcDataFetcher {
         &self,
         epoch_end_block: u32,
     ) -> HeaderRotateData {
+        // Assert epoch_end_block is a valid epoch end block.
+        let epoch_end_block_authority_set_id = self.get_authority_set_id(epoch_end_block).await;
+        let prev_authority_set_id = self.get_authority_set_id(epoch_end_block - 1).await;
+        assert_eq!(epoch_end_block_authority_set_id - 1, prev_authority_set_id);
+
         let header = self.get_header(epoch_end_block).await;
 
         let mut header_bytes = header.encode();

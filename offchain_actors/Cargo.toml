@@ -31,7 +31,7 @@ codec = { package = "parity-scale-codec", version = "3.0.0", default-features = 
     "bit-vec",
 ] }
 pallet-grandpa = "21.0.0"
-sp-core = { default-features = false }
+sp-core = { version = "21.0.0", default-features = false }
 sp-state-machine = "0.12.0"
 subxt = "0.27"
 

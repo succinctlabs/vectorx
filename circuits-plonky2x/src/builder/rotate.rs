@@ -41,7 +41,19 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         expected_new_authority_set_hash: &Bytes32Variable,
     ) {
         let header_bytes = &header.header_bytes;
-        // Convert header to Variable from ByteVariable for get_fixed_subarray.
+
+        let one = self.one();
+        let true_v = self._true();
+
+        let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
+        let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
+        let delay_len = self.constant::<Variable>(L::Field::from_canonical_usize(DELAY_LENGTH));
+        let consensus_engine_id_len = self.constant::<Variable>(L::Field::from_canonical_usize(4));
+
+        // Initialize the cursor to the start position.
+        let mut cursor = *start_position;
+
+        // Convert header to Variables from ByteVariables for get_fixed_subarray.
         let header_variables = header_bytes
             .as_vec()
             .iter()
@@ -50,16 +62,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let header_as_variables =
             ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
 
-        let one = self.one();
-        let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
-        let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
-        let delay_len = self.constant::<Variable>(L::Field::from_canonical_usize(DELAY_LENGTH));
-        let consensus_engine_id_len = self.constant::<Variable>(L::Field::from_canonical_usize(4));
-
-        let mut cursor = *start_position;
-
-        // Note: Use header_hash as seed for randomness.
-        // Get the maximum size subarray of the header bytes that we want to verify.
+        // Get the subarray of the header bytes that we want to verify. The header_hash is used as
+        // the seed for randomness.
         let subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
             &header_as_variables,
             cursor,
@@ -73,7 +77,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
                 .collect::<Vec<_>>(),
         );
 
-        // Skip 1 byte, TODO: Figure out what this byte is.
+        // Skip 1 unknown byte.
         cursor = self.add(cursor, one);
 
         // Verify the next byte is 0x04 (Consensus Flag = 4u32).
@@ -92,8 +96,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
         cursor = self.add(cursor, consensus_engine_id_len);
 
-        // Skip 2 bytes
-        // TODO: Validate what the 2 bytes are. Not sure if this is ncessary.
+        // Skip 2 unknown bytes.
         for _ in 0..2 {
             cursor = self.add(cursor, one);
         }
@@ -104,53 +107,48 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
         cursor = self.add(cursor, one);
 
-        // Skip 2 bytes
-        // TODO: Validate what the 2 bytes are. Not sure if this is ncessary.
+        // Skip 2 unknown bytes.
         for _ in 0..2 {
             cursor = self.add(cursor, one);
         }
 
+        // Expected weight for each authority.
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
             [1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8].to_vec(),
         );
-
-        let true_v = self._true();
-        let mut validator_enabled = self._true();
-
-        let delay_bytes =
+        // Expected delay for the authority set.
+        let expected_delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
 
         // The length of the bytes before the encoded authority set.
         const PREFIX_LENGTH: usize = 1 + 1 + 4 + 2 + 1 + 2;
 
+        let mut validator_disabled = self._false();
         // Verify num_authorities validators are present and valid.
         for i in 0..(MAX_AUTHORITY_SET_SIZE) {
             let idx = (i * VALIDATOR_LENGTH) + PREFIX_LENGTH;
             let curr_validator = self.constant::<Variable>(L::Field::from_canonical_usize(i));
 
-            let at_delay = self.is_equal(curr_validator, *num_authorities);
-            let not_at_delay = self.not(at_delay);
+            // Set validator_disabled to true if the cursor is past the last validator.
+            let at_end = self.is_equal(curr_validator, *num_authorities);
+            validator_disabled = self.select(at_end, true_v, validator_disabled);
 
-            // Set validator to disabled once we are at the delay.
-            validator_enabled = self.and(validator_enabled, not_at_delay);
-            let validator_disabled = self.not(validator_enabled);
-
-            // Check if pubkey matches new_pubkey (which forms the new authority set commitment).
+            // Verify the correctness of the pubkey for each enabled validator and increment the
+            // cursor by the pubkey length.
             let pubkey = Bytes32Variable::from(&subarray[idx..idx + PUBKEY_LENGTH]);
-            let correct_pubkey = self.is_equal(pubkey, new_pubkeys[i]);
-            let is_valid_pubkey = self.or(validator_disabled, correct_pubkey);
-            self.assert_is_equal(is_valid_pubkey, true_v);
-            // Increment the cursor by the pubkey length.
+            let pubkey_match = self.is_equal(pubkey, new_pubkeys[i]);
+            let pubkey_check = self.or(pubkey_match, validator_disabled);
+            self.assert_is_equal(pubkey_check, true_v);
             cursor = self.add(cursor, pubkey_len);
 
-            // Check the weight is [1, 0, 0, 0, 0, 0, 0, 0]
+            // Verify the correctness of the weight for each enabled validator and increment the
+            // cursor by the weight length.
             let weight = ArrayVariable::<ByteVariable, WEIGHT_LENGTH>::from(
                 subarray[idx + PUBKEY_LENGTH..idx + VALIDATOR_LENGTH].to_vec(),
             );
-            let correct_weight = self.is_equal(weight, expected_weight_bytes.clone());
-            let is_valid_weight = self.or(validator_disabled, correct_weight);
-            self.assert_is_equal(is_valid_weight, true_v);
-            // Increment the cursor by the weight length.
+            let weight_match = self.is_equal(weight, expected_weight_bytes.clone());
+            let weight_check = self.or(weight_match, validator_disabled);
+            self.assert_is_equal(weight_check, true_v);
             cursor = self.add(cursor, weight_len);
         }
 
@@ -159,7 +157,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         for j in 0..DELAY_LENGTH {
             // TODO: select_array is inefficient, see if there's a better way to do this.
             let extracted_delay_byte = self.select_array(&header_bytes.data, delay_cursor);
-            self.assert_is_equal(extracted_delay_byte, delay_bytes[j]);
+            self.assert_is_equal(extracted_delay_byte, expected_delay_bytes[j]);
             delay_cursor = self.add(delay_cursor, one);
         }
 

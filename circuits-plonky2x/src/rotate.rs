@@ -143,14 +143,9 @@ impl<
         let new_pubkeys = output_stream
             .read::<ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        // TODO: USE target_header_hash as randomness!
-        // // Hash the header at epoch_end_block.
+        // Hash the header at epoch_end_block.
         let target_header_hash =
             builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
-        // let mut hasher = sha2::Sha256::new();
-        // hasher.update("Hello World");
-        // let target_header_hash =
-        //     builder.constant::<Bytes32Variable>(H256::from_slice(&hasher.finalize()));
 
         // Call rotate on the header.
         builder.rotate::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
@@ -257,6 +252,7 @@ mod tests {
         // These inputs are taken from: https://kate.avail.tools/#/explorer/query/485710
         let mut input = circuit.input();
         let authority_set_id = 299u64;
+        // TODO: Update authority_set_hash
         let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
         let epoch_end_block_number = 318937u32;
 

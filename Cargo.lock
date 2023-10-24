@@ -308,6 +308,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "avail-subxt",
+ "dotenv",
  "ed25519-dalek",
  "env_logger 0.9.3",
  "ethers",

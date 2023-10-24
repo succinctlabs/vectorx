@@ -40,6 +40,7 @@ codec = { package = "parity-scale-codec", version = "3", default-features = fals
     "bit-vec",
 ] }
 sha2 = "0.10.8"
+dotenv = "0.15.0"
 
 [dev-dependencies]
 anyhow = "1.0.68"

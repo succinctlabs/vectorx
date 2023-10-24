@@ -456,6 +456,9 @@ mod tests {
             .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_number)
             .await;
 
-        // println!("rotate_data: {:?}", rotate_data.header_bytes);
+        println!(
+            "new authority set hash: {:?}",
+            rotate_data.new_authority_set_hash
+        );
     }
 }

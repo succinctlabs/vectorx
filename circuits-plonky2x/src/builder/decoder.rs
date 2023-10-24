@@ -102,6 +102,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         quotient
     }
 
+    /// TODO: Rewrite with CircuitVariable, follow this: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target) {
         // For now, assume that compact_bytes is 5 bytes long
         assert!(compact_bytes.len() == 5);

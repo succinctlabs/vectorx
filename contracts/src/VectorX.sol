@@ -89,6 +89,8 @@ contract VectorX {
         if (trustedHeader == bytes32(0)) {
             revert("Trusted header not found");
         }
+        // Note: In the case that the trusted block is an epoch end block, the authority set id will
+        // be the authority set id of the next block.
         uint64 authoritySetId = blockHeightToAuthoritySetId[_trustedBlock];
         if (authoritySetId == 0) {
             revert("Authority set ID not found");
@@ -256,28 +258,5 @@ contract VectorX {
             new_authority_set_hash,
             _epochEndBlock
         );
-    }
-
-    function decodePackedData(
-        bytes memory _packedData
-    ) public pure returns (bytes32, bytes32, bytes32) {
-        require(_packedData.length == 96, "Invalid packed data length"); // 3 * 32 = 96
-
-        bytes32 decodedData1;
-        bytes32 decodedData2;
-        bytes32 decodedData3;
-
-        // Assembly is used to efficiently decode bytes to bytes32
-        assembly {
-            // Load the first 32 bytes from packedData at position 0x20
-            decodedData1 := mload(add(_packedData, 0x20))
-
-            // Load the next 32 bytes
-            decodedData2 := mload(add(_packedData, 0x40))
-
-            // Load the last 32 bytes
-            decodedData3 := mload(add(_packedData, 0x60))
-        }
-        return (decodedData1, decodedData2, decodedData3);
     }
 }

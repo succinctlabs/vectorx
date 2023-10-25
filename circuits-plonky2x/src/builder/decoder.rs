@@ -249,7 +249,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let data_root = Bytes32Variable::from(data_root_byte_vars.as_slice());
 
         HeaderVariable {
-            block_number: U32Variable::from_variables_unsafe(&[Variable(block_number_target)]), // TODO: do we need to do a range-check here?
+            block_number: U32Variable::from_variables_unsafe(&[Variable(block_number_target)]),
             parent_hash,
             state_root,
             data_root,

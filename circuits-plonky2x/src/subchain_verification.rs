@@ -297,13 +297,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 #[cfg(test)]
 mod tests {
     use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
-    use plonky2x::prelude::{DefaultParameters, HintRegistry};
+    use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
     use super::*;
 
-    //  Need a test circuit, since map reduce requires a circuit generic
+    // Test circuit, as MapReduce requires a circuit to be defined.
     #[derive(Clone, Debug)]
-
     struct TestSubchainVerificationCircuit<
         const MAX_HEADER_SIZE: usize,
         const MAX_NUM_HEADERS: usize,
@@ -366,7 +365,7 @@ mod tests {
     fn test_verify_subchain() {
         env_logger::try_init().unwrap_or_default();
 
-        let mut builder = CircuitBuilder::<L, D>::new();
+        let mut builder = DefaultBuilder::new();
 
         const MAX_NUM_HEADERS: usize = 32;
         const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;

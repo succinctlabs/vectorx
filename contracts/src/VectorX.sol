@@ -2,59 +2,48 @@
 pragma solidity ^0.8.13;
 
 import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
+import {IVectorX} from "./interfaces/IVectorX.sol";
 
-contract VectorX {
+/// @notice VectorX is a light client for Avail's consensus.
+/// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
+///     data commitment solution.
+contract VectorX is IVectorX {
+    /// @notice The address of the gateway contract.
     address public gateway;
-    uint32 public head;
+
+    /// @notice The latest block that has been committed.
+    uint32 public latestBlock;
+
+    /// @notice The function for requesting a header range.
     bytes32 public headerRangeFunctionId;
+
+    /// @notice The function for requesting a rotate.
     bytes32 public rotateFunctionId;
 
-    // Maximum range of blocks that can be requested in a single call to requestHeaderRange.
-    uint32 public constant MAX_RANGE = 128;
+    /// @notice The maximum header range that can be requested.
+    uint32 public constant MAX_HEADER_RANGE = 128;
 
-    // Maps block height to the header hash of the block.
+    /// @notice Maps block height to the header hash of the block.
     mapping(uint32 => bytes32) public blockHeightToHeaderHash;
-    // Maps block height to the authority set id of the next block.
+
+    /// @notice Maps block height to the authority set id of the next block.
     mapping(uint32 => uint64) public blockHeightToAuthoritySetId;
-    // Maps authority set id to the authority set hash.
+
+    /// @notice Maps authority set id to the authority set hash.
     mapping(uint64 => bytes32) public authoritySetIdToHash;
-    //
+
+    /// @notice Maps block ranges to data commitments. Block ranges are stored as keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public dataRootCommitments;
+
+    /// @notice Maps block ranges to state commitments. Block ranges are stored as keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
-
-    event HeaderRangeRequested(
-        uint32 trustedBlock,
-        bytes32 trustedHeader,
-        uint64 authoritySetId,
-        bytes32 authoritySetHash,
-        uint32 targetBlock
-    );
-
-    event HeaderRangeFulfilled(
-        uint32 trustedBlock,
-        uint32 targetBlock,
-        bytes32 targetHeaderHash,
-        bytes32 dataRootCommitment,
-        bytes32 stateRootCommitment
-    );
-
-    event RotateRequested(
-        uint64 currentAuthoritySetId,
-        bytes32 currentAuthoritySetHash,
-        uint64 epochEndBlock
-    );
-
-    event RotateFulfilled(
-        uint64 newAuthoritySetId,
-        bytes32 newAuthoritySetHash,
-        uint64 epochEndBlock
-    );
 
     modifier onlyGateway() {
         require(msg.sender == gateway, "Only gateway can call this function");
         _;
     }
 
+    /// @notice Initialize the contract with the address of the gateway contract.
     constructor(address _gateway) {
         gateway = _gateway;
     }
@@ -69,6 +58,11 @@ contract VectorX {
         headerRangeFunctionId = _functionId;
     }
 
+    // TODO: In production, this would be `onlyOwner`
+    function updateRotateFunctionId(bytes32 _functionId) external {
+        rotateFunctionId = _functionId;
+    }
+
     // TODO: In production, this would be part of a constructor and/or `onlyOwner`
     function setGensisInfo(
         uint32 _blockHeight,
@@ -81,7 +75,8 @@ contract VectorX {
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
     }
 
-    // Requests a header update and data commitment from the range (trustedBlock + 1, requestedBlock]
+    // Requests a header update and data commitment from the range (trustedBlock, requestedBlock]
+    // Note: _trustedBlock + 1 and _requestedBlock must have the same authority set id.
     function requestHeaderRange(
         uint32 _trustedBlock,
         uint32 _requestedBlock
@@ -102,9 +97,9 @@ contract VectorX {
         }
 
         require(_requestedBlock > _trustedBlock);
-        require(_requestedBlock - _trustedBlock <= MAX_RANGE);
+        require(_requestedBlock - _trustedBlock <= MAX_HEADER_RANGE);
         // NOTE: this is needed to prevent a long-range attack on the light client
-        require(_requestedBlock > head);
+        require(_requestedBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
             _trustedBlock,
@@ -172,7 +167,7 @@ contract VectorX {
         dataRootCommitments[key] = data_root_commitment;
         stateRootCommitments[key] = state_root_commitment;
 
-        head = _targetBlock;
+        latestBlock = _targetBlock;
         emit HeaderRangeFulfilled(
             _trustedBlock,
             _targetBlock,
@@ -187,9 +182,9 @@ contract VectorX {
         uint32 _epochEndBlock,
         uint64 _currentAuthoritySetId
     ) external payable {
-        // NOTE: _epochEndBlock must be GTE the head block. Can be equal if we've already called step
+        // NOTE: _epochEndBlock must be GTE the latestBlock block. Can be equal if we've already called step
         // to the epochEndBlock.
-        require(_epochEndBlock >= head);
+        require(_epochEndBlock >= latestBlock);
 
         bytes32 currentAuthoritySetHash = authoritySetIdToHash[
             _currentAuthoritySetId

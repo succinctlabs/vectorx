@@ -180,8 +180,9 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         let true_v = self._true();
         let mut num_signed: U32Variable = self.zero();
         for i in 0..MAX_NUM_AUTHORITIES {
-            // 1 if validator signed, 0 otherwise.
-            let val_signed_u32 = U32Variable::from_variables(self, &[validator_signed[i].variable]);
+            // 1 if validator signed, 0 otherwise. Already range-checked (as a bool), so use unsafe.
+            let val_signed_u32 =
+                U32Variable::from_variables_unsafe(&[validator_signed[i].variable]);
             num_signed = self.add(num_signed, val_signed_u32);
         }
 

@@ -35,10 +35,8 @@ pub trait DecodingMethods {
 
 // Note: Assumes that all the inputted byte array are already range checked to be valid bytes.
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
-    /// Decodes the byte representation of a compact u32 into its integer representation and its
-    /// corresponding compress mode.
-    ///
-    /// Spec for compact encoding: https://docs.substrate.io/reference/scale-codec/#fn-1.
+    /// Decodes the byte representation of a compact u32 into integer representation and compress
+    /// mode. Spec: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(
         &mut self,
         compact_bytes: ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>,
@@ -58,6 +56,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let compress_mode = Variable(self.api.le_sum(bool_targets[0..2].iter()));
 
         // Get all of the possible bytes that could be used to represent the compact int.
+        // Spec for compact scale encoding: https://docs.substrate.io/reference/scale-codec/#fn-1.
         // Specifically, extract the LE bits of each potential value as follows:
         //  Mode 0: Upper 6 bits are the value.
         //  Mode 1: Upper 6 bits + next byte are the value.

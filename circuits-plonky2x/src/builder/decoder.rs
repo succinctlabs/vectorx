@@ -37,13 +37,11 @@ pub trait DecodingMethods {
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
-    /// TODO: Rewrite with CircuitVariable, follow this: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(
         &mut self,
         compact_bytes: ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>,
     ) -> (U32Variable, Variable) {
-        // If BigInt encoding, check that the length is 4.
-
+        // Flip the bit order within each byte and flatten the array.
         let bool_targets = compact_bytes
             .data
             .iter()
@@ -58,10 +56,17 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let compress_mode = Variable(self.api.le_sum(bool_targets[0..2].iter()));
 
         // Get all of the possible bytes that could be used to represent the compact int.
+        // Specifically, extract the LE bits of each potential value following the spec:
+        //  1) If first two bits are 00, upper 6 bits are the value.
+        //  2) If first two bits are 01, upper 6 bits + next byte are the value.
+        //  3) If first two bits are 10, upper 6 bits + next 3 bytes are the value.
+        //  4) If first two bits are 11, upper 6 bits are the length and next 4 bytes are the value.
         let zero_mode_value = Variable(self.api.le_sum(bool_targets[2..8].iter()));
         let one_mode_value = Variable(self.api.le_sum(bool_targets[2..16].iter()));
         let two_mode_value = Variable(self.api.le_sum(bool_targets[2..32].iter()));
         let three_mode_value = Variable(self.api.le_sum(bool_targets[8..40].iter()));
+
+        // Select the correct value based on the compress mode.
         let value = self.select_array_random_gate(
             &[
                 zero_mode_value,
@@ -81,7 +86,6 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let zero = self.constant(L::Field::from_canonical_u8(0));
         let encoded_byte_length = Variable(self.api.le_sum(bool_targets[2..8].iter()));
         let is_encoded_length_zero = self.is_equal(encoded_byte_length, zero);
-        // If mode is 3, then is_encoded_length_zero should be true.
         let is_valid_encoded_length_check = self.and(is_mode_three, is_encoded_length_zero);
         self.assert_is_equal(is_mode_three, is_valid_encoded_length_check);
 

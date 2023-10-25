@@ -10,8 +10,6 @@ use crate::consts::{
 use crate::vars::*;
 
 pub trait DecodingMethods {
-    /// Decodes the byte representation of a compact u32 into its integer representation and its
-    /// corresponding compress mode, spec: https://docs.substrate.io/reference/scale-codec/#fn-1.
     fn decode_compact_int(
         &mut self,
         compact_bytes: ArrayVariable<ByteVariable, 5>,
@@ -37,6 +35,10 @@ pub trait DecodingMethods {
 
 // Note: Assumes that all the inputted byte array are already range checked to be valid bytes.
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
+    /// Decodes the byte representation of a compact u32 into its integer representation and its
+    /// corresponding compress mode.
+    ///
+    /// Spec for compact encoding: https://docs.substrate.io/reference/scale-codec/#fn-1.
     fn decode_compact_int(
         &mut self,
         compact_bytes: ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>,
@@ -52,15 +54,15 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             })
             .collect::<Vec<_>>();
 
-        // Get the compress mode.
+        // Get the compress mode which is the first two bits. {00, 01, 10, 11} -> Mode {0, 1, 2, 3}.
         let compress_mode = Variable(self.api.le_sum(bool_targets[0..2].iter()));
 
         // Get all of the possible bytes that could be used to represent the compact int.
-        // Specifically, extract the LE bits of each potential value following the spec:
-        //  1) If first two bits are 00, upper 6 bits are the value.
-        //  2) If first two bits are 01, upper 6 bits + next byte are the value.
-        //  3) If first two bits are 10, upper 6 bits + next 3 bytes are the value.
-        //  4) If first two bits are 11, upper 6 bits are the length and next 4 bytes are the value.
+        // Specifically, extract the LE bits of each potential value as follows:
+        //  Mode 0: Upper 6 bits are the value.
+        //  Mode 1: Upper 6 bits + next byte are the value.
+        //  Mode 2: Upper 6 bits + next 3 bytes are the value.
+        //  Mode 3: Upper 6 bits are the length and next 4 bytes are the value.
         let zero_mode_value = Variable(self.api.le_sum(bool_targets[2..8].iter()));
         let one_mode_value = Variable(self.api.le_sum(bool_targets[2..16].iter()));
         let two_mode_value = Variable(self.api.le_sum(bool_targets[2..32].iter()));
@@ -78,9 +80,8 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         );
         let value = U32Variable::from_variables_unsafe(&[value]);
 
-        // If mode is 3, check the upper 6 bits are 0. This is because the upper 6 bits are used to
-        // represent the number of bytes for the big int - 4. Since we only support u32, the
-        // number of bytes will always be 4, so the upper 6 bits should always be 0.
+        // If mode is 3, check the upper 6 bits are 0. These bits represent the number of bytes for
+        // the "BigInt" - 4. Since block number is a u32 (4 bytes), this will always be 0.
         let three = self.constant(L::Field::from_canonical_u8(3));
         let is_mode_three = self.is_equal(compress_mode, three);
         let zero = self.constant(L::Field::from_canonical_u8(0));

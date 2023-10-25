@@ -1,7 +1,0 @@
-The offchain actors need a protobuf library to be installed.  Can do so via
-
-apt-get install protobuf-compiler
-
-or
-
-brew install protobuf

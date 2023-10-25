@@ -18,7 +18,7 @@ use sha2::Digest;
 use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
 };
-use crate::consts::{DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH};
+use crate::consts::{DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
@@ -325,7 +325,7 @@ impl RpcDataFetcher {
                         assert_eq!(*pubkey, fetched_authorities.1[i]);
 
                         // Assert weight's LE representation == 1
-                        for j in 0..PUBKEY_LENGTH {
+                        for j in 0..WEIGHT_LENGTH {
                             if j == 0 {
                                 assert_eq!(weight[j], 1);
                             } else {

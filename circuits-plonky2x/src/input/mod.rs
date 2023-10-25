@@ -297,7 +297,7 @@ impl RpcDataFetcher {
 
         let mut position = 0;
         let number_encoded = epoch_end_block.encode();
-        // skip past parent_hash, number, state_root, extrinsics_root.
+        // Skip past parent_hash, number, state_root, extrinsics_root.
         position += 32 + number_encoded.len() + 32 + 32;
 
         let mut found_correct_log = false;
@@ -308,8 +308,10 @@ impl RpcDataFetcher {
                 if consensus_id == [70, 82, 78, 75] {
                     found_correct_log = true;
 
-                    // TODO: Find out what value[1,2] means?
-                    assert_eq!(value[0], 1); // To denote that it is a `ScheduledChange`
+                    // Denotes that this is a `ScheduledChange` log.
+                    assert_eq!(value[0], 1);
+
+                    // TODO: What is value[1..3]?
                     let mut cursor = 3;
                     let authorities_bytes = &value[cursor..];
 
@@ -317,6 +319,7 @@ impl RpcDataFetcher {
                         let pubkey = &authority_chunk[..32];
                         let weight = &authority_chunk[32..];
 
+                        // Assert the pubkey in the encoded log is correct.
                         assert_eq!(*pubkey, fetched_authorities.1[i]);
 
                         // Assert weight's LE representation == 1
@@ -337,14 +340,6 @@ impl RpcDataFetcher {
                         assert_eq!(delay[i], 0);
                     }
 
-                    // Circuit should verify the following:
-                    //  1) header[position+1] == 4
-                    //  2) verify header[position+2..position+6] == [70, 82, 78, 75]
-                    //  3) skip header[position+6..position+6+2] == random stuff
-                    //  4) verify header[position+8] == 1
-                    //  5) verify header[position+8..position+8+2] == random stuff
-                    //  6) hash(header[position+10..position+10+num*(40)]) == new_authority_set_hash
-                    //  7) verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
                     break;
                 }
             }
@@ -354,7 +349,7 @@ impl RpcDataFetcher {
             }
         }
 
-        // Panic if we did not find the correct log.
+        // Panic if we did not find the consensus log.
         if !found_correct_log {
             panic!(
                 "Block: {:?} should be an epoch end block, but did not find corresponding consensus log!",

@@ -302,7 +302,7 @@ impl RpcDataFetcher {
 
         let mut found_correct_log = false;
         for log in header.digest.logs {
-            let log_1 = log.clone();
+            let encoded_log = log.clone().encode();
             // Note: Two bytes are skipped between the consensus id and value.
             if let DigestItem::Consensus(consensus_id, value) = log {
                 if consensus_id == [70, 82, 78, 75] {
@@ -348,10 +348,9 @@ impl RpcDataFetcher {
                     break;
                 }
             }
-            let encoded = log_1.encode();
             // If this is not the correct log, increment position by the length of the encoded log.
             if !found_correct_log {
-                position += encoded.len();
+                position += encoded_log.len();
             }
         }
 

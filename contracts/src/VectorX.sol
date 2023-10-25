@@ -14,6 +14,9 @@ contract VectorX {
     mapping(bytes32 => bytes32) public dataRootCommitments;
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
+    uint64 public currentAuthoritySetId;
+    bytes32 public currentAuthoritySetHash;
+
     uint32 public head;
 
     uint32 public constant MAX_RANGE = 128;
@@ -55,7 +58,7 @@ contract VectorX {
         headerRangeFunctionId = _functionId;
     }
 
-    // TODO: In proudction, this would be part of a constructor and/or `onlyOwner`
+    // TODO: In production, this would be part of a constructor and/or `onlyOwner`
     function setGensisInfo(
         uint32 _blockHeight,
         bytes32 _header,
@@ -65,6 +68,8 @@ contract VectorX {
         blockHeightToHeaderHash[_blockHeight] = _header;
         blockHeightToAuthoritySetId[_blockHeight] = _authoritySetId;
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        currentAuthoritySetId = _authoritySetId;
+        currentAuthoritySetHash = _authoritySetHash;
     }
 
     // Requests a header update and data commitment from the range (trustedBlock, requestedBlock)
@@ -72,6 +77,102 @@ contract VectorX {
         uint32 _trustedBlock,
         uint32 _requestedBlock
     ) external payable {
+        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        if (trustedHeader == bytes32(0)) {
+            revert("Trusted header not found");
+        }
+        uint64 authoritySetId = blockHeightToAuthoritySetId[_trustedBlock];
+        if (authoritySetId == 0) {
+            revert("Authority set ID not found");
+        }
+        bytes32 authoritySetHash = authoritySetIdToHash[authoritySetId];
+        if (authoritySetHash == bytes32(0)) {
+            revert("Authority set hash not found");
+        }
+
+        require(_requestedBlock > _trustedBlock);
+        require(_requestedBlock - _trustedBlock <= MAX_RANGE);
+        // NOTE: this is needed to prevent a long-range attack on the light client
+        require(_requestedBlock > head);
+
+        bytes memory input = abi.encodePacked(
+            _trustedBlock,
+            trustedHeader,
+            authoritySetId,
+            authoritySetHash,
+            _requestedBlock
+        );
+
+        bytes memory callbackData = abi.encodeWithSelector(
+            this.callbackHeaderRange.selector,
+            _trustedBlock,
+            trustedHeader,
+            authoritySetId,
+            authoritySetHash,
+            _requestedBlock
+        );
+
+        IFunctionGateway(gateway).requestCall{value: msg.value}(
+            headerRangeFunctionId,
+            input,
+            address(this),
+            callbackData,
+            500000
+        );
+        emit HeaderRangeRequested(
+            _trustedBlock,
+            trustedHeader,
+            authoritySetId,
+            authoritySetHash,
+            _requestedBlock
+        );
+    }
+
+    function callbackHeaderRange(
+        uint32 _trustedBlock,
+        bytes32 _trustedHeader,
+        uint64 _authoritySetId,
+        bytes32 _authoritySetHash,
+        uint32 _targetBlock
+    ) external onlyGateway {
+        bytes memory input = abi.encodePacked(
+            _trustedBlock,
+            _trustedHeader,
+            _authoritySetId,
+            _authoritySetHash,
+            _targetBlock
+        );
+
+        bytes memory output = IFunctionGateway(gateway).verifiedCall(
+            headerRangeFunctionId,
+            input
+        );
+
+        // abi.encode matches abi.encodePacked for (bytes32, bytes32, bytes32).
+        (
+            bytes32 target_header_hash,
+            bytes32 state_root_commitment,
+            bytes32 data_root_commitment
+        ) = abi.decode(output, (bytes32, bytes32, bytes32));
+
+        blockHeightToHeaderHash[_targetBlock] = target_header_hash;
+
+        bytes32 key = keccak256(abi.encode(_trustedBlock, _targetBlock));
+        dataRootCommitments[key] = data_root_commitment;
+        stateRootCommitments[key] = state_root_commitment;
+
+        head = _targetBlock;
+        emit HeaderRangeFulfilled(
+            _trustedBlock,
+            _targetBlock,
+            target_header_hash,
+            data_root_commitment,
+            state_root_commitment
+        );
+    }
+
+    // Requests a rotate to the next authority set id, which occurs at _epochEndBlock.
+    function requestRotate(uint32 _epochEndBlock) external payable {
         bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
         if (trustedHeader == bytes32(0)) {
             revert("Trusted header not found");
@@ -119,7 +220,7 @@ contract VectorX {
         );
     }
 
-    function callbackHeaderRange(
+    function callbackRotate(
         uint32 _trustedBlock,
         bytes32 _trustedHeader,
         uint64 _authoritySetId,

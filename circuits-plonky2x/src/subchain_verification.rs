@@ -300,7 +300,6 @@ mod tests {
     use plonky2x::prelude::{DefaultParameters, HintRegistry};
 
     use super::*;
-    use crate::builder::decoder::FloorDivGenerator;
 
     //  Need a test circuit, since map reduce requires a circuit generic
     #[derive(Clone, Debug)]
@@ -339,8 +338,6 @@ mod tests {
         {
             registry
                 .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
-            let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
-            registry.register_simple::<FloorDivGenerator<L::Field, D>>(floor_div_id);
 
             let id = MapReduceGenerator::<
                 L,

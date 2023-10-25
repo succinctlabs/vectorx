@@ -1,153 +1,22 @@
-use std::marker::PhantomData;
-
-use plonky2::field::extension::Extendable;
-use plonky2::iop::generator::{GeneratedValues, SimpleGenerator};
-use plonky2::iop::witness::PartitionWitness;
-use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
-use plonky2::plonk::circuit_data::CommonCircuitData;
-use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
 use plonky2x::frontend::vars::{EvmVariable, U32Variable};
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Field, PlonkParameters, RichField, Target, U64Variable, Variable, Witness, WitnessWrite,
+    Field, PlonkParameters, U64Variable, Variable,
 };
 
-use crate::consts::{DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE};
+use crate::consts::{
+    DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE, MAX_BLOCK_NUMBER_BYTES,
+};
 use crate::vars::*;
 
-#[derive(Debug)]
-pub struct FloorDivGenerator<F: RichField + Extendable<D>, const D: usize> {
-    divisor: Target,
-    dividend: Target,
-    quotient: Target,
-    remainder: Target,
-    _marker: PhantomData<F>,
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> FloorDivGenerator<F, D> {
-    pub fn id() -> String {
-        "FloorDivGenerator".to_string()
-    }
-}
-
-impl<F: RichField + Extendable<D>, const D: usize> SimpleGenerator<F, D>
-    for FloorDivGenerator<F, D>
-{
-    fn id(&self) -> String {
-        Self::id()
-    }
-
-    fn serialize(&self, dst: &mut Vec<u8>, _common_data: &CommonCircuitData<F, D>) -> IoResult<()> {
-        dst.write_target(self.divisor)?;
-        dst.write_target(self.dividend)?;
-        dst.write_target(self.quotient)?;
-        dst.write_target(self.remainder)
-    }
-
-    fn deserialize(src: &mut Buffer, _common_data: &CommonCircuitData<F, D>) -> IoResult<Self> {
-        let divisor = src.read_target()?;
-        let dividend = src.read_target()?;
-        let quotient = src.read_target()?;
-        let remainder = src.read_target()?;
-        Ok(Self {
-            divisor,
-            dividend,
-            quotient,
-            remainder,
-            _marker: PhantomData,
-        })
-    }
-
-    fn dependencies(&self) -> Vec<Target> {
-        Vec::from([self.dividend])
-    }
-
-    fn run_once(&self, witness: &PartitionWitness<F>, out_buffer: &mut GeneratedValues<F>) {
-        let divisor = witness.get_target(self.divisor);
-        let dividend = witness.get_target(self.dividend);
-        let divisor_int = divisor.to_canonical_u64() as u32;
-        let dividend_int = dividend.to_canonical_u64() as u32;
-        let quotient = dividend_int / divisor_int;
-        let remainder = dividend_int % divisor_int;
-        out_buffer.set_target(self.quotient, F::from_canonical_u32(quotient));
-        out_buffer.set_target(self.remainder, F::from_canonical_u32(remainder));
-    }
-}
-
-trait CircuitBuilderScaleDecoder {
-    fn int_div(&mut self, dividend: Target, divisor: Target) -> Target;
-
-    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target);
-}
-
-// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
-impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
-    for BaseCircuitBuilder<F, D>
-{
-    fn int_div(&mut self, dividend: Target, divisor: Target) -> Target {
-        let quotient = self.add_virtual_target();
-        let remainder = self.add_virtual_target();
-
-        self.add_simple_generator(FloorDivGenerator::<F, D> {
-            divisor,
-            dividend,
-            quotient,
-            remainder,
-            _marker: PhantomData,
-        });
-        let base = self.mul(quotient, divisor);
-        let rhs = self.add(base, remainder);
-        let is_equal = self.is_equal(rhs, dividend);
-        self.assert_one(is_equal.target);
-        quotient
-    }
-
-    /// TODO: Rewrite with CircuitVariable, follow this: https://docs.substrate.io/reference/scale-codec/#fn-1
-    fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target) {
-        // For now, assume that compact_bytes is 5 bytes long
-        assert!(compact_bytes.len() == 5);
-
-        let mut first_byte_bool_targets = compact_bytes[0].as_bool_targets();
-        first_byte_bool_targets.reverse();
-
-        let compress_mode = self.le_sum(first_byte_bool_targets[0..2].iter());
-
-        // Get all of the possible bytes that could be used to represent the compact int
-
-        let zero_mode_value = to_variable_unsafe(self, &compact_bytes[0..1]).0;
-        let one_mode_value = to_variable_unsafe(self, &compact_bytes[0..2]).0;
-        let two_mode_value = to_variable_unsafe(self, &compact_bytes[0..4]).0;
-        let three_mode_value = to_variable_unsafe(self, &compact_bytes[1..5]).0;
-        let value = self.random_access(
-            compress_mode,
-            vec![
-                zero_mode_value,
-                one_mode_value,
-                two_mode_value,
-                three_mode_value,
-            ],
-        );
-
-        // Will need to divide by 4 (remove least 2 significnat bits) for mode 0, 1, 2.  Those bits stores the encoding mode
-        let three = self.constant(F::from_canonical_u8(3));
-        let is_eq_three = self.is_equal(compress_mode, three);
-        let div_by_4 = self.not(is_eq_three);
-
-        let four = self.constant(F::from_canonical_u8(4));
-        let value_div_4 = self.int_div(value, four);
-
-        let decoded_int = self.select(div_by_4, value_div_4, value);
-
-        let five = self.constant(F::from_canonical_u8(5));
-        let one = self.one();
-        let two = self.two();
-        let encoded_byte_length = self.random_access(compress_mode, vec![one, two, four, five]);
-
-        (decoded_int, compress_mode, encoded_byte_length)
-    }
-}
-
 pub trait DecodingMethods {
+    /// Decodes the byte representation of a compact int into its integer representation and its
+    /// corresponding compress mode, spec: https://docs.substrate.io/reference/scale-codec/#fn-1.
+    fn decode_compact_int(
+        &mut self,
+        compact_bytes: ArrayVariable<ByteVariable, 5>,
+    ) -> (U32Variable, Variable);
+
     fn decode_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
@@ -168,6 +37,57 @@ pub trait DecodingMethods {
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
+    /// TODO: Rewrite with CircuitVariable, follow this: https://docs.substrate.io/reference/scale-codec/#fn-1
+    fn decode_compact_int(
+        &mut self,
+        compact_bytes: ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>,
+    ) -> (U32Variable, Variable) {
+        // If BigInt encoding, check that the length is 4.
+
+        let bool_targets = compact_bytes
+            .data
+            .iter()
+            .flat_map(|x| {
+                let mut bool_targets = x.as_bool_targets();
+                bool_targets.reverse();
+                bool_targets
+            })
+            .collect::<Vec<_>>();
+
+        // Get the compress mode.
+        let compress_mode = Variable(self.api.le_sum(bool_targets[0..2].iter()));
+
+        // Get all of the possible bytes that could be used to represent the compact int.
+        let zero_mode_value = Variable(self.api.le_sum(bool_targets[2..8].iter()));
+        let one_mode_value = Variable(self.api.le_sum(bool_targets[2..16].iter()));
+        let two_mode_value = Variable(self.api.le_sum(bool_targets[2..32].iter()));
+        let three_mode_value = Variable(self.api.le_sum(bool_targets[8..40].iter()));
+        let value = self.select_array_random_gate(
+            &[
+                zero_mode_value,
+                one_mode_value,
+                two_mode_value,
+                three_mode_value,
+            ],
+            compress_mode,
+        );
+        let value = U32Variable::from_variables_unsafe(&[value]);
+
+        // If mode is 3, check the upper 6 bits are 0. This is because the upper 6 bits are used to
+        // represent the number of bytes for the big int - 4. Since we only support u32, the
+        // number of bytes will always be 4, so the upper 6 bits should always be 0.
+        let three = self.constant(L::Field::from_canonical_u8(3));
+        let is_mode_three = self.is_equal(compress_mode, three);
+        let zero = self.constant(L::Field::from_canonical_u8(0));
+        let encoded_byte_length = Variable(self.api.le_sum(bool_targets[2..8].iter()));
+        let is_encoded_length_zero = self.is_equal(encoded_byte_length, zero);
+        // If mode is 3, then is_encoded_length_zero should be true.
+        let is_valid_encoded_length_check = self.and(is_mode_three, is_encoded_length_zero);
+        self.assert_is_equal(is_mode_three, is_valid_encoded_length_check);
+
+        (value, compress_mode)
+    }
+
     // Decode an array of headers into their components. header_hashes are used for the RLC challenge.
     fn decode_headers<const S: usize, const N: usize>(
         &mut self,
@@ -195,11 +115,10 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
 
         // Next field is the block number
-        // Can need up to 5 bytes to represent a compact u32
-        const MAX_BLOCK_NUMBER_SIZE: usize = 5;
-        let (block_number_target, compress_mode, _) = self
-            .api
-            .decode_compact_int(&header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_SIZE]);
+        let block_number_bytes = ArrayVariable::<ByteVariable, MAX_BLOCK_NUMBER_BYTES>::from(
+            header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_BYTES].to_vec(),
+        );
+        let (block_number, compress_mode) = self.decode_compact_int(block_number_bytes);
 
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
@@ -209,8 +128,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             Bytes32Variable::from(&header.header_bytes[37..37 + HASH_SIZE]),
         ];
 
-        let state_root =
-            self.select_array_random_gate(&all_possible_state_roots, Variable(compress_mode));
+        let state_root = self.select_array_random_gate(&all_possible_state_roots, compress_mode);
 
         // Need the convert the encoded header header bytes into an array of variables.
         // The byte variable array representation is in bits, and that significantly increases the
@@ -249,7 +167,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let data_root = Bytes32Variable::from(data_root_byte_vars.as_slice());
 
         HeaderVariable {
-            block_number: U32Variable::from_variables_unsafe(&[Variable(block_number_target)]),
+            block_number,
             parent_hash,
             state_root,
             data_root,
@@ -300,10 +218,11 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 pub mod tests {
     use std::env;
 
+    use codec::{Compact, Encode};
     use plonky2x::frontend::vars::U32Variable;
     use plonky2x::prelude::{
-        ArrayVariable, Bytes32Variable, BytesVariable, DefaultBuilder, Field, GoldilocksField,
-        U64Variable,
+        ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, DefaultBuilder, Field,
+        GoldilocksField, U64Variable, Variable,
     };
     use plonky2x::utils::{bytes, bytes32};
     use testing_utils::tests::{
@@ -311,10 +230,50 @@ pub mod tests {
     };
 
     use super::DecodingMethods;
-    use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE};
+    use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_BLOCK_NUMBER_BYTES, MAX_HEADER_SIZE};
     use crate::testing_utils;
     use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
+
+    #[test]
+    fn test_decode_compact_int() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        type F = GoldilocksField;
+
+        let mut builder = DefaultBuilder::new();
+
+        let compact_bytes = builder.read::<ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>>();
+
+        let (value, compress_mode) = builder.decode_compact_int(compact_bytes);
+        builder.write(value);
+        builder.write(compress_mode);
+
+        let circuit = builder.build();
+
+        let test_cases = [(1u32, 0), (64u32, 1), (16384u32, 2), (4294967295u32, 3)];
+
+        for i in 0..test_cases.len() {
+            let mut input = circuit.input();
+
+            let encoded_block_num = Compact(test_cases[i].0).encode();
+            // Extend encoding to MAX_BLOCK_NUMBER_BYTES.
+            let mut encoded_block_num = encoded_block_num.to_vec();
+            encoded_block_num.resize(MAX_BLOCK_NUMBER_BYTES, 0);
+
+            input.write::<ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>>(encoded_block_num);
+
+            let (proof, mut output) = circuit.prove(&input);
+            circuit.verify(&proof, &input, &output);
+
+            let value = output.read::<U32Variable>();
+            let compress_mode = output.read::<Variable>();
+
+            assert_eq!(value, test_cases[i].0);
+            assert_eq!(compress_mode, F::from_canonical_usize(test_cases[i].1));
+        }
+    }
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]

@@ -2,10 +2,17 @@
     "entrypoints": [
         {
             "name": "step",
-            "framework": "plonky2",
+            "framework": "plonky2x",
             "baseDir": ".",
-            "buildCommand": "cargo run --release --bin step build && mv ./target/release/step ./build/step",
-            "proveCommand": "env RUST_LOG=debug ./build/step prove-wrapped --input-json input.json --wrapper-path /verifier-build"
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin step --release build && mv ./target/release/step ./build/step",
+            "proveCommand": "RUST_LOG=info ./build/step prove input.json"
+        },
+        {
+            "name": "rotate",
+            "framework": "plonky2x",
+            "baseDir": ".",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin rotate --release build && mv ./target/release/rotate ./build/rotate",
+            "proveCommand": "RUST_LOG=info ./build/rotate prove input.json"
         }
     ]
 }

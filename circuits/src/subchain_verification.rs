@@ -297,14 +297,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 #[cfg(test)]
 mod tests {
     use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
-    use plonky2x::prelude::{DefaultParameters, HintRegistry};
+    use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
     use super::*;
-    use crate::builder::decoder::FloorDivGenerator;
 
-    //  Need a test circuit, since map reduce requires a circuit generic
+    // Test circuit, as MapReduce requires a circuit to be defined.
     #[derive(Clone, Debug)]
-
     struct TestSubchainVerificationCircuit<
         const MAX_HEADER_SIZE: usize,
         const MAX_NUM_HEADERS: usize,
@@ -339,8 +337,6 @@ mod tests {
         {
             registry
                 .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
-            let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
-            registry.register_simple::<FloorDivGenerator<L::Field, D>>(floor_div_id);
 
             let id = MapReduceGenerator::<
                 L,
@@ -369,7 +365,7 @@ mod tests {
     fn test_verify_subchain() {
         env_logger::try_init().unwrap_or_default();
 
-        let mut builder = CircuitBuilder::<L, D>::new();
+        let mut builder = DefaultBuilder::new();
 
         const MAX_NUM_HEADERS: usize = 32;
         const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;

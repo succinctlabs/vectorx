@@ -5,7 +5,6 @@ use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters};
 
-use crate::builder::decoder::FloorDivGenerator;
 use crate::builder::header::HeaderRangeFetcherHint;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::consts::HEADERS_PER_MAP;
@@ -116,9 +115,6 @@ impl<
         generator_registry
             .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_LENGTH, HEADERS_PER_MAP>>();
         generator_registry.register_async_hint::<HintSimpleJustification<MAX_AUTHORITY_SET_SIZE>>();
-
-        let floor_div_id = FloorDivGenerator::<L::Field, D>::id();
-        generator_registry.register_simple::<FloorDivGenerator<L::Field, D>>(floor_div_id);
 
         let mr_id = MapReduceGenerator::<
             L,

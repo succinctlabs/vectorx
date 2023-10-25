@@ -252,6 +252,7 @@ pub mod tests {
 
         let circuit = builder.build();
 
+        // Test cases are (compact int, compress mode).
         let test_cases = [(1u32, 0), (64u32, 1), (16384u32, 2), (4294967295u32, 3)];
 
         for i in 0..test_cases.len() {

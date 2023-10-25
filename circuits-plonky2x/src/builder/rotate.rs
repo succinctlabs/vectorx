@@ -28,7 +28,6 @@ pub trait RotateMethods {
         header_hash: &Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
-        end_position: &Variable,
         new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     );
@@ -80,11 +79,9 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         header_hash: &Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
-        end_position: &Variable,
         new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) {
-        let one = self.one();
         let true_v = self._true();
 
         // Convert header to Variables from ByteVariables for get_fixed_subarray.
@@ -97,7 +94,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let header_as_variables =
             ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
 
-        // Initialize the cursor to the start position.
+        // Initialize the cursor to the start position, which is the start of the consensus log
+        // corresponding to an authority set change event in the epoch end header.
         let mut cursor = *start_position;
 
         // Get the subarray of the header bytes that we want to verify. The header_hash is used as
@@ -131,7 +129,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
         let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
-        let delay_len = self.constant::<Variable>(L::Field::from_canonical_usize(DELAY_LENGTH));
         let prefix_len = self.constant::<Variable>(L::Field::from_canonical_usize(PREFIX_LENGTH));
 
         // Increment the cursor by the prefix length to get to the start of the encoded authority set.
@@ -164,15 +161,16 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             let weight_check = self.or(weight_match, validator_disabled);
             self.assert_is_equal(weight_check, true_v);
             cursor = self.add(cursor, weight_len);
-        }
 
-        // Verifies the delay is at header_bytes[end_position - 4..end_position].
-        let mut delay_cursor = self.sub(*end_position, delay_len);
-        for j in 0..DELAY_LENGTH {
-            // TODO: select_array is inefficient, see if there's a better way to do this.
-            let extracted_delay_byte = self.select_array(&header.header_bytes.data, delay_cursor);
-            self.assert_is_equal(extracted_delay_byte, expected_delay_bytes[j]);
-            delay_cursor = self.add(delay_cursor, one);
+            // If at the end of the authority set, verify the correctness of the delay bytes.
+            let not_at_end = self.not(at_end);
+
+            let extracted_delay = ArrayVariable::<ByteVariable, DELAY_LENGTH>::from(
+                subarray[idx..idx + DELAY_LENGTH].to_vec(),
+            );
+            let delay_match = self.is_equal(extracted_delay, expected_delay_bytes.clone());
+            let delay_check = self.or(delay_match, not_at_end);
+            self.assert_is_equal(delay_check, true_v);
         }
 
         // Verify the new authority set commitment.
@@ -222,7 +220,6 @@ pub mod tests {
 
         let num_authorities = output_stream.read::<Variable>(&mut builder);
         let start_position = output_stream.read::<Variable>(&mut builder);
-        let end_position = output_stream.read::<Variable>(&mut builder);
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
         let new_pubkeys =
             output_stream.read::<ArrayVariable<AvailPubkeyVariable, NUM_AUTHORITIES>>(&mut builder);
@@ -236,7 +233,6 @@ pub mod tests {
             &target_header_hash,
             &num_authorities,
             &start_position,
-            &end_position,
             &new_pubkeys,
             &expected_new_authority_set_hash,
         );

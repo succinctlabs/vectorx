@@ -88,9 +88,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         output_stream.write_value::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(
             justification_data.pubkeys,
         );
-        output_stream.write_value::<Variable>(L::Field::from_canonical_usize(
-            justification_data.num_authorities,
-        ));
+        output_stream.write_value::<U32Variable>(justification_data.num_authorities as u32);
     }
 }
 
@@ -110,10 +108,10 @@ pub trait GrandpaJustificationVerifier {
     /// Verify the number of validators that signed is greater than or equal to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
-        num_active_authorities: Variable,
+        num_active_authorities: U32Variable,
         validator_signed: &ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>,
-        threshold_numerator: Variable,
-        threshold_denominator: Variable,
+        threshold_numerator: U32Variable,
+        threshold_denominator: U32Variable,
     );
 
     /// Verify a simple justification on a block from the specified authority set.
@@ -153,7 +151,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             let at_end = self.is_equal(curr_idx, num_active_authorities);
             let not_at_end = self.not(at_end);
 
-            // Once reaching the last validator, turn enabled to false to ensure that the commitment_so_far is not updated.
+            // Upon reaching the last validator, turn enabled to false to ensure that the commitment_so_far is not updated.
             // This is because the authority set commitment is the chained hash of the first num_active_authorities public keys.
             authority_enabled = self.and(authority_enabled, not_at_end);
 
@@ -174,15 +172,17 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
     /// Verify the number of validators that signed is greater than or equal to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
-        num_active_authorities: Variable,
+        num_active_authorities: U32Variable,
         validator_signed: &ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>,
-        threshold_numerator: Variable,
-        threshold_denominator: Variable,
+        threshold_numerator: U32Variable,
+        threshold_denominator: U32Variable,
     ) {
         let true_v = self._true();
-        let mut num_signed: Variable = self.zero();
+        let mut num_signed: U32Variable = self.zero();
         for i in 0..MAX_NUM_AUTHORITIES {
-            num_signed = self.add(num_signed, validator_signed[i].variable);
+            // 1 if validator signed, 0 otherwise.
+            let val_signed_u32 = U32Variable::from_variables(self, &[validator_signed[i].variable]);
+            num_signed = self.add(num_signed, val_signed_u32);
         }
 
         let scaled_num_signed = self.mul(num_signed, threshold_denominator);
@@ -220,7 +220,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             .read::<ArrayVariable<EDDSASignatureTarget<Curve>, MAX_NUM_AUTHORITIES>>(self);
         let pubkeys =
             output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>>(self);
-        let num_active_authorities = output_stream.read::<Variable>(self);
+        let num_active_authorities = output_stream.read::<U32Variable>(self);
 
         // Compress the pubkeys from affine points to bytes.
         let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>::from(
@@ -233,7 +233,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 
         // Verify the authority set commitment is valid.
         self.verify_authority_set_commitment(
-            num_active_authorities,
+            num_active_authorities.variable,
             authority_set_hash,
             &compressed_pubkeys,
         );
@@ -263,8 +263,8 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         );
 
         // Verify at least 2/3 of the validators have signed the message.
-        let two_v = self.constant::<Variable>(L::Field::from_canonical_usize(2));
-        let three_v = self.constant::<Variable>(L::Field::from_canonical_usize(3));
+        let two_v = self.constant::<U32Variable>(2u32);
+        let three_v = self.constant::<U32Variable>(3u32);
         self.verify_voting_threshold(num_active_authorities, &validator_signed, two_v, three_v)
     }
 }

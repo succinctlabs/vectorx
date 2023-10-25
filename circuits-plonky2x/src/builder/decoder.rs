@@ -271,19 +271,19 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // The next 4 bytes is the block number.
         let mut block_number_bytes = precommit[33..37].to_vec();
-        // Need to reverse the bytes since the block number is little endian.
+        // Need to reverse the bytes since the block number bytes are stored as little endian.
         block_number_bytes.reverse();
         let block_number = U32Variable::decode(self, &block_number_bytes);
 
         // The next 8 bytes is the justification round.
         let mut justification_round_bytes = precommit[37..45].to_vec();
-        // Need to reverse the bytes since the justification round is little endian.
+        // Need to reverse the bytes since the justification round are stored as little endian.
         justification_round_bytes.reverse();
         let justification_round = U64Variable::decode(self, &precommit[37..45]);
 
         // The next 8 bytes is the authority set id.
         let mut authority_set_id_bytes = precommit[45..53].to_vec();
-        // Need to reverse the bytes since the authority set id is little endian.
+        // Need to reverse the bytes since the authority set id are stored as little endian.
         authority_set_id_bytes.reverse();
         let authority_set_id = U64Variable::decode(self, &authority_set_id_bytes);
 
@@ -426,6 +426,9 @@ pub mod tests {
             58, 0, 0, 0, 0, 0, 0, 42, 1, 0, 0, 0, 0, 0, 0,
         ];
 
+        let expected_block_number = 317857u32;
+        let expected_authority_set_id = 298u64;
+
         input.write::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(encoded_precommit);
 
         let (proof, mut output) = circuit.prove(&input);
@@ -434,7 +437,8 @@ pub mod tests {
 
         let block_number = output.read::<U32Variable>();
         let authority_set_id = output.read::<U64Variable>();
-        println!("block_number: {:?}", block_number);
-        println!("authority_set_id: {:?}", authority_set_id);
+
+        assert_eq!(block_number, expected_block_number);
+        assert_eq!(authority_set_id, expected_authority_set_id);
     }
 }

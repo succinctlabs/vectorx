@@ -59,13 +59,9 @@ impl<
         output_stream
             .write_value::<Variable>(L::Field::from_canonical_usize(rotate_data.num_authorities));
 
-        // Start of consensus log.
+        // Start position of consensus log in the header bytes.
         output_stream
             .write_value::<Variable>(L::Field::from_canonical_usize(rotate_data.start_position));
-
-        // End position.
-        output_stream
-            .write_value::<Variable>(L::Field::from_canonical_usize(rotate_data.end_position));
 
         // Expected new authority set hash.
         output_stream.write_value::<Bytes32Variable>(H256::from_slice(
@@ -143,7 +139,6 @@ impl<
         let target_header = output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(builder);
         let num_authorities = output_stream.read::<Variable>(builder);
         let start_position = output_stream.read::<Variable>(builder);
-        let end_position = output_stream.read::<Variable>(builder);
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(builder);
         let new_pubkeys = output_stream
             .read::<ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
@@ -158,7 +153,6 @@ impl<
             &target_header_hash,
             &num_authorities,
             &start_position,
-            &end_position,
             &new_pubkeys,
             &expected_new_authority_set_hash,
         );

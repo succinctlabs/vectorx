@@ -279,36 +279,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
-name = "avail"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "avail-subxt",
- "dotenv",
- "ed25519-dalek",
- "env_logger 0.9.3",
- "ethers",
- "ff_ce",
- "hex",
- "itertools 0.10.5",
- "log",
- "num",
- "parity-scale-codec",
- "plonky2",
- "plonky2x",
- "plonky2x-derive",
- "primitive-types 0.12.2",
- "reqwest",
- "serde",
- "serde_json",
- "sha2 0.10.8",
- "sha256",
- "sp-core",
- "tokio",
-]
-
-[[package]]
 name = "avail-subxt"
 version = "0.4.0"
 source = "git+https://github.com/availproject/avail.git#841e974dab6a84a7d1cd93f57c5e40f071742971"
@@ -6074,6 +6044,36 @@ name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
+
+[[package]]
+name = "vectorx"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "avail-subxt",
+ "dotenv",
+ "ed25519-dalek",
+ "env_logger 0.9.3",
+ "ethers",
+ "ff_ce",
+ "hex",
+ "itertools 0.10.5",
+ "log",
+ "num",
+ "parity-scale-codec",
+ "plonky2",
+ "plonky2x",
+ "plonky2x-derive",
+ "primitive-types 0.12.2",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "sha256",
+ "sp-core",
+ "tokio",
+]
 
 [[package]]
 name = "version_check"

@@ -123,6 +123,7 @@ impl RpcDataFetcher {
             .unwrap()
             .unwrap();
 
+        // TODO: Reference the following comment for verifying the compact scale encoding inside of the circuit.
         // The grandpa_authorities_bytes has the following format:
         // [V, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
         // Where V is a "Version" number (right now it's 1u8)
@@ -296,7 +297,7 @@ impl RpcDataFetcher {
 
         let mut position = 0;
         let number_encoded = epoch_end_block.encode();
-        // skip past parent_hash, number, state_root, extrinsics_root
+        // skip past parent_hash, number, state_root, extrinsics_root.
         position += 32 + number_encoded.len() + 32 + 32;
 
         let mut found_correct_log = false;
@@ -307,7 +308,7 @@ impl RpcDataFetcher {
                 if consensus_id == [70, 82, 78, 75] {
                     found_correct_log = true;
 
-                    // TODO: have to figure out what value[1,2] means?
+                    // TODO: Find out what value[1,2] means?
                     assert_eq!(value[0], 1); // To denote that it is a `ScheduledChange`
                     let mut cursor = 3;
                     let authorities_bytes = &value[cursor..];
@@ -339,15 +340,16 @@ impl RpcDataFetcher {
                     // Circuit should verify the following:
                     //  1) header[position+1] == 4
                     //  2) verify header[position+2..position+6] == [70, 82, 78, 75]
-                    //  3) skip header[position+6..position+6+2] == random stuff, TODO what is this
+                    //  3) skip header[position+6..position+6+2] == random stuff
                     //  4) verify header[position+8] == 1
-                    //  5) verify header[position+8..position+8+2] == random stuff, TODO what is this
+                    //  5) verify header[position+8..position+8+2] == random stuff
                     //  6) hash(header[position+10..position+10+num*(40)]) == new_authority_set_hash
                     //  7) verify[position+5+2+num_authorities*(32+8)..+4] == [0, 0, 0, 0] // delay = 0
                     break;
                 }
             }
             let encoded = log_1.encode();
+            // If this is not the correct log, increment position by the length of the encoded log.
             if !found_correct_log {
                 position += encoded.len();
             }
@@ -370,9 +372,10 @@ impl RpcDataFetcher {
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
-        // 1 unknown byte, 1 consensus id, 4 consensus id, 5 unknown bytes, encoded pubkeys, 4 delay bytes
-        let end_position =
-            position + (1 + 1 + 4 + 5) + ((32 + 8) * fetched_authorities.1.len()) + 4;
+        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown, 1 scheduled change, 2 unknown.
+        let prefix_length = 11;
+        // prefix_length, encoded pubkeys, 4 delay bytes.
+        let end_position = position + prefix_length + ((32 + 8) * fetched_authorities.1.len()) + 4;
 
         HeaderRotateData {
             header_bytes,
@@ -421,7 +424,7 @@ mod tests {
     async fn test_get_new_authority_set() {
         let fetcher = RpcDataFetcher::new().await;
 
-        // A binary search given a target_authority_set_id, returns the epoch end block number
+        // A binary search given a target_authority_set_id, returns the epoch end block number.
         let target_authority_set_id = 513;
         println!("target_authority_set_id {:?}", target_authority_set_id);
         let mut low = 0;
@@ -436,7 +439,7 @@ mod tests {
             match mid_authority_set_id.cmp(&target_authority_set_id) {
                 Ordering::Equal => {
                     if mid == 0 {
-                        // Special case: there is no block "mid - 1", so we just return the found block.
+                        // Special case: there is no block "mid - 1", just return the found block.
                         epoch_end_block_number = mid;
                         break;
                     }
@@ -453,17 +456,16 @@ mod tests {
             }
         }
 
-        // TODO: handle the case where the authority set id is not found
+        // Verify that we found an epoch end block.
         assert_ne!(epoch_end_block_number, 0);
         println!("epoch_end_block_number {:?}", epoch_end_block_number);
 
-        // let epoch_end_block_number = 272535 + 180;
         let previous_authority_set_id = fetcher
             .get_authority_set_id(epoch_end_block_number - 1)
             .await;
-        // println!("previous_authority_set_id {:?}", previous_authority_set_id);
         let authority_set_id = fetcher.get_authority_set_id(epoch_end_block_number).await;
-        // println!("authority_set_id {:?}", authority_set_id);
+
+        // Verify this is an epoch end block.
         assert_eq!(previous_authority_set_id + 1, authority_set_id);
         assert_eq!(authority_set_id, target_authority_set_id);
 

@@ -10,7 +10,7 @@ use crate::consts::{
 use crate::vars::*;
 
 pub trait DecodingMethods {
-    /// Decodes the byte representation of a compact int into its integer representation and its
+    /// Decodes the byte representation of a compact u32 into its integer representation and its
     /// corresponding compress mode, spec: https://docs.substrate.io/reference/scale-codec/#fn-1.
     fn decode_compact_int(
         &mut self,
@@ -35,7 +35,7 @@ pub trait DecodingMethods {
     ) -> PrecommitVariable;
 }
 
-// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
+// Note: Assumes that all the inputted byte array are already range checked to be valid bytes.
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
     fn decode_compact_int(
         &mut self,
@@ -92,7 +92,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         (value, compress_mode)
     }
 
-    // Decode an array of headers into their components. header_hashes are used for the RLC challenge.
+    // Decode an array of headers into their components. header_hashes are used for RLC challenge.
     fn decode_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
@@ -109,16 +109,15 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
     }
 
     /// Decode a header into its components. header_hash is used for the RLC challenge.
-    /// TODO: Use EvmVariable types with decode instead of targets!
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
         header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
-        // The first 32 bytes are the parent hash
+        // The first 32 bytes are the parent hash.
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
 
-        // Next field is the block number
+        // Next field is the block number. The block number is encoded as a compact u32.
         let block_number_bytes = ArrayVariable::<ByteVariable, MAX_BLOCK_NUMBER_BYTES>::from(
             header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_BYTES].to_vec(),
         );
@@ -127,17 +126,14 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
             Bytes32Variable::from(&header.header_bytes[34..34 + HASH_SIZE]),
-            // TODO: why is 35 missing here
+            // TODO: Why is 35 missing here?
             Bytes32Variable::from(&header.header_bytes[36..36 + HASH_SIZE]),
             Bytes32Variable::from(&header.header_bytes[37..37 + HASH_SIZE]),
         ];
 
         let state_root = self.select_array_random_gate(&all_possible_state_roots, compress_mode);
 
-        // Need the convert the encoded header header bytes into an array of variables.
-        // The byte variable array representation is in bits, and that significantly increases the
-        // number of contraints needed for get_fixed_subarray.
-
+        // Convert the encoded header bytes to variables for get_fixed_subarray.
         let header_variables = header
             .header_bytes
             .as_vec()
@@ -145,30 +141,30 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .map(|x: &ByteVariable| x.to_variable(self))
             .collect::<Vec<_>>();
 
+        // The next field is the data root. The data root is located at the end of the header.
         let data_root_offset =
-            self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END)); // Since we're working with bits
-
+            self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
 
-        // If header_size == 0, then set data_root_start to 0
+        // If header_size == 0, then set data_root_start to 0.
         let header_is_zero_size = self.is_zero(header.header_size);
         let zero = self.zero();
         data_root_start = self.select(header_is_zero_size, zero, data_root_start);
 
+        // Extract the data root from the header.
         let data_root_variables: Vec<Variable> = self
             .get_fixed_subarray::<S, HASH_SIZE>(
                 &ArrayVariable::<Variable, S>::from(header_variables),
                 data_root_start,
-                &header_hash.as_bytes()[0..15], // Seed the challenger with the first 15 bytes (120 bits) of the header hash
+                // Seed the challenger with the first 15 bytes (120 bits) of the header hash.
+                &header_hash.as_bytes()[0..15],
             )
             .as_vec();
-
-        let data_root_byte_vars = data_root_variables
+        let data_root_bytes = data_root_variables
             .iter()
             .map(|x| ByteVariable::from_target(self, x.0))
             .collect::<Vec<_>>();
-
-        let data_root = Bytes32Variable::from(data_root_byte_vars.as_slice());
+        let data_root = Bytes32Variable::from(data_root_bytes.as_slice());
 
         HeaderVariable {
             block_number,
@@ -193,19 +189,19 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // The next 4 bytes is the block number.
         let mut block_number_bytes = precommit[33..37].to_vec();
-        // Need to reverse the bytes since the block number bytes are stored as little endian.
+        // Reverse the bytes since the block number bytes are stored as LE.
         block_number_bytes.reverse();
         let block_number = U32Variable::decode(self, &block_number_bytes);
 
         // The next 8 bytes is the justification round.
         let mut justification_round_bytes = precommit[37..45].to_vec();
-        // Need to reverse the bytes since the justification round are stored as little endian.
+        // Reverse the bytes since the justification round are stored as LE.
         justification_round_bytes.reverse();
         let justification_round = U64Variable::decode(self, &precommit[37..45]);
 
         // The next 8 bytes is the authority set id.
         let mut authority_set_id_bytes = precommit[45..53].to_vec();
-        // Need to reverse the bytes since the authority set id are stored as little endian.
+        // Reverse the bytes since the authority set id are stored as LE.
         authority_set_id_bytes.reverse();
         let authority_set_id = U64Variable::decode(self, &authority_set_id_bytes);
 
@@ -262,7 +258,9 @@ pub mod tests {
         for i in 0..test_cases.len() {
             let mut input = circuit.input();
 
+            // Use compact encoding to encode the block number.
             let encoded_block_num = Compact(test_cases[i].0).encode();
+
             // Extend encoding to MAX_BLOCK_NUMBER_BYTES.
             let mut encoded_block_num = encoded_block_num.to_vec();
             encoded_block_num.resize(MAX_BLOCK_NUMBER_BYTES, 0);

@@ -168,8 +168,7 @@ pub trait DecodingMethods {
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
-    // Assumes that header and header_hash are properly linked already
-    // header_hash is only used for the RLC challenge
+    // Decode an array of headers into their components. header_hashes are used for the RLC challenge.
     fn decode_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
@@ -185,7 +184,8 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .unwrap()
     }
 
-    // Note that S is the max header size in bits
+    /// Decode a header into its components. header_hash is used for the RLC challenge.
+    /// TODO: Use EvmVariable types with decode instead of targets!
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
@@ -256,6 +256,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         }
     }
 
+    /// Decode a precommit message into its components.
     fn decode_precommit(
         &mut self,
         precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,

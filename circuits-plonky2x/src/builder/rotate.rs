@@ -7,11 +7,16 @@ use crate::consts::{DELAY_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH
 use crate::vars::*;
 
 pub trait RotateMethods {
+    /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
+    /// for the epoch end header.
+    ///
+    /// TODO: Find the spec for this prefix!
     fn verify_prefix_epoch_end_header<const MAX_SUBARRAY_SIZE: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>,
     );
 
+    /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -63,6 +68,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Skip 2 unknown bytes.
     }
+
     /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
@@ -128,7 +134,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let delay_len = self.constant::<Variable>(L::Field::from_canonical_usize(DELAY_LENGTH));
         let prefix_len = self.constant::<Variable>(L::Field::from_canonical_usize(PREFIX_LENGTH));
 
-        // Increment the cursor by the prefix length.
+        // Increment the cursor by the prefix length to get to the start of the encoded authority set.
         cursor = self.add(cursor, prefix_len);
 
         let mut validator_disabled = self._false();

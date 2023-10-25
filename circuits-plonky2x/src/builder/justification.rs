@@ -95,8 +95,11 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
 }
 
 pub trait GrandpaJustificationVerifier {
-    /// Verify the authority set commitment of an authority set. This is the chained hash of the first num_active_authorities public keys.
-    /// Specifically, the chained hash takes the form: SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])...
+    /// Verify the authority set commitment of an authority set. This is the chained hash of the
+    /// first num_active_authorities public keys.
+    ///
+    /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
+    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
     fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
@@ -104,6 +107,7 @@ pub trait GrandpaJustificationVerifier {
         authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
     );
 
+    /// Verify the number of validators that signed is greater than or equal to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
@@ -112,6 +116,13 @@ pub trait GrandpaJustificationVerifier {
         threshold_denominator: Variable,
     );
 
+    /// Verify a simple justification on a block from the specified authority set.
+    ///
+    /// Specifically, this verifies that:
+    ///     1) Authority set commitment matches the authority set.
+    ///     2) Specified precommit message matches the block #, authority set id, and block hash.
+    ///     3) Signatures on the precommit message are valid from each validator marked as signed.
+    ///     4) At least 2/3 of the validators have signed the precommit message.
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
@@ -122,6 +133,11 @@ pub trait GrandpaJustificationVerifier {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for CircuitBuilder<L, D> {
+    /// Verify the authority set commitment of an authority set. This is the chained hash of the
+    /// first num_active_authorities public keys.
+    ///
+    /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
+    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
     fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
@@ -155,6 +171,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         self.assert_is_equal(authority_set_commitment, commitment_so_far);
     }
 
+    /// Verify the number of validators that signed is greater than or equal to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
@@ -174,6 +191,13 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         self.assert_is_equal(is_valid_num_signed, true_v);
     }
 
+    /// Verify a simple justification on a block from the specified authority set.
+    ///
+    /// Specifically, this verifies that:
+    ///     1) Authority set commitment matches the authority set.
+    ///     2) Specified precommit message matches the block #, authority set id, and block hash.
+    ///     3) Signatures on the precommit message are valid from each validator marked as signed.
+    ///     4) At least 2/3 of the validators have signed the precommit message.
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
@@ -216,7 +240,6 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 
         // Verify the correctness of the encoded_precommit message.
         let decoded_precommit = self.decode_precommit(encoded_precommit);
-
         self.assert_is_equal(decoded_precommit.block_number, block_number);
         self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
         self.assert_is_equal(decoded_precommit.block_hash, block_hash);

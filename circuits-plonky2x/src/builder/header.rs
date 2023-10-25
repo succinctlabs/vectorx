@@ -12,11 +12,13 @@ use crate::input::RpcDataFetcher;
 use crate::vars::*;
 
 pub trait HeaderMethods {
+    /// Get the Blake2b hash of an encoded header.
     fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable;
 
+    /// Get the Blake2b hashes of an array of encoded headers.
     fn hash_encoded_headers<
         const MAX_HEADER_SIZE: usize,
         const MAX_CHUNK_SIZE: usize,

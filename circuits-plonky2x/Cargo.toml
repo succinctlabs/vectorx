@@ -7,44 +7,38 @@ edition = "2021"
 name = "step"
 path = "bin/step.rs"
 
+[features]
+ci = []
+
 [dependencies]
 env_logger = { version = "0.9.0", default-features = false }
-futures-util = { version = "0.3", default-features = false, features = [
-    "async-await",
-    "sink",
-    "std",
-] }
 ed25519-dalek = "1.0.1"
-hashbrown = "0.14.0"
 hex = "0.4.3"
 itertools = "0.10.5"
 ff = { package = "ff_ce", version = "0.11", features = ["derive"] }
-lazy_static = "1.4.0"
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = ["rand"] }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
 plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }
-rand = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.86"
 tokio = { version = "1.2.0", features = ["full"] }
-tokio-tungstenite = { version = "0.17.2", features = ["native-tls"] }
-avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "b68af9607e3d0db972eb54b1ccea70223584cfe9" }
-subxt = "0.27"
 async-trait = "0.1.73"
 reqwest = "0.11.20"
-codec = { package = "parity-scale-codec", version = "3.0.0", default-features = false, features = [
+ethers = "2.0.10"
+sha256 = "1.4.0"
+primitive-types = "0.12.1"
+
+avail-subxt = { git = "https://github.com/availproject/avail.git" }
+sp-core = { version = "21.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",
     "full",
     "bit-vec",
 ] }
-ethers = "2.0.10"
-pallet-grandpa = "23.0.0"
-sp-application-crypto = "25.0.0"
-sp-core = "23.0.0"
-sha256 = "1.4.0"
-primitive-types = "0.12.1"
+sha2 = "0.10.8"
+dotenv = "0.15.0"
 
 [dev-dependencies]
 anyhow = "1.0.68"

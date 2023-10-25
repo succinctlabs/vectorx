@@ -1,11 +1,21 @@
 use avail_subxt::primitives::Header;
 use codec::{Decode, Encode};
-use primitive_types::H256;
+use ethers::types::H256;
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519::{Public as EdPublic, Signature};
 use sp_core::Bytes;
 
 use crate::vars::{AffinePoint, Curve};
+
+pub struct HeaderRotateData {
+    pub header_bytes: Vec<u8>,
+    pub header_size: usize,
+    pub num_authorities: usize,
+    pub start_position: usize,
+    pub end_position: usize,
+    pub new_authority_set_hash: Vec<u8>,
+    pub padded_pubkeys: Vec<H256>,
+}
 
 pub struct SimpleJustificationData {
     pub authority_set_id: u64,
@@ -13,6 +23,8 @@ pub struct SimpleJustificationData {
     pub validator_signed: Vec<bool>,
     pub pubkeys: Vec<AffinePoint<Curve>>,
     pub signatures: Vec<[u8; 64]>,
+    pub num_authorities: usize,
+    pub current_authority_set_hash: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Decode, Encode, Deserialize)]

@@ -12,11 +12,13 @@ use crate::input::RpcDataFetcher;
 use crate::vars::*;
 
 pub trait HeaderMethods {
+    /// Get the Blake2b hash of an encoded header.
     fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable;
 
+    /// Get the Blake2b hashes of an array of encoded headers.
     fn hash_encoded_headers<
         const MAX_HEADER_SIZE: usize,
         const MAX_CHUNK_SIZE: usize,
@@ -59,8 +61,9 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
     }
 }
 
+// Fetch a range of headers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HeaderFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
+pub struct HeaderRangeFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 
 #[async_trait]
 impl<
@@ -68,7 +71,7 @@ impl<
         const NUM_HEADERS: usize,
         L: PlonkParameters<D>,
         const D: usize,
-    > AsyncHint<L, D> for HeaderFetcherHint<HEADER_LENGTH, NUM_HEADERS>
+    > AsyncHint<L, D> for HeaderRangeFetcherHint<HEADER_LENGTH, NUM_HEADERS>
 {
     async fn hint(
         &self,

@@ -1,19 +1,19 @@
+use async_trait::async_trait;
 use log::debug;
 use num::traits::ToBytes;
 use num::BigUint;
-use plonky2x::frontend::ecc::ed25519::curve::eddsa::{verify_message, EDDSASignature};
+use plonky2x::frontend::ecc::ed25519::gadgets::curve::CircuitBuilderCurveGadget;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
-use plonky2x::frontend::hint::simple::hint::Hint;
+use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
     Field, PlonkParameters, RichField, Variable,
 };
-use plonky2x::utils::to_be_bits;
 use serde::{Deserialize, Serialize};
-use tokio::runtime::Runtime;
 
+use super::decoder::DecodingMethods;
 use crate::consts::ENCODED_PRECOMMIT_LENGTH;
 use crate::input::types::SimpleJustificationData;
 use crate::input::{verify_signature, RpcDataFetcher};
@@ -35,10 +35,15 @@ fn signature_to_value_type<F: RichField>(sig_bytes: &[u8]) -> SignatureValueType
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
 
-impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L, D>
+#[async_trait]
+impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncHint<L, D>
     for HintSimpleJustification<NUM_AUTHORITIES>
 {
-    fn hint(&self, input_stream: &mut ValueStream<L, D>, output_stream: &mut ValueStream<L, D>) {
+    async fn hint(
+        &self,
+        input_stream: &mut ValueStream<L, D>,
+        output_stream: &mut ValueStream<L, D>,
+    ) {
         let block_number = input_stream.read_value::<U32Variable>();
         let authority_set_id = input_stream.read_value::<U64Variable>();
 
@@ -47,13 +52,10 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
             block_number, authority_set_id
         );
 
-        let rt = Runtime::new().expect("failed to create tokio runtime");
-        let justification_data: SimpleJustificationData = rt.block_on(async {
-            let data_fetcher = RpcDataFetcher::new().await;
-            data_fetcher
-                .get_simple_justification::<NUM_AUTHORITIES>(block_number)
-                .await
-        });
+        let data_fetcher = RpcDataFetcher::new().await;
+        let justification_data: SimpleJustificationData = data_fetcher
+            .get_simple_justification::<NUM_AUTHORITIES>(block_number)
+            .await;
 
         if justification_data.authority_set_id != authority_set_id {
             panic!("Authority set id does not match");
@@ -86,18 +88,40 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> Hint<L
         output_stream.write_value::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(
             justification_data.pubkeys,
         );
+        output_stream.write_value::<U32Variable>(justification_data.num_authorities as u32);
     }
 }
 
 pub trait GrandpaJustificationVerifier {
-    fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
+    /// Verify the authority set commitment of an authority set. This is the chained hash of the
+    /// first num_active_authorities public keys.
+    ///
+    /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
+    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
+    fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
     );
 
-    fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
+    /// Verify the number of validators that signed is greater than or equal to the threshold.
+    fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
+        &mut self,
+        num_active_authorities: U32Variable,
+        validator_signed: &ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>,
+        threshold_numerator: U32Variable,
+        threshold_denominator: U32Variable,
+    );
+
+    /// Verify a simple justification on a block from the specified authority set.
+    ///
+    /// Specifically, this verifies that:
+    ///     1) Authority set commitment matches the authority set.
+    ///     2) Specified precommit message matches the block #, authority set id, and block hash.
+    ///     3) Signatures on the precommit message are valid from each validator marked as signed.
+    ///     4) At least 2/3 of the validators have signed the precommit message.
+    fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
         block_hash: Bytes32Variable,
@@ -107,60 +131,142 @@ pub trait GrandpaJustificationVerifier {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for CircuitBuilder<L, D> {
-    fn verify_authority_set_commitment<const NUM_AUTHORITIES: usize>(
+    /// Verify the authority set commitment of an authority set. This is the chained hash of the
+    /// first num_active_authorities public keys.
+    ///
+    /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
+    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
+    fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
-        _num_active_authorities: Variable,
-        _authority_set_commitment: Bytes32Variable,
-        _authority_set_signers: &ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>,
+        num_active_authorities: Variable,
+        authority_set_commitment: Bytes32Variable,
+        authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
     ) {
-        todo!()
+        let mut authority_enabled = self._true();
+
+        let mut commitment_so_far = self.curta_sha256(&authority_set_signers[0].as_bytes());
+
+        for i in 1..MAX_NUM_AUTHORITIES {
+            let curr_idx = self.constant::<Variable>(L::Field::from_canonical_usize(i));
+            let at_end = self.is_equal(curr_idx, num_active_authorities);
+            let not_at_end = self.not(at_end);
+
+            // Upon reaching the last validator, turn enabled to false to ensure that the commitment_so_far is not updated.
+            // This is because the authority set commitment is the chained hash of the first num_active_authorities public keys.
+            authority_enabled = self.and(authority_enabled, not_at_end);
+
+            let mut input_to_hash = Vec::new();
+            input_to_hash.extend_from_slice(&commitment_so_far.as_bytes());
+            input_to_hash.extend_from_slice(&authority_set_signers[i].as_bytes());
+
+            // Compute the chained hash of the authority set commitment.
+            let chained_hash = self.curta_sha256(&input_to_hash);
+
+            // If we are before the end, update the commitment_so_far.
+            commitment_so_far = self.select(authority_enabled, chained_hash, commitment_so_far);
+        }
+
+        self.assert_is_equal(authority_set_commitment, commitment_so_far);
     }
 
-    // This assumes
-    fn verify_simple_justification<const NUM_AUTHORITIES: usize>(
+    /// Verify the number of validators that signed is greater than or equal to the threshold.
+    fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
+        &mut self,
+        num_active_authorities: U32Variable,
+        validator_signed: &ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>,
+        threshold_numerator: U32Variable,
+        threshold_denominator: U32Variable,
+    ) {
+        let true_v = self._true();
+        let mut num_signed: U32Variable = self.zero();
+        for i in 0..MAX_NUM_AUTHORITIES {
+            // 1 if validator signed, 0 otherwise. Already range-checked (as a bool), so use unsafe.
+            let val_signed_u32 =
+                U32Variable::from_variables_unsafe(&[validator_signed[i].variable]);
+            num_signed = self.add(num_signed, val_signed_u32);
+        }
+
+        let scaled_num_signed = self.mul(num_signed, threshold_denominator);
+        let scaled_threshold = self.mul(num_active_authorities, threshold_numerator);
+        let is_valid_num_signed = self.gte(scaled_num_signed, scaled_threshold);
+        self.assert_is_equal(is_valid_num_signed, true_v);
+    }
+
+    /// Verify a simple justification on a block from the specified authority set.
+    ///
+    /// Specifically, this verifies that:
+    ///     1) Authority set commitment matches the authority set.
+    ///     2) Specified precommit message matches the block #, authority set id, and block hash.
+    ///     3) Signatures on the precommit message are valid from each validator marked as signed.
+    ///     4) At least 2/3 of the validators have signed the precommit message.
+    fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
-        _block_hash: Bytes32Variable,
+        block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
-        _authority_set_hash: Bytes32Variable,
+        authority_set_hash: Bytes32Variable,
     ) {
         let mut input_stream = VariableStream::new();
         input_stream.write(&block_number);
         input_stream.write(&authority_set_id);
-        let output_stream = self.hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
+        let output_stream = self.async_hint(
+            input_stream,
+            HintSimpleJustification::<MAX_NUM_AUTHORITIES> {},
+        );
 
         let encoded_precommit = output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(self);
         let validator_signed =
-            output_stream.read::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(self);
-        let signatures =
-            output_stream.read::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(self);
+            output_stream.read::<ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>>(self);
+        let signatures = output_stream
+            .read::<ArrayVariable<EDDSASignatureTarget<Curve>, MAX_NUM_AUTHORITIES>>(self);
         let pubkeys =
-            output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(self);
-        // TODO: read `num_active_authorities` from output stream
+            output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>>(self);
+        let num_active_authorities = output_stream.read::<U32Variable>(self);
 
-        // TODO: call verify_authority_set_commitment
+        // Compress the pubkeys from affine points to bytes.
+        let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>::from(
+            pubkeys
+                .as_vec()
+                .iter()
+                .map(|x| self.compress_point(x).0)
+                .collect::<Vec<Bytes32Variable>>(),
+        );
 
-        // TODO: decode the encoded_precommit and ensure that it matches the block_hash, block_number, and authority_set_id
+        // Verify the authority set commitment is valid.
+        self.verify_authority_set_commitment(
+            num_active_authorities.variable,
+            authority_set_hash,
+            &compressed_pubkeys,
+        );
+
+        // Verify the correctness of the encoded_precommit message.
+        let decoded_precommit = self.decode_precommit(encoded_precommit);
+        self.assert_is_equal(decoded_precommit.block_number, block_number);
+        self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
+        self.assert_is_equal(decoded_precommit.block_hash, block_hash);
 
         // We verify the signatures of the validators on the encoded_precommit message.
         // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
         // and they are also constant length, so we can have `message_byte_lengths` be a constant array
-        let message_byte_lengths =
-            self.constant::<ArrayVariable<U32Variable, NUM_AUTHORITIES>>(vec![
+        let message_byte_lengths = self
+            .constant::<ArrayVariable<U32Variable, MAX_NUM_AUTHORITIES>>(vec![
                 ENCODED_PRECOMMIT_LENGTH
                     as u32;
-                NUM_AUTHORITIES
+                MAX_NUM_AUTHORITIES
             ]);
-        let messages = vec![encoded_precommit; NUM_AUTHORITIES];
-        self.conditional_batch_eddsa_verify::<NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
-            validator_signed,
+        let messages = vec![encoded_precommit; MAX_NUM_AUTHORITIES];
+        self.conditional_batch_eddsa_verify::<MAX_NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
+            validator_signed.clone(),
             message_byte_lengths,
             messages.into(),
             signatures,
             pubkeys,
         );
 
-        // TODO: ensure that at least 2/3 signed based on the `num_active_authorities`
+        // Verify at least 2/3 of the validators have signed the message.
+        let two_v = self.constant::<U32Variable>(2u32);
+        let three_v = self.constant::<U32Variable>(3u32);
+        self.verify_voting_threshold(num_active_authorities, &validator_signed, two_v, three_v)
     }
 }
 
@@ -171,6 +277,7 @@ mod tests {
     use ethers::types::H256;
     use log::info;
     use plonky2x::prelude::{Bytes32Variable, DefaultBuilder};
+    use tokio::runtime::Runtime;
 
     use super::*;
 
@@ -181,8 +288,8 @@ mod tests {
 
         // There are only 7 authories in the 10,000-th block
         // But we set NUM_AUTHORITIES=10 so that we can test padding
-        const BLOCK_NUMBER: u32 = 272535u32;
-        const NUM_AUTHORITIES: usize = 76;
+        const BLOCK_NUMBER: u32 = 317857u32;
+        const NUM_AUTHORITIES: usize = 80;
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let justification_data: SimpleJustificationData = rt.block_on(async {

@@ -79,6 +79,10 @@ pub struct EncodedHeaderVariable<const S: usize> {
     pub header_bytes: ArrayVariable<ByteVariable, S>,
     pub header_size: Variable,
 }
+
+/// The public key of the validator as a variable.
+pub type AvailPubkeyVariable = Bytes32Variable;
+
 #[derive(Clone, Debug, CircuitVariable)]
 #[value_name(HeaderValueType)]
 pub struct HeaderVariable {
@@ -92,8 +96,8 @@ pub struct HeaderVariable {
 pub struct PrecommitVariable {
     pub block_hash: Bytes32Variable,
     pub block_number: U32Variable,
-    pub justification_round: Variable,
-    pub authority_set_id: Variable,
+    pub justification_round: U64Variable,
+    pub authority_set_id: U64Variable,
 }
 
 pub type Curve = Ed25519;

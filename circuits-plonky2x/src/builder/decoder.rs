@@ -6,10 +6,10 @@ use plonky2::iop::witness::PartitionWitness;
 use plonky2::plonk::circuit_builder::CircuitBuilder as BaseCircuitBuilder;
 use plonky2::plonk::circuit_data::CommonCircuitData;
 use plonky2::util::serialization::{Buffer, IoResult, Read, Write};
-use plonky2x::frontend::vars::U32Variable;
+use plonky2x::frontend::vars::{EvmVariable, U32Variable};
 use plonky2x::prelude::{
-    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, Field,
-    PlonkParameters, RichField, Target, Variable, Witness, WitnessWrite,
+    ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
+    Field, PlonkParameters, RichField, Target, U64Variable, Variable, Witness, WitnessWrite,
 };
 
 use crate::consts::{DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE};
@@ -102,6 +102,7 @@ impl<F: RichField + Extendable<D>, const D: usize> CircuitBuilderScaleDecoder
         quotient
     }
 
+    /// TODO: Rewrite with CircuitVariable, follow this: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(&mut self, compact_bytes: &[ByteVariable]) -> (Target, Target, Target) {
         // For now, assume that compact_bytes is 5 bytes long
         assert!(compact_bytes.len() == 5);
@@ -167,8 +168,7 @@ pub trait DecodingMethods {
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
-    // Assumes that header and header_hash are properly linked already
-    // header_hash is only used for the RLC challenge
+    // Decode an array of headers into their components. header_hashes are used for the RLC challenge.
     fn decode_headers<const S: usize, const N: usize>(
         &mut self,
         headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
@@ -184,7 +184,8 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .unwrap()
     }
 
-    // Note that S is the max header size in bits
+    /// Decode a header into its components. header_hash is used for the RLC challenge.
+    /// TODO: Use EvmVariable types with decode instead of targets!
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
@@ -248,40 +249,47 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let data_root = Bytes32Variable::from(data_root_byte_vars.as_slice());
 
         HeaderVariable {
-            block_number: U32Variable(Variable(block_number_target)), // TODO: do we need to do a range-check here?
+            block_number: U32Variable::from_variables_unsafe(&[Variable(block_number_target)]), // TODO: do we need to do a range-check here?
             parent_hash,
             state_root,
             data_root,
         }
     }
 
+    /// Decode a precommit message into its components.
     fn decode_precommit(
         &mut self,
         precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
     ) -> PrecommitVariable {
-        // TODO: when we have seamless conversion between BytesVariable and U32/U64 variables, use those instead
-
-        // The first byte is the variant number and should be 1
-        let one = self.one::<Variable>();
-        let precommit_first_byte = to_variable(&mut self.api, precommit[0]);
+        // The first byte is the varint number and should be 1.
+        let one = self.one();
+        let precommit_first_byte = precommit[0].to_variable(self);
         self.assert_is_equal(precommit_first_byte, one);
 
-        // The next 32 bytes is the block hash
+        // The next 32 bytes is the block hash.
         let block_hash: Bytes32Variable = precommit[1..33].into();
 
-        // The next 4 bytes is the block number
-        let block_number = to_variable_unsafe(&mut self.api, &precommit[33..37]);
+        // The next 4 bytes is the block number.
+        let mut block_number_bytes = precommit[33..37].to_vec();
+        // Need to reverse the bytes since the block number bytes are stored as little endian.
+        block_number_bytes.reverse();
+        let block_number = U32Variable::decode(self, &block_number_bytes);
 
-        // The next 8 bytes is the justification round
-        let justification_round = to_variable_unsafe(&mut self.api, &precommit[37..45]);
+        // The next 8 bytes is the justification round.
+        let mut justification_round_bytes = precommit[37..45].to_vec();
+        // Need to reverse the bytes since the justification round are stored as little endian.
+        justification_round_bytes.reverse();
+        let justification_round = U64Variable::decode(self, &precommit[37..45]);
 
-        // The next 8 bytes is the authority set id
-        let authority_set_id = to_variable_unsafe(&mut self.api, &precommit[45..53]);
+        // The next 8 bytes is the authority set id.
+        let mut authority_set_id_bytes = precommit[45..53].to_vec();
+        // Need to reverse the bytes since the authority set id are stored as little endian.
+        authority_set_id_bytes.reverse();
+        let authority_set_id = U64Variable::decode(self, &authority_set_id_bytes);
 
-        // It's okay that we're not range checking any of these because the inputs to this function are range-checked
         PrecommitVariable {
             block_hash,
-            block_number: U32Variable(block_number),
+            block_number,
             justification_round,
             authority_set_id,
         }
@@ -294,7 +302,8 @@ pub mod tests {
 
     use plonky2x::frontend::vars::U32Variable;
     use plonky2x::prelude::{
-        ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
+        ArrayVariable, Bytes32Variable, BytesVariable, DefaultBuilder, Field, GoldilocksField,
+        U64Variable,
     };
     use plonky2x::utils::{bytes, bytes32};
     use testing_utils::tests::{
@@ -302,7 +311,7 @@ pub mod tests {
     };
 
     use super::DecodingMethods;
-    use crate::consts::MAX_HEADER_SIZE;
+    use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_HEADER_SIZE};
     use crate::testing_utils;
     use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
@@ -392,5 +401,44 @@ pub mod tests {
         let (proof, output) = circuit.prove(&input);
 
         circuit.verify(&proof, &input, &output);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_decode_precommit() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        let mut builder = DefaultBuilder::new();
+
+        let precommit = builder.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>();
+        let decoded_precommit = builder.decode_precommit(precommit);
+        builder.write::<U32Variable>(decoded_precommit.block_number);
+        builder.write::<U64Variable>(decoded_precommit.authority_set_id);
+
+        let circuit = builder.build();
+
+        let mut input = circuit.input();
+
+        let encoded_precommit = [
+            1u8, 38, 27, 45, 113, 196, 242, 16, 36, 228, 137, 117, 93, 79, 157, 136, 222, 239, 71,
+            241, 37, 152, 13, 194, 159, 190, 169, 38, 234, 124, 89, 223, 233, 161, 217, 4, 0, 75,
+            58, 0, 0, 0, 0, 0, 0, 42, 1, 0, 0, 0, 0, 0, 0,
+        ];
+
+        let expected_block_number = 317857u32;
+        let expected_authority_set_id = 298u64;
+
+        input.write::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(encoded_precommit);
+
+        let (proof, mut output) = circuit.prove(&input);
+
+        circuit.verify(&proof, &input, &output);
+
+        let block_number = output.read::<U32Variable>();
+        let authority_set_id = output.read::<U64Variable>();
+
+        assert_eq!(block_number, expected_block_number);
+        assert_eq!(authority_set_id, expected_authority_set_id);
     }
 }

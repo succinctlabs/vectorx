@@ -4,22 +4,23 @@ pragma solidity ^0.8.13;
 import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
 
 contract VectorX {
-    // Information related to ZK circuits
     address public gateway;
-
-    // Mappings to store header information and commitments
-    mapping(uint32 => bytes32) public blockHeightToHeaderHash;
-    mapping(uint32 => uint64) public blockHeightToAuthoritySetId;
-    mapping(uint64 => bytes32) public authoritySetIdToHash;
-    mapping(bytes32 => bytes32) public dataRootCommitments;
-    mapping(bytes32 => bytes32) public stateRootCommitments;
-
     uint32 public head;
-
-    uint32 public constant MAX_RANGE = 128;
-
     bytes32 public headerRangeFunctionId;
     bytes32 public rotateFunctionId;
+
+    // Maximum range of blocks that can be requested in a single call to requestHeaderRange.
+    uint32 public constant MAX_RANGE = 128;
+
+    // Maps block height to the header hash of the block.
+    mapping(uint32 => bytes32) public blockHeightToHeaderHash;
+    // Maps block height to the authority set id of the next block.
+    mapping(uint32 => uint64) public blockHeightToAuthoritySetId;
+    // Maps authority set id to the authority set hash.
+    mapping(uint64 => bytes32) public authoritySetIdToHash;
+    //
+    mapping(bytes32 => bytes32) public dataRootCommitments;
+    mapping(bytes32 => bytes32) public stateRootCommitments;
 
     event HeaderRangeRequested(
         uint32 trustedBlock,

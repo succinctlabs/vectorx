@@ -149,6 +149,7 @@ mod tests {
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
     #[test]
+    #[cfg_attr(feature = "ci", ignore)]
     fn test_hash_blocks() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();

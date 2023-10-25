@@ -196,7 +196,6 @@ pub mod tests {
     use crate::vars::{AvailPubkeyVariable, EncodedHeaderVariable};
 
     #[test]
-    #[cfg_attr(feature = "ci", ignore)]
     fn test_verify_epoch_end_header() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();

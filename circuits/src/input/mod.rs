@@ -393,13 +393,15 @@ mod tests {
     use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
 
     #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_block_headers_range() {
         let fetcher = RpcDataFetcher::new().await;
-        let headers = fetcher.get_block_headers_range(0, 10).await;
+        let headers = fetcher.get_block_headers_range(100000, 100009).await;
         assert_eq!(headers.len(), 10);
     }
 
     #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_authority_set_id() {
         let fetcher = RpcDataFetcher::new().await;
         let authority_set_id = fetcher.get_authority_set_id(485710).await;
@@ -417,6 +419,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_new_authority_set() {
         let fetcher = RpcDataFetcher::new().await;
 

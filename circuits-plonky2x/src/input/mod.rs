@@ -18,7 +18,7 @@ use sha2::Digest;
 use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
 };
-use crate::consts::VALIDATOR_LENGTH;
+use crate::consts::{DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
@@ -298,7 +298,7 @@ impl RpcDataFetcher {
         let mut position = 0;
         let number_encoded = epoch_end_block.encode();
         // Skip past parent_hash, number, state_root, extrinsics_root.
-        position += 32 + number_encoded.len() + 32 + 32;
+        position += HASH_SIZE + number_encoded.len() + HASH_SIZE + HASH_SIZE;
 
         let mut found_correct_log = false;
         for log in header.digest.logs {
@@ -315,15 +315,17 @@ impl RpcDataFetcher {
                     let mut cursor = 3;
                     let authorities_bytes = &value[cursor..];
 
-                    for (i, authority_chunk) in authorities_bytes.chunks_exact(32 + 8).enumerate() {
-                        let pubkey = &authority_chunk[..32];
-                        let weight = &authority_chunk[32..];
+                    for (i, authority_chunk) in
+                        authorities_bytes.chunks_exact(VALIDATOR_LENGTH).enumerate()
+                    {
+                        let pubkey = &authority_chunk[..PUBKEY_LENGTH];
+                        let weight = &authority_chunk[PUBKEY_LENGTH..];
 
                         // Assert the pubkey in the encoded log is correct.
                         assert_eq!(*pubkey, fetched_authorities.1[i]);
 
                         // Assert weight's LE representation == 1
-                        for j in 0..8 {
+                        for j in 0..PUBKEY_LENGTH {
                             if j == 0 {
                                 assert_eq!(weight[j], 1);
                             } else {
@@ -331,12 +333,12 @@ impl RpcDataFetcher {
                             }
                         }
 
-                        cursor += 32 + 8;
+                        cursor += VALIDATOR_LENGTH;
                     }
 
                     // Assert delay is [0, 0, 0, 0]
                     let delay = &value[cursor..];
-                    for i in 0..4 {
+                    for i in 0..DELAY_LENGTH {
                         assert_eq!(delay[i], 0);
                     }
 

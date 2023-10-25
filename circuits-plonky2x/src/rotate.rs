@@ -254,14 +254,13 @@ mod tests {
         let circuit = builder.build();
         log::debug!("Done building circuit");
 
-        // These inputs are taken from: https://kate.avail.tools/#/explorer/query/485710
         let mut input = circuit.input();
         let authority_set_id = 298u64;
-        // TODO: Update authority_set_hash
+        // TODO: Get authority set hash from rotate inputs, or a similar function.
         let authority_set_hash: [u8; 32] = [
             193, 181, 216, 51, 32, 48, 126, 89, 38, 31, 89, 159, 112, 228, 179, 11, 129, 3, 26, 72,
             123, 98, 94, 232, 199, 38, 175, 201, 115, 224, 140, 176,
-        ]; // Placeholder for now
+        ];
         let epoch_end_block_number = 317857u32;
 
         input.evm_write::<U64Variable>(authority_set_id);

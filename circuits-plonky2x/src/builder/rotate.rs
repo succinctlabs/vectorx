@@ -227,8 +227,8 @@ pub mod tests {
         let new_pubkeys =
             output_stream.read::<ArrayVariable<AvailPubkeyVariable, NUM_AUTHORITIES>>(&mut builder);
 
-        // Note: In verify_epoch_end_header, we use the header_hash as the seed for randomness, so
-        // it's fine to just use the expected_new_authority_set_hash during the test.
+        // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
+        // so it's fine to just use the expected_new_authority_set_hash during this test.
         let target_header_hash = expected_new_authority_set_hash;
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(

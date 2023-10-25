@@ -472,12 +472,9 @@ mod tests {
         let rotate_data = fetcher
             .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_number)
             .await;
-
         println!(
-            "first 40 bytes of header_bytes: {:?}",
-            rotate_data.header_bytes
-                [rotate_data.start_position..rotate_data.start_position + VALIDATOR_LENGTH]
-                .to_vec()
+            "new authority set hash {:?}",
+            rotate_data.new_authority_set_hash
         );
     }
 }

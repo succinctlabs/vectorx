@@ -40,11 +40,6 @@ contract VectorX is IVectorX {
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
-    modifier onlyGateway() {
-        require(msg.sender == gateway, "Only gateway can call this function");
-        _;
-    }
-
     /// @notice Initialize the contract with the address of the gateway contract.
     /// @param _gateway The address of the gateway contract.
     constructor(address _gateway) {
@@ -154,7 +149,7 @@ contract VectorX is IVectorX {
         uint64 _authoritySetId,
         bytes32 _authoritySetHash,
         uint32 _targetBlock
-    ) external onlyGateway {
+    ) external {
         bytes memory input = abi.encodePacked(
             _trustedBlock,
             _trustedHeader,
@@ -248,7 +243,7 @@ contract VectorX is IVectorX {
         uint64 _currentAuthoritySetId,
         bytes32 _currentAuthoritySetHash,
         uint32 _epochEndBlock
-    ) external onlyGateway {
+    ) external {
         bytes memory input = abi.encodePacked(
             _currentAuthoritySetId,
             _currentAuthoritySetHash,

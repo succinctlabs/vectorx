@@ -44,26 +44,31 @@ contract VectorX is IVectorX {
     }
 
     /// @notice Initialize the contract with the address of the gateway contract.
+    /// @param _gateway The address of the gateway contract.
     constructor(address _gateway) {
         gateway = _gateway;
     }
 
     // TODO: In production, this would be `onlyOwner`
+    /// @notice Update the address of the gateway contract.
     function updateGateway(address _gateway) external {
         gateway = _gateway;
     }
 
     // TODO: In production, this would be `onlyOwner`
+    /// @notice Update the function id for requesting a header range.
     function updateHeaderRangeFunctionId(bytes32 _functionId) external {
         headerRangeFunctionId = _functionId;
     }
 
     // TODO: In production, this would be `onlyOwner`
+    /// @notice Update the function id for requesting a rotate.
     function updateRotateFunctionId(bytes32 _functionId) external {
         rotateFunctionId = _functionId;
     }
 
     // TODO: In production, this would be part of a constructor and/or `onlyOwner`
+    /// @notice Set the genesis info for the light client.
     function setGensisInfo(
         uint32 _blockHeight,
         bytes32 _header,
@@ -75,8 +80,9 @@ contract VectorX is IVectorX {
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
     }
 
-    // Requests a header update and data commitment from the range (trustedBlock, requestedBlock]
-    // Note: _trustedBlock + 1 and _requestedBlock must have the same authority set id.
+    /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
+    /// @param _trustedBlock The block height of the trusted block.
+    /// @param _requestedBlock The block height of the requested block.
     function requestHeaderRange(
         uint32 _trustedBlock,
         uint32 _requestedBlock
@@ -98,7 +104,7 @@ contract VectorX is IVectorX {
 
         require(_requestedBlock > _trustedBlock);
         require(_requestedBlock - _trustedBlock <= MAX_HEADER_RANGE);
-        // NOTE: this is needed to prevent a long-range attack on the light client
+        // Note: This is needed to prevent a long-range attack on the light client.
         require(_requestedBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
@@ -134,6 +140,13 @@ contract VectorX is IVectorX {
         );
     }
 
+    /// @notice Callback function for header range requests. Adds the header hash for targetBlock,
+    ///    and the data and state commitments for the range (trustedBlock, targetBlock].
+    /// @param _trustedBlock The block height of the trusted block.
+    /// @param _trustedHeader The header hash of the trusted block.
+    /// @param _authoritySetId The authority set id of the header range (trustedBlock, targetBlock].
+    /// @param _authoritySetHash The authority set hash for the authority set id.
+    /// @param _targetBlock The block height of the target block.
     function callbackHeaderRange(
         uint32 _trustedBlock,
         bytes32 _trustedHeader,
@@ -154,7 +167,6 @@ contract VectorX is IVectorX {
             input
         );
 
-        // abi.encode matches abi.encodePacked for (bytes32, bytes32, bytes32).
         (
             bytes32 target_header_hash,
             bytes32 state_root_commitment,
@@ -163,10 +175,12 @@ contract VectorX is IVectorX {
 
         blockHeightToHeaderHash[_targetBlock] = target_header_hash;
 
+        // Store the data and state commitments for the range (trustedBlock, targetBlock].
         bytes32 key = keccak256(abi.encode(_trustedBlock, _targetBlock));
         dataRootCommitments[key] = data_root_commitment;
         stateRootCommitments[key] = state_root_commitment;
 
+        // Update latest block.
         latestBlock = _targetBlock;
         emit HeaderRangeFulfilled(
             _trustedBlock,
@@ -177,18 +191,21 @@ contract VectorX is IVectorX {
         );
     }
 
-    // Requests a rotate to the next authority set id, which occurs at _epochEndBlock.
+    /// @notice Requests a rotate to the next authority set id, which starts at  _epochEndBlock + 1.
+    /// @param _epochEndBlock The block height of the epoch end block.
+    /// @param _currentAuthoritySetId The authority set id of the current authority set.
     function requestRotate(
         uint32 _epochEndBlock,
         uint64 _currentAuthoritySetId
     ) external payable {
-        // NOTE: _epochEndBlock must be GTE the latestBlock block. Can be equal if we've already called step
-        // to the epochEndBlock.
+        // Note: _epochEndBlock must be GTE the latestBlock. Can be equal if we've already
+        // called step to the _epochEndBlock.
         require(_epochEndBlock >= latestBlock);
 
         bytes32 currentAuthoritySetHash = authoritySetIdToHash[
             _currentAuthoritySetId
         ];
+        // Note: Occurs if requesting a new authority set id that is not the next authority set id.
         if (currentAuthoritySetHash == bytes32(0)) {
             revert("Authority set hash not found");
         }
@@ -220,6 +237,11 @@ contract VectorX is IVectorX {
         );
     }
 
+    /// @notice Callback function for rotate requests. Adds the authority set hash for the next
+    ///     authority set id.
+    /// @param _currentAuthoritySetId The authority set id of the current authority set.
+    /// @param _currentAuthoritySetHash The authority set hash of the current authority set.
+    /// @param _epochEndBlock The block height of the epoch end block.
     function callbackRotate(
         uint64 _currentAuthoritySetId,
         bytes32 _currentAuthoritySetHash,
@@ -236,15 +258,17 @@ contract VectorX is IVectorX {
             input
         );
 
-        // abi.encode matches abi.encodePacked for (bytes32, bytes32, bytes32).
         bytes32 new_authority_set_hash = abi.decode(output, (bytes32));
 
+        // Store the authority set hash for the next authority set id.
         authoritySetIdToHash[
             _currentAuthoritySetId + 1
         ] = new_authority_set_hash;
+
         // Note: blockHeightToAuthoritySetId[block] returns the authority set id of the next block.
-        // If the epochEndBlock is 100, and we request a step from 100 -> 147, we want the authority set of
-        // blocks 101 -> 147, so we set the authority set id of block 100 to the next authority set id.
+        // If the epochEndBlock is 100, and we request a step from 100 -> 147, we want the authority
+        // set of blocks 101 -> 147, so we set the authority set id of block 100 to the next
+        // authority set id.
         blockHeightToAuthoritySetId[_epochEndBlock] =
             _currentAuthoritySetId +
             1;

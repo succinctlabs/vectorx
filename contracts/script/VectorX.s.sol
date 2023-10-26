@@ -36,12 +36,9 @@ contract DeployScript is Script {
 
         uint32 targetBlock = 272534;
 
-        lightClient.updateFunctionId(
-            "dataCommitment",
-            dataCommitmentFunctionId
-        );
+        lightClient.updateHeaderRangeFunctionId(dataCommitmentFunctionId);
 
-        lightClient.requestDataCommitment{value: 0.2 ether}(
+        lightClient.requestHeaderRange{value: 0.2 ether}(
             trustedBlock,
             targetBlock
         );

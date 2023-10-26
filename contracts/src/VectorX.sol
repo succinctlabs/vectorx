@@ -32,10 +32,12 @@ contract VectorX is IVectorX {
     /// @notice Maps authority set id to the authority set hash.
     mapping(uint64 => bytes32) public authoritySetIdToHash;
 
-    /// @notice Maps block ranges to data commitments. Block ranges are stored as keccak256(abi.encode(startBlock, endBlock)).
+    /// @notice Maps block ranges to data commitments. Block ranges are stored as
+    ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public dataRootCommitments;
 
-    /// @notice Maps block ranges to state commitments. Block ranges are stored as keccak256(abi.encode(startBlock, endBlock)).
+    /// @notice Maps block ranges to state commitments. Block ranges are stored as
+    ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
     modifier onlyGateway() {

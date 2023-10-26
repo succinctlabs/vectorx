@@ -11,6 +11,10 @@ path = "bin/step.rs"
 name = "rotate"
 path = "bin/rotate.rs"
 
+[[bin]]
+name = "vectorx"
+path = "bin/vectorx.rs"
+
 [features]
 ci = []
 

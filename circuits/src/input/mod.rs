@@ -1,5 +1,6 @@
 pub mod types;
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use avail_subxt::avail::Client;
@@ -55,6 +56,38 @@ impl RpcDataFetcher {
         let url = "wss://kate.avail.tools:443/ws".to_string();
         let client = build_client(url.as_str(), false).await.unwrap();
         RpcDataFetcher { client, save: None }
+    }
+
+    pub async fn get_epoch_end_block(&self, target_authority_set_id: u64) -> u32 {
+        let mut low = 0;
+        let head_block = self.get_head().await;
+        let mut high = head_block.number;
+        let mut epoch_end_block_number = 0;
+
+        while low <= high {
+            let mid = (low + high) / 2;
+            let mid_authority_set_id = self.get_authority_set_id(mid).await;
+
+            match mid_authority_set_id.cmp(&target_authority_set_id) {
+                Ordering::Equal => {
+                    if mid == 0 {
+                        // Special case: there is no block "mid - 1", just return the found block.
+                        epoch_end_block_number = mid;
+                        break;
+                    }
+                    let prev_authority_set_id = self.get_authority_set_id(mid - 1).await;
+                    if prev_authority_set_id == target_authority_set_id - 1 {
+                        epoch_end_block_number = mid;
+                        break;
+                    } else {
+                        high = mid - 1;
+                    }
+                }
+                Ordering::Less => low = mid + 1,
+                Ordering::Greater => high = mid - 1,
+            }
+        }
+        epoch_end_block_number
     }
 
     pub async fn get_block_hash(&self, block_number: u32) -> H256 {
@@ -387,8 +420,6 @@ impl RpcDataFetcher {
 
 #[cfg(test)]
 mod tests {
-    use std::cmp::Ordering;
-
     use super::*;
     use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
 
@@ -425,35 +456,7 @@ mod tests {
 
         // A binary search given a target_authority_set_id, returns the epoch end block number.
         let target_authority_set_id = 513;
-        println!("target_authority_set_id {:?}", target_authority_set_id);
-        let mut low = 0;
-        let head_block = fetcher.get_head().await;
-        let mut high = head_block.number;
-        let mut epoch_end_block_number = 0;
-
-        while low <= high {
-            let mid = (low + high) / 2;
-            let mid_authority_set_id = fetcher.get_authority_set_id(mid).await;
-
-            match mid_authority_set_id.cmp(&target_authority_set_id) {
-                Ordering::Equal => {
-                    if mid == 0 {
-                        // Special case: there is no block "mid - 1", just return the found block.
-                        epoch_end_block_number = mid;
-                        break;
-                    }
-                    let prev_authority_set_id = fetcher.get_authority_set_id(mid - 1).await;
-                    if prev_authority_set_id == target_authority_set_id - 1 {
-                        epoch_end_block_number = mid;
-                        break;
-                    } else {
-                        high = mid - 1;
-                    }
-                }
-                Ordering::Less => low = mid + 1,
-                Ordering::Greater => high = mid - 1,
-            }
-        }
+        let epoch_end_block_number = fetcher.get_epoch_end_block(target_authority_set_id).await;
 
         // Verify that we found an epoch end block.
         assert_ne!(epoch_end_block_number, 0);

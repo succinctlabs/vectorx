@@ -138,6 +138,7 @@ impl<
 mod tests {
     use std::env;
 
+    use codec::Encode;
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
@@ -145,6 +146,7 @@ mod tests {
 
     use crate::builder::header::HeaderMethods;
     use crate::consts::{MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
+    use crate::input::RpcDataFetcher;
     use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS};
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
@@ -197,5 +199,28 @@ mod tests {
             let calculated_hash = output.read::<Bytes32Variable>();
             assert_eq!(calculated_hash, bytes32!(expected_hash));
         }
+    }
+
+    #[test]
+    fn test_max_header_len() {
+        const START_BLOCK_NUM: u32 = 452578;
+        const NUM_BLOCKS: usize = 10;
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Note: Returns NUM_BLOCKS + 1 headers.
+        let headers = rt.block_on(async {
+            let data_fetcher = RpcDataFetcher::new().await;
+            data_fetcher
+                .get_block_headers_range(START_BLOCK_NUM, START_BLOCK_NUM + NUM_BLOCKS as u32)
+                .await
+        });
+
+        let mut max_size = 0;
+        for i in 0..headers.len() {
+            let encoded_header = headers[i].encode();
+            if encoded_header.len() > max_size {
+                max_size = encoded_header.len();
+            }
+        }
+        println!("Max header size: {:?}", max_size);
     }
 }

@@ -16,20 +16,6 @@ interface IVectorX {
         uint32 targetBlock
     );
 
-    /// @notice Outputs of a header range proof.
-    /// @param trustedBlock The block height of the trusted block.
-    /// @param targetBlock The block height of the target block.
-    /// @param targetHeaderHash The header hash of the target block.
-    /// @param dataRootCommitment The data root commitment of the range (trustedBlock, targetBlock].
-    /// @param stateRootCommitment The state root commitment of the range (trustedBlock, targetBlock].
-    event HeaderRangeFulfilled(
-        uint32 trustedBlock,
-        uint32 targetBlock,
-        bytes32 targetHeaderHash,
-        bytes32 dataRootCommitment,
-        bytes32 stateRootCommitment
-    );
-
     /// @notice Emits event with the inputs of a rotate request.
     /// @param currentAuthoritySetId The authority set id of the current authority set.
     /// @param currentAuthoritySetHash The authority set hash of the current authority set.
@@ -40,13 +26,21 @@ interface IVectorX {
         uint64 epochEndBlock
     );
 
-    /// @notice Outputs of a rotate proof.
-    /// @param newAuthoritySetId The authority set id of the new authority set.
-    /// @param newAuthoritySetHash The authority set hash of the new authority set.
-    /// @param epochEndBlock The height of the epoch end block.
-    event RotateFulfilled(
-        uint64 newAuthoritySetId,
-        bytes32 newAuthoritySetHash,
+    /// @notice Emitted when the light client's head is updated.
+    event HeadUpdate(uint32 blockNumber, bytes32 headerHash);
+
+    /// @notice Emitted when data + state commitment for range (startBlock, endBlock] are stored.
+    event HeaderRangeCommitmentStored(
+        uint32 startBlock,
+        uint32 endBlock,
+        bytes32 dataCommitment,
+        bytes32 stateCommitment
+    );
+
+    /// @notice Emitted when a new authority set is stored.
+    event AuthoritySetStored(
+        uint64 authoritySetId,
+        bytes32 authoritySetHash,
         uint64 epochEndBlock
     );
 }

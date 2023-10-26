@@ -117,8 +117,8 @@ contract VectorX is IVectorX {
             _requestedBlock
         );
 
-        bytes memory callbackData = abi.encodeWithSelector(
-            this.callbackHeaderRange.selector,
+        bytes memory data = abi.encodeWithSelector(
+            this.commitHeaderRange.selector,
             _trustedBlock,
             trustedHeader,
             authoritySetId,
@@ -130,7 +130,7 @@ contract VectorX is IVectorX {
             headerRangeFunctionId,
             input,
             address(this),
-            callbackData,
+            data,
             500000
         );
         emit HeaderRangeRequested(
@@ -142,14 +142,13 @@ contract VectorX is IVectorX {
         );
     }
 
-    /// @notice Callback function for header range requests. Adds the header hash for targetBlock,
-    ///    and the data and state commitments for the range (trustedBlock, targetBlock].
+    /// @notice Add target header hash, and data + state commitments for (trustedBlock, targetBlock].
     /// @param _trustedBlock The block height of the trusted block.
     /// @param _trustedHeader The header hash of the trusted block.
     /// @param _authoritySetId The authority set id of the header range (trustedBlock, targetBlock].
     /// @param _authoritySetHash The authority set hash for the authority set id.
     /// @param _targetBlock The block height of the target block.
-    function callbackHeaderRange(
+    function commitHeaderRange(
         uint32 _trustedBlock,
         bytes32 _trustedHeader,
         uint64 _authoritySetId,
@@ -184,10 +183,12 @@ contract VectorX is IVectorX {
 
         // Update latest block.
         latestBlock = _targetBlock;
-        emit HeaderRangeFulfilled(
+
+        emit HeadUpdate(_targetBlock, target_header_hash);
+
+        emit HeaderRangeCommitmentStored(
             _trustedBlock,
             _targetBlock,
-            target_header_hash,
             data_root_commitment,
             state_root_commitment
         );
@@ -218,8 +219,8 @@ contract VectorX is IVectorX {
             _epochEndBlock
         );
 
-        bytes memory callbackData = abi.encodeWithSelector(
-            this.callbackHeaderRange.selector,
+        bytes memory data = abi.encodeWithSelector(
+            this.rotate.selector,
             _currentAuthoritySetId,
             currentAuthoritySetHash,
             _epochEndBlock
@@ -229,7 +230,7 @@ contract VectorX is IVectorX {
             rotateFunctionId,
             input,
             address(this),
-            callbackData,
+            data,
             500000
         );
         emit RotateRequested(
@@ -239,12 +240,11 @@ contract VectorX is IVectorX {
         );
     }
 
-    /// @notice Callback function for rotate requests. Adds the authority set hash for the next
-    ///     authority set id.
+    /// @notice Adds the authority set hash for the next authority set id.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
     /// @param _currentAuthoritySetHash The authority set hash of the current authority set.
     /// @param _epochEndBlock The block height of the epoch end block.
-    function callbackRotate(
+    function rotate(
         uint64 _currentAuthoritySetId,
         bytes32 _currentAuthoritySetHash,
         uint32 _epochEndBlock
@@ -275,7 +275,7 @@ contract VectorX is IVectorX {
             _currentAuthoritySetId +
             1;
 
-        emit RotateFulfilled(
+        emit AuthoritySetStored(
             _currentAuthoritySetId + 1,
             new_authority_set_hash,
             _epochEndBlock

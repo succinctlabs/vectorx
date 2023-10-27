@@ -218,21 +218,17 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 pub mod tests {
     use std::env;
 
+    use avail_subxt::config::Header;
     use codec::{Compact, Encode};
     use plonky2x::frontend::vars::U32Variable;
     use plonky2x::prelude::{
         ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, DefaultBuilder, Field,
         GoldilocksField, U64Variable, Variable,
     };
-    use plonky2x::utils::{bytes, bytes32};
-    use testing_utils::tests::{
-        BLOCK_HASHES, ENCODED_HEADERS, HEAD_BLOCK_NUM, NUM_BLOCKS, PARENT_HASHES,
-    };
 
     use super::DecodingMethods;
     use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_BLOCK_NUMBER_BYTES, MAX_HEADER_SIZE};
-    use crate::testing_utils;
-    use crate::testing_utils::tests::{DATA_ROOTS, STATE_ROOTS};
+    use crate::input::RpcDataFetcher;
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
     #[test]
@@ -281,6 +277,8 @@ pub mod tests {
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_decode_headers() {
+        const HEAD_BLOCK_NUM: u32 = 272515;
+        const NUM_BLOCKS: usize = 1;
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
@@ -310,11 +308,20 @@ pub mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = ENCODED_HEADERS
-            [0..NUM_BLOCKS]
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Note: Returns NUM_BLOCKS + 1 headers.
+        let headers = rt.block_on(async {
+            let data_fetcher = RpcDataFetcher::new().await;
+            data_fetcher
+                .get_block_headers_range(HEAD_BLOCK_NUM, HEAD_BLOCK_NUM + NUM_BLOCKS as u32)
+                .await
+        });
+
+        let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = headers[0..NUM_BLOCKS]
             .iter()
             .map(|x| {
-                let mut header: Vec<u8> = bytes!(x);
+                let mut header: Vec<u8> = x.encode();
                 let header_len = header.len();
                 header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
@@ -329,9 +336,9 @@ pub mod tests {
         );
 
         input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
-            BLOCK_HASHES[0..NUM_BLOCKS]
+            headers[0..NUM_BLOCKS]
                 .iter()
-                .map(|x| bytes32!(x))
+                .map(|x| x.hash())
                 .collect::<Vec<_>>(),
         );
 
@@ -340,23 +347,23 @@ pub mod tests {
         );
 
         input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
-            PARENT_HASHES[0..NUM_BLOCKS]
+            headers[0..NUM_BLOCKS]
                 .iter()
-                .map(|x| bytes32!(x))
+                .map(|x| x.parent_hash)
                 .collect::<Vec<_>>(),
         );
 
         input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
-            STATE_ROOTS[0..NUM_BLOCKS]
+            headers[0..NUM_BLOCKS]
                 .iter()
-                .map(|x| bytes32!(x))
+                .map(|x| x.state_root)
                 .collect::<Vec<_>>(),
         );
 
         input.write::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>(
-            DATA_ROOTS[0..NUM_BLOCKS]
+            headers[0..NUM_BLOCKS]
                 .iter()
-                .map(|x| bytes32!(x))
+                .map(|x| x.data_root())
                 .collect::<Vec<_>>(),
         );
 

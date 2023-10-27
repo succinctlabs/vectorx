@@ -26,9 +26,6 @@ contract VectorX is IVectorX {
     /// @notice Maps block height to the header hash of the block.
     mapping(uint32 => bytes32) public blockHeightToHeaderHash;
 
-    /// @notice Maps block height to the authority set id of the next block.
-    mapping(uint32 => uint64) public blockHeightToAuthoritySetId;
-
     /// @notice Maps authority set id to the authority set hash.
     mapping(uint64 => bytes32) public authoritySetIdToHash;
 
@@ -66,24 +63,25 @@ contract VectorX is IVectorX {
 
     // TODO: In production, this would be part of a constructor and/or `onlyOwner`
     /// @notice Set the genesis info for the light client.
-    function setGensisInfo(
+    function setGenesisInfo(
         uint32 _blockHeight,
         bytes32 _header,
         uint64 _authoritySetId,
         bytes32 _authoritySetHash
     ) external {
         blockHeightToHeaderHash[_blockHeight] = _header;
-        blockHeightToAuthoritySetId[_blockHeight] = _authoritySetId;
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
         latestBlock = _blockHeight;
     }
 
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
     /// @param _trustedBlock The block height of the trusted block.
+    /// @param _authoritySetId The authority set id of the header range (trustedBlock, requestedBlock].
     /// @param _requestedBlock The block height of the requested block.
-    /// @dev The trusted block and requested block must have the same authority set.
+    /// @dev The trusted block and requested block must have the same authority id.
     function requestHeaderRange(
         uint32 _trustedBlock,
+        uint64 _authoritySetId,
         uint32 _requestedBlock
     ) external payable {
         bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
@@ -92,11 +90,7 @@ contract VectorX is IVectorX {
         }
         // Note: In the case that the trusted block is an epoch end block, the authority set id will
         // be the authority set id of the next epoch.
-        uint64 authoritySetId = blockHeightToAuthoritySetId[_trustedBlock];
-        if (authoritySetId == 0) {
-            revert("Authority set ID not found");
-        }
-        bytes32 authoritySetHash = authoritySetIdToHash[authoritySetId];
+        bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
         if (authoritySetHash == bytes32(0)) {
             revert("Authority set hash not found");
         }
@@ -109,7 +103,7 @@ contract VectorX is IVectorX {
         bytes memory input = abi.encodePacked(
             _trustedBlock,
             trustedHeader,
-            authoritySetId,
+            _authoritySetId,
             authoritySetHash,
             _requestedBlock
         );
@@ -117,9 +111,7 @@ contract VectorX is IVectorX {
         bytes memory data = abi.encodeWithSelector(
             this.commitHeaderRange.selector,
             _trustedBlock,
-            trustedHeader,
-            authoritySetId,
-            authoritySetHash,
+            _authoritySetId,
             _requestedBlock
         );
 
@@ -133,7 +125,7 @@ contract VectorX is IVectorX {
         emit HeaderRangeRequested(
             _trustedBlock,
             trustedHeader,
-            authoritySetId,
+            _authoritySetId,
             authoritySetHash,
             _requestedBlock
         );
@@ -141,23 +133,26 @@ contract VectorX is IVectorX {
 
     /// @notice Add target header hash, and data + state commitments for (trustedBlock, targetBlock].
     /// @param _trustedBlock The block height of the trusted block.
-    /// @param _trustedHeader The header hash of the trusted block.
     /// @param _authoritySetId The authority set id of the header range (trustedBlock, targetBlock].
-    /// @param _authoritySetHash The authority set hash for the authority set id.
     /// @param _targetBlock The block height of the target block.
-    /// @dev The trusted block and requested block must have the same authority set.
+    /// @dev The trusted block and requested block must have the same authority set id.
     function commitHeaderRange(
         uint32 _trustedBlock,
-        bytes32 _trustedHeader,
         uint64 _authoritySetId,
-        bytes32 _authoritySetHash,
         uint32 _targetBlock
     ) external {
+        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        if (trustedHeader == bytes32(0)) {
+            revert("Trusted header not found");
+        }
+        bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
+        if (authoritySetHash == bytes32(0)) {
+            revert("Authority set hash not found");
+        }
+
         bytes memory input = abi.encodePacked(
             _trustedBlock,
-            _trustedHeader,
             _authoritySetId,
-            _authoritySetHash,
             _targetBlock
         );
 
@@ -202,12 +197,12 @@ contract VectorX is IVectorX {
     ) external payable {
         // Note: _epochEndBlock must be >= the latestBlock. Can be equal if we've already
         // called step to the _epochEndBlock.
+        // This ensures we don't call rotate twice for the same epoch.
         require(_epochEndBlock >= latestBlock);
 
         bytes32 currentAuthoritySetHash = authoritySetIdToHash[
             _currentAuthoritySetId
         ];
-        // Note: Occurs if requesting a new authority set id that is not the next authority set id.
         if (currentAuthoritySetHash == bytes32(0)) {
             revert("Authority set hash not found");
         }
@@ -221,7 +216,6 @@ contract VectorX is IVectorX {
         bytes memory data = abi.encodeWithSelector(
             this.rotate.selector,
             _currentAuthoritySetId,
-            currentAuthoritySetHash,
             _epochEndBlock
         );
 
@@ -241,16 +235,22 @@ contract VectorX is IVectorX {
 
     /// @notice Adds the authority set hash for the next authority set id.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
-    /// @param _currentAuthoritySetHash The authority set hash of the current authority set.
     /// @param _epochEndBlock The block height of the epoch end block.
     function rotate(
         uint64 _currentAuthoritySetId,
-        bytes32 _currentAuthoritySetHash,
         uint32 _epochEndBlock
     ) external {
+        bytes32 currentAuthoritySetHash = authoritySetIdToHash[
+            _currentAuthoritySetId
+        ];
+        // Note: Occurs if requesting a new authority set id that is not the next authority set id.
+        if (currentAuthoritySetHash == bytes32(0)) {
+            revert("Authority set hash not found");
+        }
+
         bytes memory input = abi.encodePacked(
             _currentAuthoritySetId,
-            _currentAuthoritySetHash,
+            currentAuthoritySetHash,
             _epochEndBlock
         );
 
@@ -265,15 +265,6 @@ contract VectorX is IVectorX {
         authoritySetIdToHash[
             _currentAuthoritySetId + 1
         ] = new_authority_set_hash;
-
-        // Note: blockHeightToAuthoritySetId[block] returns the authority set id of the next block,
-        // mirroring the logic in Avail's consensus of getAuthoritySetId.
-        //
-        // Specifically, for an epoch end block that specifies a "rotate" from id 1 to id 2, the
-        // authority set that justifies the block is id 1, but getAuthoritySetId will return id 2.
-        blockHeightToAuthoritySetId[_epochEndBlock] =
-            _currentAuthoritySetId +
-            1;
 
         emit AuthoritySetStored(
             _currentAuthoritySetId + 1,

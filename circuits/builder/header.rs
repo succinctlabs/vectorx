@@ -138,27 +138,28 @@ impl<
 mod tests {
     use std::env;
 
+    use avail_subxt::config::Header;
     use codec::Encode;
+    use ethers::types::H256;
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
     };
-    use plonky2x::utils::{bytes, bytes32};
 
     use crate::builder::header::HeaderMethods;
     use crate::consts::{MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
     use crate::input::RpcDataFetcher;
-    use crate::testing_utils::tests::{BLOCK_HASHES, ENCODED_HEADERS};
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_hash_blocks() {
+    fn test_hash_headers() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        type F = GoldilocksField;
+        const HEAD_BLOCK_NUM: u32 = 272515;
+        const NUM_HEADERS: usize = 1;
 
-        const NUM_HEADERS: usize = 16;
+        type F = GoldilocksField;
 
         let mut builder = DefaultBuilder::new();
 
@@ -174,11 +175,21 @@ mod tests {
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = ENCODED_HEADERS
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Note: Returns NUM_BLOCKS + 1 headers.
+        let headers = rt.block_on(async {
+            let data_fetcher = RpcDataFetcher::new().await;
+            data_fetcher
+                .get_block_headers_range(HEAD_BLOCK_NUM, HEAD_BLOCK_NUM + NUM_HEADERS as u32)
+                .await
+        });
+
+        let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = headers
             [0..NUM_HEADERS]
             .iter()
             .map(|x| {
-                let mut header: Vec<u8> = bytes!(x);
+                let mut header: Vec<u8> = x.encode();
                 let header_len = header.len();
                 header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
@@ -195,9 +206,14 @@ mod tests {
         let (proof, mut output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        for expected_hash in BLOCK_HASHES[0..NUM_HEADERS].iter() {
+        let expected_block_hashes = headers
+            .iter()
+            .map(|x| H256::from_slice(&x.hash().0))
+            .collect::<Vec<H256>>();
+
+        for expected_hash in expected_block_hashes[0..NUM_HEADERS].iter() {
             let calculated_hash = output.read::<Bytes32Variable>();
-            assert_eq!(calculated_hash, bytes32!(expected_hash));
+            assert_eq!(calculated_hash, *expected_hash);
         }
     }
 

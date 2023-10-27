@@ -99,6 +99,7 @@ impl RpcDataFetcher {
         block_hash.unwrap().unwrap()
     }
 
+    // This function returns a vector of headers for a given range of block numbers, inclusive of the start and end block numbers.
     pub async fn get_block_headers_range(
         &self,
         start_block_number: u32,

@@ -8,7 +8,7 @@
         "editor.formatOnSave": true,
     },
     "rust-analyzer.linkedProjects": [
-        "./circuits/Cargo.toml"
+        "./Cargo.toml"
     ],
     "rust-analyzer.check.overrideCommand": [
         "cargo",

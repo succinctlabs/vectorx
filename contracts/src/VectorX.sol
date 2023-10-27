@@ -80,6 +80,7 @@ contract VectorX is IVectorX {
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
     /// @param _trustedBlock The block height of the trusted block.
     /// @param _requestedBlock The block height of the requested block.
+    /// @dev The trusted block and requested block must have the same authority set.
     function requestHeaderRange(
         uint32 _trustedBlock,
         uint32 _requestedBlock
@@ -89,7 +90,7 @@ contract VectorX is IVectorX {
             revert("Trusted header not found");
         }
         // Note: In the case that the trusted block is an epoch end block, the authority set id will
-        // be the authority set id of the next block.
+        // be the authority set id of the next epoch.
         uint64 authoritySetId = blockHeightToAuthoritySetId[_trustedBlock];
         if (authoritySetId == 0) {
             revert("Authority set ID not found");
@@ -143,6 +144,7 @@ contract VectorX is IVectorX {
     /// @param _authoritySetId The authority set id of the header range (trustedBlock, targetBlock].
     /// @param _authoritySetHash The authority set hash for the authority set id.
     /// @param _targetBlock The block height of the target block.
+    /// @dev The trusted block and requested block must have the same authority set.
     function commitHeaderRange(
         uint32 _trustedBlock,
         bytes32 _trustedHeader,
@@ -196,7 +198,7 @@ contract VectorX is IVectorX {
         uint32 _epochEndBlock,
         uint64 _currentAuthoritySetId
     ) external payable {
-        // Note: _epochEndBlock must be GTE the latestBlock. Can be equal if we've already
+        // Note: _epochEndBlock must be >= the latestBlock. Can be equal if we've already
         // called step to the _epochEndBlock.
         require(_epochEndBlock >= latestBlock);
 
@@ -262,7 +264,8 @@ contract VectorX is IVectorX {
             _currentAuthoritySetId + 1
         ] = new_authority_set_hash;
 
-        // Note: blockHeightToAuthoritySetId[block] returns the authority set id of the next block.
+        // Note: blockHeightToAuthoritySetId[block] returns the authority set id of the next block, mirroring the logic
+        // in Avail's consensus.
         // If the epochEndBlock is 100, and we request a step from 100 -> 147, we want the authority
         // set of blocks 101 -> 147, so we set the authority set id of block 100 to the next
         // authority set id.

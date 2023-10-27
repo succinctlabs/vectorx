@@ -3,7 +3,7 @@ use plonky2x::prelude::{
 };
 
 use crate::builder::justification::GrandpaJustificationVerifier;
-use crate::consts::{DELAY_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
+use crate::consts::{DELAY_LENGTH, PREFIX_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
 use crate::vars::*;
 
 pub trait RotateMethods {
@@ -129,9 +129,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let expected_delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
 
-        // The prefix length before the encoded authority set.
-        const PREFIX_LENGTH: usize = 11;
-
         let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
         let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
         let prefix_len = self.constant::<Variable>(L::Field::from_canonical_usize(PREFIX_LENGTH));
@@ -196,7 +193,7 @@ pub mod tests {
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{MAX_HEADER_SIZE, VALIDATOR_LENGTH};
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, PREFIX_LENGTH, VALIDATOR_LENGTH};
     use crate::rotate::RotateHint;
     use crate::vars::{AvailPubkeyVariable, EncodedHeaderVariable};
 
@@ -207,7 +204,8 @@ pub mod tests {
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * VALIDATOR_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize =
+            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

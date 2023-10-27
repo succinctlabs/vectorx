@@ -188,7 +188,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;
-    use crate::consts::MAX_HEADER_SIZE;
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, PREFIX_LENGTH};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -199,7 +199,8 @@ mod tests {
         const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * VALIDATOR_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize =
+            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 
@@ -231,7 +232,8 @@ mod tests {
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * VALIDATOR_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize =
+            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

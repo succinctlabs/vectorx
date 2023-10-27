@@ -191,7 +191,8 @@ contract VectorX is IVectorX {
         );
     }
 
-    /// @notice Requests a rotate to the next authority set id, which starts at  _epochEndBlock + 1.
+    /// @notice Requests a rotate to the next authority set, which starts justifying blocks at
+    ///     _epochEndBlock + 1.
     /// @param _epochEndBlock The block height of the epoch end block.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
     function requestRotate(
@@ -264,11 +265,11 @@ contract VectorX is IVectorX {
             _currentAuthoritySetId + 1
         ] = new_authority_set_hash;
 
-        // Note: blockHeightToAuthoritySetId[block] returns the authority set id of the next block, mirroring the logic
-        // in Avail's consensus.
-        // If the epochEndBlock is 100, and we request a step from 100 -> 147, we want the authority
-        // set of blocks 101 -> 147, so we set the authority set id of block 100 to the next
-        // authority set id.
+        // Note: blockHeightToAuthoritySetId[block] returns the authority set id of the next block,
+        // mirroring the logic in Avail's consensus of getAuthoritySetId.
+        //
+        // Specifically, for an epoch end block that specifies a "rotate" from id 1 to id 2, the
+        // authority set that justifies the block is id 1, but getAuthoritySetId will return id 2.
         blockHeightToAuthoritySetId[_epochEndBlock] =
             _currentAuthoritySetId +
             1;

@@ -63,7 +63,7 @@ contract VectorX is IVectorX {
 
     // TODO: In production, this would be part of a constructor and/or `onlyOwner`
     /// @notice Set the genesis info for the light client.
-    function setGensisInfo(
+    function setGenesisInfo(
         uint32 _blockHeight,
         bytes32 _header,
         uint64 _authoritySetId,

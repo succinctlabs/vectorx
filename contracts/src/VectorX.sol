@@ -75,6 +75,7 @@ contract VectorX is IVectorX {
         blockHeightToHeaderHash[_blockHeight] = _header;
         blockHeightToAuthoritySetId[_blockHeight] = _authoritySetId;
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestBlock = _blockHeight;
     }
 
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].

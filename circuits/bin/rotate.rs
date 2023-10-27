@@ -14,6 +14,7 @@ use vectorx::consts::{
 use vectorx::rotate::RotateCircuit;
 
 fn main() {
+    // MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH + DELAY_LENGTH + PREFIX_LENGTH
     const MAX_SUBARRAY_SIZE: usize = (MAX_AUTHORITY_SET_SIZE + 1) * VALIDATOR_LENGTH;
 
     RotateCircuit::<

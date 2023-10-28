@@ -35,10 +35,27 @@ async fn main() {
     let client = Arc::new(client);
 
     // VectorX on Goerli: https://goerli.etherscan.io/address/#code
+    // Note; This should be in the config
     let address = "";
     let address = address.parse::<Address>().expect("invalid address");
 
     let vectorx = VectorX::new(address, client.clone());
-    let latest_header = get_latest_header(&tendermint_rpc_url).await;
-    let latest_block = latest_header.height.value();
+
+    let head = fetcher.get_head().await;
+
+    let head_block = head.number;
+    let latest_block = vectorx.latest_block().await.unwrap();
+
+    let latest_authority_set_id = fetcher.get_authority_set_id(latest_block).await;
+
+    // Check if this authority set id is in the contract.
+    let matching_authority_set_id = vectorx
+        .authority_set_id_to_hash(latest_authority_set_id)
+        .await
+        .unwrap();
+
+    if H256::from_slice(&matching_authority_set_id) == H256::zero() {
+        info!("No matching authority set id found in contract");
+        return;
+    }
 }

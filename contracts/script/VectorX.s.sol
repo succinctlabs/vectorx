@@ -24,10 +24,11 @@ contract DeployScript is Script {
         VectorX lightClient = new VectorX(gateway);
 
         uint32 trustedBlock = 272502;
+        uint64 authoritySetId = 256;
         bytes32 header = bytes32(
             hex"9a69988124baf188d9d6bbbc579977815086a5d9dfa3b91bafa6d315f31047dc"
         );
-        lightClient.setGensisInfo(
+        lightClient.setGenesisInfo(
             trustedBlock,
             header,
             256,
@@ -40,6 +41,7 @@ contract DeployScript is Script {
 
         lightClient.requestHeaderRange{value: 0.2 ether}(
             trustedBlock,
+            authoritySetId,
             targetBlock
         );
     }

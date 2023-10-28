@@ -150,6 +150,11 @@ contract VectorX is IVectorX {
             revert("Authority set hash not found");
         }
 
+        require(_targetBlock > _trustedBlock);
+        require(_targetBlock - _trustedBlock <= MAX_HEADER_RANGE);
+        // Note: This is needed to prevent a long-range attack on the light client.
+        require(_targetBlock > latestBlock);
+
         bytes memory input = abi.encodePacked(
             _trustedBlock,
             _authoritySetId,
@@ -191,7 +196,7 @@ contract VectorX is IVectorX {
     ///     _epochEndBlock + 1.
     /// @param _epochEndBlock The block height of the epoch end block.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
-    function requestRotate(
+    function requestNextAuthoritySetId(
         uint32 _epochEndBlock,
         uint64 _currentAuthoritySetId
     ) external payable {
@@ -214,7 +219,7 @@ contract VectorX is IVectorX {
         );
 
         bytes memory data = abi.encodeWithSelector(
-            this.rotate.selector,
+            this.addNextAuthoritySetId.selector,
             _currentAuthoritySetId,
             _epochEndBlock
         );
@@ -236,7 +241,7 @@ contract VectorX is IVectorX {
     /// @notice Adds the authority set hash for the next authority set id.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
     /// @param _epochEndBlock The block height of the epoch end block.
-    function rotate(
+    function addNextAuthoritySetId(
         uint64 _currentAuthoritySetId,
         uint32 _epochEndBlock
     ) external {

@@ -58,7 +58,10 @@ impl RpcDataFetcher {
         RpcDataFetcher { client, save: None }
     }
 
-    pub async fn get_epoch_end_block(&self, target_authority_set_id: u64) -> u32 {
+    // This function takes in a target_authority_set_id as input, and returns the block that
+    // specifies the authority set (specifically, it is the last justified block by authority set
+    // target - 1).
+    pub async fn get_authority_rotate_block(&self, target_authority_set_id: u64) -> u32 {
         let mut low = 0;
         let head_block = self.get_head().await;
         let mut high = head_block.number;
@@ -457,7 +460,9 @@ mod tests {
 
         // A binary search given a target_authority_set_id, returns the epoch end block number.
         let target_authority_set_id = 513;
-        let epoch_end_block_number = fetcher.get_epoch_end_block(target_authority_set_id).await;
+        let epoch_end_block_number = fetcher
+            .get_authority_rotate_block(target_authority_set_id)
+            .await;
 
         // Verify that we found an epoch end block.
         assert_ne!(epoch_end_block_number, 0);

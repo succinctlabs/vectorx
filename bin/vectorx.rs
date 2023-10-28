@@ -10,6 +10,8 @@ use ethers::types::H256;
 use log::info;
 use vectorx::input::RpcDataFetcher;
 
+use bindings::
+
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json");
 
@@ -44,6 +46,7 @@ async fn main() {
     let head = fetcher.get_head().await;
 
     let head_block = head.number;
+
     let latest_block = vectorx.latest_block().await.unwrap();
 
     let latest_authority_set_id = fetcher.get_authority_set_id(latest_block).await;
@@ -55,7 +58,18 @@ async fn main() {
         .unwrap();
 
     if H256::from_slice(&matching_authority_set_id) == H256::zero() {
-        info!("No matching authority set id found in contract");
+        info!("No matching authority set id, rotate is needed");
+
+        // Note: We should have some logic to handle the case if the light client is out of sync (i.e more than 1 rotate behind)
+        let epoch_end_block = fetcher
+            .get_authority_rotate_block(latest_authority_set_id)
+            .await;
+
+        vectorx
+            .(epoch_end_block, latest_authority_set_id)
+            .await
+            .unwrap();
+
         return;
     }
 }

@@ -7,6 +7,10 @@ edition = "2021"
 name = "step"
 path = "bin/step.rs"
 
+[[bin]]
+name = "rotate"
+path = "bin/rotate.rs"
+
 [features]
 ci = []
 

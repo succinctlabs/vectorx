@@ -3,7 +3,7 @@ use plonky2x::prelude::{
 };
 
 use crate::builder::justification::GrandpaJustificationVerifier;
-use crate::consts::{DELAY_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
+use crate::consts::{DELAY_LENGTH, PREFIX_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
 use crate::vars::*;
 
 pub trait RotateMethods {
@@ -83,6 +83,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         expected_new_authority_set_hash: &Bytes32Variable,
     ) {
         let true_v = self._true();
+        let one = self.one();
+
+        // Check num_authorities is >= 1.
+        let num_authorities_check = self.gte(*num_authorities, one);
+        self.assert_is_equal(num_authorities_check, true_v);
 
         // Convert header to Variables from ByteVariables for get_fixed_subarray.
         let header_variables = header
@@ -124,9 +129,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let expected_delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
 
-        // The prefix length before the encoded authority set.
-        const PREFIX_LENGTH: usize = 11;
-
         let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
         let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
         let prefix_len = self.constant::<Variable>(L::Field::from_canonical_usize(PREFIX_LENGTH));
@@ -138,11 +140,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // Verify num_authorities validators are present and valid.
         for i in 0..(MAX_AUTHORITY_SET_SIZE) {
             let idx = (i * VALIDATOR_LENGTH) + PREFIX_LENGTH;
-            let curr_validator = self.constant::<Variable>(L::Field::from_canonical_usize(i));
-
-            // Set validator_disabled to true if the cursor is past the last validator.
-            let at_end = self.is_equal(curr_validator, *num_authorities);
-            validator_disabled = self.select(at_end, true_v, validator_disabled);
+            let curr_validator = self.constant::<Variable>(L::Field::from_canonical_usize(i + 1));
 
             // Verify the correctness of the extracted pubkey for each enabled validator and
             // increment the cursor by the pubkey length.
@@ -162,11 +160,15 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             self.assert_is_equal(weight_check, true_v);
             cursor = self.add(cursor, weight_len);
 
-            // If at the end of the authority set, verify the correctness of the delay bytes.
+            // Set validator_disabled to true if the cursor if this is the last validator.
+            let at_end = self.is_equal(curr_validator, *num_authorities);
+            validator_disabled = self.select(at_end, true_v, validator_disabled);
+
             let not_at_end = self.not(at_end);
 
+            // If at the end of the authority set, verify the correctness of the delay bytes.
             let extracted_delay = ArrayVariable::<ByteVariable, DELAY_LENGTH>::from(
-                subarray[idx..idx + DELAY_LENGTH].to_vec(),
+                subarray[idx + VALIDATOR_LENGTH..idx + VALIDATOR_LENGTH + DELAY_LENGTH].to_vec(),
             );
             let delay_match = self.is_equal(extracted_delay, expected_delay_bytes.clone());
             let delay_check = self.or(delay_match, not_at_end);
@@ -191,19 +193,19 @@ pub mod tests {
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{MAX_HEADER_SIZE, VALIDATOR_LENGTH};
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, PREFIX_LENGTH, VALIDATOR_LENGTH};
     use crate::rotate::RotateHint;
     use crate::vars::{AvailPubkeyVariable, EncodedHeaderVariable};
 
     #[test]
-    #[cfg_attr(feature = "ci", ignore)]
     fn test_verify_epoch_end_header() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_SUBARRAY_SIZE: usize = (NUM_AUTHORITIES + 1) * VALIDATOR_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize =
+            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

@@ -7,5 +7,4 @@ pub mod input;
 pub mod rotate;
 pub mod step;
 pub mod subchain_verification;
-mod testing_utils;
 pub mod vars;

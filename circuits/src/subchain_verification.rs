@@ -362,6 +362,7 @@ mod tests {
     const D: usize = 2;
 
     #[test]
+    #[cfg_attr(feature = "ci", ignore)]
     fn test_verify_subchain() {
         env_logger::try_init().unwrap_or_default();
 

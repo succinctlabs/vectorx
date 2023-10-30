@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use crate::builder::header::HeaderMethods;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::builder::rotate::RotateMethods;
-use crate::consts::VALIDATOR_LENGTH;
 use crate::input::RpcDataFetcher;
 use crate::vars::{AvailPubkeyVariable, EncodedHeader, EncodedHeaderVariable};
 
@@ -101,11 +100,6 @@ impl<
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        assert_eq!(
-            (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH),
-            MAX_SUBARRAY_SIZE
-        );
-
         // Read the on-chain inputs. The validators that signed epoch_end_block_number are defined
         // by authority_set_id and authority_set_hash.
         let authority_set_id = builder.evm_read::<U64Variable>();

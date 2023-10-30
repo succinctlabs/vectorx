@@ -93,10 +93,8 @@ async fn main() {
             .await
             .unwrap();
 
-        // Get the last block justified by the current authority set id (the rotate block).
-        let rotate_block = fetcher
-            .get_authority_rotate_block(next_authority_set_id)
-            .await;
+        // Get the last block justified by the current authority set id (also a rotate block).
+        let rotate_block = fetcher.last_justified_block(head_authority_set_id).await;
 
         if H256::from_slice(&next_authority_set_id_hash) == H256::zero() {
             info!("No matching authority set id, rotate is needed");

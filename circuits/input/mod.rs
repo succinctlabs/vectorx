@@ -58,10 +58,9 @@ impl RpcDataFetcher {
         RpcDataFetcher { client, save: None }
     }
 
-    // This function takes in a target_authority_set_id as input, and returns the block that
-    // specifies the authority set (specifically, it is the last justified block by authority set
-    // target - 1).
-    pub async fn get_authority_rotate_block(&self, target_authority_set_id: u64) -> u32 {
+    // This function returns the last block justified by target_authority_set_id. This block
+    // also specifies the new authority set, which starts justifying after this block.
+    pub async fn last_justified_block(&self, target_authority_set_id: u64) -> u32 {
         let mut low = 0;
         let head_block = self.get_head().await;
         let mut high = head_block.number;
@@ -71,7 +70,7 @@ impl RpcDataFetcher {
             let mid = (low + high) / 2;
             let mid_authority_set_id = self.get_authority_set_id(mid).await;
 
-            match mid_authority_set_id.cmp(&target_authority_set_id) {
+            match mid_authority_set_id.cmp(&(target_authority_set_id + 1)) {
                 Ordering::Equal => {
                     if mid == 0 {
                         // Special case: there is no block "mid - 1", just return the found block.
@@ -79,7 +78,7 @@ impl RpcDataFetcher {
                         break;
                     }
                     let prev_authority_set_id = self.get_authority_set_id(mid - 1).await;
-                    if prev_authority_set_id == target_authority_set_id - 1 {
+                    if prev_authority_set_id == target_authority_set_id {
                         epoch_end_block_number = mid;
                         break;
                     } else {
@@ -458,11 +457,11 @@ mod tests {
     async fn test_get_new_authority_set() {
         let fetcher = RpcDataFetcher::new().await;
 
-        // A binary search given a target_authority_set_id, returns the epoch end block number.
+        // A binary search given a target_authority_set_id, returns the last block justified by
+        // target_authority_set_id. This block also specifies the new authority set,
+        // target_authority_set_id + 1.
         let target_authority_set_id = 513;
-        let epoch_end_block_number = fetcher
-            .get_authority_rotate_block(target_authority_set_id)
-            .await;
+        let epoch_end_block_number = fetcher.last_justified_block(target_authority_set_id).await;
 
         // Verify that we found an epoch end block.
         assert_ne!(epoch_end_block_number, 0);

@@ -34,7 +34,7 @@ pub const PREFIX_LENGTH: usize = 11;
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 
 // Max number of authorities this circuit currently supports.
-pub const MAX_AUTHORITY_SET_SIZE: usize = 80;
+pub const MAX_AUTHORITY_SET_SIZE: usize = 100;
 
 // Max number of headers this circuit currently supports.
 pub const MAX_NUM_HEADERS: usize = 180;

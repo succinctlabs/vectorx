@@ -144,7 +144,7 @@
                 "type": "uint64"
             }
         ],
-        "name": "RotateRequested",
+        "name": "NextAuthoritySetIdRequested",
         "type": "event"
     },
     {
@@ -164,6 +164,24 @@
         "inputs": [
             {
                 "internalType": "uint64",
+                "name": "_currentAuthoritySetId",
+                "type": "uint64"
+            },
+            {
+                "internalType": "uint32",
+                "name": "_epochEndBlock",
+                "type": "uint32"
+            }
+        ],
+        "name": "addNextAuthoritySetId",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint64",
                 "name": "",
                 "type": "uint64"
             }
@@ -174,25 +192,6 @@
                 "internalType": "bytes32",
                 "name": "",
                 "type": "bytes32"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "uint32",
-                "name": "",
-                "type": "uint32"
-            }
-        ],
-        "name": "blockHeightToAuthoritySetId",
-        "outputs": [
-            {
-                "internalType": "uint64",
-                "name": "",
-                "type": "uint64"
             }
         ],
         "stateMutability": "view",
@@ -225,19 +224,9 @@
                 "type": "uint32"
             },
             {
-                "internalType": "bytes32",
-                "name": "_trustedHeader",
-                "type": "bytes32"
-            },
-            {
                 "internalType": "uint64",
                 "name": "_authoritySetId",
                 "type": "uint64"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "_authoritySetHash",
-                "type": "bytes32"
             },
             {
                 "internalType": "uint32",
@@ -316,6 +305,11 @@
                 "type": "uint32"
             },
             {
+                "internalType": "uint64",
+                "name": "_authoritySetId",
+                "type": "uint64"
+            },
+            {
                 "internalType": "uint32",
                 "name": "_requestedBlock",
                 "type": "uint32"
@@ -339,32 +333,9 @@
                 "type": "uint64"
             }
         ],
-        "name": "requestRotate",
+        "name": "requestNextAuthoritySetId",
         "outputs": [],
         "stateMutability": "payable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "uint64",
-                "name": "_currentAuthoritySetId",
-                "type": "uint64"
-            },
-            {
-                "internalType": "bytes32",
-                "name": "_currentAuthoritySetHash",
-                "type": "bytes32"
-            },
-            {
-                "internalType": "uint32",
-                "name": "_epochEndBlock",
-                "type": "uint32"
-            }
-        ],
-        "name": "rotate",
-        "outputs": [],
-        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
@@ -403,7 +374,7 @@
                 "type": "bytes32"
             }
         ],
-        "name": "setGensisInfo",
+        "name": "setGenesisInfo",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"

@@ -231,7 +231,7 @@ contract VectorX is IVectorX {
             data,
             500000
         );
-        emit RotateRequested(
+        emit NextAuthoritySetIdRequested(
             _currentAuthoritySetId,
             currentAuthoritySetHash,
             _epochEndBlock

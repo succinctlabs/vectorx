@@ -164,14 +164,20 @@ impl RpcDataFetcher {
         // [V, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
         // Where V is a "Version" number (right now it's 1u8)
         // Where XX is the compact scale encoding of the number of authorities
-        // NOTE: In some cases the compact scale encoding might be only 1 byte if the number of authorities is small
+        // NOTE: In some cases the compact scale encoding might be only 1 byte if the number of authorities is <63
         // This is a reference on how compact scale encoding works: https://docs.substrate.io/reference/scale-codec/#fn-1
         // This is why we do the assert below to check that when we subtract the assumed prefix length of 3
         // that the remainder is divisible by 32 + 8, which represents the number of bytes in an authority public key
         // plus the number of bytes in the weight of the authority
-        assert!((grandpa_authorities_bytes.len() - 3) % (32 + 8) == 0);
+        let offset = if grandpa_authorities_bytes.len() < ((32 + 8) * 63) + 3 {
+            2
+        } else {
+            3
+        };
 
-        let pubkey_and_weight_bytes = grandpa_authorities_bytes[3..].to_vec();
+        assert!((grandpa_authorities_bytes.len() - offset) % (32 + 8) == 0);
+
+        let pubkey_and_weight_bytes = &grandpa_authorities_bytes[offset..];
 
         let mut authorities: Vec<AffinePoint<Curve>> = Vec::new();
         let mut authories_pubkey_bytes: Vec<Vec<u8>> = Vec::new();
@@ -438,10 +444,15 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_authority_set_id() {
         let fetcher = RpcDataFetcher::new().await;
-        let authority_set_id = fetcher.get_authority_set_id(485710).await;
-        assert_eq!(authority_set_id, 458);
-        fetcher.get_authorities(485710).await;
-        let simple_justification_data = fetcher.get_simple_justification::<100>(485710).await;
+        let head = fetcher.get_head().await;
+        let authority_set_id = fetcher.get_authority_set_id(head.number - 1000).await;
+
+        // Get the last justified block of the previous epoch.
+        let last_justified_block = fetcher.last_justified_block(authority_set_id - 1).await;
+
+        let simple_justification_data = fetcher
+            .get_simple_justification::<200>(last_justified_block)
+            .await;
         println!(
             "Number authorities {:?}",
             simple_justification_data.pubkeys.len()

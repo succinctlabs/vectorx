@@ -55,16 +55,16 @@ async fn main() {
     let latest_authority_set_id = fetcher.get_authority_set_id(latest_block).await;
 
     // The logic is as follows:
-    //      1. There is an existing head_block, and it's corresponding head_authority_set_id in the contract.
-    //      2. We fetch the latest block, and it's corresponding latest_authority_set_id.
-    //      3. If latest_authority_set_id == head_authority_set_id, then no rotate is needed. Step to the latest block if > STEP_THRESHOLD.
-    //      4. If latest_authority_set_id > head_authority_set_id, then rotate is needed. Request the head_authority_set_id + 1.
-    //          a) Step from head_block to get_rotate_block(head_authority_set_id + 1).
+    //      1. There is an existing head_block, and corresponding head_authority_set_id in the
+    //          contract.
+    //      2. We fetch the latest block, and corresponding latest_authority_set_id.
+    //      3. If latest_authority_set_id == head_authority_set_id, then no rotate is needed.
+    //          a) Step to the latest block if (latest_block - head) > STEP_THRESHOLD.
+    //      4. If latest_authority_id > head_authority_id, request head_authority_set_id + 1.
+    //          a) Step from head_block to min(head_block + STEP_RANGE_MAX, rotate_block).
+    //             rotate_block is the last block justified by the current authority set id.
     //
-    // We can only launch one rotate at a time.
-    //
-    // TODO: A batch rotate function could make sense, for when the light client gets far out of sync, and we want to rotate from the
-    // current authority set id to a future one. This posed in an issue in our old circom light client, that our new implementation can fix.
+    // Note: Only launches one rotate at a time.
 
     if head_authority_set_id == latest_authority_set_id
         && latest_block - head_block > STEP_THRESHOLD as u32

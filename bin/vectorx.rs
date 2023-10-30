@@ -62,12 +62,11 @@ async fn main() {
         let current_block = vectorx.latest_block().await.unwrap();
         let current_authority_set_id = fetcher.get_authority_set_id(current_block).await;
 
-        // The logic is as follows:
-        //      1. There is an existing current latest_block in the contract.
-        //      2. We fetch the head of the chain, and corresponding head_authority_id.
-        //      3. If current_authority_set_id == head_authority_set_id, then no rotate is needed.
+        // The logic for keeping the Vector LC up to date is as follows:
+        //      1. Fetch the current latest_block in the contract and the head of the chain.
+        //      2. If current_authority_set_id == head_authority_set_id, then no rotate is needed.
         //          a) Step if (head - current_block) > STEP_THRESHOLD.
-        //      4. If current_authority_set_id < head_authority_set_id, request next authority set.
+        //      3. If current_authority_set_id < head_authority_set_id, request next authority set.
         //          a) Step if current_block != the last block justified by current authority set.
 
         if current_authority_set_id == head_authority_set_id

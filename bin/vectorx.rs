@@ -107,13 +107,13 @@ async fn main() {
 
                 // Check if step needed to the last justified block by the current authority set.
                 if head_block < last_justified_block {
-                    info!("Step to the rotate block");
+                    info!("Step to the last justified block");
 
-                    // The block to step to is the minimum of the rotate block and the head block +
-                    // STEP_RANGE_MAX.
+                    // The block to step to is the minimum of the last justified block and the
+                    // head block + STEP_RANGE_MAX.
                     let block_to_step_to = min(last_justified_block, head_block + step_range_max);
 
-                    // Step to the rotate block.
+                    // Step to block_to_step_to.
                     vectorx
                         .request_header_range(head_block, head_authority_set_id, block_to_step_to)
                         .await

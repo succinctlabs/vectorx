@@ -108,7 +108,8 @@ async fn main() {
             if head_block < rotate_block {
                 info!("Step to the rotate block");
 
-                // The block to step to is the minimum of the rotate block and the head block + STEP_RANGE_MAX.
+                // The block to step to is the minimum of the rotate block and the head block +
+                // STEP_RANGE_MAX.
                 let block_to_step_to = min(rotate_block, head_block + step_range_max);
 
                 // Step to the rotate block.

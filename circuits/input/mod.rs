@@ -444,15 +444,10 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_authority_set_id() {
         let fetcher = RpcDataFetcher::new().await;
-        let head = fetcher.get_head().await;
-        let authority_set_id = fetcher.get_authority_set_id(head.number - 1000).await;
-
-        // Get the last justified block of the previous epoch.
-        let last_justified_block = fetcher.last_justified_block(authority_set_id - 1).await;
-
-        let simple_justification_data = fetcher
-            .get_simple_justification::<200>(last_justified_block)
-            .await;
+        let authority_set_id = fetcher.get_authority_set_id(485710).await;
+        assert_eq!(authority_set_id, 458);
+        fetcher.get_authorities(485710).await;
+        let simple_justification_data = fetcher.get_simple_justification::<100>(485710).await;
         println!(
             "Number authorities {:?}",
             simple_justification_data.pubkeys.len()

@@ -19,8 +19,6 @@ async fn main() {
     dotenv::dotenv().ok();
 
     const STEP_THRESHOLD: usize = 100;
-    // Source this from the contract.
-    const STEP_RANGE_MAX: usize = 128;
 
     let fetcher = RpcDataFetcher::new().await;
 
@@ -46,6 +44,9 @@ async fn main() {
 
     let vectorx = VectorX::new(address, client.clone());
 
+    // Source STEP_RANGE_MAX from the contract.
+    let step_range_max = vectorx.max_header_range().await.unwrap();
+
     let head = fetcher.get_head().await;
 
     let head_block = head.number;
@@ -70,7 +71,7 @@ async fn main() {
         && latest_block - head_block > STEP_THRESHOLD as u32
     {
         info!("Step to the latest block");
-        let block_to_step_to = min(latest_block, head_block + STEP_RANGE_MAX as u32);
+        let block_to_step_to = min(latest_block, head_block + step_range_max);
 
         // The block to step to is the minimum of the latest_block block and the head block + STEP_RANGE_MAX.
         vectorx
@@ -110,7 +111,7 @@ async fn main() {
                 info!("Step to the rotate block");
 
                 // The block to step to is the minimum of the rotate block and the head block + STEP_RANGE_MAX.
-                let block_to_step_to = min(rotate_block, head_block + STEP_RANGE_MAX as u32);
+                let block_to_step_to = min(rotate_block, head_block + step_range_max);
 
                 // Step to the rotate block.
                 vectorx

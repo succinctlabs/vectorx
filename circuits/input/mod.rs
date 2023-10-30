@@ -271,17 +271,17 @@ impl RpcDataFetcher {
         for (i, authority) in authorities.iter().enumerate() {
             let pubkey_bytes = authorities_pubkey_bytes[i].clone();
             let signature = pubkey_bytes_to_signature.get(&pubkey_bytes);
-            if signature.is_none() {
+            if let Some(valid_signature) = signature {
+                verify_signature(&pubkey_bytes, &signed_message, signature.unwrap());
+                validator_signed.push(true);
+                padded_pubkeys.push(*authority);
+                padded_signatures.push(*valid_signature);
+                voting_weight += 1;
+            } else {
                 validator_signed.push(false);
                 padded_pubkeys.push(*authority);
                 // We push a dummy signature, since this validator didn't sign
                 padded_signatures.push(DUMMY_SIGNATURE);
-            } else {
-                verify_signature(&pubkey_bytes, &signed_message, signature.unwrap());
-                validator_signed.push(true);
-                padded_pubkeys.push(*authority);
-                padded_signatures.push(*signature.unwrap());
-                voting_weight += 1;
             }
         }
 

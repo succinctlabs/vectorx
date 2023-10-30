@@ -40,7 +40,7 @@ async fn main() {
     let client = Arc::new(client);
 
     // VectorX on Goerli: https://goerli.etherscan.io/address/#code
-    // Note; This should be in the config
+    // Note: This should be in the config
     let address = "";
     let address = address.parse::<Address>().expect("invalid address");
 
@@ -70,9 +70,9 @@ async fn main() {
         && latest_block - head_block > STEP_THRESHOLD as u32
     {
         info!("Step to the latest block");
-        // TODO: Check for errors
         let block_to_step_to = min(latest_block, head_block + STEP_RANGE_MAX as u32);
 
+        // The block to step to is the minimum of the latest_block block and the head block + STEP_RANGE_MAX.
         vectorx
             .request_header_range(head_block, head_authority_set_id, block_to_step_to)
             .await

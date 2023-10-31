@@ -80,29 +80,29 @@ async fn submit_request(
         input: Bytes::from(input).to_string(),
     };
 
-    // // Stringify the data into JSON format.
-    // let serialized_data = serde_json::to_string(&data).unwrap();
+    // Stringify the data into JSON format.
+    let serialized_data = serde_json::to_string(&data).unwrap();
 
-    // // TODO: Update with config.
-    // let request_url = "https://alpha.succinct.xyz/api/request/new";
+    // TODO: Update with config.
+    let request_url = "https://alpha.succinct.xyz/api/request/new";
 
-    // // Submit POST request to the offchain worker.
-    // let client = reqwest::Client::new();
-    // let res = client
-    //     .post(request_url)
-    //     .header("Content-Type", "application/json")
-    //     .body(serialized_data)
-    //     .send()
-    //     .await
-    //     .expect("Failed to send request.");
+    // Submit POST request to the offchain worker.
+    let client = reqwest::Client::new();
+    let res = client
+        .post(request_url)
+        .header("Content-Type", "application/json")
+        .body(serialized_data)
+        .send()
+        .await
+        .expect("Failed to send request.");
 
-    // if res.status().is_success() {
-    //     // TODO: Log success message. Find structure of output.
-    //     info!("Successfully submitted request.");
-    // } else {
-    //     // TODO: Log error message.
-    //     info!("Failed to submit request.");
-    // }
+    if res.status().is_success() {
+        // TODO: Log success message. Find structure of output.
+        info!("Successfully submitted request.");
+    } else {
+        // TODO: Log error message.
+        info!("Failed to submit request.");
+    }
 }
 
 async fn request_header_range(

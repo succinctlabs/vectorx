@@ -10,3 +10,9 @@ forge create --rpc-url $RPC_URL --private-key $PRIVATE_KEY --constructor-args 0x
 ```
 forge script script/VectorX.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
 ```
+### Test with off-chain requests
+Add CONTRACT_ADDRESS to .env
+
+```
+cargo run --bin vectorx
+```

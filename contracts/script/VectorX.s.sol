@@ -11,38 +11,47 @@ contract DeployScript is Script {
 
     function run() public {
         vm.startBroadcast();
-        address gateway = address(0x852a94F8309D445D27222eDb1E92A4E83DdDd2a8);
-        bytes32 dataCommitmentFunctionId = bytes32(
-            0xf21ad9ac1eb903b95ea90d135fe019007cd90508861afaeb73f25d3dfc5dcc01
+        bytes32 stepFunctionId = bytes32(
+            hex"98a2381f5efeaf7c3e39d749d6f676df1432487578f393161cebd2b03934f43b"
+        );
+        bytes32 rotateFunctionId = bytes32(
+            hex"b3f1415062a3543bb1c48d9d6a49f9e005fe415d347a5ba63e40bb1235acfd86"
         );
 
         // Use the below to interact with an already deployed ZK light client
-        // VectorX lightClient = VectorX(
-        //     0xB1cdc97E3C9fC29a30da31e49B4e2304b011d631
-        // );
-
-        VectorX lightClient = new VectorX(gateway);
-
-        uint32 trustedBlock = 272502;
-        uint64 authoritySetId = 256;
-        bytes32 header = bytes32(
-            hex"9a69988124baf188d9d6bbbc579977815086a5d9dfa3b91bafa6d315f31047dc"
+        VectorX lightClient = VectorX(
+            0x2DCB17C1EF8BbE1dE386Dc850EcEe1cc3b2aa1b1
         );
+
+        uint32 trustedBlock = 214287;
+        uint64 authoritySetId = 202;
+        bytes32 authoritySetHash = bytes32(
+            hex"99d276c2bf394325382294e08d3285ec5e3548f3d50deebfb900e0730041a923"
+        );
+        bytes32 header = bytes32(
+            hex"1bccd337481d3f37b6059e07b4d903f7186d4448021bce00c54940f92eee28af"
+        );
+
         lightClient.setGenesisInfo(
             trustedBlock,
             header,
-            256,
-            bytes32(uint256(1))
-        );
-
-        uint32 targetBlock = 272534;
-
-        lightClient.updateHeaderRangeFunctionId(dataCommitmentFunctionId);
-
-        lightClient.requestHeaderRange{value: 0.2 ether}(
-            trustedBlock,
             authoritySetId,
-            targetBlock
+            authoritySetHash
         );
+
+        lightClient.updateHeaderRangeFunctionId(stepFunctionId);
+        lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);
+
+        // Call rotate
+        lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
+
+        // Call step
+        // uint32 targetBlock = 214288;
+
+        // lightClient.requestHeaderRange{value: 0.2 ether}(
+        //     trustedBlock,
+        //     authoritySetId,
+        //     targetBlock
+        // );
     }
 }

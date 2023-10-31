@@ -57,7 +57,7 @@ contract VectorX is IVectorX {
 
     // TODO: In production, this would be `onlyOwner`
     /// @notice Update the function id for requesting a rotate.
-    function updateRotateFunctionId(bytes32 _functionId) external {
+    function updateAddNextAuthoritySetFunctionId(bytes32 _functionId) external {
         rotateFunctionId = _functionId;
     }
 

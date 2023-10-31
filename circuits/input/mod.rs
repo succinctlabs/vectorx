@@ -38,7 +38,7 @@ pub fn verify_signature(pubkey_bytes: &[u8], signed_message: &[u8], signature: &
 }
 
 // Compute the chained hash of the authority set.
-fn compute_authority_set_hash(authorities: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn compute_authority_set_hash(authorities: Vec<Vec<u8>>) -> Vec<u8> {
     let mut hash_so_far = Vec::new();
     for i in 0..authorities.len() {
         let authority = authorities[i].clone();
@@ -444,18 +444,44 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_authority_set_id() {
         let fetcher = RpcDataFetcher::new().await;
-        let authority_set_id = fetcher.get_authority_set_id(485710).await;
-        assert_eq!(authority_set_id, 458);
-        fetcher.get_authorities(485710).await;
-        let simple_justification_data = fetcher.get_simple_justification::<100>(485710).await;
-        println!(
-            "Number authorities {:?}",
-            simple_justification_data.pubkeys.len()
-        );
-        println!(
-            "signed_message len {:?}",
-            simple_justification_data.signed_message.len()
-        );
+        let mut block: u32 = 215000;
+
+        loop {
+            let authority_set_id = fetcher.get_authority_set_id(block).await;
+            println!("authority_set_id {:?}", authority_set_id);
+
+            let epoch_end_block = fetcher.last_justified_block(authority_set_id - 1).await;
+            println!("first end block {:?}", epoch_end_block);
+            let authorities = fetcher.get_authorities(epoch_end_block).await;
+
+            let next_epoch_end_block = fetcher.last_justified_block(authority_set_id).await;
+            println!("second end block {:?}", next_epoch_end_block);
+            let next_authorities = fetcher.get_authorities(next_epoch_end_block).await;
+
+            if next_authorities.1.len() != authorities.1.len() {
+                let prev_epoch_end_block = fetcher.last_justified_block(authority_set_id - 2).await;
+                println!("zero end block {:?}", prev_epoch_end_block);
+                let authorities = fetcher.get_authorities(prev_epoch_end_block).await;
+
+                println!(
+                    "First authority set hash {:?}",
+                    hex::encode(compute_authority_set_hash(authorities.1))
+                );
+
+                println!(
+                    "Second authority set hash {:?}",
+                    hex::encode(compute_authority_set_hash(next_authorities.1))
+                );
+
+                println!(
+                    "Header hash of last justified block before switch {:?}",
+                    fetcher.get_block_hash(epoch_end_block).await
+                );
+
+                break;
+            }
+            block += 1000;
+        }
     }
 
     #[tokio::test]

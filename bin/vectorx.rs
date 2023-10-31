@@ -21,11 +21,11 @@ struct VectorConfig {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct OffchainInput {
-    chain_id: u32,
-    to: Address,
-    data: Vec<u8>,
-    function_id: H256,
-    input: Vec<u8>,
+    chain_id: String,
+    to: String,
+    data: String,
+    function_id: String,
+    input: String,
 }
 
 // const VECTOR_CONFIG: VectorConfig = VectorConfig {
@@ -56,6 +56,50 @@ fn get_config() -> VectorConfig {
     }
 }
 
+async fn submit_request(
+    config: &VectorConfig,
+    function_data: Vec<u8>,
+    input: Vec<u8>,
+    function_id: H256,
+) {
+    println!("function data: {:?}", hex::encode(function_data.clone()));
+    println!("function input: {:?}", hex::encode(input.clone()));
+
+    let data = OffchainInput {
+        chain_id: config.chain_id.to_string(),
+        to: config.address.to_string(),
+        data: hex::encode(function_data.clone()),
+        function_id: function_id.to_string(),
+        input: hex::encode(input.clone()),
+    };
+
+    // JSON stringify the data
+    println!("data: {:?}", serde_json::to_string(&data).unwrap());
+
+    let serialized_data = serde_json::to_string(&data).unwrap();
+
+    // TODO: Update with config.
+    let request_url = "https://alpha.succinct.xyz/api/request/new";
+
+    // Submit POST request to the offchain worker.
+    let client = reqwest::Client::new();
+    let res = client
+        .post(request_url)
+        .header("Content-Type", "application/json")
+        .body(serialized_data)
+        .send()
+        .await
+        .expect("Failed to send request.");
+
+    if res.status().is_success() {
+        // TODO: Log success message. Find structure of output.
+        info!("Successfully submitted request.");
+    } else {
+        // TODO: Log error message.
+        info!("Failed to submit request.");
+    }
+}
+
 async fn request_header_range(
     config: &VectorConfig,
     contract: &VectorX<Provider<Http>>,
@@ -83,7 +127,7 @@ async fn request_header_range(
     .expect("Failed to encode packed data.");
 
     let function_signature = "commitHeaderRange(uint32,uint64,uint32)";
-    let function_selector = ethers::utils::id(function_signature)[0..4].to_vec();
+    let function_selector = ethers::utils::id(function_signature).to_vec();
     let encoded_parameters = ethers::abi::encode(&[
         trusted_block.into_token(),
         trusted_authority_set_id.into_token(),
@@ -92,33 +136,7 @@ async fn request_header_range(
     // Concat function selector and encoded parameters.
     let function_data = [&function_selector[..], &encoded_parameters[..]].concat();
 
-    let data = OffchainInput {
-        chain_id: config.chain_id,
-        to: config.address,
-        data: function_data,
-        function_id: config.step_function_id,
-        input,
-    };
-
-    // TODO: Update with config.
-    let request_url = "https://alpha.succinct.xyz/api/request/new";
-
-    // Submit POST request to the offchain worker.
-    let client = reqwest::Client::new();
-    let res = client
-        .post(request_url)
-        .json(&data)
-        .send()
-        .await
-        .expect("Failed to send request.");
-
-    if res.status().is_success() {
-        // TODO: Log success message. Find structure of output.
-        info!("Successfully submitted request.");
-    } else {
-        // TODO: Log error message.
-        info!("Failed to submit request.");
-    }
+    submit_request(config, function_data, input, config.step_function_id).await;
 }
 
 async fn request_next_authority_set_id(
@@ -140,7 +158,7 @@ async fn request_next_authority_set_id(
     .expect("Failed to encode packed data.");
 
     let function_signature = "addNextAuthoritySetId(uint64,uint32)";
-    let function_selector = ethers::utils::id(function_signature)[0..4].to_vec();
+    let function_selector = ethers::utils::id(function_signature).to_vec();
     let encoded_parameters = ethers::abi::encode(&[
         current_authority_set_id.into_token(),
         epoch_end_block.into_token(),
@@ -148,38 +166,16 @@ async fn request_next_authority_set_id(
     // Concat function selector and encoded parameters.
     let function_data = [&function_selector[..], &encoded_parameters[..]].concat();
 
-    let data = OffchainInput {
-        chain_id: config.chain_id,
-        to: config.address,
-        data: function_data,
-        function_id: config.rotate_function_id,
-        input,
-    };
-
-    // TODO: Update with config.
-    let request_url = "https://alpha.succinct.xyz/api/request/new";
-
-    // Submit POST request to the offchain worker.
-    let client = reqwest::Client::new();
-    let res = client
-        .post(request_url)
-        .json(&data)
-        .send()
-        .await
-        .expect("Failed to send request.");
-
-    if res.status().is_success() {
-        // TODO: Log success message. Find structure of output.
-        info!("Successfully submitted request.");
-    } else {
-        // TODO: Log error message.
-        info!("Failed to submit request.");
-    }
+    submit_request(config, function_data, input, config.rotate_function_id).await;
 }
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
+
+    env_logger::init();
+
+    info!("Starting VectorX offchain worker");
 
     const STEP_THRESHOLD: usize = 100;
     const LOOP_DELAY: u64 = 30;
@@ -251,26 +247,25 @@ async fn main() {
                     last_justified_block,
                 )
                 .await;
+            }
 
-                // Check if step needed to the last justified block by the current authority set.
-                if current_block < last_justified_block {
-                    info!("Step to the last justified block");
+            // Check if step needed to the last justified block by the current authority set.
+            if current_block < last_justified_block {
+                info!("Step to the last justified block");
 
-                    // The block to step to is the minimum of the last justified block and the
-                    // head block + STEP_RANGE_MAX.
-                    let block_to_step_to =
-                        min(last_justified_block, current_block + step_range_max);
+                // The block to step to is the minimum of the last justified block and the
+                // head block + STEP_RANGE_MAX.
+                let block_to_step_to = min(last_justified_block, current_block + step_range_max);
 
-                    // Step to block_to_step_to.
-                    request_header_range(
-                        &config,
-                        &vectorx,
-                        current_block,
-                        current_authority_set_id,
-                        block_to_step_to,
-                    )
-                    .await;
-                }
+                // Step to block_to_step_to.
+                request_header_range(
+                    &config,
+                    &vectorx,
+                    current_block,
+                    current_authority_set_id,
+                    block_to_step_to,
+                )
+                .await;
             }
         }
 

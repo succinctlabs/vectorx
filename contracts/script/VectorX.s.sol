@@ -43,7 +43,7 @@ contract DeployScript is Script {
         lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);
 
         // Call rotate
-        lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
+        // lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
 
         // Call step
         // uint32 targetBlock = 214288;

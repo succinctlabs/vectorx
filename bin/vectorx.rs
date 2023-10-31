@@ -5,7 +5,7 @@ use ethers::abi::{encode_packed, Tokenizable};
 use ethers::contract::abigen;
 use ethers::core::types::Address;
 use ethers::providers::{Http, Provider};
-use ethers::types::H256;
+use ethers::types::{Bytes, H256};
 use log::info;
 use vectorx::input::RpcDataFetcher;
 
@@ -21,10 +21,10 @@ struct VectorConfig {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct OffchainInput {
-    chain_id: String,
+    chainId: u32,
     to: String,
     data: String,
-    function_id: String,
+    functionId: String,
     input: String,
 }
 
@@ -62,20 +62,17 @@ async fn submit_request(
     input: Vec<u8>,
     function_id: H256,
 ) {
-    println!("function data: {:?}", hex::encode(function_data.clone()));
-    println!("function input: {:?}", hex::encode(input.clone()));
-
+    println!("function id: {:?}", function_id.to_string());
+    // All data except for chainId is a string, and needs a 0x prefix.
     let data = OffchainInput {
-        chain_id: config.chain_id.to_string(),
-        to: config.address.to_string(),
-        data: hex::encode(function_data.clone()),
-        function_id: function_id.to_string(),
-        input: hex::encode(input.clone()),
+        chainId: config.chain_id,
+        to: Bytes::from(config.address.0).to_string(),
+        data: Bytes::from(function_data).to_string(),
+        functionId: Bytes::from(function_id.0).to_string(),
+        input: Bytes::from(input).to_string(),
     };
 
-    // JSON stringify the data
-    println!("data: {:?}", serde_json::to_string(&data).unwrap());
-
+    // Stringify the data into JSON format.
     let serialized_data = serde_json::to_string(&data).unwrap();
 
     // TODO: Update with config.
@@ -171,8 +168,8 @@ async fn request_next_authority_set_id(
 
 #[tokio::main]
 async fn main() {
+    env::set_var("RUST_LOG", "info");
     dotenv::dotenv().ok();
-
     env_logger::init();
 
     info!("Starting VectorX offchain worker");
@@ -270,6 +267,7 @@ async fn main() {
         }
 
         // Sleep for N minutes.
+        println!("Sleeping for {} minutes", LOOP_DELAY);
         tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY)).await;
     }
 }

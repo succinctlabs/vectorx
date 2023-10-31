@@ -1,7 +1,8 @@
 use std::cmp::min;
 use std::env;
 
-use ethers::abi::{encode_packed, Tokenizable};
+use alloy_primitives::bytes;
+use alloy_sol_types::{sol, SolType};
 use ethers::contract::abigen;
 use ethers::core::types::Address;
 use ethers::providers::{Http, Provider};
@@ -19,6 +20,7 @@ struct VectorConfig {
     rotate_function_id: H256,
 }
 
+#[allow(non_snake_case)]
 #[derive(serde::Serialize, serde::Deserialize)]
 struct OffchainInput {
     chainId: u32,
@@ -27,6 +29,12 @@ struct OffchainInput {
     functionId: String,
     input: String,
 }
+
+type NextAuthoritySetCalldataTuple = sol! { tuple(uint64, uint32) };
+type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
+
+type HeaderRangeCalldataTuple = sol! { tuple(uint32, uint64, uint32) };
+type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint32) };
 
 // const VECTOR_CONFIG: VectorConfig = VectorConfig {
 //     address: "0x0000000",
@@ -62,7 +70,7 @@ async fn submit_request(
     input: Vec<u8>,
     function_id: H256,
 ) {
-    println!("function id: {:?}", function_id.to_string());
+    // println!("function id: {:?}", function_id.to_string());
     // All data except for chainId is a string, and needs a 0x prefix.
     let data = OffchainInput {
         chainId: config.chain_id,
@@ -72,29 +80,29 @@ async fn submit_request(
         input: Bytes::from(input).to_string(),
     };
 
-    // Stringify the data into JSON format.
-    let serialized_data = serde_json::to_string(&data).unwrap();
+    // // Stringify the data into JSON format.
+    // let serialized_data = serde_json::to_string(&data).unwrap();
 
-    // TODO: Update with config.
-    let request_url = "https://alpha.succinct.xyz/api/request/new";
+    // // TODO: Update with config.
+    // let request_url = "https://alpha.succinct.xyz/api/request/new";
 
-    // Submit POST request to the offchain worker.
-    let client = reqwest::Client::new();
-    let res = client
-        .post(request_url)
-        .header("Content-Type", "application/json")
-        .body(serialized_data)
-        .send()
-        .await
-        .expect("Failed to send request.");
+    // // Submit POST request to the offchain worker.
+    // let client = reqwest::Client::new();
+    // let res = client
+    //     .post(request_url)
+    //     .header("Content-Type", "application/json")
+    //     .body(serialized_data)
+    //     .send()
+    //     .await
+    //     .expect("Failed to send request.");
 
-    if res.status().is_success() {
-        // TODO: Log success message. Find structure of output.
-        info!("Successfully submitted request.");
-    } else {
-        // TODO: Log error message.
-        info!("Failed to submit request.");
-    }
+    // if res.status().is_success() {
+    //     // TODO: Log success message. Find structure of output.
+    //     info!("Successfully submitted request.");
+    // } else {
+    //     // TODO: Log error message.
+    //     info!("Failed to submit request.");
+    // }
 }
 
 async fn request_header_range(
@@ -114,22 +122,23 @@ async fn request_header_range(
         .await
         .unwrap();
 
-    let input = encode_packed(&[
-        trusted_block.into_token(),
-        trusted_header_hash.into_token(),
-        trusted_authority_set_id.into_token(),
-        trusted_authority_set_hash.into_token(),
-        target_block.into_token(),
-    ])
-    .expect("Failed to encode packed data.");
+    let input = HeaderRangeInputTuple::abi_encode_packed(&(
+        trusted_block,
+        trusted_header_hash,
+        trusted_authority_set_id,
+        trusted_authority_set_hash,
+        target_block,
+    ));
+
+    info!("length of step input: {:?}", input.len());
 
     let function_signature = "commitHeaderRange(uint32,uint64,uint32)";
     let function_selector = ethers::utils::id(function_signature).to_vec();
-    let encoded_parameters = ethers::abi::encode(&[
-        trusted_block.into_token(),
-        trusted_authority_set_id.into_token(),
-        target_block.into_token(),
-    ]);
+    let encoded_parameters = HeaderRangeCalldataTuple::abi_encode_sequence(&(
+        trusted_block,
+        trusted_authority_set_id,
+        target_block,
+    ));
     // Concat function selector and encoded parameters.
     let function_data = [&function_selector[..], &encoded_parameters[..]].concat();
 
@@ -147,19 +156,20 @@ async fn request_next_authority_set_id(
         .await
         .unwrap();
 
-    let input = encode_packed(&[
-        current_authority_set_id.into_token(),
-        current_authority_set_hash.into_token(),
-        epoch_end_block.into_token(),
-    ])
-    .expect("Failed to encode packed data.");
+    let input = NextAuthoritySetInputTuple::abi_encode_packed(&(
+        current_authority_set_id,
+        current_authority_set_hash,
+        epoch_end_block,
+    ));
+
+    info!("length of rotate input: {:?}", input.len());
 
     let function_signature = "addNextAuthoritySetId(uint64,uint32)";
     let function_selector = ethers::utils::id(function_signature).to_vec();
-    let encoded_parameters = ethers::abi::encode(&[
-        current_authority_set_id.into_token(),
-        epoch_end_block.into_token(),
-    ]);
+    let encoded_parameters = NextAuthoritySetCalldataTuple::abi_encode_sequence(&(
+        current_authority_set_id,
+        epoch_end_block,
+    ));
     // Concat function selector and encoded parameters.
     let function_data = [&function_selector[..], &encoded_parameters[..]].concat();
 

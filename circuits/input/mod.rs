@@ -429,6 +429,8 @@ impl RpcDataFetcher {
 
 #[cfg(test)]
 mod tests {
+    use ethers::abi::{encode_packed, Tokenizable};
+
     use super::*;
     use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
 
@@ -438,6 +440,19 @@ mod tests {
         let fetcher = RpcDataFetcher::new().await;
         let headers = fetcher.get_block_headers_range(100000, 100009).await;
         assert_eq!(headers.len(), 10);
+    }
+
+    #[test]
+    fn test_encode_packed() {
+        let authority_set_id: u64 = 4;
+        let trusted_block_number: u32 = 10;
+
+        let input = encode_packed(&[
+            authority_set_id.into_token(),
+            trusted_block_number.into_token(),
+        ])
+        .expect("Failed to encode packed data.");
+        println!("input {:?}", hex::encode(input));
     }
 
     #[tokio::test]

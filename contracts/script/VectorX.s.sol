@@ -23,13 +23,13 @@ contract DeployScript is Script {
             0x2DCB17C1EF8BbE1dE386Dc850EcEe1cc3b2aa1b1
         );
 
-        uint32 trustedBlock = 214287;
-        uint64 authoritySetId = 202;
+        uint32 trustedBlock = 215367;
+        uint64 authoritySetId = 203;
         bytes32 authoritySetHash = bytes32(
             hex"99d276c2bf394325382294e08d3285ec5e3548f3d50deebfb900e0730041a923"
         );
         bytes32 header = bytes32(
-            hex"1bccd337481d3f37b6059e07b4d903f7186d4448021bce00c54940f92eee28af"
+            hex"f1fc366868ae66403816faf4778769f4344b7f9f2ac6f705350588aba5c1b7b7"
         );
 
         lightClient.setGenesisInfo(
@@ -43,7 +43,7 @@ contract DeployScript is Script {
         lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);
 
         // Call rotate
-        // lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
+        lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
 
         // Call step
         // uint32 targetBlock = 214288;

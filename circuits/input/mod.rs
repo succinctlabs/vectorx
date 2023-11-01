@@ -233,7 +233,8 @@ impl RpcDataFetcher {
             authority_set_id = prev_authority_set_id;
         }
 
-        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number).await;
+        // The authorities for the current block are defined in the previous block.
+        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number - 1).await;
 
         if authorities.len() > VALIDATOR_SET_SIZE_MAX {
             panic!("Too many authorities");
@@ -272,7 +273,7 @@ impl RpcDataFetcher {
             let pubkey_bytes = authorities_pubkey_bytes[i].clone();
             let signature = pubkey_bytes_to_signature.get(&pubkey_bytes);
             if let Some(valid_signature) = signature {
-                verify_signature(&pubkey_bytes, &signed_message, signature.unwrap());
+                verify_signature(&pubkey_bytes, &signed_message, valid_signature);
                 validator_signed.push(true);
                 padded_pubkeys.push(*authority);
                 padded_signatures.push(*valid_signature);
@@ -429,6 +430,7 @@ impl RpcDataFetcher {
 
 #[cfg(test)]
 mod tests {
+    use avail_subxt::config::Header;
     use ethers::abi::{encode_packed, Tokenizable};
 
     use super::*;
@@ -465,38 +467,47 @@ mod tests {
             let authority_set_id = fetcher.get_authority_set_id(block).await;
             println!("authority_set_id {:?}", authority_set_id);
 
-            let epoch_end_block = fetcher.last_justified_block(authority_set_id - 1).await;
-            println!("first end block {:?}", epoch_end_block);
-            let authorities = fetcher.get_authorities(epoch_end_block).await;
+            let prev_epoch_end_block = fetcher.last_justified_block(authority_set_id - 1).await;
+            println!("prev end block {:?}", prev_epoch_end_block);
+            // The current authorities are defined in the last block of the previous epoch.
+            let curr_authorities = fetcher.get_authorities(prev_epoch_end_block).await;
 
-            let next_epoch_end_block = fetcher.last_justified_block(authority_set_id).await;
-            println!("second end block {:?}", next_epoch_end_block);
-            let next_authorities = fetcher.get_authorities(next_epoch_end_block).await;
+            let epoch_end_block = fetcher.last_justified_block(authority_set_id).await;
+            println!("curr end block {:?}", epoch_end_block);
+            // The next authority set is defined by the last block of the current epoch.
+            let next_authorities = fetcher.get_authorities(epoch_end_block).await;
 
-            if next_authorities.1.len() != authorities.1.len() {
-                let prev_epoch_end_block = fetcher.last_justified_block(authority_set_id - 2).await;
-                println!("zero end block {:?}", prev_epoch_end_block);
-                let authorities = fetcher.get_authorities(prev_epoch_end_block).await;
-
+            if curr_authorities.1.len() != next_authorities.1.len() {
+                println!("genesis id {:?}", authority_set_id);
                 println!(
-                    "First authority set hash {:?}",
-                    hex::encode(compute_authority_set_hash(authorities.1))
+                    "genesis authority set hash {:?}",
+                    hex::encode(compute_authority_set_hash(curr_authorities.1))
                 );
-
                 println!(
-                    "Second authority set hash {:?}",
-                    hex::encode(compute_authority_set_hash(next_authorities.1))
+                    "genesis block (last block justified by genesis id) {:?}",
+                    epoch_end_block
                 );
-
-                println!(
-                    "Header hash of last justified block before switch {:?}",
-                    fetcher.get_block_hash(epoch_end_block).await
-                );
+                let genesis_header = fetcher.get_header(epoch_end_block).await;
+                println!("genesis header {:?}", hex::encode(genesis_header.hash().0));
 
                 break;
             }
             block += 1000;
         }
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_simple_justification_change_authority_set() {
+        let fetcher = RpcDataFetcher::new().await;
+
+        // This is an epoch end block where the authority set changes.
+        let genesis_epoch_end_block = 215367;
+
+        const VALIDATOR_SET_SIZE_MAX: usize = 100;
+        let _ = fetcher
+            .get_simple_justification::<VALIDATOR_SET_SIZE_MAX>(genesis_epoch_end_block)
+            .await;
     }
 
     #[tokio::test]

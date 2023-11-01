@@ -224,14 +224,8 @@ impl RpcDataFetcher {
         let justification: GrandpaJustification =
             Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
 
-        let mut authority_set_id = self.get_authority_set_id(block_number).await;
-        // If this is an epoch end block, then we need to use the previous authority set id.
-        // Specifically, if epoch_end_block is 500 and the new authority set specified in block 500 is id 2, we need to use id=1.
-        let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
-        if authority_set_id - prev_authority_set_id == 1 {
-            // This is an epoch end block, so we use the previous authority set id.
-            authority_set_id = prev_authority_set_id;
-        }
+        // The authority set for the current block is defined in the previous block.
+        let authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
         // The authorities for the current block are defined in the previous block.
         let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number - 1).await;
@@ -448,17 +442,14 @@ mod tests {
         assert_eq!(headers.len(), 10);
     }
 
-    #[test]
-    fn test_encode_packed() {
-        let authority_set_id: u64 = 4;
-        let trusted_block_number: u32 = 10;
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_header_hash() {
+        let fetcher = RpcDataFetcher::new().await;
 
-        let input = encode_packed(&[
-            authority_set_id.into_token(),
-            trusted_block_number.into_token(),
-        ])
-        .expect("Failed to encode packed data.");
-        println!("input {:?}", hex::encode(input));
+        let target_block = 215495;
+        let header = fetcher.get_header(target_block).await;
+        println!("header hash {:?}", hex::encode(header.hash().0));
     }
 
     #[tokio::test]

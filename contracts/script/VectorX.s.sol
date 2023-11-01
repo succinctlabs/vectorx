@@ -12,15 +12,15 @@ contract DeployScript is Script {
     function run() public {
         vm.startBroadcast();
         bytes32 stepFunctionId = bytes32(
-            hex"98a2381f5efeaf7c3e39d749d6f676df1432487578f393161cebd2b03934f43b"
+            hex"3503f80d2000a387d3f19ba5ae616ee31f8455e6d13c835ee4c4404db3bb449e"
         );
         bytes32 rotateFunctionId = bytes32(
-            hex"b3f1415062a3543bb1c48d9d6a49f9e005fe415d347a5ba63e40bb1235acfd86"
+            hex"d78926e1a401e80cff31715d3dbad782ff8e7cdc83fa436f6e03e3e07cd7a7b4"
         );
 
         // Use the below to interact with an already deployed ZK light client
         VectorX lightClient = VectorX(
-            0x2DCB17C1EF8BbE1dE386Dc850EcEe1cc3b2aa1b1
+            0x14588DB3A468Aeb603379B0DA881a748971A94B8
         );
 
         uint32 trustedBlock = 215367;
@@ -43,7 +43,7 @@ contract DeployScript is Script {
         lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);
 
         // Call rotate
-        lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
+        // lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
 
         // Call step
         // uint32 targetBlock = 214288;

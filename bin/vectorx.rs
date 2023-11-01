@@ -44,10 +44,10 @@ type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint
 
 fn get_config() -> VectorConfig {
     let step_function_id = H256::from_slice(
-        &hex::decode("98a2381f5efeaf7c3e39d749d6f676df1432487578f393161cebd2b03934f43b").unwrap(),
+        &hex::decode("3503f80d2000a387d3f19ba5ae616ee31f8455e6d13c835ee4c4404db3bb449e").unwrap(),
     );
     let rotate_function_id = H256::from_slice(
-        &hex::decode("b3f1415062a3543bb1c48d9d6a49f9e005fe415d347a5ba63e40bb1235acfd86").unwrap(),
+        &hex::decode("d78926e1a401e80cff31715d3dbad782ff8e7cdc83fa436f6e03e3e07cd7a7b4").unwrap(),
     );
     let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
     // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
@@ -69,7 +69,6 @@ async fn submit_request(
     input: Vec<u8>,
     function_id: H256,
 ) {
-    // println!("function id: {:?}", function_id.to_string());
     // All data except for chainId is a string, and needs a 0x prefix.
     let data = OffchainInput {
         chainId: config.chain_id,
@@ -129,8 +128,6 @@ async fn request_header_range(
         target_block,
     ));
 
-    info!("length of step input: {:?}", input.len());
-
     let function_signature = "commitHeaderRange(uint32,uint64,uint32)";
     let function_selector = ethers::utils::id(function_signature).to_vec();
     let encoded_parameters = HeaderRangeCalldataTuple::abi_encode_sequence(&(
@@ -160,8 +157,6 @@ async fn request_next_authority_set_id(
         current_authority_set_hash,
         epoch_end_block,
     ));
-
-    info!("length of rotate input: {:?}", input.len());
 
     let function_signature = "addNextAuthoritySetId(uint64,uint32)";
     let function_selector = ethers::utils::id(function_signature).to_vec();
@@ -214,8 +209,9 @@ async fn main() {
         if current_authority_set_id == head_authority_set_id
             && head_block - current_block > STEP_THRESHOLD as u32
         {
-            info!("Step to the latest block");
             let block_to_step_to = min(head_block, current_block + step_range_max);
+
+            info!("Stepping to block {:?}.", block_to_step_to);
 
             // The block to step to is the minimum of the latest_block block and the head block + STEP_RANGE_MAX.
             request_header_range(
@@ -229,7 +225,7 @@ async fn main() {
         }
 
         if current_authority_set_id < head_authority_set_id {
-            info!("Rotate is needed");
+            info!("Current authority set id is less than head authority set id.");
 
             let next_authority_set_id = current_authority_set_id + 1;
 
@@ -244,7 +240,10 @@ async fn main() {
             let last_justified_block = fetcher.last_justified_block(current_authority_set_id).await;
 
             if H256::from_slice(&next_authority_set_hash) == H256::zero() {
-                info!("No matching authority set id, rotate is needed");
+                info!(
+                    "Requesting next authority set id, which is {:?}.",
+                    current_authority_set_id + 1
+                );
                 // Request the next authority set id.
                 request_next_authority_set_id(
                     &config,
@@ -257,11 +256,11 @@ async fn main() {
 
             // Check if step needed to the last justified block by the current authority set.
             if current_block < last_justified_block {
-                info!("Step to the last justified block");
-
                 // The block to step to is the minimum of the last justified block and the
                 // head block + STEP_RANGE_MAX.
                 let block_to_step_to = min(last_justified_block, current_block + step_range_max);
+
+                info!("Stepping to block {:?}.", block_to_step_to);
 
                 // Step to block_to_step_to.
                 request_header_range(
@@ -276,7 +275,7 @@ async fn main() {
         }
 
         // Sleep for N minutes.
-        println!("Sleeping for {} minutes", LOOP_DELAY);
+        println!("Sleeping for {} minutes.", LOOP_DELAY);
         tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY)).await;
     }
 }

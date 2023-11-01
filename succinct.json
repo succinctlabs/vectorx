@@ -5,7 +5,10 @@
             "framework": "plonky2x",
             "baseDir": ".",
             "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin step --release build && mv ./target/release/step ./build/step",
-            "proveCommand": "RUST_LOG=info ./build/step prove input.json"
+            "proveCommand": "RUST_LOG=info ./build/step prove input.json",
+            "requiredArtifacts": [
+                "step"
+            ]
         },
         {
             "name": "rotate",

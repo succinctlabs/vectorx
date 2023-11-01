@@ -147,10 +147,16 @@ async fn request_next_authority_set_id(
     current_authority_set_id: u64,
     epoch_end_block: u32,
 ) {
+    info!("Current authority set id: {:?}", current_authority_set_id);
     let current_authority_set_hash = contract
         .authority_set_id_to_hash(current_authority_set_id)
         .await
         .unwrap();
+
+    info!(
+        "Current authority set hash: {:?}",
+        current_authority_set_hash
+    );
 
     let input = NextAuthoritySetInputTuple::abi_encode_packed(&(
         current_authority_set_id,
@@ -194,10 +200,11 @@ async fn main() {
     loop {
         let head = fetcher.get_head().await;
         let head_block = head.number;
-        let head_authority_set_id = fetcher.get_authority_set_id(head_block).await;
+        let head_authority_set_id = fetcher.get_authority_set_id(head_block - 1).await;
 
         let current_block = vectorx.latest_block().await.unwrap();
-        let current_authority_set_id = fetcher.get_authority_set_id(current_block).await;
+        // The current authority set id is the authority set id of the block before the current block.
+        let current_authority_set_id = fetcher.get_authority_set_id(current_block - 1).await;
 
         // The logic for keeping the Vector LC up to date is as follows:
         //      1. Fetch the current latest_block in the contract and the head of the chain.
@@ -255,6 +262,7 @@ async fn main() {
             }
 
             // Check if step needed to the last justified block by the current authority set.
+            #[allow(clippy::comparison_chain)]
             if current_block < last_justified_block {
                 // The block to step to is the minimum of the last justified block and the
                 // head block + STEP_RANGE_MAX.
@@ -268,6 +276,28 @@ async fn main() {
                     &vectorx,
                     current_block,
                     current_authority_set_id,
+                    block_to_step_to,
+                )
+                .await;
+            } else if current_block == last_justified_block {
+                // If the current block is the last justified block, then call step for the next
+                // authority set id.
+
+                let next_last_justified_block =
+                    fetcher.last_justified_block(next_authority_set_id).await;
+
+                let block_to_step_to = min(
+                    next_last_justified_block,
+                    last_justified_block + step_range_max,
+                );
+
+                info!("Stepping to block {:?}.", block_to_step_to);
+                // Step to block_to_step_to.
+                request_header_range(
+                    &config,
+                    &vectorx,
+                    last_justified_block,
+                    next_authority_set_id,
                     block_to_step_to,
                 )
                 .await;

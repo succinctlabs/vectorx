@@ -1,7 +1,6 @@
 use std::cmp::min;
 use std::env;
 
-use alloy_primitives::bytes;
 use alloy_sol_types::{sol, SolType};
 use ethers::contract::abigen;
 use ethers::core::types::Address;

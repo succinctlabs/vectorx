@@ -229,7 +229,7 @@ impl RpcDataFetcher {
         // Specifically, if epoch_end_block is 500 and the new authority set specified in block 500 is id 2, we need to use id=1.
         let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
         if authority_set_id - prev_authority_set_id == 1 {
-            // This is an epoch end block, so we use the previous authority set id
+            // This is an epoch end block, so we use the previous authority set id.
             authority_set_id = prev_authority_set_id;
         }
 
@@ -240,7 +240,7 @@ impl RpcDataFetcher {
             panic!("Too many authorities");
         }
 
-        // Form a message which is signed in the justification
+        // Form a message which is signed in the justification.
         let signed_message = Encode::encode(&(
             &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
             &justification.round,
@@ -250,7 +250,7 @@ impl RpcDataFetcher {
 
         let mut pubkey_bytes_to_signature = HashMap::new();
 
-        // Verify all the signatures of the justification
+        // Verify all the signatures of the justification.
         // TODO: panic if the justification is not not a simple justification
         justification
             .commit
@@ -281,7 +281,7 @@ impl RpcDataFetcher {
             } else {
                 validator_signed.push(false);
                 padded_pubkeys.push(*authority);
-                // We push a dummy signature, since this validator didn't sign
+                // Push a dummy signature, since this validator did not sign.
                 padded_signatures.push(DUMMY_SIGNATURE);
             }
         }
@@ -292,7 +292,7 @@ impl RpcDataFetcher {
 
         for _ in authorities.len()..VALIDATOR_SET_SIZE_MAX {
             validator_signed.push(false);
-            // We push a dummy pubkey and a dummy padded signature to fill out the rest of the padding
+            // Push a dummy pubkey and signature, to pad the array to VALIDATOR_SET_SIZE_MAX.
             padded_pubkeys.push(AffinePoint::new_from_compressed_point(&DUMMY_PUBLIC_KEY));
             padded_signatures.push(DUMMY_SIGNATURE);
         }
@@ -310,8 +310,10 @@ impl RpcDataFetcher {
         }
     }
 
-    /// This function takes in a block_number as input, fetches the authority set for the epoch end block.
-    /// Additionally, it computes the new authority set hash from the epoch end block.
+    /// This function takes in a block_number as input, and fetches the new authority set specified
+    /// in the epoch end block. It returns the data necessary to prove the new authority set, which
+    /// specifies the new authority set hash, the number of authorities, and the start and end
+    /// position of the encoded new authority set in the header.
     pub async fn get_header_rotate<
         const HEADER_LENGTH: usize,
         const VALIDATOR_SET_SIZE_MAX: usize,
@@ -336,7 +338,8 @@ impl RpcDataFetcher {
         }
         header_bytes.resize(HEADER_LENGTH, 0);
 
-        let fetched_authorities = self.get_authorities(epoch_end_block).await;
+        // Fetch the new authority set specified in the epoch end block.
+        let new_authorities = self.get_authorities(epoch_end_block).await;
 
         let mut position = 0;
         let number_encoded = epoch_end_block.encode();
@@ -365,7 +368,7 @@ impl RpcDataFetcher {
                         let weight = &authority_chunk[PUBKEY_LENGTH..];
 
                         // Assert the pubkey in the encoded log is correct.
-                        assert_eq!(*pubkey, fetched_authorities.1[i]);
+                        assert_eq!(*pubkey, new_authorities.1[i]);
 
                         // Assert weight's LE representation == 1
                         for j in 0..WEIGHT_LENGTH {
@@ -402,24 +405,25 @@ impl RpcDataFetcher {
             );
         }
 
-        let new_authority_set_hash = compute_authority_set_hash(fetched_authorities.1.clone());
+        let new_authority_set_hash = compute_authority_set_hash(new_authorities.1.clone());
         let mut padded_pubkeys = Vec::new();
-        for i in 0..fetched_authorities.1.len() {
-            padded_pubkeys.push(H256::from_slice(&fetched_authorities.1[i].clone()));
+        for i in 0..new_authorities.1.len() {
+            padded_pubkeys.push(H256::from_slice(&new_authorities.1[i].clone()));
         }
-        for _ in fetched_authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
+        for _ in new_authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
+            // Pad the array with dummy pubkeys to VALIDATOR_SET_SIZE_MAX.
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
         // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown, 1 scheduled change, 2 unknown.
         let prefix_length = 11;
-        // prefix_length, encoded pubkeys, 4 delay bytes.
-        let end_position = position + prefix_length + ((32 + 8) * fetched_authorities.1.len()) + 4;
+        // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
+        let end_position = position + prefix_length + ((32 + 8) * new_authorities.1.len()) + 4;
 
         HeaderRotateData {
             header_bytes,
             header_size,
-            num_authorities: fetched_authorities.1.len(),
+            num_authorities: new_authorities.1.len(),
             start_position: position,
             end_position,
             new_authority_set_hash,

@@ -8,6 +8,7 @@
 //!
 use std::ops::Deref;
 
+use avail_subxt::config::Header as HeaderTrait;
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
@@ -102,6 +103,11 @@ pub async fn main() {
 
     // Wait for new justification
     while let Some(Ok(justification)) = sub.next().await {
+        println!("New justification");
+
+        // Note: justification.commit.target_hash is probably block_hash, but it is not header_hash!
+        // Noticed this because it retrieves the correct header but doesn't match header.hash()
+
         // Get the header corresponding to the new justification
         let header = c
             .rpc()
@@ -110,9 +116,11 @@ pub async fn main() {
             .unwrap()
             .unwrap();
         // A bit redundant, but just to make sure the hash is correct
+        let block_hash = justification.commit.target_hash;
+        println!("block hash: {}", hex::encode(block_hash.0));
+        let header_hash = header.hash();
         let calculated_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
-
-        if justification.commit.target_hash != calculated_hash {
+        if header_hash != calculated_hash {
             continue;
         }
 
@@ -120,11 +128,13 @@ pub async fn main() {
         let set_id_key = api::storage().grandpa().current_set_id();
         let set_id = c
             .storage()
-            .at(H256::zero())
+            .at(block_hash)
             .fetch(&set_id_key)
             .await
             .unwrap()
             .unwrap();
+
+        println!("set id: {}", set_id);
 
         // Form a message which is signed in the justification
         let signed_message = Encode::encode(&(

@@ -262,6 +262,8 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     fn test_step_1() {
         env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
+
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 76;
@@ -307,20 +309,20 @@ mod tests {
                 .unwrap();
 
         // 000349c7 -> 215495
-        input.evm_write::<U32Variable>(target_block);
+        input.write::<U32Variable>(target_block);
 
         let target_header: [u8; 32] =
             hex::decode("da3cfb6143dff3ffa575135f1e9a833133e79c4900033c26c97cabe678f75784")
                 .unwrap()
                 .try_into()
                 .unwrap();
-        input.evm_write::<Bytes32Variable>(H256::from_slice(target_header.as_slice()));
+        input.write::<Bytes32Variable>(H256::from_slice(target_header.as_slice()));
 
         // 00000000000000cc -> 204
-        input.evm_write::<U64Variable>(authority_set_id);
+        input.write::<U64Variable>(authority_set_id);
 
         // 27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7 ->
-        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
 
         // // 00034947 -> 215367
         // input.evm_write::<U32Variable>(trusted_block);

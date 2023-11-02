@@ -67,6 +67,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         }
 
         for i in 0..justification_data.num_authorities {
+            log::debug!("Verifying signature for authority {}", i);
             verify_signature(
                 &justification_data.pubkeys[i].compress_point().to_le_bytes(),
                 &encoded_precommit,
@@ -234,41 +235,41 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                 .collect::<Vec<Bytes32Variable>>(),
         );
 
-        // // Verify the authority set commitment is valid.
-        // self.verify_authority_set_commitment(
-        //     num_active_authorities.variable,
-        //     authority_set_hash,
-        //     &compressed_pubkeys,
-        // );
+        // Verify the authority set commitment is valid.
+        self.verify_authority_set_commitment(
+            num_active_authorities.variable,
+            authority_set_hash,
+            &compressed_pubkeys,
+        );
 
-        // // Verify the correctness of the encoded_precommit message.
-        // let decoded_precommit = self.decode_precommit(encoded_precommit);
-        // self.assert_is_equal(decoded_precommit.block_number, block_number);
-        // self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
-        // self.assert_is_equal(decoded_precommit.block_hash, block_hash);
+        // Verify the correctness of the encoded_precommit message.
+        let decoded_precommit = self.decode_precommit(encoded_precommit);
+        self.assert_is_equal(decoded_precommit.block_number, block_number);
+        self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
+        self.assert_is_equal(decoded_precommit.block_hash, block_hash);
 
         // We verify the signatures of the validators on the encoded_precommit message.
         // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
         // and they are also constant length, so we can have `message_byte_lengths` be a constant array
-        // let message_byte_lengths = self
-        //     .constant::<ArrayVariable<U32Variable, MAX_NUM_AUTHORITIES>>(vec![
-        //         ENCODED_PRECOMMIT_LENGTH
-        //             as u32;
-        //         MAX_NUM_AUTHORITIES
-        //     ]);
-        // let messages = vec![encoded_precommit; MAX_NUM_AUTHORITIES];
-        // self.conditional_batch_eddsa_verify::<MAX_NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
-        //     validator_signed.clone(),
-        //     message_byte_lengths,
-        //     messages.into(),
-        //     signatures,
-        //     pubkeys,
-        // );
+        let message_byte_lengths = self
+            .constant::<ArrayVariable<U32Variable, MAX_NUM_AUTHORITIES>>(vec![
+                ENCODED_PRECOMMIT_LENGTH
+                    as u32;
+                MAX_NUM_AUTHORITIES
+            ]);
+        let messages = vec![encoded_precommit; MAX_NUM_AUTHORITIES];
+        self.conditional_batch_eddsa_verify::<MAX_NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
+            validator_signed.clone(),
+            message_byte_lengths,
+            messages.into(),
+            signatures,
+            pubkeys,
+        );
 
-        // // Verify at least 2/3 of the validators have signed the message.
-        // let two_v = self.constant::<U32Variable>(2u32);
-        // let three_v = self.constant::<U32Variable>(3u32);
-        // self.verify_voting_threshold(num_active_authorities, &validator_signed, two_v, three_v)
+        // Verify at least 2/3 of the validators have signed the message.
+        let two_v = self.constant::<U32Variable>(2u32);
+        let three_v = self.constant::<U32Variable>(3u32);
+        self.verify_voting_threshold(num_active_authorities, &validator_signed, two_v, three_v)
     }
 }
 
@@ -340,34 +341,6 @@ mod tests {
 
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 76;
-        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const NUM_HEADERS: usize = 36;
-        let mut builder = DefaultBuilder::new();
-
-        let block_number = builder.read::<U32Variable>();
-        let block_hash = builder.read::<Bytes32Variable>();
-        let authority_set_id = builder.read::<U64Variable>();
-        let authority_set_hash = builder.read::<Bytes32Variable>();
-
-        builder.verify_simple_justification::<NUM_AUTHORITIES>(
-            block_number,
-            block_hash,
-            authority_set_id,
-            authority_set_hash,
-        );
-
-        // log::debug!("Defining circuit");
-        // StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
-
-        log::debug!("Building circuit");
-        let circuit = builder.build();
-        log::debug!("Done building circuit");
-
-        let test_input = "0x00034947f1fc366868ae66403816faf4778769f4344b7f9f2ac6f705350588aba5c1b7b700000000000000cc27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7000349c7";
-
-        let mut input = circuit.input();
-
         let trusted_header: [u8; 32] =
             hex::decode("f1fc366868ae66403816faf4778769f4344b7f9f2ac6f705350588aba5c1b7b7")
                 .unwrap()
@@ -382,47 +355,48 @@ mod tests {
                 .try_into()
                 .unwrap();
 
-        // 000349c7 -> 215495
-        input.write::<U32Variable>(target_block);
+        const NUM_AUTHORITIES: usize = 76;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const NUM_HEADERS: usize = 36;
+        let mut builder = DefaultBuilder::new();
 
-        let target_header: [u8; 32] =
-            hex::decode("da3cfb6143dff3ffa575135f1e9a833133e79c4900033c26c97cabe678f75784")
-                .unwrap()
-                .try_into()
-                .unwrap();
-        input.write::<Bytes32Variable>(H256::from_slice(target_header.as_slice()));
+        let mut input_stream = VariableStream::new();
+        input_stream.write(&builder.constant::<U32Variable>(target_block + 1));
+        input_stream.write(&builder.constant::<U64Variable>(authority_set_id));
+        let output_stream =
+            builder.async_hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
 
-        // 00000000000000cc -> 204
-        input.write::<U64Variable>(authority_set_id);
+        let encoded_precommit =
+            output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(&mut builder);
+        let validator_signed =
+            output_stream.read::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(&mut builder);
+        let signatures = output_stream
+            .read::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(&mut builder);
+        let pubkeys = output_stream
+            .read::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(&mut builder);
+        let num_active_authorities = output_stream.read::<U32Variable>(&mut builder);
 
-        // 27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7 ->
-        input.write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        // Compress the pubkeys from affine points to bytes.
+        let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, NUM_AUTHORITIES>::from(
+            pubkeys
+                .as_vec()
+                .iter()
+                .map(|x| builder.compress_point(x).0)
+                .collect::<Vec<Bytes32Variable>>(),
+        );
 
-        // // 00034947 -> 215367
-        // input.evm_write::<U32Variable>(trusted_block);
+        log::debug!("Building circuit");
+        let circuit = builder.build();
+        log::debug!("Done building circuit");
 
-        // // f1fc366868ae66403816faf4778769f4344b7f9f2ac6f705350588aba5c1b7b7
-        // input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
-
-        // // 00000000000000cc -> 204
-        // input.evm_write::<U64Variable>(authority_set_id);
-
-        // // 27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7 ->
-        // input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
-
-        // // 000349c7 -> 215495
-        // input.evm_write::<U32Variable>(target_block);
+        let mut input = circuit.input();
 
         log::debug!("Generating proof");
         let (proof, mut output) = circuit.prove(&input);
         log::debug!("Done generating proof");
 
         circuit.verify(&proof, &input, &output);
-        // let target_header = output.evm_read::<Bytes32Variable>();
-        // let state_root_merkle_root = output.evm_read::<Bytes32Variable>();
-        // let data_root_merkle_root = output.evm_read::<Bytes32Variable>();
-        // println!("target_header {:?}", target_header);
-        // println!("state root merkle root {:?}", state_root_merkle_root);
-        // println!("data root merkle root {:?}", data_root_merkle_root);
+
+        let test_input = "0x00034947f1fc366868ae66403816faf4778769f4344b7f9f2ac6f705350588aba5c1b7b700000000000000cc27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7000349c7";
     }
 }

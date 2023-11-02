@@ -214,10 +214,10 @@ impl RpcDataFetcher {
             .unwrap();
 
         let hex_string = encode(&encoded_finality_proof.0 .0);
-        debug!(
-            "returned justification for block {:?} has bytes 0x{:?}",
-            block_number, hex_string
-        );
+        // debug!(
+        //     "returned justification for block {:?} has bytes 0x{:?}",
+        //     block_number, hex_string
+        // );
 
         let finality_proof: FinalityProof =
             Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
@@ -228,7 +228,7 @@ impl RpcDataFetcher {
         let authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
         // The authorities for the current block are defined in the previous block.
-        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number - 1).await;
+        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number).await;
 
         if authorities.len() > VALIDATOR_SET_SIZE_MAX {
             panic!("Too many authorities");

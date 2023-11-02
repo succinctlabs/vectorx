@@ -290,7 +290,6 @@ mod tests {
     use tokio::runtime::Runtime;
 
     use super::*;
-    use crate::consts::MAX_HEADER_SIZE;
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -342,54 +341,25 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_simple_justification_1() {
+    fn test_verify_simple_justification() {
         env::set_var("RUST_LOG", "debug");
         dotenv::dotenv().ok();
 
         env_logger::try_init().unwrap_or_default();
 
-        let trusted_header: [u8; 32] =
-            hex::decode("f1fc366868ae66403816faf4778769f4344b7f9f2ac6f705350588aba5c1b7b7")
-                .unwrap()
-                .try_into()
-                .unwrap();
-        let trusted_block = 215367u32;
-        let target_block = 215495u32; // mimics test_step_small
-        let authority_set_id = 204u64;
-        let authority_set_hash: [u8; 32] =
-            hex::decode("27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7")
-                .unwrap()
-                .try_into()
-                .unwrap();
-
         const NUM_AUTHORITIES: usize = 76;
-        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const NUM_HEADERS: usize = 36;
         let mut builder = DefaultBuilder::new();
 
-        let mut input_stream = VariableStream::new();
-        input_stream.write(&builder.constant::<U32Variable>(target_block));
-        input_stream.write(&builder.constant::<U64Variable>(authority_set_id));
-        let output_stream =
-            builder.async_hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});
+        let block_number = builder.read::<U32Variable>();
+        let block_hash = builder.read::<Bytes32Variable>();
+        let authority_set_id = builder.read::<U64Variable>();
+        let authority_set_hash = builder.read::<Bytes32Variable>();
 
-        let encoded_precommit =
-            output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(&mut builder);
-        let validator_signed =
-            output_stream.read::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(&mut builder);
-        let signatures = output_stream
-            .read::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(&mut builder);
-        let pubkeys = output_stream
-            .read::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(&mut builder);
-        let num_active_authorities = output_stream.read::<U32Variable>(&mut builder);
-
-        // Compress the pubkeys from affine points to bytes.
-        let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, NUM_AUTHORITIES>::from(
-            pubkeys
-                .as_vec()
-                .iter()
-                .map(|x| builder.compress_point(x).0)
-                .collect::<Vec<Bytes32Variable>>(),
+        builder.verify_simple_justification::<NUM_AUTHORITIES>(
+            block_number,
+            block_hash,
+            authority_set_id,
+            authority_set_hash,
         );
 
         log::debug!("Building circuit");
@@ -398,12 +368,32 @@ mod tests {
 
         let mut input = circuit.input();
 
+        // target_block is the last block in epoch 204.
+        let target_block = 215495u32;
+        let authority_set_id = 204u64;
+        let authority_set_hash: [u8; 32] =
+            hex::decode("27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7")
+                .unwrap()
+                .try_into()
+                .unwrap();
+
+        input.write::<U32Variable>(target_block);
+
+        let target_header: [u8; 32] =
+            hex::decode("da3cfb6143dff3ffa575135f1e9a833133e79c4900033c26c97cabe678f75784")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        input.write::<Bytes32Variable>(H256::from_slice(target_header.as_slice()));
+
+        input.write::<U64Variable>(authority_set_id);
+
+        input.write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+
         log::debug!("Generating proof");
-        let (proof, mut output) = circuit.prove(&input);
+        let (proof, output) = circuit.prove(&input);
         log::debug!("Done generating proof");
 
         circuit.verify(&proof, &input, &output);
-
-        let test_input = "0x00034947f1fc366868ae66403816faf4778769f4344b7f9f2ac6f705350588aba5c1b7b700000000000000cc27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7000349c7";
     }
 }

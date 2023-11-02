@@ -214,10 +214,10 @@ impl RpcDataFetcher {
             .unwrap();
 
         let hex_string = encode(&encoded_finality_proof.0 .0);
-        // debug!(
-        //     "returned justification for block {:?} has bytes 0x{:?}",
-        //     block_number, hex_string
-        // );
+        debug!(
+            "returned justification for block {:?} has bytes 0x{:?}",
+            block_number, hex_string
+        );
 
         let finality_proof: FinalityProof =
             Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
@@ -433,7 +433,6 @@ impl RpcDataFetcher {
 #[cfg(test)]
 mod tests {
     use avail_subxt::config::Header;
-    use ethers::abi::{encode_packed, Tokenizable};
 
     use super::*;
     use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};

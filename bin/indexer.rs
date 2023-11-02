@@ -176,6 +176,7 @@ pub async fn main() {
         );
         println!("justification set id: {}", set_id);
         println!("justification signers: {:?}", sig_owners);
+        println!("number of signers: {}", sig_owners.len());
         println!("\n\n\n");
     }
 }

@@ -67,7 +67,14 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         }
 
         for i in 0..justification_data.num_authorities {
-            log::debug!("Verifying signature for authority {}", i);
+            if !justification_data.validator_signed[i] {
+                continue;
+            }
+            log::debug!(
+                "Verifying signature for authority {}, with pubkey {:?}",
+                i,
+                justification_data.pubkeys[i].compress_point().to_le_bytes()
+            );
             verify_signature(
                 &justification_data.pubkeys[i].compress_point().to_le_bytes(),
                 &encoded_precommit,
@@ -361,7 +368,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         let mut input_stream = VariableStream::new();
-        input_stream.write(&builder.constant::<U32Variable>(target_block + 1));
+        input_stream.write(&builder.constant::<U32Variable>(target_block));
         input_stream.write(&builder.constant::<U64Variable>(authority_set_id));
         let output_stream =
             builder.async_hint(input_stream, HintSimpleJustification::<NUM_AUTHORITIES> {});

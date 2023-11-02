@@ -228,7 +228,7 @@ impl RpcDataFetcher {
         let authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
         // The authorities for the current block are defined in the previous block.
-        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number).await;
+        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number - 1).await;
 
         if authorities.len() > VALIDATOR_SET_SIZE_MAX {
             panic!("Too many authorities");
@@ -255,6 +255,8 @@ impl RpcDataFetcher {
                 let signature = precommit.clone().signature.0;
                 let pubkey_bytes = pubkey.0.to_vec();
 
+                log::debug!("Verifying signature for pubkey {:?}", pubkey_bytes);
+
                 verify_signature(&pubkey_bytes, &signed_message, &signature);
                 pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
             });
@@ -266,6 +268,8 @@ impl RpcDataFetcher {
         for (i, authority) in authorities.iter().enumerate() {
             let pubkey_bytes = authorities_pubkey_bytes[i].clone();
             let signature = pubkey_bytes_to_signature.get(&pubkey_bytes);
+            log::debug!("Verifying signature for pubkey {:?}", pubkey_bytes);
+
             if let Some(valid_signature) = signature {
                 verify_signature(&pubkey_bytes, &signed_message, valid_signature);
                 validator_signed.push(true);

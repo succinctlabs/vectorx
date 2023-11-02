@@ -617,7 +617,6 @@ mod tests {
         let new_authorities = fetcher.get_authorities(last_justified_block).await;
 
         // assert_ne!(curr_authorities, new_authorities);
-
         println!(
             "last justified block from authority set {:?} is: {:?}",
             authority_set_id, last_justified_block

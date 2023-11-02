@@ -17,6 +17,7 @@ use serde::Deserialize;
 use sp_core::ed25519::{self, Public as EdPublic, Signature};
 use sp_core::{blake2_256, bytes, Pair, H256};
 use subxt::rpc::RpcParams;
+use vectorx::input::RpcDataFetcher;
 // use anyhow::Result;
 
 #[derive(Deserialize, Debug)]
@@ -87,6 +88,8 @@ pub enum SignerMessage {
 pub async fn main() {
     println!("Starting indexer");
 
+    let fetcher = RpcDataFetcher::new().await;
+
     let url: &str = "wss://kate.avail.tools:443/ws";
 
     let c: subxt::OnlineClient<avail_subxt::AvailConfig> = build_client(url, false).await.unwrap();
@@ -136,6 +139,9 @@ pub async fn main() {
 
         println!("set id: {}", set_id);
 
+        let authorities = fetcher.get_authorities(header.number - 1).await;
+        let num_authorities = authorities.0.len();
+
         // Form a message which is signed in the justification
         let signed_message = Encode::encode(&(
             &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
@@ -166,7 +172,7 @@ pub async fn main() {
 
         sig_owners.sort();
 
-        if sig_owners.len() < 7 {
+        if 3 * sig_owners.len() < num_authorities * 2 {
             continue;
         }
 
@@ -177,6 +183,7 @@ pub async fn main() {
         println!("justification set id: {}", set_id);
         println!("justification signers: {:?}", sig_owners);
         println!("number of signers: {}", sig_owners.len());
+        println!("validator set size: {}", num_authorities);
         println!("\n\n\n");
     }
 }

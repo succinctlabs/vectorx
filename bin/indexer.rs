@@ -139,9 +139,6 @@ pub async fn main() {
 
         println!("set id: {}", set_id);
 
-        let authorities = fetcher.get_authorities(header.number - 1).await;
-        let num_authorities = authorities.0.len();
-
         // Form a message which is signed in the justification
         let signed_message = Encode::encode(&(
             &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
@@ -172,6 +169,10 @@ pub async fn main() {
 
         sig_owners.sort();
 
+        // Check that at least 2/3 of the validators signed the justification.
+        // Note: Assumes the validator set have equal voting power.
+        let authorities = fetcher.get_authorities(header.number - 1).await;
+        let num_authorities = authorities.0.len();
         if 3 * sig_owners.len() < num_authorities * 2 {
             continue;
         }

@@ -50,6 +50,36 @@ pub fn compute_authority_set_hash(authorities: Vec<Vec<u8>>) -> Vec<u8> {
     hash_so_far
 }
 
+pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
+    // The first byte should be a 1.
+    assert_eq!(precommit[0], 1);
+
+    // The next 32 bytes are the block hash.
+    let block_hash = &precommit[1..33];
+
+    // The next 4 bytes are the block number.
+    let block_number = &precommit[33..37];
+    // Convert the block number to a u32.
+    let block_number = u32::from_le_bytes(block_number.try_into().unwrap());
+
+    // The next 8 bytes are the justification round.
+    let round = &precommit[37..45];
+    // Convert the round to a u64.
+    let round = u64::from_le_bytes(round.try_into().unwrap());
+
+    // The next 8 bytes are the authority set id.
+    let authority_set_id = &precommit[45..53];
+    // Convert the authority set id to a u64.
+    let authority_set_id = u64::from_le_bytes(authority_set_id.try_into().unwrap());
+
+    (
+        H256::from_slice(block_hash),
+        block_number,
+        round,
+        authority_set_id,
+    )
+}
+
 impl RpcDataFetcher {
     pub async fn new() -> Self {
         // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
@@ -160,21 +190,24 @@ impl RpcDataFetcher {
             .unwrap();
 
         // TODO: Reference the following comment for verifying the compact scale encoding inside of the circuit.
-        // The grandpa_authorities_bytes has the following format:
+        // The grandpa_authorities_bytes has one of the two following formats:
+        // [V, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
         // [V, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
         // Where V is a "Version" number (right now it's 1u8)
-        // Where XX is the compact scale encoding of the number of authorities
-        // NOTE: In some cases the compact scale encoding might be only 1 byte if the number of authorities is <63
+        // Where X or XX is the compact scale encoding of the number of authorities
         // This is a reference on how compact scale encoding works: https://docs.substrate.io/reference/scale-codec/#fn-1
-        // This is why we do the assert below to check that when we subtract the assumed prefix length of 3
-        // that the remainder is divisible by 32 + 8, which represents the number of bytes in an authority public key
-        // plus the number of bytes in the weight of the authority
+
+        // The prefix length is 2 if the number of authorities is <=63, otherwise it is 3 (including)
+        // the version number. This is because the compact scale encoding will be only 1 byte if the
+        // number of authorities is <=63.
         let offset = if grandpa_authorities_bytes.len() < ((32 + 8) * 63) + 3 {
             2
         } else {
             3
         };
 
+        // Each encoded authority is 32 bytes for the public key, and 8 bytes for the weight, so
+        // the rest of the bytes should be a multiple of 40.
         assert!((grandpa_authorities_bytes.len() - offset) % (32 + 8) == 0);
 
         let pubkey_and_weight_bytes = &grandpa_authorities_bytes[offset..];
@@ -187,7 +220,7 @@ impl RpcDataFetcher {
             authorities.push(pub_key_point);
             authories_pubkey_bytes.push(pub_key_vec);
 
-            // Assert that the weight is 0x0100000000000000
+            // Assert that the weight is 1 (weight is in LE representation).
             assert_eq!(authority_pubkey_weight[32], 1);
             for i in 33..VALIDATOR_LENGTH {
                 assert_eq!(authority_pubkey_weight[i], 0);
@@ -197,6 +230,22 @@ impl RpcDataFetcher {
         (authorities, authories_pubkey_bytes)
     }
 
+    // Computes the authority_set_hash for a given block number.
+    // This is the authority_set_hash of the next block.
+    pub async fn compute_authority_set_hash(&self, block_number: u32) -> H256 {
+        let authorities = self.get_authorities(block_number).await;
+
+        let mut hash_so_far = Vec::new();
+        for i in 0..authorities.1.len() {
+            let authority = authorities.1[i].clone();
+            let mut hasher = sha2::Sha256::new();
+            hasher.update(hash_so_far);
+            hasher.update(authority);
+            hash_so_far = hasher.finalize().to_vec();
+        }
+        H256::from_slice(&hash_so_far)
+    }
+
     // This function takes in a block_number as input, fetches the authority set for that block and the finality proof
     // for that block. If the finality proof is a simple justification, it will return a SimpleJustificationData
     // containing all the encoded precommit that the authorities sign, the validator signatures, and the authority pubkeys.
@@ -204,6 +253,15 @@ impl RpcDataFetcher {
         &self,
         block_number: u32,
     ) -> SimpleJustificationData {
+        // Note: grandpa_proveFinality will serve the proof for the last justified block in an epoch.
+        // This means that get_simple_justification should fail for any block that is not the last
+        // justified block in an epoch.
+        let curr_authority_set_id = self.get_authority_set_id(block_number).await;
+        let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
+        if curr_authority_set_id != prev_authority_set_id + 1 {
+            panic!("Block {:?} is not an epoch end block", block_number);
+        }
+
         let mut params = RpcParams::new();
         let _ = params.push(block_number);
         let encoded_finality_proof = self
@@ -214,17 +272,17 @@ impl RpcDataFetcher {
             .unwrap();
 
         let hex_string = encode(&encoded_finality_proof.0 .0);
-        debug!(
-            "returned justification for block {:?} has bytes 0x{:?}",
-            block_number, hex_string
-        );
+        // debug!(
+        //     "returned justification for block {:?} has bytes 0x{:?}",
+        //     block_number, hex_string
+        // );
 
         let finality_proof: FinalityProof =
             Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
         let justification: GrandpaJustification =
             Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
 
-        // The authority set for the current block is defined in the previous block.
+        // The authority set id for the current block is defined in the previous block.
         let authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
         // The authorities for the current block are defined in the previous block.
@@ -255,8 +313,6 @@ impl RpcDataFetcher {
                 let signature = precommit.clone().signature.0;
                 let pubkey_bytes = pubkey.0.to_vec();
 
-                log::debug!("Verifying signature for pubkey {:?}", pubkey_bytes);
-
                 verify_signature(&pubkey_bytes, &signed_message, &signature);
                 pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
             });
@@ -268,7 +324,6 @@ impl RpcDataFetcher {
         for (i, authority) in authorities.iter().enumerate() {
             let pubkey_bytes = authorities_pubkey_bytes[i].clone();
             let signature = pubkey_bytes_to_signature.get(&pubkey_bytes);
-            log::debug!("Verifying signature for pubkey {:?}", pubkey_bytes);
 
             if let Some(valid_signature) = signature {
                 verify_signature(&pubkey_bytes, &signed_message, valid_signature);
@@ -539,5 +594,64 @@ mod tests {
             "new authority set hash {:?}",
             rotate_data.new_authority_set_hash
         );
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_grandpa_prove_finality() {
+        let fetcher = RpcDataFetcher::new().await;
+
+        let block_number = 642000;
+        let authority_set_id = fetcher.get_authority_set_id(block_number - 1).await;
+
+        let last_justified_block = fetcher.last_justified_block(authority_set_id).await;
+
+        let header = fetcher.get_header(last_justified_block).await;
+        println!("header hash {:?}", hex::encode(header.hash().0));
+        let authority_set_hash = fetcher.compute_authority_set_hash(block_number - 1).await;
+        println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
+
+        let new_authority_set_id = fetcher.get_authority_set_id(last_justified_block).await;
+
+        let curr_authorities = fetcher.get_authorities(last_justified_block - 1).await;
+        let new_authorities = fetcher.get_authorities(last_justified_block).await;
+
+        // assert_ne!(curr_authorities, new_authorities);
+
+        println!(
+            "last justified block from authority set {:?} is: {:?}",
+            authority_set_id, last_justified_block
+        );
+
+        println!("new authority set id is: {:?}", new_authority_set_id);
+
+        let mut params = RpcParams::new();
+        let _ = params.push(last_justified_block + 1);
+
+        let encoded_finality_proof = fetcher
+            .client
+            .rpc()
+            .request::<EncodedFinalityProof>("grandpa_proveFinality", params)
+            .await
+            .unwrap();
+
+        let finality_proof: FinalityProof =
+            Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
+        let justification: GrandpaJustification =
+            Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
+
+        let authority_set_id = fetcher.get_authority_set_id(block_number - 1).await;
+
+        // Form a message which is signed in the justification.
+        let signed_message = Encode::encode(&(
+            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
+            &justification.round,
+            &authority_set_id,
+        ));
+
+        let (block_hash, block_number, _, final_authority_set_id) =
+            decode_precommit(signed_message.clone());
+
+        println!("block number {:?}", block_number);
     }
 }

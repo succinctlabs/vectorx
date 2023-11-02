@@ -70,11 +70,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             if !justification_data.validator_signed[i] {
                 continue;
             }
-            log::debug!(
-                "Verifying signature for authority {}, with pubkey {:?}",
-                i,
-                justification_data.pubkeys[i].compress_point().to_le_bytes()
-            );
             verify_signature(
                 &justification_data.pubkeys[i].compress_point().to_le_bytes(),
                 &encoded_precommit,
@@ -344,7 +339,6 @@ mod tests {
     fn test_verify_simple_justification() {
         env::set_var("RUST_LOG", "debug");
         dotenv::dotenv().ok();
-
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 76;
@@ -368,11 +362,11 @@ mod tests {
 
         let mut input = circuit.input();
 
-        // target_block is the last block in epoch 204.
-        let target_block = 215495u32;
-        let authority_set_id = 204u64;
+        // target_block is the last block in epoch 613.
+        let target_block = 642372u32;
+        let authority_set_id = 613u64;
         let authority_set_hash: [u8; 32] =
-            hex::decode("27774f9579078528428fba59205b12387d6135fcb73db337272159b0d49f9ec7")
+            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
                 .unwrap()
                 .try_into()
                 .unwrap();
@@ -380,7 +374,7 @@ mod tests {
         input.write::<U32Variable>(target_block);
 
         let target_header: [u8; 32] =
-            hex::decode("da3cfb6143dff3ffa575135f1e9a833133e79c4900033c26c97cabe678f75784")
+            hex::decode("465caa54f7f2d66a0b9be2622243a4c347fbfcba1c5a49c6b3c75942f6fb73de")
                 .unwrap()
                 .try_into()
                 .unwrap();

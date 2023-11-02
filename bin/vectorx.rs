@@ -128,6 +128,8 @@ async fn request_header_range(
         target_block,
     ));
 
+    // abi.encodeWithSelector(bytes4(keccak256("commitHeaderRange(uint32,uint64,uint32)")),
+    //  trusted_block, trusted_authority_set_id, target_block);
     let function_signature = "commitHeaderRange(uint32,uint64,uint32)";
     let function_selector = ethers::utils::id(function_signature).to_vec();
     let encoded_parameters = HeaderRangeCalldataTuple::abi_encode_sequence(&(
@@ -164,13 +166,14 @@ async fn request_next_authority_set_id(
         epoch_end_block,
     ));
 
+    // abi.encodeWithSelector(bytes4(keccak256("addNextAuthoritySetId(uint64,uint32)")),
+    //  current_authority_set_id, epoch_end_block);
     let function_signature = "addNextAuthoritySetId(uint64,uint32)";
     let function_selector = ethers::utils::id(function_signature).to_vec();
     let encoded_parameters = NextAuthoritySetCalldataTuple::abi_encode_sequence(&(
         current_authority_set_id,
         epoch_end_block,
     ));
-    // Concat function selector and encoded parameters.
     let function_data = [&function_selector[..], &encoded_parameters[..]].concat();
 
     submit_request(config, function_data, input, config.rotate_function_id).await;

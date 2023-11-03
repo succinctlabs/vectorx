@@ -362,7 +362,7 @@ mod tests {
 
         let mut input = circuit.input();
 
-        // target_block is the last block in epoch 613.
+        // target_block is a non-era end block block in epoch 616.
         let target_block = 645570u32;
         let authority_set_id = 616u64;
         let authority_set_hash: [u8; 32] =

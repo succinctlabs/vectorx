@@ -679,14 +679,11 @@ mod tests {
     async fn test_get_header_hash() {
         let fetcher = RpcDataFetcher::new().await;
 
-        let target_block = 648111;
+        let target_block = 648159;
         let header = fetcher.get_header(target_block).await;
         let block_hash = fetcher.get_block_hash(target_block).await;
 
-        println!(
-            "header hash {:?}",
-            hex::encode(Encode::using_encoded(&header, blake2_256))
-        );
+        println!("header hash {:?}", hex::encode(header.hash().0));
         println!("block hash {:?}", hex::encode(block_hash.0));
 
         let prev_block_hash = fetcher.get_block_hash(target_block - 1).await;

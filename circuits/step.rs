@@ -94,11 +94,12 @@ impl<
             Level::Debug,
         );
 
-        // builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
-        //     target_block,
-        //     authority_set_id,
-        //     authority_set_hash,
-        // );
+        builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
+            target_block,
+            target_header_hash,
+            authority_set_id,
+            authority_set_hash,
+        );
 
         builder.evm_write::<Bytes32Variable>(target_header_hash);
         builder.evm_write::<Bytes32Variable>(state_root_merkle_root);

@@ -77,9 +77,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             );
         }
 
-        // Fetch the block hash from the RPC.
-        let expected_block_hash = data_fetcher.get_block_hash(block_number).await;
-
         output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
             encoded_precommit.try_into().unwrap(),
         );
@@ -97,7 +94,6 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             justification_data.pubkeys,
         );
         output_stream.write_value::<U32Variable>(justification_data.num_authorities as u32);
-        output_stream.write_value::<Bytes32Variable>(expected_block_hash);
     }
 }
 
@@ -133,6 +129,7 @@ pub trait GrandpaJustificationVerifier {
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
+        block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
     );
@@ -210,6 +207,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
+        block_hash: Bytes32Variable,
         authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
     ) {
@@ -229,7 +227,6 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         let pubkeys =
             output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>>(self);
         let num_active_authorities = output_stream.read::<U32Variable>(self);
-        let expected_block_hash = output_stream.read::<Bytes32Variable>(self);
 
         // Compress the pubkeys from affine points to bytes.
         let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>::from(
@@ -251,7 +248,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         let decoded_precommit = self.decode_precommit(encoded_precommit);
         self.assert_is_equal(decoded_precommit.block_number, block_number);
         self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
-        self.assert_is_equal(decoded_precommit.block_hash, expected_block_hash);
+        self.assert_is_equal(decoded_precommit.block_hash, block_hash);
 
         // We verify the signatures of the validators on the encoded_precommit message.
         // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
@@ -298,11 +295,13 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         let block_number = builder.read::<U32Variable>();
+        let block_hash = builder.read::<Bytes32Variable>();
         let authority_set_id = builder.read::<U64Variable>();
         let authority_set_hash = builder.read::<Bytes32Variable>();
 
         builder.verify_simple_justification::<NUM_AUTHORITIES>(
             block_number,
+            block_hash,
             authority_set_id,
             authority_set_hash,
         );
@@ -315,6 +314,11 @@ mod tests {
 
         // target_block is a non-era end block block in epoch 616 with 10 authorities.
         let target_block = 645570u32;
+        let target_header: [u8; 32] =
+            hex::decode("6187641fdbad4b99ea81f39135b4f72e2f3a79193a99fd61b381d43e6fa8dfaa")
+                .unwrap()
+                .try_into()
+                .unwrap();
         let authority_set_id = 616u64;
         let authority_set_hash: [u8; 32] =
             hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
@@ -323,6 +327,8 @@ mod tests {
                 .unwrap();
 
         input.write::<U32Variable>(target_block);
+
+        input.write::<Bytes32Variable>(H256::from_slice(target_header.as_slice()));
 
         input.write::<U64Variable>(authority_set_id);
 

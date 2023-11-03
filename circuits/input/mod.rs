@@ -661,7 +661,6 @@ impl RpcDataFetcher {
 #[cfg(test)]
 mod tests {
     use avail_subxt::config::Header;
-    use sp_core::blake2_256;
 
     use super::*;
     use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};

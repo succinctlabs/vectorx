@@ -216,7 +216,7 @@ mod tests {
 
         const NUM_AUTHORITIES: usize = 76;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const NUM_HEADERS: usize = 36;
+        const NUM_HEADERS: usize = 100;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");

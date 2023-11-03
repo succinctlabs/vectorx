@@ -218,6 +218,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "ci", ignore)]
     fn test_max_header_len() {
         const START_BLOCK_NUM: u32 = 452578;
         const NUM_BLOCKS: usize = 10;

@@ -19,7 +19,7 @@ use sp_core::ed25519::{self, Public as EdPublic, Signature};
 use sp_core::{blake2_256, bytes, Pair, H256};
 use subxt::rpc::RpcParams;
 use vectorx::input::types::StoredJustificationData;
-use vectorx::input::{AvailRedisClient, RpcDataFetcher};
+use vectorx::input::{RedisClient, RpcDataFetcher};
 // use anyhow::Result;
 
 #[derive(Deserialize, Debug)]
@@ -104,7 +104,7 @@ pub async fn main() {
         )
         .await;
 
-    let mut r: AvailRedisClient = AvailRedisClient::new().await;
+    let mut r: RedisClient = RedisClient::new().await;
 
     let mut sub = sub.unwrap();
 

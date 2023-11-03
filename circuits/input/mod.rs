@@ -14,7 +14,7 @@ use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
-use redis::JsonAsyncCommands;
+use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::Digest;
 
 use self::types::{
@@ -25,19 +25,41 @@ use crate::consts::{DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WE
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
-pub struct AvailRedisClient {
+pub struct RedisClient {
     pub redis: redis::Client,
 }
 
-impl AvailRedisClient {
+impl RedisClient {
     pub async fn new() -> Self {
         dotenv::dotenv().ok();
 
         let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
         let redis = redis::Client::open(redis_url).expect("Redis client not created");
-        AvailRedisClient { redis }
+        RedisClient { redis }
     }
 
+    /// Finds all blocks with justifications in Redis within a given range of block numbers.
+    pub async fn find_justifications_in_range(
+        &mut self,
+        start_block: u64,
+        end_block: u64,
+    ) -> Vec<u64> {
+        // Query Redis for all keys in the range [start_block, end_block].
+        let mut con = self
+            .redis
+            .get_async_connection()
+            .await
+            .expect("Failed to create Redis connection");
+
+        let keys: Vec<u64> = con
+            .zrangebyscore("blocks", start_block, end_block)
+            .await
+            .expect("Failed to get keys");
+
+        keys
+    }
+
+    /// Stores justification data in Redis. Errors if setting the key fails.
     pub async fn add_justification(&mut self, justification: StoredJustificationData) {
         let mut con = self
             .redis
@@ -45,10 +67,21 @@ impl AvailRedisClient {
             .await
             .expect("Failed to create Redis connection");
 
+        // Justification is stored as a JSON object.
         let _: () = con
             .json_set(justification.block_number, "$", &justification)
             .await
             .expect("Failed to set key");
+
+        // Add the block number to a sorted set, so we can query for all blocks with justifications.
+        let _: () = con
+            .zadd(
+                "blocks",
+                justification.block_number,
+                justification.block_number,
+            )
+            .await
+            .expect("Failed to add key to sorted set");
 
         debug!(
             "Added justification for block {:?}",
@@ -56,6 +89,7 @@ impl AvailRedisClient {
         )
     }
 
+    /// Gets justification data from Redis. Errors if getting the key fails.
     pub async fn get_justification(&mut self, block_number: u32) -> StoredJustificationData {
         // Result is always stored as serialized bytes: https://github.com/redis-rs/redis-rs#json-support.
         let mut con = self
@@ -129,6 +163,7 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
 
 pub struct RpcDataFetcher {
     pub client: Client,
+    pub redis_client: RedisClient,
     pub save: Option<String>,
 }
 
@@ -137,7 +172,12 @@ impl RpcDataFetcher {
         // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
         let url = "wss://kate.avail.tools:443/ws".to_string();
         let client = build_client(url.as_str(), false).await.unwrap();
-        RpcDataFetcher { client, save: None }
+        let redis_client = RedisClient::new().await;
+        RpcDataFetcher {
+            client,
+            redis_client,
+            save: None,
+        }
     }
 
     // This function returns the last block justified by target_authority_set_id. This block
@@ -690,5 +730,17 @@ mod tests {
         let (_, block_number, _, _) = decode_precommit(signed_message.clone());
 
         println!("block number {:?}", block_number);
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_query_redis_block_range() {
+        let mut redis_client = RedisClient::new().await;
+        let start_block = 644609;
+        let end_block = 650000;
+        let blocks = redis_client
+            .find_justifications_in_range(start_block, end_block)
+            .await;
+        println!("keys {:?}", blocks);
     }
 }

@@ -51,6 +51,7 @@ redis = { version = "0.23.3", features = [
     "tokio-comp",
 ] }
 
+# TODO: Update to latest version/new pinned version with new testnet.
 avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "5d2595a" }
 sp-core = { version = "21.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [

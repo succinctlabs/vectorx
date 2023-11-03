@@ -6,6 +6,7 @@
 //!
 //!
 //!
+use std::collections::HashMap;
 use std::ops::Deref;
 
 use avail_subxt::avail::Client;
@@ -13,6 +14,7 @@ use avail_subxt::config::Header as HeaderTrait;
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
+use plonky2x::frontend::ecc::ed25519::gadgets::verify::DUMMY_SIGNATURE;
 use serde::de::Error;
 use serde::Deserialize;
 use sp_core::ed25519::{self, Public as EdPublic, Signature};
@@ -177,6 +179,12 @@ pub async fn main() {
         let pubkeys = validators.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
         let signatures = validators.iter().map(|v| v.1.clone()).collect::<Vec<_>>();
 
+        // Create map from pubkey to signature.
+        let pubkey_to_signature = HashMap::new();
+        for (pubkey, signature) in pubkeys.iter().zip(signatures.iter()) {
+            pubkey_to_signature.insert(pubkey, signature);
+        }
+
         // Check that at least 2/3 of the validators signed the justification.
         // Note: Assumes the validator set have equal voting power.
         let authorities = fetcher.get_authorities(header.number - 1).await;
@@ -185,12 +193,29 @@ pub async fn main() {
             continue;
         }
 
+        let justification_pubkeys = Vec::new();
+        let justification_signatures = Vec::new();
+        let validator_signed = Vec::new();
+        for authority_pubkey in authorities.iter() {
+            if let Some(signature) = pubkey_to_signature.get(authority_pubkey) {
+                justification_pubkeys.push(authority_pubkey);
+                justification_signatures.push(signature);
+                validator_signed.push(true);
+            } else {
+                justification_pubkeys.push(authority_pubkey);
+                justification_signatures.push(DUMMY_SIGNATURE);
+                validator_signed.push(false);
+            }
+        }
+
         // Add justification to Redis.
         let store_justification_data = StoredJustificationData {
             block_number: header.number,
             signed_message: signed_message.clone(),
-            pubkeys,
-            signatures,
+            pubkeys: justification_pubkeys,
+            signatures: justification_signatures,
+            num_authorities: authorities.len(),
+            validator_signed,
         };
         r.add_justification(store_justification_data).await;
     }

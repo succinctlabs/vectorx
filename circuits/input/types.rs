@@ -27,6 +27,8 @@ pub struct StoredJustificationData {
     pub signed_message: Vec<u8>,
     pub pubkeys: Vec<Vec<u8>>,
     pub signatures: Vec<Vec<u8>>,
+    pub validator_signed: Vec<bool>,
+    pub num_authorities: usize,
 }
 
 pub struct SimpleJustificationData {

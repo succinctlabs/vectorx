@@ -12,7 +12,6 @@ use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
-use hex::encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use redis::JsonAsyncCommands;
@@ -320,12 +319,6 @@ impl RpcDataFetcher {
             .request::<EncodedFinalityProof>("grandpa_proveFinality", params)
             .await
             .unwrap();
-
-        let hex_string = encode(&encoded_finality_proof.0 .0);
-        // debug!(
-        //     "returned justification for block {:?} has bytes 0x{:?}",
-        //     block_number, hex_string
-        // );
 
         let finality_proof: FinalityProof =
             Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
@@ -663,10 +656,6 @@ mod tests {
 
         let new_authority_set_id = fetcher.get_authority_set_id(last_justified_block).await;
 
-        let curr_authorities = fetcher.get_authorities(last_justified_block - 1).await;
-        let new_authorities = fetcher.get_authorities(last_justified_block).await;
-
-        // assert_ne!(curr_authorities, new_authorities);
         println!(
             "last justified block from authority set {:?} is: {:?}",
             authority_set_id, last_justified_block
@@ -698,8 +687,7 @@ mod tests {
             &authority_set_id,
         ));
 
-        let (block_hash, block_number, _, final_authority_set_id) =
-            decode_precommit(signed_message.clone());
+        let (_, block_number, _, _) = decode_precommit(signed_message.clone());
 
         println!("block number {:?}", block_number);
     }

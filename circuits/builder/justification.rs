@@ -363,8 +363,8 @@ mod tests {
         let mut input = circuit.input();
 
         // target_block is the last block in epoch 613.
-        let target_block = 642372u32;
-        let authority_set_id = 613u64;
+        let target_block = 645570u32;
+        let authority_set_id = 616u64;
         let authority_set_hash: [u8; 32] =
             hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
                 .unwrap()
@@ -374,7 +374,7 @@ mod tests {
         input.write::<U32Variable>(target_block);
 
         let target_header: [u8; 32] =
-            hex::decode("465caa54f7f2d66a0b9be2622243a4c347fbfcba1c5a49c6b3c75942f6fb73de")
+            hex::decode("6187641fdbad4b99ea81f39135b4f72e2f3a79193a99fd61b381d43e6fa8dfaa")
                 .unwrap()
                 .try_into()
                 .unwrap();

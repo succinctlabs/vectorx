@@ -69,7 +69,10 @@ impl RedisClient {
     }
 
     /// Gets justification data from Redis. Errors if getting the key fails.
-    pub async fn get_justification(&mut self, block_number: u32) -> StoredJustificationData {
+    pub async fn get_justification(
+        &mut self,
+        block_number: u32,
+    ) -> Result<StoredJustificationData, ()> {
         // Result is always stored as serialized bytes: https://github.com/redis-rs/redis-rs#json-support.
         let mut con = self
             .redis
@@ -81,10 +84,15 @@ impl RedisClient {
             .json_get(block_number, "$")
             .await
             .expect("Failed to get key");
-        let justification: StoredJustificationData =
-            serde_json::from_slice(&serialized_justification)
-                .expect("Failed to deserialize justification");
-        justification
+
+        match serde_json::from_slice::<Vec<StoredJustificationData>>(&serialized_justification) {
+            Ok(justification) => Ok(justification[0].clone()),
+            Err(e) => {
+                eprintln!("Failed to deserialize justification: {}", e);
+                // Handle the error appropriately, maybe return an Err if your function can return a Result
+                Err(())
+            }
+        }
     }
 }
 
@@ -453,8 +461,11 @@ impl RpcDataFetcher {
                 authorities_pubkey_bytes.len() as u64,
             )
         } else {
-            let stored_justification_data: StoredJustificationData =
-                self.redis_client.get_justification(block_number).await;
+            let stored_justification_data: StoredJustificationData = self
+                .redis_client
+                .get_justification(block_number)
+                .await
+                .expect("Failed to get justification from Redis");
 
             let mut voting_weight = 0;
             for validator_signed in stored_justification_data.validator_signed.iter() {
@@ -716,13 +727,21 @@ mod tests {
     async fn test_get_simple_justification_change_authority_set() {
         let mut fetcher = RpcDataFetcher::new().await;
 
-        // This is an epoch end block where the authority set changes.
-        // TODO: Update with a new block that is stored in Redis.
-        let genesis_epoch_end_block = 215367;
+        // This is an block in the middle of an era.
+        let block = 645570;
+
+        let authority_set_id = fetcher.get_authority_set_id(block - 1).await;
+        let authority_set_hash = fetcher.compute_authority_set_hash(block - 1).await;
+        let header = fetcher.get_header(block).await;
+        let header_hash = header.hash();
+
+        println!("authority_set_id {:?}", authority_set_id);
+        println!("authority_set_hash {:?}", hex::encode(authority_set_hash.0));
+        println!("header_hash {:?}", hex::encode(header_hash.0));
 
         const VALIDATOR_SET_SIZE_MAX: usize = 100;
         let _ = fetcher
-            .get_simple_justification::<VALIDATOR_SET_SIZE_MAX>(genesis_epoch_end_block)
+            .get_simple_justification::<VALIDATOR_SET_SIZE_MAX>(block)
             .await;
     }
 
@@ -816,7 +835,7 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_query_redis_block_range() {
         let mut data_fetcher = RpcDataFetcher::new().await;
-        let start_block = 644609;
+        let start_block = 640000;
         let end_block = 650000;
         let blocks = data_fetcher
             .find_justifications_in_range(start_block, end_block)

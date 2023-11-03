@@ -24,7 +24,6 @@ use sp_core::{blake2_256, bytes, Pair, H256};
 use subxt::rpc::RpcParams;
 use vectorx::input::types::StoredJustificationData;
 use vectorx::input::{RedisClient, RpcDataFetcher};
-// use anyhow::Result;
 
 #[derive(Deserialize, Debug)]
 pub struct SubscriptionMessageResult {
@@ -234,6 +233,5 @@ pub async fn main() {
             validator_signed,
         };
         r.add_justification(store_justification_data).await;
-        debug!("Added justification to Redis");
     }
 }

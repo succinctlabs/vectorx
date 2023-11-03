@@ -21,7 +21,7 @@ pub struct HeaderRotateData {
 // Note: There is a redis macros crate that can be used to serialize this.
 // https://github.com/daniel7grant/redis-macros/#json-wrapper-with-redisjson
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct StoredJustificationData {
     pub block_number: u32,
     pub signed_message: Vec<u8>,

@@ -157,7 +157,7 @@ pub async fn main() {
             .commit
             .precommits
             .iter()
-            .map(|precommit| {
+            .filter_map(|precommit| {
                 let is_ok = <ed25519::Pair as Pair>::verify(
                     &precommit.clone().signature,
                     signed_message.as_slice(),
@@ -172,8 +172,6 @@ pub async fn main() {
                     None
                 }
             })
-            .filter(|signer| signer.is_some())
-            .map(|signer| signer.unwrap())
             .collect::<Vec<_>>();
 
         let pubkeys = validators.iter().map(|v| v.0.clone()).collect::<Vec<_>>();

@@ -7,6 +7,7 @@
 //!
 //!
 use std::collections::HashMap;
+use std::env;
 use std::ops::Deref;
 
 use avail_subxt::avail::Client;
@@ -91,6 +92,10 @@ pub enum SignerMessage {
 
 #[tokio::main]
 pub async fn main() {
+    env::set_var("RUST_LOG", "debug");
+    dotenv::dotenv().ok();
+    env_logger::init();
+
     // Save every 90 blocks (every 30 minutes).
     const BLOCK_SAVE_INTERVAL: usize = 90;
     debug!(

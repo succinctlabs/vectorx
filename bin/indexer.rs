@@ -8,6 +8,7 @@
 //!
 use std::ops::Deref;
 
+use avail_subxt::avail::Client;
 use avail_subxt::config::Header as HeaderTrait;
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client};
@@ -17,7 +18,8 @@ use serde::Deserialize;
 use sp_core::ed25519::{self, Public as EdPublic, Signature};
 use sp_core::{blake2_256, bytes, Pair, H256};
 use subxt::rpc::RpcParams;
-use vectorx::input::RpcDataFetcher;
+use vectorx::input::types::StoredJustificationData;
+use vectorx::input::{AvailRedisClient, RpcDataFetcher};
 // use anyhow::Result;
 
 #[derive(Deserialize, Debug)]
@@ -92,7 +94,7 @@ pub async fn main() {
 
     let url: &str = "wss://kate.avail.tools:443/ws";
 
-    let c: subxt::OnlineClient<avail_subxt::AvailConfig> = build_client(url, false).await.unwrap();
+    let c: Client = build_client(url, false).await.unwrap();
     let t = c.rpc().deref();
     let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
         .subscribe(
@@ -101,6 +103,8 @@ pub async fn main() {
             "grandpa_unsubscribeJustifications",
         )
         .await;
+
+    let mut r: AvailRedisClient = AvailRedisClient::new().await;
 
     let mut sub = sub.unwrap();
 
@@ -147,7 +151,9 @@ pub async fn main() {
         ));
 
         // Verify all the signatures of the justification and extract the public keys
-        let mut sig_owners = justification
+        // Note: Are the authorities always going to be in the same order?
+
+        let validators = justification
             .commit
             .precommits
             .iter()
@@ -158,33 +164,36 @@ pub async fn main() {
                     &precommit.clone().id,
                 );
                 if is_ok {
-                    Some(precommit.clone().id.0)
+                    Some((
+                        precommit.clone().id.0.to_vec(),
+                        precommit.clone().signature.0.to_vec(),
+                    ))
                 } else {
                     None
                 }
             })
             .filter(|signer| signer.is_some())
-            .map(|some_signer| hex::encode(some_signer.unwrap()))
+            .map(|signer| signer.unwrap())
             .collect::<Vec<_>>();
 
-        sig_owners.sort();
+        let pubkeys = validators.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
+        let signatures = validators.iter().map(|v| v.1.clone()).collect::<Vec<_>>();
 
         // Check that at least 2/3 of the validators signed the justification.
         // Note: Assumes the validator set have equal voting power.
         let authorities = fetcher.get_authorities(header.number - 1).await;
-        let num_authorities = authorities.0.len();
-        if 3 * sig_owners.len() < num_authorities * 2 {
+        let num_authorities = authorities.len();
+        if 3 * pubkeys.len() < num_authorities * 2 {
             continue;
         }
 
-        println!(
-            "justification block number: {}",
-            justification.commit.target_number
-        );
-        println!("justification set id: {}", set_id);
-        println!("justification signers: {:?}", sig_owners);
-        println!("number of signers: {}", sig_owners.len());
-        println!("validator set size: {}", num_authorities);
-        println!("\n\n\n");
+        // Add justification to Redis.
+        let store_justification_data = StoredJustificationData {
+            block_number: header.number,
+            signed_message: signed_message.clone(),
+            pubkeys,
+            signatures,
+        };
+        r.add_justification(store_justification_data).await;
     }
 }

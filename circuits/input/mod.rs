@@ -2,6 +2,7 @@ pub mod types;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::env;
 
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
@@ -14,18 +15,65 @@ use ethers::types::H256;
 use hex::encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
+use redis::JsonAsyncCommands;
 use sha2::Digest;
 
 use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
+    StoredJustificationData,
 };
 use crate::consts::{DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
-pub struct RpcDataFetcher {
-    pub client: Client,
-    pub save: Option<String>,
+pub struct AvailRedisClient {
+    pub redis: redis::Client,
+}
+
+impl AvailRedisClient {
+    pub async fn new() -> Self {
+        dotenv::dotenv().ok();
+
+        let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
+        let redis = redis::Client::open(redis_url).expect("Redis client not created");
+        AvailRedisClient { redis }
+    }
+
+    pub async fn add_justification(&mut self, justification: StoredJustificationData) {
+        let mut con = self
+            .redis
+            .get_async_connection()
+            .await
+            .expect("Failed to create Redis connection");
+
+        let _: () = con
+            .json_set(justification.block_number, "$", &justification)
+            .await
+            .expect("Failed to set key");
+
+        debug!(
+            "Added justification for block {:?}",
+            justification.block_number
+        )
+    }
+
+    pub async fn get_justification(&mut self, block_number: u32) -> StoredJustificationData {
+        // Result is always stored as serialized bytes: https://github.com/redis-rs/redis-rs#json-support.
+        let mut con = self
+            .redis
+            .get_async_connection()
+            .await
+            .expect("Failed to create Redis connection");
+
+        let serialized_justification: Vec<u8> = con
+            .json_get(block_number, "$")
+            .await
+            .expect("Failed to get key");
+        let justification: StoredJustificationData =
+            serde_json::from_slice(&serialized_justification)
+                .expect("Failed to deserialize justification");
+        justification
+    }
 }
 
 /// This function is useful for verifying that a Ed25519 signature is valid, it will panic if the signature is not valid
@@ -38,7 +86,7 @@ pub fn verify_signature(pubkey_bytes: &[u8], signed_message: &[u8], signature: &
 }
 
 // Compute the chained hash of the authority set.
-pub fn compute_authority_set_hash(authorities: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn compute_authority_set_hash(authorities: &[Vec<u8>]) -> Vec<u8> {
     let mut hash_so_far = Vec::new();
     for i in 0..authorities.len() {
         let authority = authorities[i].clone();
@@ -78,6 +126,11 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
         round,
         authority_set_id,
     )
+}
+
+pub struct RpcDataFetcher {
+    pub client: Client,
+    pub save: Option<String>,
 }
 
 impl RpcDataFetcher {
@@ -174,10 +227,7 @@ impl RpcDataFetcher {
 
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
-    pub async fn get_authorities(
-        &self,
-        block_number: u32,
-    ) -> (Vec<AffinePoint<Curve>>, Vec<Vec<u8>>) {
+    pub async fn get_authorities(&self, block_number: u32) -> Vec<Vec<u8>> {
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities_bytes = self
@@ -227,7 +277,7 @@ impl RpcDataFetcher {
             }
         }
 
-        (authorities, authories_pubkey_bytes)
+        authories_pubkey_bytes
     }
 
     // Computes the authority_set_hash for a given block number.
@@ -236,8 +286,8 @@ impl RpcDataFetcher {
         let authorities = self.get_authorities(block_number).await;
 
         let mut hash_so_far = Vec::new();
-        for i in 0..authorities.1.len() {
-            let authority = authorities.1[i].clone();
+        for i in 0..authorities.len() {
+            let authority = authorities[i].clone();
             let mut hasher = sha2::Sha256::new();
             hasher.update(hash_so_far);
             hasher.update(authority);
@@ -286,9 +336,9 @@ impl RpcDataFetcher {
         let authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
         // The authorities for the current block are defined in the previous block.
-        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number - 1).await;
+        let authorities_pubkey_bytes = self.get_authorities(block_number - 1).await;
 
-        if authorities.len() > VALIDATOR_SET_SIZE_MAX {
+        if authorities_pubkey_bytes.len() > VALIDATOR_SET_SIZE_MAX {
             panic!("Too many authorities");
         }
 
@@ -321,36 +371,36 @@ impl RpcDataFetcher {
         let mut padded_signatures = Vec::new();
         let mut padded_pubkeys = Vec::new();
         let mut voting_weight = 0;
-        for (i, authority) in authorities.iter().enumerate() {
-            let pubkey_bytes = authorities_pubkey_bytes[i].clone();
-            let signature = pubkey_bytes_to_signature.get(&pubkey_bytes);
+        for pubkey_bytes in authorities_pubkey_bytes.iter() {
+            let signature = pubkey_bytes_to_signature.get(pubkey_bytes);
+            let authority = AffinePoint::<Curve>::new_from_compressed_point(pubkey_bytes);
 
             if let Some(valid_signature) = signature {
-                verify_signature(&pubkey_bytes, &signed_message, valid_signature);
+                verify_signature(pubkey_bytes, &signed_message, valid_signature);
                 validator_signed.push(true);
-                padded_pubkeys.push(*authority);
+                padded_pubkeys.push(authority);
                 padded_signatures.push(*valid_signature);
                 voting_weight += 1;
             } else {
                 validator_signed.push(false);
-                padded_pubkeys.push(*authority);
+                padded_pubkeys.push(authority);
                 // Push a dummy signature, since this validator did not sign.
                 padded_signatures.push(DUMMY_SIGNATURE);
             }
         }
 
-        if voting_weight * 3 < authorities.len() * 2 {
+        if voting_weight * 3 < authorities_pubkey_bytes.len() * 2 {
             panic!("Not enough voting power");
         }
 
-        for _ in authorities.len()..VALIDATOR_SET_SIZE_MAX {
+        for _ in authorities_pubkey_bytes.len()..VALIDATOR_SET_SIZE_MAX {
             validator_signed.push(false);
             // Push a dummy pubkey and signature, to pad the array to VALIDATOR_SET_SIZE_MAX.
             padded_pubkeys.push(AffinePoint::new_from_compressed_point(&DUMMY_PUBLIC_KEY));
             padded_signatures.push(DUMMY_SIGNATURE);
         }
 
-        let current_authority_set_hash = compute_authority_set_hash(authorities_pubkey_bytes);
+        let current_authority_set_hash = compute_authority_set_hash(&authorities_pubkey_bytes);
 
         SimpleJustificationData {
             authority_set_id,
@@ -358,7 +408,7 @@ impl RpcDataFetcher {
             validator_signed,
             pubkeys: padded_pubkeys,
             signatures: padded_signatures,
-            num_authorities: authorities.len(),
+            num_authorities: authorities_pubkey_bytes.len(),
             current_authority_set_hash,
         }
     }
@@ -421,7 +471,7 @@ impl RpcDataFetcher {
                         let weight = &authority_chunk[PUBKEY_LENGTH..];
 
                         // Assert the pubkey in the encoded log is correct.
-                        assert_eq!(*pubkey, new_authorities.1[i]);
+                        assert_eq!(*pubkey, new_authorities[i]);
 
                         // Assert weight's LE representation == 1
                         for j in 0..WEIGHT_LENGTH {
@@ -458,12 +508,12 @@ impl RpcDataFetcher {
             );
         }
 
-        let new_authority_set_hash = compute_authority_set_hash(new_authorities.1.clone());
+        let new_authority_set_hash = compute_authority_set_hash(&new_authorities);
         let mut padded_pubkeys = Vec::new();
-        for i in 0..new_authorities.1.len() {
-            padded_pubkeys.push(H256::from_slice(&new_authorities.1[i].clone()));
+        for i in 0..new_authorities.len() {
+            padded_pubkeys.push(H256::from_slice(&new_authorities[i].clone()));
         }
-        for _ in new_authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
+        for _ in new_authorities.len()..VALIDATOR_SET_SIZE_MAX {
             // Pad the array with dummy pubkeys to VALIDATOR_SET_SIZE_MAX.
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
@@ -471,12 +521,12 @@ impl RpcDataFetcher {
         // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown, 1 scheduled change, 2 unknown.
         let prefix_length = 11;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
-        let end_position = position + prefix_length + ((32 + 8) * new_authorities.1.len()) + 4;
+        let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 
         HeaderRotateData {
             header_bytes,
             header_size,
-            num_authorities: new_authorities.1.len(),
+            num_authorities: new_authorities.len(),
             start_position: position,
             end_position,
             new_authority_set_hash,
@@ -530,11 +580,11 @@ mod tests {
             // The next authority set is defined by the last block of the current epoch.
             let next_authorities = fetcher.get_authorities(epoch_end_block).await;
 
-            if curr_authorities.1.len() != next_authorities.1.len() {
+            if curr_authorities.len() != next_authorities.len() {
                 println!("genesis id {:?}", authority_set_id);
                 println!(
                     "genesis authority set hash {:?}",
-                    hex::encode(compute_authority_set_hash(curr_authorities.1))
+                    hex::encode(compute_authority_set_hash(&curr_authorities))
                 );
                 println!(
                     "genesis block (last block justified by genesis id) {:?}",

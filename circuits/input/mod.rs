@@ -678,9 +678,16 @@ mod tests {
     async fn test_get_header_hash() {
         let fetcher = RpcDataFetcher::new().await;
 
-        let target_block = 645660;
+        let target_block = 645570;
         let header = fetcher.get_header(target_block).await;
         println!("header hash {:?}", hex::encode(header.hash().0));
+        let authority_set_hash = fetcher.compute_authority_set_hash(target_block - 1).await;
+        println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
+
+        let id_1 = fetcher.get_authority_set_id(645570 - 1).await;
+        let id_2 = fetcher.get_authority_set_id(645660 - 1).await;
+        println!("id_1 {:?}", id_1);
+        println!("id_2 {:?}", id_2);
     }
 
     #[tokio::test]

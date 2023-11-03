@@ -229,13 +229,13 @@ mod tests {
         let mut input = circuit.input();
 
         let trusted_header: [u8; 32] =
-            hex::decode("a9c0db43a5f56d9623209c3104d6fc8601eb267b57c1a9a37b88c9b43191e361")
+            hex::decode("6187641fdbad4b99ea81f39135b4f72e2f3a79193a99fd61b381d43e6fa8dfaa")
                 .unwrap()
                 .try_into()
                 .unwrap();
-        let trusted_block = 645570u32;
-        let target_block = 645660u32; // mimics test_step_small
-        let authority_set_id = 616u64;
+        let trusted_block = 645660u32;
+        let target_block = 645750u32; // mimics test_step_small
+        let authority_set_id = 617u64;
         let authority_set_hash: [u8; 32] =
             hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
                 .unwrap()

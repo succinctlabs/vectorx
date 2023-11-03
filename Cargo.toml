@@ -51,7 +51,7 @@ redis = { version = "0.23.3", features = [
     "tokio-comp",
 ] }
 
-avail-subxt = { git = "https://github.com/availproject/avail.git" }
+avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "b68af96" }
 sp-core = { version = "21.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",
@@ -62,6 +62,6 @@ sha2 = "0.10.8"
 dotenv = "0.15.0"
 alloy-sol-types = "0.4.2"
 alloy-primitives = "0.4.2"
-subxt = "0.29"
+subxt = "0.27"
 [dev-dependencies]
 anyhow = "1.0.68"

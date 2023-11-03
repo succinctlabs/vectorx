@@ -38,27 +38,6 @@ impl RedisClient {
         RedisClient { redis }
     }
 
-    /// Finds all blocks with justifications in Redis within a given range of block numbers.
-    pub async fn find_justifications_in_range(
-        &mut self,
-        start_block: u64,
-        end_block: u64,
-    ) -> Vec<u64> {
-        // Query Redis for all keys in the range [start_block, end_block].
-        let mut con = self
-            .redis
-            .get_async_connection()
-            .await
-            .expect("Failed to create Redis connection");
-
-        let keys: Vec<u64> = con
-            .zrangebyscore("blocks", start_block, end_block)
-            .await
-            .expect("Failed to get keys");
-
-        keys
-    }
-
     /// Stores justification data in Redis. Errors if setting the key fails.
     pub async fn add_justification(&mut self, justification: StoredJustificationData) {
         let mut con = self
@@ -178,6 +157,51 @@ impl RpcDataFetcher {
             redis_client,
             save: None,
         }
+    }
+
+    /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch
+    /// end blocks within the given range of block numbers.
+    pub async fn find_justifications_in_range(
+        &mut self,
+        start_block: u32,
+        end_block: u32,
+    ) -> Vec<u32> {
+        // Query Redis for all keys in the range [start_block, end_block].
+        let mut con = self
+            .redis_client
+            .redis
+            .get_async_connection()
+            .await
+            .expect("Failed to create Redis connection");
+
+        let redis_blocks: Vec<u32> = con
+            .zrangebyscore("blocks", start_block, end_block)
+            .await
+            .expect("Failed to get keys");
+
+        // Query the chain for all era end blocks in the range [start_block, end_block].
+        let start_era = self.get_authority_set_id(start_block - 1).await;
+
+        let mut curr_block = start_block;
+        let mut curr_era = start_era;
+        let mut epoch_end_blocks = Vec::new();
+        while curr_block < end_block {
+            let epoch_end_block = self.last_justified_block(curr_era).await;
+            if epoch_end_block <= end_block {
+                epoch_end_blocks.push(epoch_end_block);
+                curr_block = epoch_end_block;
+                curr_era += 1;
+            } else {
+                break;
+            }
+        }
+
+        // Combine the Redis blocks and epoch end blocks.
+        let mut all_blocks = redis_blocks;
+        all_blocks.extend(epoch_end_blocks);
+        all_blocks.sort();
+
+        all_blocks
     }
 
     // This function returns the last block justified by target_authority_set_id. This block
@@ -791,10 +815,10 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_query_redis_block_range() {
-        let mut redis_client = RedisClient::new().await;
+        let mut data_fetcher = RpcDataFetcher::new().await;
         let start_block = 644609;
         let end_block = 650000;
-        let blocks = redis_client
+        let blocks = data_fetcher
             .find_justifications_in_range(start_block, end_block)
             .await;
         println!("keys {:?}", blocks);

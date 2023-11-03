@@ -187,12 +187,11 @@ async fn main() {
 
     info!("Starting VectorX offchain worker");
 
-    const STEP_THRESHOLD: usize = 100;
     const LOOP_DELAY: u64 = 30;
 
     let config: VectorConfig = get_config();
 
-    let fetcher = RpcDataFetcher::new().await;
+    let mut fetcher = RpcDataFetcher::new().await;
 
     let lc_rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
     let provider = Provider::<Http>::try_from(lc_rpc_url).expect("could not connect to client");
@@ -212,14 +211,22 @@ async fn main() {
         // The logic for keeping the Vector LC up to date is as follows:
         //      1. Fetch the current latest_block in the contract and the head of the chain.
         //      2. If current_authority_set_id == head_authority_set_id, then no rotate is needed.
-        //          a) Step if (head - current_block) > STEP_THRESHOLD.
         //      3. If current_authority_set_id < head_authority_set_id, request next authority set.
         //          a) Step if current_block != the last block justified by current authority set.
 
-        if current_authority_set_id == head_authority_set_id
-            && head_block - current_block > STEP_THRESHOLD as u32
-        {
-            let block_to_step_to = min(head_block, current_block + step_range_max);
+        if current_authority_set_id == head_authority_set_id {
+            let mut block_to_step_to = min(head_block, current_block + step_range_max);
+
+            // If block_to_step_to is not the last justified block, use the Redis cache.
+            if fetcher.last_justified_block(current_authority_set_id).await != block_to_step_to {
+                let valid_blocks = fetcher
+                    .find_justifications_in_range(current_block, block_to_step_to)
+                    .await;
+                if valid_blocks.is_empty() {
+                    continue;
+                }
+                block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+            }
 
             info!("Stepping to block {:?}.", block_to_step_to);
 
@@ -269,7 +276,19 @@ async fn main() {
             if current_block < last_justified_block {
                 // The block to step to is the minimum of the last justified block and the
                 // head block + STEP_RANGE_MAX.
-                let block_to_step_to = min(last_justified_block, current_block + step_range_max);
+                let mut block_to_step_to =
+                    min(last_justified_block, current_block + step_range_max);
+
+                // If block_to_step_to is not the last justified block, use the Redis cache.
+                if last_justified_block != block_to_step_to {
+                    let valid_blocks = fetcher
+                        .find_justifications_in_range(current_block, block_to_step_to)
+                        .await;
+                    if valid_blocks.is_empty() {
+                        continue;
+                    }
+                    block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+                }
 
                 info!("Stepping to block {:?}.", block_to_step_to);
 
@@ -289,10 +308,21 @@ async fn main() {
                 let next_last_justified_block =
                     fetcher.last_justified_block(next_authority_set_id).await;
 
-                let block_to_step_to = min(
+                let mut block_to_step_to = min(
                     next_last_justified_block,
                     last_justified_block + step_range_max,
                 );
+
+                // If block_to_step_to is not the last justified block, use the Redis cache.
+                if next_last_justified_block != block_to_step_to {
+                    let valid_blocks = fetcher
+                        .find_justifications_in_range(current_block, block_to_step_to)
+                        .await;
+                    if valid_blocks.is_empty() {
+                        continue;
+                    }
+                    block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+                }
 
                 info!("Stepping to block {:?}.", block_to_step_to);
                 // Step to block_to_step_to.

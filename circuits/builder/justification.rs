@@ -52,7 +52,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             block_number, authority_set_id
         );
 
-        let data_fetcher = RpcDataFetcher::new().await;
+        let mut data_fetcher = RpcDataFetcher::new().await;
         let justification_data: SimpleJustificationData = data_fetcher
             .get_simple_justification::<NUM_AUTHORITIES>(block_number)
             .await;
@@ -299,7 +299,7 @@ mod tests {
 
         let rt = Runtime::new().expect("failed to create tokio runtime");
         let justification_data: SimpleJustificationData = rt.block_on(async {
-            let fetcher = RpcDataFetcher::new().await;
+            let mut fetcher = RpcDataFetcher::new().await;
             fetcher
                 .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
                 .await

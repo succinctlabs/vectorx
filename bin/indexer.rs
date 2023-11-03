@@ -14,6 +14,7 @@ use avail_subxt::config::Header as HeaderTrait;
 use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
+use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::DUMMY_SIGNATURE;
 use serde::de::Error;
 use serde::Deserialize;
@@ -90,7 +91,12 @@ pub enum SignerMessage {
 
 #[tokio::main]
 pub async fn main() {
-    println!("Starting indexer");
+    // Save every 90 blocks (every 30 minutes).
+    const BLOCK_SAVE_INTERVAL: usize = 90;
+    debug!(
+        "Starting indexer, saving every {} blocks.",
+        BLOCK_SAVE_INTERVAL
+    );
 
     let fetcher = RpcDataFetcher::new().await;
 
@@ -112,7 +118,13 @@ pub async fn main() {
 
     // Wait for new justification
     while let Some(Ok(justification)) = sub.next().await {
-        println!("New justification");
+        debug!(
+            "New justification from block {}",
+            justification.commit.target_number
+        );
+        if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
+            continue;
+        }
 
         // Note: justification.commit.target_hash is probably block_hash, but it is not header_hash!
         // Noticed this because it retrieves the correct header but doesn't match header.hash()
@@ -126,7 +138,6 @@ pub async fn main() {
             .unwrap();
         // A bit redundant, but just to make sure the hash is correct
         let block_hash = justification.commit.target_hash;
-        println!("block hash: {}", hex::encode(block_hash.0));
         let header_hash = header.hash();
         let calculated_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
         if header_hash != calculated_hash {
@@ -135,7 +146,7 @@ pub async fn main() {
 
         // Get current authority set ID
         let set_id_key = api::storage().grandpa().current_set_id();
-        let set_id = c
+        let authority_set_id = c
             .storage()
             .at(block_hash)
             .fetch(&set_id_key)
@@ -143,18 +154,15 @@ pub async fn main() {
             .unwrap()
             .unwrap();
 
-        println!("set id: {}", set_id);
-
         // Form a message which is signed in the justification
         let signed_message = Encode::encode(&(
             &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
             &justification.round,
-            &set_id,
+            &authority_set_id,
         ));
 
         // Verify all the signatures of the justification and extract the public keys
-        // Note: Are the authorities always going to be in the same order?
-
+        // TODO: Check if the authorities always going to be in the same order? Otherwise sort them.
         let validators = justification
             .commit
             .precommits
@@ -180,9 +188,9 @@ pub async fn main() {
         let signatures = validators.iter().map(|v| v.1.clone()).collect::<Vec<_>>();
 
         // Create map from pubkey to signature.
-        let pubkey_to_signature = HashMap::new();
+        let mut pubkey_to_signature = HashMap::new();
         for (pubkey, signature) in pubkeys.iter().zip(signatures.iter()) {
-            pubkey_to_signature.insert(pubkey, signature);
+            pubkey_to_signature.insert(pubkey.to_vec(), signature.to_vec());
         }
 
         // Check that at least 2/3 of the validators signed the justification.
@@ -193,17 +201,18 @@ pub async fn main() {
             continue;
         }
 
-        let justification_pubkeys = Vec::new();
-        let justification_signatures = Vec::new();
-        let validator_signed = Vec::new();
+        // Create justification data.
+        let mut justification_pubkeys = Vec::new();
+        let mut justification_signatures = Vec::new();
+        let mut validator_signed = Vec::new();
         for authority_pubkey in authorities.iter() {
             if let Some(signature) = pubkey_to_signature.get(authority_pubkey) {
-                justification_pubkeys.push(authority_pubkey);
-                justification_signatures.push(signature);
+                justification_pubkeys.push(authority_pubkey.to_vec());
+                justification_signatures.push(signature.to_vec());
                 validator_signed.push(true);
             } else {
-                justification_pubkeys.push(authority_pubkey);
-                justification_signatures.push(DUMMY_SIGNATURE);
+                justification_pubkeys.push(authority_pubkey.to_vec());
+                justification_signatures.push(DUMMY_SIGNATURE.to_vec());
                 validator_signed.push(false);
             }
         }
@@ -218,5 +227,6 @@ pub async fn main() {
             validator_signed,
         };
         r.add_justification(store_justification_data).await;
+        debug!("Added justification to Redis");
     }
 }

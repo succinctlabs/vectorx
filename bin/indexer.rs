@@ -123,13 +123,13 @@ pub async fn main() {
 
     // Wait for new justification
     while let Some(Ok(justification)) = sub.next().await {
+        if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
+            continue;
+        }
         debug!(
             "New justification from block {}",
             justification.commit.target_number
         );
-        if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
-            continue;
-        }
 
         // Note: justification.commit.target_hash is probably block_hash, but it is not header_hash!
         // Noticed this because it retrieves the correct header but doesn't match header.hash()

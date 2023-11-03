@@ -679,7 +679,7 @@ mod tests {
     async fn test_get_header_hash() {
         let fetcher = RpcDataFetcher::new().await;
 
-        let target_block = 648159;
+        let target_block = 645570;
         let header = fetcher.get_header(target_block).await;
         let block_hash = fetcher.get_block_hash(target_block).await;
 
@@ -689,19 +689,18 @@ mod tests {
         let prev_block_hash = fetcher.get_block_hash(target_block - 1).await;
         let prev_header = fetcher.get_header(target_block - 1).await;
 
-        // println!("prev header hash {:?}", hex::encode(prev_header.hash().0));
-        // println!("prev block hash {:?}", hex::encode(prev_block_hash.0));
+        println!("prev header hash {:?}", hex::encode(prev_header.hash().0));
+        println!("prev block hash {:?}", hex::encode(prev_block_hash.0));
 
         assert_eq!(prev_block_hash, header.parent_hash);
 
-        // println!("header hash {:?}", hex::encode(header.hash().0));
         let authority_set_hash = fetcher.compute_authority_set_hash(target_block - 1).await;
-        // println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
+        println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
 
         let id_1 = fetcher.get_authority_set_id(645570 - 1).await;
         let id_2 = fetcher.get_authority_set_id(645660 - 1).await;
-        // println!("id_1 {:?}", id_1);
-        // println!("id_2 {:?}", id_2);
+        println!("id_1 {:?}", id_1);
+        println!("id_2 {:?}", id_2);
     }
 
     #[tokio::test]

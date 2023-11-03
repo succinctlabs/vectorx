@@ -315,7 +315,7 @@ mod tests {
         // target_block is a non-era end block block in epoch 616 with 10 authorities.
         let target_block = 645570u32;
         let target_header: [u8; 32] =
-            hex::decode("6187641fdbad4b99ea81f39135b4f72e2f3a79193a99fd61b381d43e6fa8dfaa")
+            hex::decode("ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d")
                 .unwrap()
                 .try_into()
                 .unwrap();

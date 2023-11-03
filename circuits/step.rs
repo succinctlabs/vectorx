@@ -96,7 +96,6 @@ impl<
 
         builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
             target_block,
-            target_header_hash,
             authority_set_id,
             authority_set_hash,
         );
@@ -211,7 +210,7 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_circuit_function_step_fixture() {
+    fn test_step() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
@@ -230,14 +229,18 @@ mod tests {
         let mut input = circuit.input();
 
         let trusted_header: [u8; 32] =
-            hex::decode("9a69988124baf188d9d6bbbc579977815086a5d9dfa3b91bafa6d315f31047dc")
+            hex::decode("a9c0db43a5f56d9623209c3104d6fc8601eb267b57c1a9a37b88c9b43191e361")
                 .unwrap()
                 .try_into()
                 .unwrap();
-        let trusted_block = 272502u32;
-        let target_block = 272534u32; // mimics test_step_small
-        let authority_set_id = 256u64;
-        let authority_set_hash: [u8; 32] = [0u8; 32]; // Placeholder for now
+        let trusted_block = 645570u32;
+        let target_block = 645660u32; // mimics test_step_small
+        let authority_set_id = 616u64;
+        let authority_set_hash: [u8; 32] =
+            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
+                .unwrap()
+                .try_into()
+                .unwrap();
 
         input.evm_write::<U32Variable>(trusted_block);
         input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));

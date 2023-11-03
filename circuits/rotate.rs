@@ -153,7 +153,6 @@ impl<
         // Verify the justification from the current authority set on the epoch end header.
         builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
             epoch_end_block_number,
-            target_header_hash,
             authority_set_id,
             authority_set_hash,
         );

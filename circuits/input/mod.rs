@@ -678,7 +678,7 @@ mod tests {
     async fn test_get_header_hash() {
         let fetcher = RpcDataFetcher::new().await;
 
-        let target_block = 215495;
+        let target_block = 645660;
         let header = fetcher.get_header(target_block).await;
         println!("header hash {:?}", hex::encode(header.hash().0));
     }

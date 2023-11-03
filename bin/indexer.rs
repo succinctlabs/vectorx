@@ -121,7 +121,7 @@ pub async fn main() {
 
     let mut sub = sub.unwrap();
 
-    // Wait for new justification
+    // Wait for new justification.
     while let Some(Ok(justification)) = sub.next().await {
         if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
             continue;
@@ -131,17 +131,19 @@ pub async fn main() {
             justification.commit.target_number
         );
 
-        // Note: justification.commit.target_hash is probably block_hash, but it is not header_hash!
-        // Noticed this because it retrieves the correct header but doesn't match header.hash()
+        // Note: justification.commit.target_hash is probably block_hash.
+        // Noticed this because retrieved the correct header from commit.target_hash, but the hash
+        // doesn't match header.hash()
 
-        // Get the header corresponding to the new justification
+        // Get the header corresponding to the new justification.
         let header = c
             .rpc()
             .header(Some(justification.commit.target_hash))
             .await
             .unwrap()
             .unwrap();
-        // A bit redundant, but just to make sure the hash is correct
+
+        // A bit redundant, but just to make sure the hash is correct.
         let block_hash = justification.commit.target_hash;
         let header_hash = header.hash();
         let calculated_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
@@ -149,7 +151,7 @@ pub async fn main() {
             continue;
         }
 
-        // Get current authority set ID
+        // Get current authority set ID.
         let set_id_key = api::storage().grandpa().current_set_id();
         let authority_set_id = c
             .storage()
@@ -159,14 +161,14 @@ pub async fn main() {
             .unwrap()
             .unwrap();
 
-        // Form a message which is signed in the justification
+        // Form a message which is signed in the justification.
         let signed_message = Encode::encode(&(
             &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
             &justification.round,
             &authority_set_id,
         ));
 
-        // Verify all the signatures of the justification and extract the public keys
+        // Verify all the signatures of the justification and extract the public keys.
         // TODO: Check if the authorities always going to be in the same order? Otherwise sort them.
         let validators = justification
             .commit

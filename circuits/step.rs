@@ -230,7 +230,7 @@ mod tests {
         let mut input = circuit.input();
 
         let trusted_header: [u8; 32] =
-            hex::decode("6187641fdbad4b99ea81f39135b4f72e2f3a79193a99fd61b381d43e6fa8dfaa")
+            hex::decode("7506dcafe4218a46c07d14e2d44971c3e9e3c8995556913f7cc1072dcaa12625")
                 .unwrap()
                 .try_into()
                 .unwrap();

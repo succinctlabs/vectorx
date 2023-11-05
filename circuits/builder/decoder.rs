@@ -5,7 +5,7 @@ use plonky2x::prelude::{
 };
 
 use crate::consts::{
-    DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE, MAX_BLOCK_NUMBER_BYTES,
+    DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE, MAX_COMPACT_UINT_BYTES,
 };
 use crate::vars::*;
 
@@ -39,7 +39,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
     /// mode. Spec: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(
         &mut self,
-        compact_bytes: ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>,
+        compact_bytes: ArrayVariable<ByteVariable, MAX_COMPACT_UINT_BYTES>,
     ) -> (U32Variable, Variable) {
         // Flip the bit order within each byte and flatten the array.
         let bool_targets = compact_bytes
@@ -118,8 +118,8 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
 
         // Next field is the block number. The block number is encoded as a compact u32.
-        let block_number_bytes = ArrayVariable::<ByteVariable, MAX_BLOCK_NUMBER_BYTES>::from(
-            header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_BLOCK_NUMBER_BYTES].to_vec(),
+        let block_number_bytes = ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
+            header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_COMPACT_UINT_BYTES].to_vec(),
         );
         let (block_number, compress_mode) = self.decode_compact_int(block_number_bytes);
 
@@ -227,7 +227,7 @@ pub mod tests {
     };
 
     use super::DecodingMethods;
-    use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_BLOCK_NUMBER_BYTES, MAX_HEADER_SIZE};
+    use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_COMPACT_UINT_BYTES, MAX_HEADER_SIZE};
     use crate::input::RpcDataFetcher;
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
@@ -240,7 +240,7 @@ pub mod tests {
 
         let mut builder = DefaultBuilder::new();
 
-        let compact_bytes = builder.read::<ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>>();
+        let compact_bytes = builder.read::<ArrayVariable<ByteVariable, MAX_COMPACT_UINT_BYTES>>();
 
         let (value, compress_mode) = builder.decode_compact_int(compact_bytes);
         builder.write(value);
@@ -257,11 +257,11 @@ pub mod tests {
             // Use compact encoding to encode the block number.
             let encoded_block_num = Compact(test_cases[i].0).encode();
 
-            // Extend encoding to MAX_BLOCK_NUMBER_BYTES.
+            // Extend encoding to MAX_COMPACT_UINT_BYTES.
             let mut encoded_block_num = encoded_block_num.to_vec();
-            encoded_block_num.resize(MAX_BLOCK_NUMBER_BYTES, 0);
+            encoded_block_num.resize(MAX_COMPACT_UINT_BYTES, 0);
 
-            input.write::<ArrayVariable<ByteVariable, MAX_BLOCK_NUMBER_BYTES>>(encoded_block_num);
+            input.write::<ArrayVariable<ByteVariable, MAX_COMPACT_UINT_BYTES>>(encoded_block_num);
 
             let (proof, mut output) = circuit.prove(&input);
             circuit.verify(&proof, &input, &output);

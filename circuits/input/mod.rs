@@ -22,7 +22,7 @@ use self::types::{
     StoredJustificationData,
 };
 use crate::consts::{
-    DELAY_LENGTH, HASH_SIZE, MIN_PREFIX_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
+    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
 };
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
@@ -652,7 +652,7 @@ impl RpcDataFetcher {
         // TODO: Find out what the unknown bytes are.
         // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown,
         // 1 scheduled change, variable length compact encoding of the number of authorities.
-        let prefix_length = MIN_PREFIX_LENGTH - 1 + encoded_num_authorities_len;
+        let prefix_length = BASE_PREFIX_LENGTH + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
         let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 

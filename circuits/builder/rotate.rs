@@ -5,7 +5,7 @@ use plonky2x::prelude::{
 use super::decoder::DecodingMethods;
 use crate::builder::justification::GrandpaJustificationVerifier;
 use crate::consts::{
-    DELAY_LENGTH, MAX_BLOCK_NUMBER_BYTES, MAX_PREFIX_LENGTH, MIN_PREFIX_LENGTH, PUBKEY_LENGTH,
+    BASE_PREFIX_LENGTH, DELAY_LENGTH, MAX_COMPACT_UINT_BYTES, MAX_PREFIX_LENGTH, PUBKEY_LENGTH,
     VALIDATOR_LENGTH, WEIGHT_LENGTH,
 };
 use crate::vars::*;
@@ -75,9 +75,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify the next bytes are the compact encoding of the length of the new authority set.
         let num_authorities_length_bytes =
-            ArrayVariable::<ByteVariable, MAX_BLOCK_NUMBER_BYTES>::from(
-                subarray[MIN_PREFIX_LENGTH - 1..MIN_PREFIX_LENGTH - 1 + MAX_BLOCK_NUMBER_BYTES]
-                    .to_vec(),
+            ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
+                subarray[BASE_PREFIX_LENGTH..BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES].to_vec(),
             );
         let (num_authorities, compress_mode) =
             self.decode_compact_int(num_authorities_length_bytes);
@@ -161,14 +160,13 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
         let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
-        let min_prefix_len =
-            self.constant::<Variable>(L::Field::from_canonical_usize(MIN_PREFIX_LENGTH));
+        let base_prefix_len =
+            self.constant::<Variable>(L::Field::from_canonical_usize(BASE_PREFIX_LENGTH));
 
-        // Get to the start of the encoded authority set. The cursor is the minimum prefix length
-        // plus the length of the compact encoding of the new authority set length - 1.
-        cursor = self.add(cursor, min_prefix_len);
+        // Get to the start of the encoded authority set. The cursor is the base prefix length
+        // plus the length of the compact encoding of the new authority set length.
+        cursor = self.add(cursor, base_prefix_len);
         cursor = self.add(cursor, encoded_num_authorities_byte_len);
-        cursor = self.sub(cursor, one);
 
         let enc_validator_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
             &header_as_variables,

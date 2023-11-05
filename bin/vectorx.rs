@@ -44,10 +44,10 @@ type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint
 
 fn get_config() -> VectorConfig {
     let step_function_id = H256::from_slice(
-        &hex::decode("0x115391b0244a219c24ffce0f63e93b0567e438df676db225b22f4dc878591461").unwrap(),
+        &hex::decode("115391b0244a219c24ffce0f63e93b0567e438df676db225b22f4dc878591461").unwrap(),
     );
     let rotate_function_id = H256::from_slice(
-        &hex::decode("0xbf47fb7f568f5c3afdbe50254af5b2466a7f9c9defdf2d81ef06bf2324d60c8b").unwrap(),
+        &hex::decode("bf47fb7f568f5c3afdbe50254af5b2466a7f9c9defdf2d81ef06bf2324d60c8b").unwrap(),
     );
     let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
     // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code

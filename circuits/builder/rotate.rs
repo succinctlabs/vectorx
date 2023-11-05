@@ -76,7 +76,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // Verify the next bytes are the compact encoding of the length of the new authority set.
         let num_authorities_length_bytes =
             ArrayVariable::<ByteVariable, MAX_BLOCK_NUMBER_BYTES>::from(
-                subarray[9..9 + MAX_BLOCK_NUMBER_BYTES].to_vec(),
+                subarray[MIN_PREFIX_LENGTH - 1..MIN_PREFIX_LENGTH - 1 + MAX_BLOCK_NUMBER_BYTES]
+                    .to_vec(),
             );
         let (num_authorities, compress_mode) =
             self.decode_compact_int(num_authorities_length_bytes);
@@ -168,7 +169,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         cursor = self.add(cursor, min_prefix_len);
         cursor = self.add(cursor, encoded_num_authorities_byte_len);
         cursor = self.sub(cursor, one);
-        self.watch(&cursor, "cursor");
 
         let enc_validator_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
             &header_as_variables,

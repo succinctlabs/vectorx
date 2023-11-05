@@ -27,11 +27,11 @@ pub const WEIGHT_LENGTH: usize = 8;
 pub const DELAY_LENGTH: usize = 4;
 
 // The minimum length of the prefix before the encoded new authority set.
-pub const MIN_PREFIX_LENGTH: usize = 9;
+pub const MIN_PREFIX_LENGTH: usize = 10;
 
 // The maximum length of the prefix before the encoded new authority set. This is the maximum length
 // including the encoded new authority set length.
-pub const MAX_PREFIX_LENGTH: usize = 14;
+pub const MAX_PREFIX_LENGTH: usize = 15;
 
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.

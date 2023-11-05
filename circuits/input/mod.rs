@@ -21,7 +21,9 @@ use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
     StoredJustificationData,
 };
-use crate::consts::{DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
+use crate::consts::{
+    DELAY_LENGTH, HASH_SIZE, MIN_PREFIX_LENGTH, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
+};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
@@ -581,16 +583,6 @@ impl RpcDataFetcher {
             // Note: Two bytes are skipped between the consensus id and value.
             if let DigestItem::Consensus(consensus_id, value) = log {
                 if consensus_id == [70, 82, 78, 75] {
-                    println!(
-                        "encoded num authorities {:?}",
-                        Compact(num_authorities as u32).encode()
-                    );
-                    println!(
-                        "encoded block number {:?}",
-                        Compact(epoch_end_block).encode()
-                    );
-                    println!("encoded log {:?}", encoded_log[..11].to_vec());
-
                     found_correct_log = true;
 
                     // Denotes that this is a `ScheduledChange` log.
@@ -660,7 +652,7 @@ impl RpcDataFetcher {
         // TODO: Find out what the unknown bytes are.
         // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown,
         // 1 scheduled change, variable length compact encoding of the number of authorities.
-        let prefix_length = 9 + encoded_num_authorities_len;
+        let prefix_length = MIN_PREFIX_LENGTH - 1 + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
         let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 
@@ -884,14 +876,14 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_rotate() {
         let data_fetcher = RpcDataFetcher::new().await;
-        let epoch_end_block = data_fetcher.last_justified_block(400).await;
+        let epoch_end_block = data_fetcher.last_justified_block(616).await;
         println!("epoch_end_block {:?}", epoch_end_block);
 
         // let num_authorities: u32 = 10;
         // let encoded_byte = Compact(num_authorities).encode();
         // println!("encoded_byte {:?}", encoded_byte);
 
-        let header_rotate_data = data_fetcher
+        let _ = data_fetcher
             .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
             .await;
     }

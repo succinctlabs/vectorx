@@ -32,12 +32,12 @@ contract DeployScript is Script {
             hex"ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
         );
 
-        // lightClient.setGenesisInfo(
-        //     trustedBlock,
-        //     header,
-        //     authoritySetId,
-        //     authoritySetHash
-        // );
+        lightClient.setGenesisInfo(
+            trustedBlock,
+            header,
+            authoritySetId,
+            authoritySetHash
+        );
 
         lightClient.updateHeaderRangeFunctionId(stepFunctionId);
         lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);

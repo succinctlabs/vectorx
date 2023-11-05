@@ -127,6 +127,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Initialize the cursor to the start position, which is the start of the consensus log
         // corresponding to an authority set change event in the epoch end header.
+        self.watch(start_position, "start_position");
         let mut cursor = *start_position;
 
         // Get the subarray of the header bytes that we want to verify. The header_hash is used as
@@ -167,6 +168,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         cursor = self.add(cursor, min_prefix_len);
         cursor = self.add(cursor, encoded_num_authorities_byte_len);
         cursor = self.sub(cursor, one);
+        self.watch(&cursor, "cursor");
 
         let enc_validator_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
             &header_as_variables,
@@ -247,7 +249,59 @@ pub mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_verify_epoch_end_header() {
+    fn test_verify_epoch_end_header_small_authority_set() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const NUM_AUTHORITIES: usize = 16;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+
+        let mut builder = DefaultBuilder::new();
+
+        let epoch_end_block_number = builder.read::<U32Variable>();
+
+        // Fetch the header at epoch_end_block.
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let mut input_stream = VariableStream::new();
+        input_stream.write(&epoch_end_block_number);
+        let output_stream = builder.async_hint(input_stream, header_fetcher);
+
+        let target_header =
+            output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
+
+        let num_authorities = output_stream.read::<Variable>(&mut builder);
+        let start_position = output_stream.read::<Variable>(&mut builder);
+        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
+        let new_pubkeys =
+            output_stream.read::<ArrayVariable<AvailPubkeyVariable, NUM_AUTHORITIES>>(&mut builder);
+
+        // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
+        // so it's fine to just use the expected_new_authority_set_hash during this test.
+        let target_header_hash = expected_new_authority_set_hash;
+
+        builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
+            &target_header,
+            &target_header_hash,
+            &num_authorities,
+            &start_position,
+            &new_pubkeys,
+            &expected_new_authority_set_hash,
+        );
+
+        let circuit = builder.build();
+        let mut input = circuit.input();
+
+        let epoch_end_block_number = 645610u32;
+        input.write::<U32Variable>(epoch_end_block_number);
+        let (proof, output) = circuit.prove(&input);
+
+        circuit.verify(&proof, &input, &output);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_verify_epoch_end_header_large_authority_set() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 

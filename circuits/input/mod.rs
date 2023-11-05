@@ -581,6 +581,16 @@ impl RpcDataFetcher {
             // Note: Two bytes are skipped between the consensus id and value.
             if let DigestItem::Consensus(consensus_id, value) = log {
                 if consensus_id == [70, 82, 78, 75] {
+                    println!(
+                        "encoded num authorities {:?}",
+                        Compact(num_authorities as u32).encode()
+                    );
+                    println!(
+                        "encoded block number {:?}",
+                        Compact(epoch_end_block).encode()
+                    );
+                    println!("encoded log {:?}", encoded_log[..11].to_vec());
+
                     found_correct_log = true;
 
                     // Denotes that this is a `ScheduledChange` log.
@@ -873,8 +883,8 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_rotate() {
-        let mut data_fetcher = RpcDataFetcher::new().await;
-        let epoch_end_block = data_fetcher.last_justified_block(616).await;
+        let data_fetcher = RpcDataFetcher::new().await;
+        let epoch_end_block = data_fetcher.last_justified_block(400).await;
         println!("epoch_end_block {:?}", epoch_end_block);
 
         // let num_authorities: u32 = 10;

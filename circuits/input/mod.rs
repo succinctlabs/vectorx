@@ -9,7 +9,7 @@ use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
 use avail_subxt::{api, build_client};
-use codec::{Decode, Encode};
+use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
 use log::debug;
@@ -567,6 +567,9 @@ impl RpcDataFetcher {
         // Fetch the new authority set specified in the epoch end block.
         let new_authorities = self.get_authorities(epoch_end_block).await;
 
+        let num_authorities = new_authorities.len();
+        let encoded_num_authorities_len = Compact(num_authorities as u32).encode().len();
+
         let mut position = 0;
         let number_encoded = epoch_end_block.encode();
         // Skip past parent_hash, number, state_root, extrinsics_root.
@@ -583,8 +586,11 @@ impl RpcDataFetcher {
                     // Denotes that this is a `ScheduledChange` log.
                     assert_eq!(value[0], 1);
 
-                    // TODO: What is value[1..3]?
-                    let mut cursor = 3;
+                    // The bytes after the prefix are the compact encoded number of authorities.
+                    // Follows the encoding format: https://docs.substrate.io/reference/scale-codec/#fn-1
+                    // If the number of authorities is <=63, the compact encoding is 1 byte.
+                    // If the number of authorities is >63 & < 2^14, the compact encoding is 2 bytes.
+                    let mut cursor = 1 + encoded_num_authorities_len;
                     let authorities_bytes = &value[cursor..];
 
                     for (i, authority_chunk) in
@@ -641,8 +647,10 @@ impl RpcDataFetcher {
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
-        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown, 1 scheduled change, 2 unknown.
-        let prefix_length = 11;
+        // TODO: Find out what the unknown bytes are.
+        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown,
+        // 1 scheduled change, variable length compact encoding of the number of authorities.
+        let prefix_length = 9 + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
         let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 
@@ -860,5 +868,21 @@ mod tests {
             .find_justifications_in_range(start_block, end_block)
             .await;
         println!("keys {:?}", blocks);
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_header_rotate() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+        let epoch_end_block = data_fetcher.last_justified_block(616).await;
+        println!("epoch_end_block {:?}", epoch_end_block);
+
+        // let num_authorities: u32 = 10;
+        // let encoded_byte = Compact(num_authorities).encode();
+        // println!("encoded_byte {:?}", encoded_byte);
+
+        let header_rotate_data = data_fetcher
+            .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
+            .await;
     }
 }

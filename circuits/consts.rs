@@ -26,8 +26,12 @@ pub const WEIGHT_LENGTH: usize = 8;
 // Length of the delay in an Avail header.
 pub const DELAY_LENGTH: usize = 4;
 
-// The prefix length before the encoded authority set.
-pub const PREFIX_LENGTH: usize = 11;
+// The minimum length of the prefix before the encoded new authority set.
+pub const MIN_PREFIX_LENGTH: usize = 9;
+
+// The maximum length of the prefix before the encoded new authority set. This is the maximum length
+// including the encoded new authority set length.
+pub const MAX_PREFIX_LENGTH: usize = 14;
 
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.

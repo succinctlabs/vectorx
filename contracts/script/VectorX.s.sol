@@ -12,10 +12,10 @@ contract DeployScript is Script {
     function run() public {
         vm.startBroadcast();
         bytes32 stepFunctionId = bytes32(
-            hex"115391b0244a219c24ffce0f63e93b0567e438df676db225b22f4dc878591461"
+            hex"4a8c380126819eaa2c702b0eedcecaf0e744e53c329256ffcfcb136debe3b47a"
         );
         bytes32 rotateFunctionId = bytes32(
-            hex"bf47fb7f568f5c3afdbe50254af5b2466a7f9c9defdf2d81ef06bf2324d60c8b"
+            hex"fb9ac718be3fa5610bc96889915a3f8afdfd49a61c119279ee144ba5e90bf007"
         );
 
         // Use the below to interact with an already deployed ZK light client
@@ -32,12 +32,12 @@ contract DeployScript is Script {
             hex"ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
         );
 
-        lightClient.setGenesisInfo(
-            trustedBlock,
-            header,
-            authoritySetId,
-            authoritySetHash
-        );
+        // lightClient.setGenesisInfo(
+        //     trustedBlock,
+        //     header,
+        //     authoritySetId,
+        //     authoritySetHash
+        // );
 
         lightClient.updateHeaderRangeFunctionId(stepFunctionId);
         lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);

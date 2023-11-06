@@ -35,26 +35,25 @@ type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
 type HeaderRangeCalldataTuple = sol! { tuple(uint32, uint64, uint32) };
 type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint32) };
 
-// const VECTOR_CONFIG: VectorConfig = VectorConfig {
-//     address: "0x0000000",
-//     chain_id: 5,
-//     step_function_id: "0x98a2381f5efeaf7c3e39d749d6f676df1432487578f393161cebd2b03934f43b",
-//     rotate_function_id: "0xb3f1415062a3543bb1c48d9d6a49f9e005fe415d347a5ba63e40bb1235acfd86",
-// };
-
 fn get_config() -> VectorConfig {
-    let step_function_id = H256::from_slice(
-        &hex::decode("4a8c380126819eaa2c702b0eedcecaf0e744e53c329256ffcfcb136debe3b47a").unwrap(),
-    );
-    let rotate_function_id = H256::from_slice(
-        &hex::decode("fb9ac718be3fa5610bc96889915a3f8afdfd49a61c119279ee144ba5e90bf007").unwrap(),
-    );
     let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
     let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
     // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
     let address = contract_address
         .parse::<Address>()
         .expect("invalid address");
+
+    // Load the function IDs.
+    let step_id_env = env::var("STEP_FUNCTION_ID").expect("STEP_FUNCTION_ID must be set");
+    let step_function_id = H256::from_slice(
+        &hex::decode(step_id_env.strip_prefix("0x").unwrap_or(&step_id_env))
+            .expect("invalid hex for step_function_id, expected 0x prefix"),
+    );
+    let rotate_id_env = env::var("ROTATE_FUNCTION_ID").expect("ROTATE_FUNCTION_ID must be set");
+    let rotate_function_id = H256::from_slice(
+        &hex::decode(rotate_id_env.strip_prefix("0x").unwrap_or(&rotate_id_env))
+            .expect("invalid hex for rotate_function_id, expected 0x prefix"),
+    );
 
     VectorConfig {
         address,

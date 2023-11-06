@@ -157,7 +157,7 @@ async fn request_next_authority_set_id(
 
     info!(
         "Current authority set hash: {:?}",
-        current_authority_set_hash
+        hex::encode(current_authority_set_hash)
     );
 
     let input = NextAuthoritySetInputTuple::abi_encode_packed(&(

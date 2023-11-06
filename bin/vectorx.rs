@@ -44,12 +44,13 @@ type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint
 
 fn get_config() -> VectorConfig {
     let step_function_id = H256::from_slice(
-        &hex::decode("115391b0244a219c24ffce0f63e93b0567e438df676db225b22f4dc878591461").unwrap(),
+        &hex::decode("4a8c380126819eaa2c702b0eedcecaf0e744e53c329256ffcfcb136debe3b47a").unwrap(),
     );
     let rotate_function_id = H256::from_slice(
-        &hex::decode("bf47fb7f568f5c3afdbe50254af5b2466a7f9c9defdf2d81ef06bf2324d60c8b").unwrap(),
+        &hex::decode("fb9ac718be3fa5610bc96889915a3f8afdfd49a61c119279ee144ba5e90bf007").unwrap(),
     );
     let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
+    let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
     // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
     let address = contract_address
         .parse::<Address>()
@@ -57,7 +58,7 @@ fn get_config() -> VectorConfig {
 
     VectorConfig {
         address,
-        chain_id: 5,
+        chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
         step_function_id,
         rotate_function_id,
     }
@@ -157,7 +158,7 @@ async fn request_next_authority_set_id(
 
     info!(
         "Current authority set hash: {:?}",
-        current_authority_set_hash
+        hex::encode(current_authority_set_hash)
     );
 
     let input = NextAuthoritySetInputTuple::abi_encode_packed(&(
@@ -187,19 +188,25 @@ async fn main() {
 
     info!("Starting VectorX offchain worker");
 
-    const LOOP_DELAY: u64 = 30;
+    // Sleep for N minutes.
+    const LOOP_DELAY: u64 = 40;
 
     let config: VectorConfig = get_config();
 
-    let mut fetcher = RpcDataFetcher::new().await;
-
     let lc_rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
-    let provider = Provider::<Http>::try_from(lc_rpc_url).expect("could not connect to client");
-    let vectorx = VectorX::new(config.address, provider.into());
 
-    // Source STEP_RANGE_MAX from the contract.
-    let step_range_max = vectorx.max_header_range().await.unwrap();
     loop {
+        // Initialize data fetcher (re-initialize every loop to avoid connection reset).
+        let mut fetcher = RpcDataFetcher::new().await;
+
+        // Initialize the VectorX contract.
+        let provider =
+            Provider::<Http>::try_from(lc_rpc_url.clone()).expect("could not connect to client");
+        let vectorx = VectorX::new(config.address, provider.into());
+
+        // Source STEP_RANGE_MAX from the contract.
+        let step_range_max = vectorx.max_header_range().await.unwrap();
+
         let head = fetcher.get_head().await;
         let head_block = head.number;
         let head_authority_set_id = fetcher.get_authority_set_id(head_block - 1).await;

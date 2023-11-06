@@ -21,7 +21,7 @@ contract VectorX is IVectorX {
     bytes32 public rotateFunctionId;
 
     /// @notice The maximum header range that can be requested.
-    uint32 public constant MAX_HEADER_RANGE = 128;
+    uint32 public constant MAX_HEADER_RANGE = 256;
 
     /// @notice Maps block height to the header hash of the block.
     mapping(uint32 => bytes32) public blockHeightToHeaderHash;
@@ -157,7 +157,9 @@ contract VectorX is IVectorX {
 
         bytes memory input = abi.encodePacked(
             _trustedBlock,
+            trustedHeader,
             _authoritySetId,
+            authoritySetHash,
             _targetBlock
         );
 

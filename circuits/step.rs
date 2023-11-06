@@ -211,6 +211,60 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
+    fn test_step_small() {
+        // Only 10 authorities in the authority set for this authority set id.
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const NUM_AUTHORITIES: usize = 10;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const NUM_HEADERS: usize = 64;
+        let mut builder = DefaultBuilder::new();
+
+        log::debug!("Defining circuit");
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+
+        log::debug!("Building circuit");
+        let circuit = builder.build();
+        log::debug!("Done building circuit");
+
+        let mut input = circuit.input();
+
+        let trusted_header: [u8; 32] =
+            hex::decode("ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let trusted_block = 645570u32;
+        let target_block = 645610u32; // mimics test_step_small
+        let authority_set_id = 616u64;
+        let authority_set_hash: [u8; 32] =
+            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
+                .unwrap()
+                .try_into()
+                .unwrap();
+
+        input.evm_write::<U32Variable>(trusted_block);
+        input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
+        input.evm_write::<U64Variable>(authority_set_id);
+        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.evm_write::<U32Variable>(target_block);
+
+        log::debug!("Generating proof");
+        let (proof, mut output) = circuit.prove(&input);
+        log::debug!("Done generating proof");
+
+        circuit.verify(&proof, &input, &output);
+        let target_header = output.evm_read::<Bytes32Variable>();
+        let state_root_merkle_root = output.evm_read::<Bytes32Variable>();
+        let data_root_merkle_root = output.evm_read::<Bytes32Variable>();
+        println!("target_header {:?}", target_header);
+        println!("state root merkle root {:?}", state_root_merkle_root);
+        println!("data root merkle root {:?}", data_root_merkle_root);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
     fn test_step() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();

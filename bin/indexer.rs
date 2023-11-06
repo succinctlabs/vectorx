@@ -102,8 +102,6 @@ pub async fn main() {
         BLOCK_SAVE_INTERVAL
     );
 
-    let fetcher = RpcDataFetcher::new().await;
-
     let url: &str = "wss://kate.avail.tools:443/ws";
 
     let c: Client = build_client(url, false).await.unwrap();
@@ -122,6 +120,9 @@ pub async fn main() {
 
     // Wait for new justification.
     while let Some(Ok(justification)) = sub.next().await {
+        // Initialize data fetcher (re-initialize every new event to avoid connection reset).
+        let fetcher = RpcDataFetcher::new().await;
+
         if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
             continue;
         }

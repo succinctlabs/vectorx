@@ -188,7 +188,8 @@ async fn main() {
 
     info!("Starting VectorX offchain worker");
 
-    const LOOP_DELAY: u64 = 30;
+    // Sleep for N minutes.
+    const LOOP_DELAY: u64 = 40;
 
     let config: VectorConfig = get_config();
 

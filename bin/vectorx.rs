@@ -44,12 +44,13 @@ type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint
 
 fn get_config() -> VectorConfig {
     let step_function_id = H256::from_slice(
-        &hex::decode("3503f80d2000a387d3f19ba5ae616ee31f8455e6d13c835ee4c4404db3bb449e").unwrap(),
+        &hex::decode("4a8c380126819eaa2c702b0eedcecaf0e744e53c329256ffcfcb136debe3b47a").unwrap(),
     );
     let rotate_function_id = H256::from_slice(
-        &hex::decode("d78926e1a401e80cff31715d3dbad782ff8e7cdc83fa436f6e03e3e07cd7a7b4").unwrap(),
+        &hex::decode("fb9ac718be3fa5610bc96889915a3f8afdfd49a61c119279ee144ba5e90bf007").unwrap(),
     );
     let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
+    let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
     // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
     let address = contract_address
         .parse::<Address>()
@@ -57,7 +58,7 @@ fn get_config() -> VectorConfig {
 
     VectorConfig {
         address,
-        chain_id: 5,
+        chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
         step_function_id,
         rotate_function_id,
     }
@@ -157,7 +158,7 @@ async fn request_next_authority_set_id(
 
     info!(
         "Current authority set hash: {:?}",
-        current_authority_set_hash
+        hex::encode(current_authority_set_hash)
     );
 
     let input = NextAuthoritySetInputTuple::abi_encode_packed(&(
@@ -187,20 +188,25 @@ async fn main() {
 
     info!("Starting VectorX offchain worker");
 
-    const STEP_THRESHOLD: usize = 100;
-    const LOOP_DELAY: u64 = 30;
+    // Sleep for N minutes.
+    const LOOP_DELAY: u64 = 40;
 
     let config: VectorConfig = get_config();
 
-    let fetcher = RpcDataFetcher::new().await;
-
     let lc_rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
-    let provider = Provider::<Http>::try_from(lc_rpc_url).expect("could not connect to client");
-    let vectorx = VectorX::new(config.address, provider.into());
 
-    // Source STEP_RANGE_MAX from the contract.
-    let step_range_max = vectorx.max_header_range().await.unwrap();
     loop {
+        // Initialize data fetcher (re-initialize every loop to avoid connection reset).
+        let mut fetcher = RpcDataFetcher::new().await;
+
+        // Initialize the VectorX contract.
+        let provider =
+            Provider::<Http>::try_from(lc_rpc_url.clone()).expect("could not connect to client");
+        let vectorx = VectorX::new(config.address, provider.into());
+
+        // Source STEP_RANGE_MAX from the contract.
+        let step_range_max = vectorx.max_header_range().await.unwrap();
+
         let head = fetcher.get_head().await;
         let head_block = head.number;
         let head_authority_set_id = fetcher.get_authority_set_id(head_block - 1).await;
@@ -212,14 +218,22 @@ async fn main() {
         // The logic for keeping the Vector LC up to date is as follows:
         //      1. Fetch the current latest_block in the contract and the head of the chain.
         //      2. If current_authority_set_id == head_authority_set_id, then no rotate is needed.
-        //          a) Step if (head - current_block) > STEP_THRESHOLD.
         //      3. If current_authority_set_id < head_authority_set_id, request next authority set.
         //          a) Step if current_block != the last block justified by current authority set.
 
-        if current_authority_set_id == head_authority_set_id
-            && head_block - current_block > STEP_THRESHOLD as u32
-        {
-            let block_to_step_to = min(head_block, current_block + step_range_max);
+        if current_authority_set_id == head_authority_set_id {
+            let mut block_to_step_to = min(head_block, current_block + step_range_max);
+
+            // If block_to_step_to is not the last justified block, use the Redis cache.
+            if fetcher.last_justified_block(current_authority_set_id).await != block_to_step_to {
+                let valid_blocks = fetcher
+                    .find_justifications_in_range(current_block, block_to_step_to)
+                    .await;
+                if valid_blocks.is_empty() {
+                    continue;
+                }
+                block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+            }
 
             info!("Stepping to block {:?}.", block_to_step_to);
 
@@ -269,7 +283,19 @@ async fn main() {
             if current_block < last_justified_block {
                 // The block to step to is the minimum of the last justified block and the
                 // head block + STEP_RANGE_MAX.
-                let block_to_step_to = min(last_justified_block, current_block + step_range_max);
+                let mut block_to_step_to =
+                    min(last_justified_block, current_block + step_range_max);
+
+                // If block_to_step_to is not the last justified block, use the Redis cache.
+                if last_justified_block != block_to_step_to {
+                    let valid_blocks = fetcher
+                        .find_justifications_in_range(current_block, block_to_step_to)
+                        .await;
+                    if valid_blocks.is_empty() {
+                        continue;
+                    }
+                    block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+                }
 
                 info!("Stepping to block {:?}.", block_to_step_to);
 
@@ -289,10 +315,21 @@ async fn main() {
                 let next_last_justified_block =
                     fetcher.last_justified_block(next_authority_set_id).await;
 
-                let block_to_step_to = min(
+                let mut block_to_step_to = min(
                     next_last_justified_block,
                     last_justified_block + step_range_max,
                 );
+
+                // If block_to_step_to is not the last justified block, use the Redis cache.
+                if next_last_justified_block != block_to_step_to {
+                    let valid_blocks = fetcher
+                        .find_justifications_in_range(current_block, block_to_step_to)
+                        .await;
+                    if valid_blocks.is_empty() {
+                        continue;
+                    }
+                    block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+                }
 
                 info!("Stepping to block {:?}.", block_to_step_to);
                 // Step to block_to_step_to.

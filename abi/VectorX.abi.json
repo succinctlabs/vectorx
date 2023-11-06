@@ -401,6 +401,19 @@
     {
         "inputs": [
             {
+                "internalType": "bytes32",
+                "name": "_functionId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "updateAddNextAuthoritySetFunctionId",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
                 "internalType": "address",
                 "name": "_gateway",
                 "type": "address"
@@ -420,19 +433,6 @@
             }
         ],
         "name": "updateHeaderRangeFunctionId",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "internalType": "bytes32",
-                "name": "_functionId",
-                "type": "bytes32"
-            }
-        ],
-        "name": "updateRotateFunctionId",
         "outputs": [],
         "stateMutability": "nonpayable",
         "type": "function"

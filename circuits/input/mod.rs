@@ -2,30 +2,100 @@ pub mod types;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::env;
 
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
 use avail_subxt::rpc::RpcParams;
 use avail_subxt::{api, build_client};
-use codec::{Decode, Encode};
+use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
-use hex::encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
+use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::Digest;
 
 use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
+    StoredJustificationData,
 };
-use crate::consts::{DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH};
+use crate::consts::{
+    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
+};
 use crate::input::types::SimpleJustificationData;
 use crate::vars::{AffinePoint, Curve};
 
-pub struct RpcDataFetcher {
-    pub client: Client,
-    pub save: Option<String>,
+pub struct RedisClient {
+    pub redis: redis::Client,
+}
+
+impl RedisClient {
+    pub async fn new() -> Self {
+        dotenv::dotenv().ok();
+
+        let redis_url = env::var("REDIS_URL").expect("REDIS_URL must be set");
+        let redis = redis::Client::open(redis_url).expect("Redis client not created");
+        RedisClient { redis }
+    }
+
+    /// Stores justification data in Redis. Errors if setting the key fails.
+    pub async fn add_justification(&mut self, justification: StoredJustificationData) {
+        let mut con = self
+            .redis
+            .get_async_connection()
+            .await
+            .expect("Failed to create Redis connection");
+
+        // Justification is stored as a JSON object.
+        let _: () = con
+            .json_set(justification.block_number, "$", &justification)
+            .await
+            .expect("Failed to set key");
+
+        // Add the block number to a sorted set, so we can query for all blocks with justifications.
+        let _: () = con
+            .zadd(
+                "blocks",
+                justification.block_number,
+                justification.block_number,
+            )
+            .await
+            .expect("Failed to add key to sorted set");
+
+        debug!(
+            "Added justification for block {:?}",
+            justification.block_number
+        )
+    }
+
+    /// Gets justification data from Redis. Errors if getting the key fails.
+    pub async fn get_justification(
+        &mut self,
+        block_number: u32,
+    ) -> Result<StoredJustificationData, ()> {
+        // Result is always stored as serialized bytes: https://github.com/redis-rs/redis-rs#json-support.
+        let mut con = self
+            .redis
+            .get_async_connection()
+            .await
+            .expect("Failed to create Redis connection");
+
+        let serialized_justification: Vec<u8> = con
+            .json_get(block_number, "$")
+            .await
+            .expect("Failed to get key");
+
+        match serde_json::from_slice::<Vec<StoredJustificationData>>(&serialized_justification) {
+            Ok(justification) => Ok(justification[0].clone()),
+            Err(e) => {
+                eprintln!("Failed to deserialize justification: {}", e);
+                // Handle the error appropriately, maybe return an Err if your function can return a Result
+                Err(())
+            }
+        }
+    }
 }
 
 /// This function is useful for verifying that a Ed25519 signature is valid, it will panic if the signature is not valid
@@ -38,7 +108,7 @@ pub fn verify_signature(pubkey_bytes: &[u8], signed_message: &[u8], signature: &
 }
 
 // Compute the chained hash of the authority set.
-pub fn compute_authority_set_hash(authorities: Vec<Vec<u8>>) -> Vec<u8> {
+pub fn compute_authority_set_hash(authorities: &[Vec<u8>]) -> Vec<u8> {
     let mut hash_so_far = Vec::new();
     for i in 0..authorities.len() {
         let authority = authorities[i].clone();
@@ -80,12 +150,68 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
     )
 }
 
+pub struct RpcDataFetcher {
+    pub client: Client,
+    pub redis_client: RedisClient,
+    pub save: Option<String>,
+}
+
 impl RpcDataFetcher {
     pub async fn new() -> Self {
         // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
         let url = "wss://kate.avail.tools:443/ws".to_string();
         let client = build_client(url.as_str(), false).await.unwrap();
-        RpcDataFetcher { client, save: None }
+        let redis_client = RedisClient::new().await;
+        RpcDataFetcher {
+            client,
+            redis_client,
+            save: None,
+        }
+    }
+
+    /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch
+    /// end blocks within the given range of block numbers.
+    pub async fn find_justifications_in_range(
+        &mut self,
+        start_block: u32,
+        end_block: u32,
+    ) -> Vec<u32> {
+        // Query Redis for all keys in the range [start_block, end_block].
+        let mut con = self
+            .redis_client
+            .redis
+            .get_async_connection()
+            .await
+            .expect("Failed to create Redis connection");
+
+        let redis_blocks: Vec<u32> = con
+            .zrangebyscore("blocks", start_block, end_block)
+            .await
+            .expect("Failed to get keys");
+
+        // Query the chain for all era end blocks in the range [start_block, end_block].
+        let start_era = self.get_authority_set_id(start_block - 1).await;
+
+        let mut curr_block = start_block;
+        let mut curr_era = start_era;
+        let mut epoch_end_blocks = Vec::new();
+        while curr_block < end_block {
+            let epoch_end_block = self.last_justified_block(curr_era).await;
+            if epoch_end_block <= end_block {
+                epoch_end_blocks.push(epoch_end_block);
+                curr_block = epoch_end_block;
+                curr_era += 1;
+            } else {
+                break;
+            }
+        }
+
+        // Combine the Redis blocks and epoch end blocks.
+        let mut all_blocks = redis_blocks;
+        all_blocks.extend(epoch_end_blocks);
+        all_blocks.sort();
+
+        all_blocks
     }
 
     // This function returns the last block justified by target_authority_set_id. This block
@@ -174,10 +300,7 @@ impl RpcDataFetcher {
 
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
-    pub async fn get_authorities(
-        &self,
-        block_number: u32,
-    ) -> (Vec<AffinePoint<Curve>>, Vec<Vec<u8>>) {
+    pub async fn get_authorities(&self, block_number: u32) -> Vec<Vec<u8>> {
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities_bytes = self
@@ -227,7 +350,7 @@ impl RpcDataFetcher {
             }
         }
 
-        (authorities, authories_pubkey_bytes)
+        authories_pubkey_bytes
     }
 
     // Computes the authority_set_hash for a given block number.
@@ -236,8 +359,8 @@ impl RpcDataFetcher {
         let authorities = self.get_authorities(block_number).await;
 
         let mut hash_so_far = Vec::new();
-        for i in 0..authorities.1.len() {
-            let authority = authorities.1[i].clone();
+        for i in 0..authorities.len() {
+            let authority = authorities[i].clone();
             let mut hasher = sha2::Sha256::new();
             hasher.update(hash_so_far);
             hasher.update(authority);
@@ -246,119 +369,171 @@ impl RpcDataFetcher {
         H256::from_slice(&hash_so_far)
     }
 
-    // This function takes in a block_number as input, fetches the authority set for that block and the finality proof
-    // for that block. If the finality proof is a simple justification, it will return a SimpleJustificationData
-    // containing all the encoded precommit that the authorities sign, the validator signatures, and the authority pubkeys.
-    pub async fn get_simple_justification<const VALIDATOR_SET_SIZE_MAX: usize>(
-        &self,
+    async fn get_justification_data<const VALIDATOR_SET_SIZE_MAX: usize>(
+        &mut self,
         block_number: u32,
-    ) -> SimpleJustificationData {
+    ) -> (Vec<Vec<u8>>, Vec<Vec<u8>>, Vec<bool>, Vec<u8>, u64, u64) {
         // Note: grandpa_proveFinality will serve the proof for the last justified block in an epoch.
         // This means that get_simple_justification should fail for any block that is not the last
         // justified block in an epoch.
         let curr_authority_set_id = self.get_authority_set_id(block_number).await;
         let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
-        if curr_authority_set_id != prev_authority_set_id + 1 {
-            panic!("Block {:?} is not an epoch end block", block_number);
-        }
 
-        let mut params = RpcParams::new();
-        let _ = params.push(block_number);
-        let encoded_finality_proof = self
-            .client
-            .rpc()
-            .request::<EncodedFinalityProof>("grandpa_proveFinality", params)
-            .await
-            .unwrap();
+        // If epoch end block, use grandpa_proveFinality to get the justification.
+        if curr_authority_set_id == prev_authority_set_id + 1 {
+            let mut params = RpcParams::new();
+            let _ = params.push(block_number);
 
-        let hex_string = encode(&encoded_finality_proof.0 .0);
-        // debug!(
-        //     "returned justification for block {:?} has bytes 0x{:?}",
-        //     block_number, hex_string
-        // );
+            let encoded_finality_proof = self
+                .client
+                .rpc()
+                .request::<EncodedFinalityProof>("grandpa_proveFinality", params)
+                .await
+                .unwrap();
 
-        let finality_proof: FinalityProof =
-            Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
-        let justification: GrandpaJustification =
-            Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
+            let finality_proof: FinalityProof =
+                Decode::decode(&mut encoded_finality_proof.0 .0.as_slice()).unwrap();
+            let justification: GrandpaJustification =
+                Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
 
-        // The authority set id for the current block is defined in the previous block.
-        let authority_set_id = self.get_authority_set_id(block_number - 1).await;
+            // The authority set id for the current block is defined in the previous block.
+            let authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
-        // The authorities for the current block are defined in the previous block.
-        let (authorities, authorities_pubkey_bytes) = self.get_authorities(block_number - 1).await;
+            // The authorities for the current block are defined in the previous block.
+            let authorities_pubkey_bytes = self.get_authorities(block_number - 1).await;
 
-        if authorities.len() > VALIDATOR_SET_SIZE_MAX {
-            panic!("Too many authorities");
-        }
-
-        // Form a message which is signed in the justification.
-        let signed_message = Encode::encode(&(
-            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
-            &justification.round,
-            &authority_set_id,
-        ));
-        // TODO: verify above that signed_message = block_hash || block_number || round || set_id
-
-        let mut pubkey_bytes_to_signature = HashMap::new();
-
-        // Verify all the signatures of the justification.
-        // TODO: panic if the justification is not not a simple justification
-        justification
-            .commit
-            .precommits
-            .iter()
-            .for_each(|precommit| {
-                let pubkey = precommit.clone().id;
-                let signature = precommit.clone().signature.0;
-                let pubkey_bytes = pubkey.0.to_vec();
-
-                verify_signature(&pubkey_bytes, &signed_message, &signature);
-                pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
-            });
-
-        let mut validator_signed = Vec::new();
-        let mut padded_signatures = Vec::new();
-        let mut padded_pubkeys = Vec::new();
-        let mut voting_weight = 0;
-        for (i, authority) in authorities.iter().enumerate() {
-            let pubkey_bytes = authorities_pubkey_bytes[i].clone();
-            let signature = pubkey_bytes_to_signature.get(&pubkey_bytes);
-
-            if let Some(valid_signature) = signature {
-                verify_signature(&pubkey_bytes, &signed_message, valid_signature);
-                validator_signed.push(true);
-                padded_pubkeys.push(*authority);
-                padded_signatures.push(*valid_signature);
-                voting_weight += 1;
-            } else {
-                validator_signed.push(false);
-                padded_pubkeys.push(*authority);
-                // Push a dummy signature, since this validator did not sign.
-                padded_signatures.push(DUMMY_SIGNATURE);
+            if authorities_pubkey_bytes.len() > VALIDATOR_SET_SIZE_MAX {
+                panic!("Too many authorities");
             }
-        }
 
-        if voting_weight * 3 < authorities.len() * 2 {
+            // Form a message which is signed in the justification.
+            let signed_message = Encode::encode(&(
+                &SignerMessage::PrecommitMessage(
+                    justification.commit.precommits[0].clone().precommit,
+                ),
+                &justification.round,
+                &authority_set_id,
+            ));
+            // TODO: verify above that signed_message = block_hash || block_number || round || set_id
+
+            let mut pubkey_bytes_to_signature = HashMap::new();
+
+            // Verify all the signatures of the justification.
+            // TODO: panic if the justification is not not a simple justification
+            justification
+                .commit
+                .precommits
+                .iter()
+                .for_each(|precommit| {
+                    let pubkey = precommit.clone().id;
+                    let signature = precommit.clone().signature.0;
+                    let pubkey_bytes = pubkey.0.to_vec();
+
+                    verify_signature(&pubkey_bytes, &signed_message, &signature);
+                    pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
+                });
+
+            let mut validator_signed = Vec::new();
+            let mut padded_signatures = Vec::new();
+            let mut padded_pubkeys = Vec::new();
+            let mut voting_weight = 0;
+            for pubkey_bytes in authorities_pubkey_bytes.iter() {
+                let signature = pubkey_bytes_to_signature.get(pubkey_bytes);
+                // let authority = AffinePoint::<Curve>::new_from_compressed_point(pubkey_bytes);
+
+                if let Some(valid_signature) = signature {
+                    verify_signature(pubkey_bytes, &signed_message, valid_signature);
+                    validator_signed.push(true);
+                    padded_pubkeys.push(pubkey_bytes.clone());
+                    padded_signatures.push((*valid_signature).to_vec());
+                    voting_weight += 1;
+                } else {
+                    validator_signed.push(false);
+                    padded_pubkeys.push(pubkey_bytes.clone());
+                    // Push a dummy signature, since this validator did not sign.
+                    padded_signatures.push(DUMMY_SIGNATURE.to_vec());
+                }
+            }
+            (
+                padded_pubkeys,
+                padded_signatures,
+                validator_signed,
+                signed_message,
+                voting_weight,
+                authorities_pubkey_bytes.len() as u64,
+            )
+        } else {
+            let stored_justification_data: StoredJustificationData = self
+                .redis_client
+                .get_justification(block_number)
+                .await
+                .expect("Failed to get justification from Redis");
+
+            let mut voting_weight = 0;
+            for validator_signed in stored_justification_data.validator_signed.iter() {
+                if *validator_signed {
+                    voting_weight += 1;
+                }
+            }
+            (
+                stored_justification_data.pubkeys,
+                stored_justification_data.signatures,
+                stored_justification_data.validator_signed,
+                stored_justification_data.signed_message,
+                voting_weight,
+                stored_justification_data.num_authorities as u64,
+            )
+        }
+    }
+
+    // This function takes in a block_number as input, fetches the authority set for that block and the finality proof
+    // for that block. If the finality proof is a simple justification, it will return a SimpleJustificationData
+    // containing all the encoded precommit that the authorities sign, the validator signatures, and the authority pubkeys.
+    pub async fn get_simple_justification<const VALIDATOR_SET_SIZE_MAX: usize>(
+        &mut self,
+        block_number: u32,
+    ) -> SimpleJustificationData {
+        let (
+            pubkeys,
+            signatures,
+            mut validator_signed,
+            signed_message,
+            voting_weight,
+            num_authorities,
+        ) = self
+            .get_justification_data::<VALIDATOR_SET_SIZE_MAX>(block_number)
+            .await;
+
+        let current_authority_set_id = self.get_authority_set_id(block_number - 1).await;
+        let current_authority_set_hash = compute_authority_set_hash(&pubkeys);
+
+        if voting_weight * 3 < num_authorities * 2 {
             panic!("Not enough voting power");
         }
 
-        for _ in authorities.len()..VALIDATOR_SET_SIZE_MAX {
+        let mut padded_pubkeys = Vec::new();
+        let mut padded_signatures = Vec::new();
+        let mut padded_validator_signed = Vec::new();
+        for i in 0..num_authorities as usize {
+            padded_pubkeys.push(AffinePoint::new_from_compressed_point(&pubkeys[i]));
+            padded_signatures.push(signatures[i].clone().as_slice().try_into().unwrap());
+            padded_validator_signed.push(validator_signed[i]);
+        }
+
+        for _ in num_authorities as usize..VALIDATOR_SET_SIZE_MAX {
             validator_signed.push(false);
             // Push a dummy pubkey and signature, to pad the array to VALIDATOR_SET_SIZE_MAX.
             padded_pubkeys.push(AffinePoint::new_from_compressed_point(&DUMMY_PUBLIC_KEY));
             padded_signatures.push(DUMMY_SIGNATURE);
         }
 
-        let current_authority_set_hash = compute_authority_set_hash(authorities_pubkey_bytes);
-
         SimpleJustificationData {
-            authority_set_id,
+            authority_set_id: current_authority_set_id,
             signed_message,
             validator_signed,
             pubkeys: padded_pubkeys,
             signatures: padded_signatures,
-            num_authorities: authorities.len(),
+            num_authorities: num_authorities as usize,
             current_authority_set_hash,
         }
     }
@@ -394,6 +569,9 @@ impl RpcDataFetcher {
         // Fetch the new authority set specified in the epoch end block.
         let new_authorities = self.get_authorities(epoch_end_block).await;
 
+        let num_authorities = new_authorities.len();
+        let encoded_num_authorities_len = Compact(num_authorities as u32).encode().len();
+
         let mut position = 0;
         let number_encoded = epoch_end_block.encode();
         // Skip past parent_hash, number, state_root, extrinsics_root.
@@ -410,8 +588,11 @@ impl RpcDataFetcher {
                     // Denotes that this is a `ScheduledChange` log.
                     assert_eq!(value[0], 1);
 
-                    // TODO: What is value[1..3]?
-                    let mut cursor = 3;
+                    // The bytes after the prefix are the compact encoded number of authorities.
+                    // Follows the encoding format: https://docs.substrate.io/reference/scale-codec/#fn-1
+                    // If the number of authorities is <=63, the compact encoding is 1 byte.
+                    // If the number of authorities is >63 & < 2^14, the compact encoding is 2 bytes.
+                    let mut cursor = 1 + encoded_num_authorities_len;
                     let authorities_bytes = &value[cursor..];
 
                     for (i, authority_chunk) in
@@ -421,7 +602,7 @@ impl RpcDataFetcher {
                         let weight = &authority_chunk[PUBKEY_LENGTH..];
 
                         // Assert the pubkey in the encoded log is correct.
-                        assert_eq!(*pubkey, new_authorities.1[i]);
+                        assert_eq!(*pubkey, new_authorities[i]);
 
                         // Assert weight's LE representation == 1
                         for j in 0..WEIGHT_LENGTH {
@@ -458,25 +639,27 @@ impl RpcDataFetcher {
             );
         }
 
-        let new_authority_set_hash = compute_authority_set_hash(new_authorities.1.clone());
+        let new_authority_set_hash = compute_authority_set_hash(&new_authorities);
         let mut padded_pubkeys = Vec::new();
-        for i in 0..new_authorities.1.len() {
-            padded_pubkeys.push(H256::from_slice(&new_authorities.1[i].clone()));
+        for i in 0..new_authorities.len() {
+            padded_pubkeys.push(H256::from_slice(&new_authorities[i].clone()));
         }
-        for _ in new_authorities.1.len()..VALIDATOR_SET_SIZE_MAX {
+        for _ in new_authorities.len()..VALIDATOR_SET_SIZE_MAX {
             // Pad the array with dummy pubkeys to VALIDATOR_SET_SIZE_MAX.
             padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
         }
 
-        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown, 1 scheduled change, 2 unknown.
-        let prefix_length = 11;
+        // TODO: Find out what the unknown bytes are.
+        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown,
+        // 1 scheduled change, variable length compact encoding of the number of authorities.
+        let prefix_length = BASE_PREFIX_LENGTH + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
-        let end_position = position + prefix_length + ((32 + 8) * new_authorities.1.len()) + 4;
+        let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 
         HeaderRotateData {
             header_bytes,
             header_size,
-            num_authorities: new_authorities.1.len(),
+            num_authorities: new_authorities.len(),
             start_position: position,
             end_position,
             new_authority_set_hash,
@@ -505,9 +688,16 @@ mod tests {
     async fn test_get_header_hash() {
         let fetcher = RpcDataFetcher::new().await;
 
-        let target_block = 215495;
+        let target_block = 645570;
         let header = fetcher.get_header(target_block).await;
+        let _ = fetcher.get_block_hash(target_block).await;
+
         println!("header hash {:?}", hex::encode(header.hash().0));
+
+        let id_1 = fetcher.get_authority_set_id(target_block - 1).await;
+        let authority_set_hash = fetcher.compute_authority_set_hash(target_block - 1).await;
+        println!("authority set id {:?}", id_1);
+        println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
     }
 
     #[tokio::test]
@@ -530,11 +720,11 @@ mod tests {
             // The next authority set is defined by the last block of the current epoch.
             let next_authorities = fetcher.get_authorities(epoch_end_block).await;
 
-            if curr_authorities.1.len() != next_authorities.1.len() {
+            if curr_authorities.len() != next_authorities.len() {
                 println!("genesis id {:?}", authority_set_id);
                 println!(
                     "genesis authority set hash {:?}",
-                    hex::encode(compute_authority_set_hash(curr_authorities.1))
+                    hex::encode(compute_authority_set_hash(&curr_authorities))
                 );
                 println!(
                     "genesis block (last block justified by genesis id) {:?}",
@@ -552,14 +742,23 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_simple_justification_change_authority_set() {
-        let fetcher = RpcDataFetcher::new().await;
+        let mut fetcher = RpcDataFetcher::new().await;
 
-        // This is an epoch end block where the authority set changes.
-        let genesis_epoch_end_block = 215367;
+        // This is an block in the middle of an era.
+        let block = 645570;
+
+        let authority_set_id = fetcher.get_authority_set_id(block - 1).await;
+        let authority_set_hash = fetcher.compute_authority_set_hash(block - 1).await;
+        let header = fetcher.get_header(block).await;
+        let header_hash = header.hash();
+
+        println!("authority_set_id {:?}", authority_set_id);
+        println!("authority_set_hash {:?}", hex::encode(authority_set_hash.0));
+        println!("header_hash {:?}", hex::encode(header_hash.0));
 
         const VALIDATOR_SET_SIZE_MAX: usize = 100;
         let _ = fetcher
-            .get_simple_justification::<VALIDATOR_SET_SIZE_MAX>(genesis_epoch_end_block)
+            .get_simple_justification::<VALIDATOR_SET_SIZE_MAX>(block)
             .await;
     }
 
@@ -613,11 +812,6 @@ mod tests {
 
         let new_authority_set_id = fetcher.get_authority_set_id(last_justified_block).await;
 
-        let curr_authorities = fetcher.get_authorities(last_justified_block - 1).await;
-        let new_authorities = fetcher.get_authorities(last_justified_block).await;
-
-        // assert_ne!(curr_authorities, new_authorities);
-
         println!(
             "last justified block from authority set {:?} is: {:?}",
             authority_set_id, last_justified_block
@@ -649,9 +843,36 @@ mod tests {
             &authority_set_id,
         ));
 
-        let (block_hash, block_number, _, final_authority_set_id) =
-            decode_precommit(signed_message.clone());
+        let (_, block_number, _, _) = decode_precommit(signed_message.clone());
 
         println!("block number {:?}", block_number);
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_query_redis_block_range() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+        let start_block = 640000;
+        let end_block = 650000;
+        let blocks = data_fetcher
+            .find_justifications_in_range(start_block, end_block)
+            .await;
+        println!("keys {:?}", blocks);
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_header_rotate() {
+        let data_fetcher = RpcDataFetcher::new().await;
+        let epoch_end_block = data_fetcher.last_justified_block(616).await;
+        println!("epoch_end_block {:?}", epoch_end_block);
+
+        // let num_authorities: u32 = 10;
+        // let encoded_byte = Compact(num_authorities).encode();
+        // println!("encoded_byte {:?}", encoded_byte);
+
+        let _ = data_fetcher
+            .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
+            .await;
     }
 }

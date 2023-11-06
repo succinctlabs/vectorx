@@ -18,6 +18,10 @@ path = "bin/rotate.rs"
 name = "vectorx"
 path = "bin/vectorx.rs"
 
+[[bin]]
+name = "indexer"
+path = "bin/indexer.rs"
+
 [features]
 ci = []
 
@@ -41,7 +45,14 @@ ethers = "2.0.10"
 sha256 = "1.4.0"
 primitive-types = "0.12.1"
 
-avail-subxt = { git = "https://github.com/availproject/avail.git" }
+redis = { version = "0.23.3", features = [
+    "tokio-native-tls-comp",
+    "json",
+    "tokio-comp",
+] }
+
+# TODO: Update to latest version/new pinned version with new testnet.
+avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "5d2595a" }
 sp-core = { version = "21.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",
@@ -52,6 +63,6 @@ sha2 = "0.10.8"
 dotenv = "0.15.0"
 alloy-sol-types = "0.4.2"
 alloy-primitives = "0.4.2"
-
+subxt = "0.29"
 [dev-dependencies]
 anyhow = "1.0.68"

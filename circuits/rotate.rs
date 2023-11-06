@@ -182,7 +182,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;
-    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, PREFIX_LENGTH, VALIDATOR_LENGTH};
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, VALIDATOR_LENGTH};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -193,8 +193,7 @@ mod tests {
         const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize =
-            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 
@@ -219,15 +218,59 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_rotate_1() {
+    fn test_rotate_small_authority_set() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const NUM_AUTHORITIES: usize = 16;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const MAX_HEADER_CHUNK_SIZE: usize = 100;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+
+        let mut builder = DefaultBuilder::new();
+
+        log::debug!("Defining circuit");
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
+            &mut builder,
+        );
+
+        log::debug!("Building circuit");
+        let circuit = builder.build();
+        log::debug!("Done building circuit");
+
+        let mut input = circuit.input();
+        let authority_set_id = 616u64;
+        // TODO: Get authority set hash from rotate inputs, or a similar function.
+        let authority_set_hash: [u8; 32] =
+            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
+                .unwrap()
+                .try_into()
+                .unwrap();
+        let epoch_end_block_number = 645610;
+
+        input.evm_write::<U64Variable>(authority_set_id);
+        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.evm_write::<U32Variable>(epoch_end_block_number);
+
+        log::debug!("Generating proof");
+        let (proof, mut output) = circuit.prove(&input);
+        log::debug!("Done generating proof");
+
+        circuit.verify(&proof, &input, &output);
+        let new_authority_set_hash = output.evm_read::<Bytes32Variable>();
+        println!("new_authority_set_hash {:?}", new_authority_set_hash);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_rotate_large_authority_set() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize =
-            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

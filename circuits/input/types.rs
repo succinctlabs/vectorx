@@ -17,6 +17,20 @@ pub struct HeaderRotateData {
     pub padded_pubkeys: Vec<H256>,
 }
 
+// Stores the signed messages, valid signatures and pubkeys for a given block number justification.
+// Note: There is a redis macros crate that can be used to serialize this.
+// https://github.com/daniel7grant/redis-macros/#json-wrapper-with-redisjson
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct StoredJustificationData {
+    pub block_number: u32,
+    pub signed_message: Vec<u8>,
+    pub pubkeys: Vec<Vec<u8>>,
+    pub signatures: Vec<Vec<u8>>,
+    pub validator_signed: Vec<bool>,
+    pub num_authorities: usize,
+}
+
 pub struct SimpleJustificationData {
     pub authority_set_id: u64,
     pub signed_message: Vec<u8>,

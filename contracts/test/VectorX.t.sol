@@ -11,17 +11,16 @@ contract VectorXTest is Test {
         lightClient = new VectorX(address(0));
     }
 
-    function testEncoding() public {
-        uint64 authoritySetId = 4;
-        // bytes32 authoritySetHash = bytes32(
-        //     hex"99d276c2bf394325382294e08d3285ec5e3548f3d50deebfb900e0730041a923"
-        // );
-        uint32 trustedBlock = 10;
+    function testEncoding() public view {
+        uint32 trustedBlock = 645570;
+        uint64 authoritySetId = 616;
+        uint32 targetBlock = 645610;
 
-        bytes memory encodedBytes = abi.encodePacked(
+        bytes memory encodedBytes = abi.encodeWithSelector(
+            lightClient.commitHeaderRange.selector,
+            trustedBlock,
             authoritySetId,
-            // authoritySetHash,
-            trustedBlock
+            targetBlock
         );
 
         console.logBytes(encodedBytes);

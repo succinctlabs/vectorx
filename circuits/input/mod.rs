@@ -867,15 +867,24 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_rotate() {
         let data_fetcher = RpcDataFetcher::new().await;
-        let epoch_end_block = data_fetcher.last_justified_block(616).await;
-        println!("epoch_end_block {:?}", epoch_end_block);
 
-        // let num_authorities: u32 = 10;
-        // let encoded_byte = Compact(num_authorities).encode();
-        // println!("encoded_byte {:?}", encoded_byte);
+        let mut start_epoch = 100;
+        loop {
+            if start_epoch > 617 {
+                break;
+            }
+            let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
 
-        let _ = data_fetcher
-            .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
-            .await;
+            let _ = data_fetcher
+                .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
+                .await;
+
+            println!("epoch_end_block {:?}", epoch_end_block);
+
+            let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
+            println!("num authorities {:?}", num_authorities);
+
+            start_epoch += 100;
+        }
     }
 }

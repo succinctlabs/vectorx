@@ -157,7 +157,9 @@ contract VectorX is IVectorX {
 
         bytes memory input = abi.encodePacked(
             _trustedBlock,
+            trustedHeader,
             _authoritySetId,
+            authoritySetHash,
             _targetBlock
         );
 

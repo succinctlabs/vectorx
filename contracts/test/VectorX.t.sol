@@ -11,12 +11,13 @@ contract VectorXTest is Test {
         lightClient = new VectorX(address(0));
     }
 
-    function testEncoding() public {
+    function testEncoding() public view {
         uint32 trustedBlock = 645570;
         uint64 authoritySetId = 616;
         uint32 targetBlock = 645610;
 
-        bytes memory encodedBytes = abi.encodePacked(
+        bytes memory encodedBytes = abi.encodeWithSelector(
+            lightClient.commitHeaderRange.selector,
             trustedBlock,
             authoritySetId,
             targetBlock

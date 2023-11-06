@@ -192,15 +192,20 @@ async fn main() {
 
     let config: VectorConfig = get_config();
 
-    let mut fetcher = RpcDataFetcher::new().await;
-
     let lc_rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
-    let provider = Provider::<Http>::try_from(lc_rpc_url).expect("could not connect to client");
-    let vectorx = VectorX::new(config.address, provider.into());
 
-    // Source STEP_RANGE_MAX from the contract.
-    let step_range_max = vectorx.max_header_range().await.unwrap();
     loop {
+        // Initialize data fetcher (re-initialize every loop to avoid connection reset).
+        let mut fetcher = RpcDataFetcher::new().await;
+
+        // Initialize the VectorX contract.
+        let provider =
+            Provider::<Http>::try_from(lc_rpc_url.clone()).expect("could not connect to client");
+        let vectorx = VectorX::new(config.address, provider.into());
+
+        // Source STEP_RANGE_MAX from the contract.
+        let step_range_max = vectorx.max_header_range().await.unwrap();
+
         let head = fetcher.get_head().await;
         let head_block = head.number;
         let head_authority_set_id = fetcher.get_authority_set_id(head_block - 1).await;

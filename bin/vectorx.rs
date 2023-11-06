@@ -50,6 +50,7 @@ fn get_config() -> VectorConfig {
         &hex::decode("fb9ac718be3fa5610bc96889915a3f8afdfd49a61c119279ee144ba5e90bf007").unwrap(),
     );
     let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
+    let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
     // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
     let address = contract_address
         .parse::<Address>()
@@ -57,7 +58,7 @@ fn get_config() -> VectorConfig {
 
     VectorConfig {
         address,
-        chain_id: 5,
+        chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
         step_function_id,
         rotate_function_id,
     }

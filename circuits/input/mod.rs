@@ -170,7 +170,7 @@ impl RpcDataFetcher {
     }
 
     /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch
-    /// end blocks within the given range of block numbers.
+    /// end blocks within the given range of block numbers. Includes start and end blocks.
     pub async fn find_justifications_in_range(
         &mut self,
         start_block: u32,
@@ -852,10 +852,13 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_query_redis_block_range() {
         let mut data_fetcher = RpcDataFetcher::new().await;
-        let start_block = 640000;
-        let end_block = 650000;
+
+        let prev_last_justified_block = data_fetcher.last_justified_block(615).await;
+        println!("prev_last_justified_block {:?}", prev_last_justified_block);
+        let last_justified_block = data_fetcher.last_justified_block(616).await;
+        println!("last_justified_block {:?}", last_justified_block);
         let blocks = data_fetcher
-            .find_justifications_in_range(start_block, end_block)
+            .find_justifications_in_range(prev_last_justified_block, last_justified_block)
             .await;
         println!("keys {:?}", blocks);
     }

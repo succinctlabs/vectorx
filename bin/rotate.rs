@@ -14,7 +14,7 @@ use vectorx::consts::{
 use vectorx::rotate::RotateCircuit;
 
 fn main() {
-    // The maximum size of the subarray is the prefix length + the max length of the encoded
+    // The maximum size of the subarray is the max length of the encoded
     // authorities + the delay length.
     const MAX_SUBARRAY_SIZE: usize = MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH + DELAY_LENGTH;
 

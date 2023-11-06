@@ -96,10 +96,9 @@ async fn submit_request(
         .expect("Failed to send request.");
 
     if res.status().is_success() {
-        // TODO: Log success message. Find structure of output.
         info!("Successfully submitted request.");
     } else {
-        // TODO: Log error message.
+        // TODO: Log more specific errors.
         info!("Failed to submit request.");
     }
 }
@@ -224,20 +223,19 @@ async fn main() {
         if current_authority_set_id == head_authority_set_id {
             let mut block_to_step_to = min(head_block, current_block + step_range_max);
 
-            // If block_to_step_to is not the last justified block, use the Redis cache.
-            if fetcher.last_justified_block(current_authority_set_id).await != block_to_step_to {
-                let valid_blocks = fetcher
-                    .find_justifications_in_range(current_block, block_to_step_to)
-                    .await;
-                if valid_blocks.is_empty() {
-                    continue;
-                }
-                block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+            // Find all blocks in the range [current_block, block_to_step_to] that have a stored
+            // justification.
+            let valid_blocks = fetcher
+                .find_justifications_in_range(current_block, block_to_step_to)
+                .await;
+            if valid_blocks.is_empty() {
+                continue;
             }
+            // Get the most recent valid block in the range.
+            block_to_step_to = valid_blocks[valid_blocks.len() - 1];
 
             info!("Stepping to block {:?}.", block_to_step_to);
 
-            // The block to step to is the minimum of the latest_block block and the head block + STEP_RANGE_MAX.
             request_header_range(
                 &config,
                 &vectorx,
@@ -286,16 +284,15 @@ async fn main() {
                 let mut block_to_step_to =
                     min(last_justified_block, current_block + step_range_max);
 
-                // If block_to_step_to is not the last justified block, use the Redis cache.
-                if last_justified_block != block_to_step_to {
-                    let valid_blocks = fetcher
-                        .find_justifications_in_range(current_block, block_to_step_to)
-                        .await;
-                    if valid_blocks.is_empty() {
-                        continue;
-                    }
-                    block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+                // Find all blocks in the range [current_block, block_to_step_to] that have a stored
+                // justification.
+                let valid_blocks = fetcher
+                    .find_justifications_in_range(current_block, block_to_step_to)
+                    .await;
+                if valid_blocks.is_empty() {
+                    continue;
                 }
+                block_to_step_to = valid_blocks[valid_blocks.len() - 1];
 
                 info!("Stepping to block {:?}.", block_to_step_to);
 
@@ -320,16 +317,15 @@ async fn main() {
                     last_justified_block + step_range_max,
                 );
 
-                // If block_to_step_to is not the last justified block, use the Redis cache.
-                if next_last_justified_block != block_to_step_to {
-                    let valid_blocks = fetcher
-                        .find_justifications_in_range(current_block, block_to_step_to)
-                        .await;
-                    if valid_blocks.is_empty() {
-                        continue;
-                    }
-                    block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+                // Find all blocks in the range [current_block, block_to_step_to] that have a stored
+                // justification.
+                let valid_blocks = fetcher
+                    .find_justifications_in_range(current_block, block_to_step_to)
+                    .await;
+                if valid_blocks.is_empty() {
+                    continue;
                 }
+                block_to_step_to = valid_blocks[valid_blocks.len() - 1];
 
                 info!("Stepping to block {:?}.", block_to_step_to);
                 // Step to block_to_step_to.

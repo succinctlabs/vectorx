@@ -25,4 +25,7 @@ cargo run --bin vectorx
 Avail Network does not store justifications, so we need to index Avail and store justifications
 that are ephemeral in their DB network for calling step on the circuit.
 
-If it is an epoch end block, query `grandpa_proveFinality`, else query the DB.
+### Run the Indexer
+```
+cargo run --bin indexer
+```

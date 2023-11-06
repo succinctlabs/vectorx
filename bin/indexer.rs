@@ -1,6 +1,6 @@
 //! To build the binary:
 //!
-//!     `cargo build --release --bin rotate`
+//!     `cargo build --release --bin indexer`
 //!
 //!
 //!

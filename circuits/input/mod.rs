@@ -51,14 +51,14 @@ impl RedisClient {
             match self.redis.get_async_connection().await {
                 Ok(con) => return Ok(con),
                 Err(e) => {
-                    // Log the retry attempt and error
-                    eprintln!(
+                    // Log the retry attempt and error.
+                    debug!(
                         "Attempt {} failed with error: {}. Retrying in {:?}...",
                         i,
                         e,
                         Self::RECONNECT_DELAY
                     );
-                    // Wait for the delay before the next retry
+                    // Wait for the delay before the next retry.
                     sleep(Self::RECONNECT_DELAY).await;
                 }
             };

@@ -76,8 +76,8 @@ pub async fn main() {
         let block_hash = justification.commit.target_hash;
         let header_hash = header.hash();
         let calculated_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
-        if header_hash != calculated_hash {
-            continue;
+        if header_hash != calculated_hash || block_hash != calculated_hash {
+            panic!("Header hash does not match block hash, avail-subxt crate is out of sync.");
         }
 
         // Get current authority set ID.
@@ -97,8 +97,12 @@ pub async fn main() {
             &authority_set_id,
         ));
 
-        // Verify all the signatures of the justification and extract the public keys.
-        // TODO: Check if the authorities always going to be in the same order? Otherwise sort them.
+        // Verify all the signatures of the justification and extract the public keys. The ordering
+        // of the authority set will already be canonical and sorted in the justification on ID.
+
+        // TODO: Add a check that the authority set hash is correctly computed. Fetch the authorities
+        // for the previous block and check that the hash matches.
+
         let validators = justification
             .commit
             .precommits

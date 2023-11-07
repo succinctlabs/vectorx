@@ -314,16 +314,12 @@ mod tests {
 
         // target_block is a non-era end block block in epoch 616 with 10 authorities.
         let target_block = 645570u32;
-        let target_header: [u8; 32] =
+        let target_header =
             hex::decode("ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d")
-                .unwrap()
-                .try_into()
                 .unwrap();
         let authority_set_id = 616u64;
-        let authority_set_hash: [u8; 32] =
+        let authority_set_hash =
             hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
-                .unwrap()
-                .try_into()
                 .unwrap();
 
         input.write::<U32Variable>(target_block);

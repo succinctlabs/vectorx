@@ -237,10 +237,9 @@ impl RpcDataFetcher {
         start_block: u32,
         end_block: u32,
     ) -> Vec<u32> {
-        let _ = match self.check_client_connection().await {
-            Ok(()) => true,
-            Err(e) => panic!("{}", e),
-        };
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         // Query Redis for all keys in the range [start_block, end_block].
         let redis_blocks: Vec<u32> = self
             .redis_client
@@ -275,10 +274,9 @@ impl RpcDataFetcher {
     // This function returns the last block justified by target_authority_set_id. This block
     // also specifies the new authority set, which starts justifying after this block.
     pub async fn last_justified_block(&mut self, target_authority_set_id: u64) -> u32 {
-        let _ = match self.check_client_connection().await {
-            Ok(()) => true,
-            Err(e) => panic!("{}", e),
-        };
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
 
         let mut low = 0;
         let head_block = self.get_head().await;
@@ -312,10 +310,9 @@ impl RpcDataFetcher {
     }
 
     pub async fn get_block_hash(&mut self, block_number: u32) -> H256 {
-        let _ = match self.check_client_connection().await {
-            Ok(()) => true,
-            Err(e) => panic!("{}", e),
-        };
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
 
         let block_hash = self
             .client
@@ -331,10 +328,9 @@ impl RpcDataFetcher {
         start_block_number: u32,
         end_block_number: u32,
     ) -> Vec<Header> {
-        let _ = match self.check_client_connection().await {
-            Ok(()) => true,
-            Err(e) => panic!("{}", e),
-        };
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
 
         let mut headers = Vec::new();
         for block_number in start_block_number..end_block_number + 1 {
@@ -347,33 +343,27 @@ impl RpcDataFetcher {
     }
 
     pub async fn get_header(&mut self, block_number: u32) -> Header {
-        let _ = match self.check_client_connection().await {
-            Ok(()) => true,
-            Err(e) => panic!("{}", e),
-        };
-
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         let block_hash = self.get_block_hash(block_number).await;
         let header_result = self.client.rpc().header(Some(block_hash)).await;
         header_result.unwrap().unwrap()
     }
 
     pub async fn get_head(&mut self) -> Header {
-        let _ = match self.check_client_connection().await {
-            Ok(()) => true,
-            Err(e) => panic!("{}", e),
-        };
-
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
         let header = self.client.rpc().header(Some(head_block_hash)).await;
         header.unwrap().unwrap()
     }
 
     pub async fn get_authority_set_id(&mut self, block_number: u32) -> u64 {
-        let _ = match self.check_client_connection().await {
-            Ok(()) => true,
-            Err(e) => panic!("{}", e),
-        };
-
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         let block_hash = self.get_block_hash(block_number).await;
 
         let set_id_key = api::storage().grandpa().current_set_id();

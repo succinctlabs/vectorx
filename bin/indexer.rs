@@ -10,9 +10,8 @@ use std::collections::HashMap;
 use std::env;
 use std::ops::Deref;
 
-use avail_subxt::avail::Client;
+use avail_subxt::api;
 use avail_subxt::config::Header as HeaderTrait;
-use avail_subxt::{api, build_client};
 use codec::Encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::DUMMY_SIGNATURE;
@@ -20,7 +19,7 @@ use sp_core::ed25519::{self};
 use sp_core::{blake2_256, Pair, H256};
 use subxt::rpc::RpcParams;
 use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
-use vectorx::input::{RedisClient, RpcDataFetcher};
+use vectorx::input::RpcDataFetcher;
 
 #[tokio::main]
 pub async fn main() {
@@ -35,23 +34,20 @@ pub async fn main() {
         BLOCK_SAVE_INTERVAL
     );
 
-    let url: &str = "wss://kate.avail.tools:443/ws";
+    // Initialize data fetcher (re-initialize every new event to avoid connection reset).
+    let mut fetcher = RpcDataFetcher::new().await;
 
-    let c: Client = build_client(url, false).await.unwrap();
-    let t = c.rpc().deref();
-    let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
+    let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = fetcher
+        .client
+        .rpc()
+        .deref()
         .subscribe(
             "grandpa_subscribeJustifications",
             RpcParams::new(),
             "grandpa_unsubscribeJustifications",
         )
         .await;
-
-    let mut r: RedisClient = RedisClient::new().await;
-
     let mut sub = sub.unwrap();
-    // Initialize data fetcher (re-initialize every new event to avoid connection reset).
-    let mut fetcher = RpcDataFetcher::new().await;
 
     // Wait for new justification.
     while let Some(Ok(justification)) = sub.next().await {
@@ -64,7 +60,8 @@ pub async fn main() {
         );
 
         // Get the header corresponding to the new justification.
-        let header = c
+        let header = fetcher
+            .client
             .rpc()
             .header(Some(justification.commit.target_hash))
             .await
@@ -82,7 +79,8 @@ pub async fn main() {
 
         // Get current authority set ID.
         let set_id_key = api::storage().grandpa().current_set_id();
-        let authority_set_id = c
+        let authority_set_id = fetcher
+            .client
             .storage()
             .at(block_hash)
             .fetch(&set_id_key)
@@ -166,6 +164,9 @@ pub async fn main() {
             num_authorities: authorities.len(),
             validator_signed,
         };
-        r.add_justification(store_justification_data).await;
+        fetcher
+            .redis_client
+            .add_justification(store_justification_data)
+            .await;
     }
 }

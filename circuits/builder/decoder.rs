@@ -277,7 +277,7 @@ pub mod tests {
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_decode_headers() {
-        const HEAD_BLOCK_NUM: u32 = 272515;
+        const HEAD_BLOCK_NUM: u32 = 1000;
         const NUM_BLOCKS: usize = 1;
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();

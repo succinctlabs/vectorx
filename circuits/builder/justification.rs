@@ -279,7 +279,6 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 mod tests {
     use std::env;
 
-    use ethers::types::H256;
     use plonky2x::prelude::{Bytes32Variable, DefaultBuilder};
 
     use super::*;
@@ -314,21 +313,21 @@ mod tests {
 
         // target_block is a non-era end block block in epoch 616 with 10 authorities.
         let target_block = 645570u32;
-        let target_header =
-            hex::decode("ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d")
-                .unwrap();
+        let target_header = "ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
+            .parse()
+            .unwrap();
         let authority_set_id = 616u64;
-        let authority_set_hash =
-            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
-                .unwrap();
+        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+            .parse()
+            .unwrap();
 
         input.write::<U32Variable>(target_block);
 
-        input.write::<Bytes32Variable>(H256::from_slice(target_header.as_slice()));
+        input.write::<Bytes32Variable>(target_header);
 
         input.write::<U64Variable>(authority_set_id);
 
-        input.write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.write::<Bytes32Variable>(authority_set_hash);
 
         log::debug!("Generating proof");
         let (proof, output) = circuit.prove(&input);

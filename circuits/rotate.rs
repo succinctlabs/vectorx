@@ -241,13 +241,13 @@ mod tests {
         let mut input = circuit.input();
         let authority_set_id = 616u64;
         // TODO: Get authority set hash from rotate inputs, or a similar function.
-        let authority_set_hash =
-            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
-                .unwrap();
+        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+            .parse()
+            .unwrap();
         let epoch_end_block_number = 645610;
 
         input.evm_write::<U64Variable>(authority_set_id);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.evm_write::<Bytes32Variable>(authority_set_hash);
         input.evm_write::<U32Variable>(epoch_end_block_number);
 
         log::debug!("Generating proof");

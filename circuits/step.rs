@@ -141,7 +141,6 @@ impl<
 mod tests {
     use std::env;
 
-    use ethers::types::H256;
     use ethers::utils::hex;
     use plonky2x::backend::circuit::PublicInput;
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
@@ -230,20 +229,20 @@ mod tests {
 
         let mut input = circuit.input();
 
-        let trusted_header =
-            hex::decode("ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d")
-                .unwrap();
+        let trusted_header = "ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
+            .parse()
+            .unwrap();
         let trusted_block = 645570u32;
         let target_block = 645610u32; // mimics test_step_small
         let authority_set_id = 616u64;
-        let authority_set_hash =
-            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
-                .unwrap();
+        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+            .parse()
+            .unwrap();
 
         input.evm_write::<U32Variable>(trusted_block);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
+        input.evm_write::<Bytes32Variable>(trusted_header);
         input.evm_write::<U64Variable>(authority_set_id);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.evm_write::<Bytes32Variable>(authority_set_hash);
         input.evm_write::<U32Variable>(target_block);
 
         log::debug!("Generating proof");
@@ -279,20 +278,20 @@ mod tests {
 
         let mut input = circuit.input();
 
-        let trusted_header =
-            hex::decode("7506dcafe4218a46c07d14e2d44971c3e9e3c8995556913f7cc1072dcaa12625")
-                .unwrap();
+        let trusted_header = "7506dcafe4218a46c07d14e2d44971c3e9e3c8995556913f7cc1072dcaa12625"
+            .parse()
+            .unwrap();
         let trusted_block = 645660u32;
         let target_block = 645750u32; // mimics test_step_small
         let authority_set_id = 617u64;
-        let authority_set_hash =
-            hex::decode("be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0")
-                .unwrap();
+        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+            .parse()
+            .unwrap();
 
         input.evm_write::<U32Variable>(trusted_block);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(trusted_header.as_slice()));
+        input.evm_write::<Bytes32Variable>(trusted_header);
         input.evm_write::<U64Variable>(authority_set_id);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.evm_write::<Bytes32Variable>(authority_set_hash);
         input.evm_write::<U32Variable>(target_block);
 
         log::debug!("Generating proof");

@@ -750,7 +750,9 @@ impl RpcDataFetcher {
 
 #[cfg(test)]
 mod tests {
+    use alloy_primitives::bytes;
     use avail_subxt::config::Header;
+    use ethers::types::Address;
 
     use super::*;
     use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
@@ -969,5 +971,18 @@ mod tests {
 
             start_epoch += 1;
         }
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_serialize() {
+        bytes!("0000000000000000000000000000000000000000000000000000000000000000");
+        let test_input = alloy_primitives::Bytes::from(vec![1, 2, 3, 4]);
+
+        let serialized = test_input.to_string();
+        println!("serialized {:?}", serialized);
+        let address_input = Address::zero();
+        let serialized_address = address_input.to_string();
+        println!("serialized address {:?}", serialized_address);
     }
 }

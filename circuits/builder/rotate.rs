@@ -14,8 +14,6 @@ pub trait RotateMethods {
     /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
     /// for the epoch end header. Returns the length of the compact encoding of the new authority set
     /// length.
-    ///
-    /// TODO: Find the spec for this prefix!
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
@@ -40,11 +38,6 @@ pub trait RotateMethods {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
-    /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
-    /// for the epoch end header.
-    ///
-    /// Returns the length of the compact encoding of the new authority set length.
-    /// TODO: Find the spec for this prefix!
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
@@ -94,7 +87,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         self.select_array_random_gate(&all_possible_lengths, compress_mode)
     }
 
-    /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -127,7 +119,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Initialize the cursor to the start position, which is the start of the consensus log
         // corresponding to an authority set change event in the epoch end header.
-        self.watch(start_position, "start_position");
         let mut cursor = *start_position;
 
         // Get the subarray of the header bytes that we want to verify. The header_hash is used as

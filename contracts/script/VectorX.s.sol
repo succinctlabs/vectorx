@@ -41,17 +41,5 @@ contract DeployScript is Script {
 
         lightClient.updateHeaderRangeFunctionId(stepFunctionId);
         lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);
-
-        // Call rotate
-        // lightClient.requestNextAuthoritySetId(trustedBlock, authoritySetId);
-
-        // Call step
-        // uint32 targetBlock = 214288;
-
-        // lightClient.requestHeaderRange{value: 0.2 ether}(
-        //     trustedBlock,
-        //     authoritySetId,
-        //     targetBlock
-        // );
     }
 }

@@ -12,73 +12,15 @@ use std::ops::Deref;
 
 use avail_subxt::avail::Client;
 use avail_subxt::config::Header as HeaderTrait;
-use avail_subxt::primitives::Header;
 use avail_subxt::{api, build_client};
 use codec::{Decode, Encode};
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::DUMMY_SIGNATURE;
-use serde::de::Error;
-use serde::Deserialize;
-use sp_core::ed25519::{self, Public as EdPublic, Signature};
-use sp_core::{blake2_256, bytes, Pair, H256};
+use sp_core::ed25519::{self, Public as EdPublic};
+use sp_core::{blake2_256, Pair, H256};
 use subxt::rpc::RpcParams;
-use vectorx::input::types::StoredJustificationData;
+use vectorx::input::types::{GrandpaJustification, Precommit, StoredJustificationData};
 use vectorx::input::{RedisClient, RpcDataFetcher};
-
-#[derive(Deserialize, Debug)]
-pub struct SubscriptionMessageResult {
-    pub result: String,
-    pub subscription: String,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct SubscriptionMessage {
-    pub jsonrpc: String,
-    pub params: SubscriptionMessageResult,
-    pub method: String,
-}
-
-#[derive(Clone, Debug, Decode, Encode, Deserialize)]
-pub struct Precommit {
-    pub target_hash: H256,
-    /// The target block's number
-    pub target_number: u32,
-}
-
-#[derive(Clone, Debug, Decode, Deserialize)]
-pub struct SignedPrecommit {
-    pub precommit: Precommit,
-    /// The signature on the message.
-    pub signature: Signature,
-    /// The Id of the signer.
-    pub id: EdPublic,
-}
-#[derive(Clone, Debug, Decode, Deserialize)]
-pub struct Commit {
-    pub target_hash: H256,
-    /// The target block's number.
-    pub target_number: u32,
-    /// Precommits for target block or any block after it that justify this commit.
-    pub precommits: Vec<SignedPrecommit>,
-}
-
-#[derive(Clone, Debug, Decode)]
-pub struct GrandpaJustification {
-    pub round: u64,
-    pub commit: Commit,
-    pub votes_ancestries: Vec<Header>,
-}
-
-impl<'de> Deserialize<'de> for GrandpaJustification {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let encoded = bytes::deserialize(deserializer)?;
-        Self::decode(&mut &encoded[..])
-            .map_err(|codec_err| D::Error::custom(format!("Invalid decoding: {:?}", codec_err)))
-    }
-}
 
 #[derive(Debug, Decode)]
 pub struct Authority(EdPublic, u64);

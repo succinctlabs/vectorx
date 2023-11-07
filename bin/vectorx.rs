@@ -103,7 +103,7 @@ impl VectorXOperator {
         // Stringify the data into JSON format.
         let serialized_data = serde_json::to_string(&data).unwrap();
 
-        // TODO: Update with config.
+        // TODO: Load from config.
         let request_url = "https://alpha.succinct.xyz/api/request/new";
 
         // Submit POST request to the offchain worker.

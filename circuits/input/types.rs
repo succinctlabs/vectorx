@@ -1,9 +1,10 @@
 use avail_subxt::primitives::Header;
 use codec::{Decode, Encode};
 use ethers::types::H256;
+use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519::{Public as EdPublic, Signature};
-use sp_core::Bytes;
+use sp_core::{bytes, Bytes};
 
 use crate::vars::{AffinePoint, Curve};
 
@@ -71,6 +72,17 @@ pub struct GrandpaJustification {
     pub round: u64,
     pub commit: Commit,
     pub votes_ancestries: Vec<Header>,
+}
+
+impl<'de> Deserialize<'de> for GrandpaJustification {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let encoded = bytes::deserialize(deserializer)?;
+        Self::decode(&mut &encoded[..])
+            .map_err(|codec_err| D::Error::custom(format!("Invalid decoding: {:?}", codec_err)))
+    }
 }
 
 #[derive(Debug, Encode)]

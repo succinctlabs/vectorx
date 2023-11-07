@@ -63,7 +63,7 @@ impl RedisClient {
                 }
             };
         }
-        Err("Failed to connect to Redis after multiple attempts".to_string())
+        Err("Failed to connect to Redis after multiple attempts!".to_string())
     }
 
     /// Stores justification data in Redis. Errors if setting the key fails.
@@ -227,7 +227,7 @@ impl RpcDataFetcher {
                 }
             }
         }
-        Err("Failed to connect to client after multiple attempts".to_string())
+        Err("Failed to connect to Avail client after multiple attempts!".to_string())
     }
 
     /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch

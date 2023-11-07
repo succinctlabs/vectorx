@@ -117,12 +117,11 @@ pub async fn main() {
     let mut r: RedisClient = RedisClient::new().await;
 
     let mut sub = sub.unwrap();
+    // Initialize data fetcher (re-initialize every new event to avoid connection reset).
+    let fetcher = RpcDataFetcher::new().await;
 
     // Wait for new justification.
     while let Some(Ok(justification)) = sub.next().await {
-        // Initialize data fetcher (re-initialize every new event to avoid connection reset).
-        let fetcher = RpcDataFetcher::new().await;
-
         if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
             continue;
         }

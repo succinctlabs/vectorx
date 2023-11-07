@@ -159,7 +159,7 @@ pub struct RpcDataFetcher {
 impl RpcDataFetcher {
     pub async fn new() -> Self {
         // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
-        let url = "wss://kate.avail.tools:443/ws".to_string();
+        let url = "https://kate.avail.tools/v1".to_string();
         let client = build_client(url.as_str(), false).await.unwrap();
         let redis_client = RedisClient::new().await;
         RpcDataFetcher {

@@ -41,7 +41,7 @@ impl<
             block_number
         );
 
-        let data_fetcher = RpcDataFetcher::new().await;
+        let mut data_fetcher = RpcDataFetcher::new().await;
 
         let rotate_data = data_fetcher
             .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(block_number)

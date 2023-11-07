@@ -3,6 +3,7 @@ pub mod types;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::env;
+use std::time::Duration;
 
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
@@ -14,8 +15,10 @@ use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
+use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::Digest;
+use tokio::time::sleep;
 
 use self::types::{
     EncodedFinalityProof, FinalityProof, GrandpaJustification, HeaderRotateData, SignerMessage,
@@ -32,6 +35,9 @@ pub struct RedisClient {
 }
 
 impl RedisClient {
+    const MAX_RECONNECT_ATTEMPTS: usize = 3;
+    const RECONNECT_DELAY: Duration = Duration::from_secs(5);
+
     pub async fn new() -> Self {
         dotenv::dotenv().ok();
 
@@ -40,13 +46,32 @@ impl RedisClient {
         RedisClient { redis }
     }
 
+    pub async fn get_connection(&mut self) -> Result<Connection, String> {
+        for i in 0..Self::MAX_RECONNECT_ATTEMPTS {
+            match self.redis.get_async_connection().await {
+                Ok(con) => return Ok(con),
+                Err(e) => {
+                    // Log the retry attempt and error.
+                    debug!(
+                        "Attempt {} failed with error: {}. Retrying in {:?}...",
+                        i,
+                        e,
+                        Self::RECONNECT_DELAY
+                    );
+                    // Wait for the delay before the next retry.
+                    sleep(Self::RECONNECT_DELAY).await;
+                }
+            };
+        }
+        Err("Failed to connect to Redis after multiple attempts!".to_string())
+    }
+
     /// Stores justification data in Redis. Errors if setting the key fails.
     pub async fn add_justification(&mut self, justification: StoredJustificationData) {
-        let mut con = self
-            .redis
-            .get_async_connection()
-            .await
-            .expect("Failed to create Redis connection");
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
 
         // Justification is stored as a JSON object.
         let _: () = con
@@ -75,13 +100,12 @@ impl RedisClient {
         &mut self,
         block_number: u32,
     ) -> Result<StoredJustificationData, ()> {
-        // Result is always stored as serialized bytes: https://github.com/redis-rs/redis-rs#json-support.
-        let mut con = self
-            .redis
-            .get_async_connection()
-            .await
-            .expect("Failed to create Redis connection");
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
 
+        // Result is always stored as serialized bytes: https://github.com/redis-rs/redis-rs#json-support.
         let serialized_justification: Vec<u8> = con
             .json_get(block_number, "$")
             .await
@@ -95,6 +119,18 @@ impl RedisClient {
                 Err(())
             }
         }
+    }
+
+    /// Gets all blocks in range [start, end] (inclusive) that have justifications in Redis.
+    pub async fn get_blocks_in_range(&mut self, start: u32, end: u32) -> Vec<u32> {
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
+
+        con.zrangebyscore("blocks", start, end)
+            .await
+            .expect("Failed to get keys")
     }
 }
 
@@ -157,9 +193,12 @@ pub struct RpcDataFetcher {
 }
 
 impl RpcDataFetcher {
+    const MAX_RECONNECT_ATTEMPTS: usize = 3;
+    const RECONNECT_DELAY: Duration = Duration::from_secs(5);
+
     pub async fn new() -> Self {
         // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
-        let url = "https://kate.avail.tools/v1".to_string();
+        let url = "wss://kate.avail.tools:443/ws".to_string();
         let client = build_client(url.as_str(), false).await.unwrap();
         let redis_client = RedisClient::new().await;
         RpcDataFetcher {
@@ -169,6 +208,28 @@ impl RpcDataFetcher {
         }
     }
 
+    async fn check_client_connection(&mut self) -> Result<(), String> {
+        for _ in 0..Self::MAX_RECONNECT_ATTEMPTS {
+            match self.client.rpc().system_health().await {
+                Ok(_) => return Ok(()),
+                Err(_) => {
+                    let url = "wss://kate.avail.tools:443/ws".to_string();
+                    match build_client(url.as_str(), false).await {
+                        Ok(new_client) => {
+                            self.client = new_client;
+                            return Ok(());
+                        }
+                        Err(_) => {
+                            debug!("Failed to connect to client, retrying...");
+                            tokio::time::sleep(Self::RECONNECT_DELAY).await;
+                        }
+                    }
+                }
+            }
+        }
+        Err("Failed to connect to Avail client after multiple attempts!".to_string())
+    }
+
     /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch
     /// end blocks within the given range of block numbers. Includes start and end blocks.
     pub async fn find_justifications_in_range(
@@ -176,18 +237,14 @@ impl RpcDataFetcher {
         start_block: u32,
         end_block: u32,
     ) -> Vec<u32> {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         // Query Redis for all keys in the range [start_block, end_block].
-        let mut con = self
+        let redis_blocks: Vec<u32> = self
             .redis_client
-            .redis
-            .get_async_connection()
-            .await
-            .expect("Failed to create Redis connection");
-
-        let redis_blocks: Vec<u32> = con
-            .zrangebyscore("blocks", start_block, end_block)
-            .await
-            .expect("Failed to get keys");
+            .get_blocks_in_range(start_block, end_block)
+            .await;
 
         // Query the chain for all era end blocks in the range [start_block, end_block].
         let start_era = self.get_authority_set_id(start_block - 1).await;
@@ -216,7 +273,11 @@ impl RpcDataFetcher {
 
     // This function returns the last block justified by target_authority_set_id. This block
     // also specifies the new authority set, which starts justifying after this block.
-    pub async fn last_justified_block(&self, target_authority_set_id: u64) -> u32 {
+    pub async fn last_justified_block(&mut self, target_authority_set_id: u64) -> u32 {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
         let mut low = 0;
         let head_block = self.get_head().await;
         let mut high = head_block.number;
@@ -248,7 +309,11 @@ impl RpcDataFetcher {
         epoch_end_block_number
     }
 
-    pub async fn get_block_hash(&self, block_number: u32) -> H256 {
+    pub async fn get_block_hash(&mut self, block_number: u32) -> H256 {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
         let block_hash = self
             .client
             .rpc()
@@ -259,10 +324,14 @@ impl RpcDataFetcher {
 
     // This function returns a vector of headers for a given range of block numbers, inclusive of the start and end block numbers.
     pub async fn get_block_headers_range(
-        &self,
+        &mut self,
         start_block_number: u32,
         end_block_number: u32,
     ) -> Vec<Header> {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
         let mut headers = Vec::new();
         for block_number in start_block_number..end_block_number + 1 {
             let block_hash = self.get_block_hash(block_number).await;
@@ -273,19 +342,28 @@ impl RpcDataFetcher {
         headers
     }
 
-    pub async fn get_header(&self, block_number: u32) -> Header {
+    pub async fn get_header(&mut self, block_number: u32) -> Header {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         let block_hash = self.get_block_hash(block_number).await;
         let header_result = self.client.rpc().header(Some(block_hash)).await;
         header_result.unwrap().unwrap()
     }
 
-    pub async fn get_head(&self) -> Header {
+    pub async fn get_head(&mut self) -> Header {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
         let header = self.client.rpc().header(Some(head_block_hash)).await;
         header.unwrap().unwrap()
     }
 
-    pub async fn get_authority_set_id(&self, block_number: u32) -> u64 {
+    pub async fn get_authority_set_id(&mut self, block_number: u32) -> u64 {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
         let block_hash = self.get_block_hash(block_number).await;
 
         let set_id_key = api::storage().grandpa().current_set_id();
@@ -300,7 +378,7 @@ impl RpcDataFetcher {
 
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
-    pub async fn get_authorities(&self, block_number: u32) -> Vec<Vec<u8>> {
+    pub async fn get_authorities(&mut self, block_number: u32) -> Vec<Vec<u8>> {
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities_bytes = self
@@ -355,7 +433,7 @@ impl RpcDataFetcher {
 
     // Computes the authority_set_hash for a given block number.
     // This is the authority_set_hash of the next block.
-    pub async fn compute_authority_set_hash(&self, block_number: u32) -> H256 {
+    pub async fn compute_authority_set_hash(&mut self, block_number: u32) -> H256 {
         let authorities = self.get_authorities(block_number).await;
 
         let mut hash_so_far = Vec::new();
@@ -546,7 +624,7 @@ impl RpcDataFetcher {
         const HEADER_LENGTH: usize,
         const VALIDATOR_SET_SIZE_MAX: usize,
     >(
-        &self,
+        &mut self,
         epoch_end_block: u32,
     ) -> HeaderRotateData {
         // Assert epoch_end_block is a valid epoch end block.
@@ -678,7 +756,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_block_headers_range() {
-        let fetcher = RpcDataFetcher::new().await;
+        let mut fetcher = RpcDataFetcher::new().await;
         let headers = fetcher.get_block_headers_range(100000, 100009).await;
         assert_eq!(headers.len(), 10);
     }
@@ -686,7 +764,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_hash() {
-        let fetcher = RpcDataFetcher::new().await;
+        let mut fetcher = RpcDataFetcher::new().await;
 
         let target_block = 645570;
         let header = fetcher.get_header(target_block).await;
@@ -703,7 +781,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_authority_set_id() {
-        let fetcher = RpcDataFetcher::new().await;
+        let mut fetcher = RpcDataFetcher::new().await;
         let mut block: u32 = 215000;
 
         loop {
@@ -765,7 +843,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_new_authority_set() {
-        let fetcher = RpcDataFetcher::new().await;
+        let mut fetcher = RpcDataFetcher::new().await;
 
         // A binary search given a target_authority_set_id, returns the last block justified by
         // target_authority_set_id. This block also specifies the new authority set,
@@ -798,7 +876,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_grandpa_prove_finality() {
-        let fetcher = RpcDataFetcher::new().await;
+        let mut fetcher = RpcDataFetcher::new().await;
 
         let block_number = 642000;
         let authority_set_id = fetcher.get_authority_set_id(block_number - 1).await;
@@ -866,7 +944,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_rotate() {
-        let data_fetcher = RpcDataFetcher::new().await;
+        let mut data_fetcher = RpcDataFetcher::new().await;
 
         let mut start_epoch = 100;
         loop {

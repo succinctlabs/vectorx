@@ -312,7 +312,7 @@ pub mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         // Note: Returns NUM_BLOCKS + 1 headers.
         let headers = rt.block_on(async {
-            let data_fetcher = RpcDataFetcher::new().await;
+            let mut data_fetcher = RpcDataFetcher::new().await;
             data_fetcher
                 .get_block_headers_range(HEAD_BLOCK_NUM, HEAD_BLOCK_NUM + NUM_BLOCKS as u32)
                 .await

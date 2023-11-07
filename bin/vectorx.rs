@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::env;
 
 use alloy_sol_types::{sol, SolType};
+use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
 use ethers::core::types::Address;
 use ethers::providers::{Http, Provider};
@@ -29,10 +30,8 @@ struct OffchainInput {
     input: String,
 }
 
-type NextAuthoritySetCalldataTuple = sol! { tuple(uint64, uint32) };
 type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
 
-type HeaderRangeCalldataTuple = sol! { tuple(uint32, uint64, uint32) };
 type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint32) };
 
 struct VectorXOperator {
@@ -150,17 +149,13 @@ impl VectorXOperator {
             target_block,
         ));
 
-        // abi.encodeWithSelector(bytes4(keccak256("commitHeaderRange(uint32,uint64,uint32)")),
-        //  trusted_block, trusted_authority_set_id, target_block);
-        let function_signature = "commitHeaderRange(uint32,uint64,uint32)";
-        let function_selector = ethers::utils::id(function_signature).to_vec();
-        let encoded_parameters = HeaderRangeCalldataTuple::abi_encode_sequence(&(
+        // Encode the call into calldata.
+        let commit_header_range_call = CommitHeaderRangeCall {
             trusted_block,
-            trusted_authority_set_id,
+            authority_set_id: trusted_authority_set_id,
             target_block,
-        ));
-        // Concat function selector and encoded parameters.
-        let function_data = [&function_selector[..], &encoded_parameters[..]].concat();
+        };
+        let function_data = commit_header_range_call.encode();
 
         self.submit_request(function_data, input, self.config.step_function_id)
             .await;
@@ -189,15 +184,12 @@ impl VectorXOperator {
             epoch_end_block,
         ));
 
-        // abi.encodeWithSelector(bytes4(keccak256("addNextAuthoritySetId(uint64,uint32)")),
-        //  current_authority_set_id, epoch_end_block);
-        let function_signature = "addNextAuthoritySetId(uint64,uint32)";
-        let function_selector = ethers::utils::id(function_signature).to_vec();
-        let encoded_parameters = NextAuthoritySetCalldataTuple::abi_encode_sequence(&(
+        // Encode the call into calldata.
+        let add_next_authority_set_id_call = AddNextAuthoritySetIdCall {
             current_authority_set_id,
             epoch_end_block,
-        ));
-        let function_data = [&function_selector[..], &encoded_parameters[..]].concat();
+        };
+        let function_data = add_next_authority_set_id_call.encode();
 
         self.submit_request(function_data, input, self.config.rotate_function_id)
             .await;

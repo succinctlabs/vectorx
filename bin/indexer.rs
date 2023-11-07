@@ -13,23 +13,14 @@ use std::ops::Deref;
 use avail_subxt::avail::Client;
 use avail_subxt::config::Header as HeaderTrait;
 use avail_subxt::{api, build_client};
-use codec::{Decode, Encode};
+use codec::Encode;
 use log::debug;
 use plonky2x::frontend::ecc::ed25519::gadgets::verify::DUMMY_SIGNATURE;
-use sp_core::ed25519::{self, Public as EdPublic};
+use sp_core::ed25519::{self};
 use sp_core::{blake2_256, Pair, H256};
 use subxt::rpc::RpcParams;
-use vectorx::input::types::{GrandpaJustification, Precommit, StoredJustificationData};
+use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
 use vectorx::input::{RedisClient, RpcDataFetcher};
-
-#[derive(Debug, Decode)]
-pub struct Authority(EdPublic, u64);
-
-#[derive(Debug, Encode)]
-pub enum SignerMessage {
-    DummyMessage(u32),
-    PrecommitMessage(Precommit),
-}
 
 #[tokio::main]
 pub async fn main() {

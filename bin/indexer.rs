@@ -63,10 +63,6 @@ pub async fn main() {
             justification.commit.target_number
         );
 
-        // Note: justification.commit.target_hash is probably block_hash.
-        // Noticed this because retrieved the correct header from commit.target_hash, but the hash
-        // doesn't match header.hash()
-
         // Get the header corresponding to the new justification.
         let header = c
             .rpc()
@@ -75,7 +71,8 @@ pub async fn main() {
             .unwrap()
             .unwrap();
 
-        // A bit redundant, but just to make sure the hash is correct.
+        // A bit redundant, but just to make sure the hash is correct. This confirms that the
+        // header encoding + block encoding match.
         let block_hash = justification.commit.target_hash;
         let header_hash = header.hash();
         let calculated_hash: H256 = Encode::using_encoded(&header, blake2_256).into();

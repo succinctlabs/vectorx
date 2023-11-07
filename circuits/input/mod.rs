@@ -198,6 +198,8 @@ impl RpcDataFetcher {
     const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
     pub async fn new() -> Self {
+        dotenv::dotenv().ok();
+
         let url = env::var("AVAIL_URL").expect("AVAIL_URL must be set");
         let client = build_client(url.as_str(), false).await.unwrap();
         let redis_client = RedisClient::new().await;
@@ -278,12 +280,14 @@ impl RpcDataFetcher {
 
         let mut low = 0;
         let head_block = self.get_head().await;
+        println!("head block {:?}", head_block.number);
         let mut high = head_block.number;
         let mut epoch_end_block_number = 0;
 
         while low <= high {
             let mid = (low + high) / 2;
             let mid_authority_set_id = self.get_authority_set_id(mid).await;
+            println!("mid {:?}", mid_authority_set_id);
 
             match mid_authority_set_id.cmp(&(target_authority_set_id + 1)) {
                 Ordering::Equal => {
@@ -929,9 +933,9 @@ mod tests {
     async fn test_query_redis_block_range() {
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        let prev_last_justified_block = data_fetcher.last_justified_block(615).await;
+        let prev_last_justified_block = data_fetcher.last_justified_block(1).await;
         println!("prev_last_justified_block {:?}", prev_last_justified_block);
-        let last_justified_block = data_fetcher.last_justified_block(616).await;
+        let last_justified_block = data_fetcher.last_justified_block(5).await;
         println!("last_justified_block {:?}", last_justified_block);
         let blocks = data_fetcher
             .find_justifications_in_range(prev_last_justified_block, last_justified_block)
@@ -944,23 +948,26 @@ mod tests {
     async fn test_get_header_rotate() {
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        let mut start_epoch = 100;
+        let mut start_epoch = 0;
+        let head = data_fetcher.get_head().await.number;
+        let id = data_fetcher.get_authority_set_id(head).await;
+        println!("head {:?}", head);
+        println!("id {:?}", id);
         loop {
-            if start_epoch > 617 {
+            if start_epoch > 2 {
                 break;
             }
             let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
+            println!("epoch_end_block {:?}", epoch_end_block);
 
             let _ = data_fetcher
                 .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
                 .await;
 
-            println!("epoch_end_block {:?}", epoch_end_block);
-
             let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
             println!("num authorities {:?}", num_authorities);
 
-            start_epoch += 100;
+            start_epoch += 1;
         }
     }
 }

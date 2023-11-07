@@ -198,8 +198,7 @@ impl RpcDataFetcher {
     const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
     pub async fn new() -> Self {
-        // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
-        let url = "wss://goldberg.avail.tools:443/ws".to_string();
+        let url = env::var("AVAIL_URL").expect("AVAIL_URL must be set");
         let client = build_client(url.as_str(), false).await.unwrap();
         let redis_client = RedisClient::new().await;
         RpcDataFetcher {

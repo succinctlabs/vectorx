@@ -11,38 +11,35 @@ contract DeployScript is Script {
 
     function run() public {
         vm.startBroadcast();
-        address gateway = address(0x852a94F8309D445D27222eDb1E92A4E83DdDd2a8);
-        bytes32 dataCommitmentFunctionId = bytes32(
-            0xf21ad9ac1eb903b95ea90d135fe019007cd90508861afaeb73f25d3dfc5dcc01
+        bytes32 stepFunctionId = bytes32(
+            hex"4a8c380126819eaa2c702b0eedcecaf0e744e53c329256ffcfcb136debe3b47a"
+        );
+        bytes32 rotateFunctionId = bytes32(
+            hex"fb9ac718be3fa5610bc96889915a3f8afdfd49a61c119279ee144ba5e90bf007"
         );
 
         // Use the below to interact with an already deployed ZK light client
-        // VectorX lightClient = VectorX(
-        //     0xB1cdc97E3C9fC29a30da31e49B4e2304b011d631
-        // );
-
-        VectorX lightClient = new VectorX(gateway);
-
-        uint32 trustedBlock = 272502;
-        uint64 authoritySetId = 256;
-        bytes32 header = bytes32(
-            hex"9a69988124baf188d9d6bbbc579977815086a5d9dfa3b91bafa6d315f31047dc"
+        VectorX lightClient = VectorX(
+            0x27164a92314c3Ed0b8EF81b8c47eb94B76211E01
         );
+
+        uint32 trustedBlock = 645570;
+        uint64 authoritySetId = 616;
+        bytes32 authoritySetHash = bytes32(
+            hex"be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+        );
+        bytes32 header = bytes32(
+            hex"ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
+        );
+
         lightClient.setGenesisInfo(
             trustedBlock,
             header,
-            256,
-            bytes32(uint256(1))
-        );
-
-        uint32 targetBlock = 272534;
-
-        lightClient.updateHeaderRangeFunctionId(dataCommitmentFunctionId);
-
-        lightClient.requestHeaderRange{value: 0.2 ether}(
-            trustedBlock,
             authoritySetId,
-            targetBlock
+            authoritySetHash
         );
+
+        lightClient.updateHeaderRangeFunctionId(stepFunctionId);
+        lightClient.updateAddNextAuthoritySetFunctionId(rotateFunctionId);
     }
 }

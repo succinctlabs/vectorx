@@ -52,7 +52,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             block_number, authority_set_id
         );
 
-        let data_fetcher = RpcDataFetcher::new().await;
+        let mut data_fetcher = RpcDataFetcher::new().await;
         let justification_data: SimpleJustificationData = data_fetcher
             .get_simple_justification::<NUM_AUTHORITIES>(block_number)
             .await;
@@ -66,11 +66,16 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             panic!("Encoded precommit is not the correct length");
         }
 
-        verify_signature(
-            &justification_data.pubkeys[0].compress_point().to_le_bytes(),
-            &encoded_precommit,
-            &justification_data.signatures[0],
-        );
+        for i in 0..justification_data.num_authorities {
+            if !justification_data.validator_signed[i] {
+                continue;
+            }
+            verify_signature(
+                &justification_data.pubkeys[i].compress_point().to_le_bytes(),
+                &encoded_precommit,
+                &justification_data.signatures[i],
+            );
+        }
 
         output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
             encoded_precommit.try_into().unwrap(),
@@ -274,58 +279,60 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 mod tests {
     use std::env;
 
-    use ethers::types::H256;
-    use log::info;
     use plonky2x::prelude::{Bytes32Variable, DefaultBuilder};
-    use tokio::runtime::Runtime;
 
     use super::*;
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_simple_justification() {
+    fn test_verify_simple_justification() {
         env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
         env_logger::try_init().unwrap_or_default();
 
-        // There are only 7 authories in the 10,000-th block
-        // But we set NUM_AUTHORITIES=10 so that we can test padding
-        const BLOCK_NUMBER: u32 = 317857u32;
-        const NUM_AUTHORITIES: usize = 80;
-
-        let rt = Runtime::new().expect("failed to create tokio runtime");
-        let justification_data: SimpleJustificationData = rt.block_on(async {
-            let fetcher = RpcDataFetcher::new().await;
-            fetcher
-                .get_simple_justification::<NUM_AUTHORITIES>(BLOCK_NUMBER)
-                .await
-        });
-        let fetched_authority_set_id = justification_data.authority_set_id;
-
-        info!("Defining circuit");
-        // Define the circuit
+        const NUM_AUTHORITIES: usize = 76;
         let mut builder = DefaultBuilder::new();
 
         let block_number = builder.read::<U32Variable>();
         let block_hash = builder.read::<Bytes32Variable>();
         let authority_set_id = builder.read::<U64Variable>();
         let authority_set_hash = builder.read::<Bytes32Variable>();
+
         builder.verify_simple_justification::<NUM_AUTHORITIES>(
             block_number,
             block_hash,
             authority_set_id,
             authority_set_hash,
         );
-        info!("Building circuit");
+
+        log::debug!("Building circuit");
         let circuit = builder.build();
+        log::debug!("Done building circuit");
 
         let mut input = circuit.input();
-        input.write::<U32Variable>(BLOCK_NUMBER);
-        input.write::<Bytes32Variable>(H256::from([0u8; 32]));
-        input.write::<U64Variable>(fetched_authority_set_id);
-        input.write::<Bytes32Variable>(H256::from([0u8; 32])); // TODO: will have to be filled in with real thing
 
-        info!("Generating proof");
+        // target_block is a non-era end block block in epoch 616 with 10 authorities.
+        let target_block = 645570u32;
+        let target_header = "ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
+            .parse()
+            .unwrap();
+        let authority_set_id = 616u64;
+        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+            .parse()
+            .unwrap();
+
+        input.write::<U32Variable>(target_block);
+
+        input.write::<Bytes32Variable>(target_header);
+
+        input.write::<U64Variable>(authority_set_id);
+
+        input.write::<Bytes32Variable>(authority_set_hash);
+
+        log::debug!("Generating proof");
         let (proof, output) = circuit.prove(&input);
+        log::debug!("Done generating proof");
+
         circuit.verify(&proof, &input, &output);
     }
 }

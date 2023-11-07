@@ -1,9 +1,10 @@
 use avail_subxt::primitives::Header;
 use codec::{Decode, Encode};
 use ethers::types::H256;
+use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519::{Public as EdPublic, Signature};
-use sp_core::Bytes;
+use sp_core::{bytes, Bytes};
 
 use crate::vars::{AffinePoint, Curve};
 
@@ -15,6 +16,20 @@ pub struct HeaderRotateData {
     pub end_position: usize,
     pub new_authority_set_hash: Vec<u8>,
     pub padded_pubkeys: Vec<H256>,
+}
+
+// Stores the signed messages, valid signatures and pubkeys for a given block number justification.
+// Note: There is a redis macros crate that can be used to serialize this.
+// https://github.com/daniel7grant/redis-macros/#json-wrapper-with-redisjson
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct StoredJustificationData {
+    pub block_number: u32,
+    pub signed_message: Vec<u8>,
+    pub pubkeys: Vec<Vec<u8>>,
+    pub signatures: Vec<Vec<u8>>,
+    pub validator_signed: Vec<bool>,
+    pub num_authorities: usize,
 }
 
 pub struct SimpleJustificationData {
@@ -57,6 +72,17 @@ pub struct GrandpaJustification {
     pub round: u64,
     pub commit: Commit,
     pub votes_ancestries: Vec<Header>,
+}
+
+impl<'de> Deserialize<'de> for GrandpaJustification {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let encoded = bytes::deserialize(deserializer)?;
+        Self::decode(&mut &encoded[..])
+            .map_err(|codec_err| D::Error::custom(format!("Invalid decoding: {:?}", codec_err)))
+    }
 }
 
 #[derive(Debug, Encode)]

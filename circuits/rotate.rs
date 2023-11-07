@@ -14,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use crate::builder::header::HeaderMethods;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::builder::rotate::RotateMethods;
-use crate::consts::VALIDATOR_LENGTH;
 use crate::input::RpcDataFetcher;
 use crate::vars::{AvailPubkeyVariable, EncodedHeader, EncodedHeaderVariable};
 
@@ -42,7 +41,7 @@ impl<
             block_number
         );
 
-        let data_fetcher = RpcDataFetcher::new().await;
+        let mut data_fetcher = RpcDataFetcher::new().await;
 
         let rotate_data = data_fetcher
             .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(block_number)
@@ -101,11 +100,6 @@ impl<
         <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
             plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
-        assert_eq!(
-            (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH),
-            MAX_SUBARRAY_SIZE
-        );
-
         // Read the on-chain inputs. The validators that signed epoch_end_block_number are defined
         // by authority_set_id and authority_set_hash.
         let authority_set_id = builder.evm_read::<U64Variable>();
@@ -188,7 +182,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;
-    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, PREFIX_LENGTH};
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, VALIDATOR_LENGTH};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -199,8 +193,7 @@ mod tests {
         const NUM_AUTHORITIES: usize = 4;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize =
-            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 
@@ -225,15 +218,57 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_rotate_1() {
+    fn test_rotate_small_authority_set() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const NUM_AUTHORITIES: usize = 16;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const MAX_HEADER_CHUNK_SIZE: usize = 100;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+
+        let mut builder = DefaultBuilder::new();
+
+        log::debug!("Defining circuit");
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
+            &mut builder,
+        );
+
+        log::debug!("Building circuit");
+        let circuit = builder.build();
+        log::debug!("Done building circuit");
+
+        let mut input = circuit.input();
+        let authority_set_id = 616u64;
+        // TODO: Get authority set hash from rotate inputs, or a similar function.
+        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+            .parse()
+            .unwrap();
+        let epoch_end_block_number = 645610;
+
+        input.evm_write::<U64Variable>(authority_set_id);
+        input.evm_write::<Bytes32Variable>(authority_set_hash);
+        input.evm_write::<U32Variable>(epoch_end_block_number);
+
+        log::debug!("Generating proof");
+        let (proof, mut output) = circuit.prove(&input);
+        log::debug!("Done generating proof");
+
+        circuit.verify(&proof, &input, &output);
+        let new_authority_set_hash = output.evm_read::<Bytes32Variable>();
+        println!("new_authority_set_hash {:?}", new_authority_set_hash);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_rotate_large_authority_set() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
-        const MAX_SUBARRAY_SIZE: usize =
-            PREFIX_LENGTH + NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

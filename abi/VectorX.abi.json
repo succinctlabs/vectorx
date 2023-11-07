@@ -1,0 +1,440 @@
+[
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_gateway",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint64",
+                "name": "authoritySetId",
+                "type": "uint64"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "authoritySetHash",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint64",
+                "name": "epochEndBlock",
+                "type": "uint64"
+            }
+        ],
+        "name": "AuthoritySetStored",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint32",
+                "name": "blockNumber",
+                "type": "uint32"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "headerHash",
+                "type": "bytes32"
+            }
+        ],
+        "name": "HeadUpdate",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint32",
+                "name": "startBlock",
+                "type": "uint32"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint32",
+                "name": "endBlock",
+                "type": "uint32"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "dataCommitment",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "stateCommitment",
+                "type": "bytes32"
+            }
+        ],
+        "name": "HeaderRangeCommitmentStored",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint32",
+                "name": "trustedBlock",
+                "type": "uint32"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "trustedHeader",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint64",
+                "name": "authoritySetId",
+                "type": "uint64"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "authoritySetHash",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint32",
+                "name": "targetBlock",
+                "type": "uint32"
+            }
+        ],
+        "name": "HeaderRangeRequested",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint64",
+                "name": "currentAuthoritySetId",
+                "type": "uint64"
+            },
+            {
+                "indexed": false,
+                "internalType": "bytes32",
+                "name": "currentAuthoritySetHash",
+                "type": "bytes32"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint64",
+                "name": "epochEndBlock",
+                "type": "uint64"
+            }
+        ],
+        "name": "NextAuthoritySetIdRequested",
+        "type": "event"
+    },
+    {
+        "inputs": [],
+        "name": "MAX_HEADER_RANGE",
+        "outputs": [
+            {
+                "internalType": "uint32",
+                "name": "",
+                "type": "uint32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint64",
+                "name": "_currentAuthoritySetId",
+                "type": "uint64"
+            },
+            {
+                "internalType": "uint32",
+                "name": "_epochEndBlock",
+                "type": "uint32"
+            }
+        ],
+        "name": "addNextAuthoritySetId",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint64",
+                "name": "",
+                "type": "uint64"
+            }
+        ],
+        "name": "authoritySetIdToHash",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint32",
+                "name": "",
+                "type": "uint32"
+            }
+        ],
+        "name": "blockHeightToHeaderHash",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint32",
+                "name": "_trustedBlock",
+                "type": "uint32"
+            },
+            {
+                "internalType": "uint64",
+                "name": "_authoritySetId",
+                "type": "uint64"
+            },
+            {
+                "internalType": "uint32",
+                "name": "_targetBlock",
+                "type": "uint32"
+            }
+        ],
+        "name": "commitHeaderRange",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "name": "dataRootCommitments",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "gateway",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "headerRangeFunctionId",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "latestBlock",
+        "outputs": [
+            {
+                "internalType": "uint32",
+                "name": "",
+                "type": "uint32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint32",
+                "name": "_trustedBlock",
+                "type": "uint32"
+            },
+            {
+                "internalType": "uint64",
+                "name": "_authoritySetId",
+                "type": "uint64"
+            },
+            {
+                "internalType": "uint32",
+                "name": "_requestedBlock",
+                "type": "uint32"
+            }
+        ],
+        "name": "requestHeaderRange",
+        "outputs": [],
+        "stateMutability": "payable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint32",
+                "name": "_epochEndBlock",
+                "type": "uint32"
+            },
+            {
+                "internalType": "uint64",
+                "name": "_currentAuthoritySetId",
+                "type": "uint64"
+            }
+        ],
+        "name": "requestNextAuthoritySetId",
+        "outputs": [],
+        "stateMutability": "payable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "rotateFunctionId",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint32",
+                "name": "_blockHeight",
+                "type": "uint32"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "_header",
+                "type": "bytes32"
+            },
+            {
+                "internalType": "uint64",
+                "name": "_authoritySetId",
+                "type": "uint64"
+            },
+            {
+                "internalType": "bytes32",
+                "name": "_authoritySetHash",
+                "type": "bytes32"
+            }
+        ],
+        "name": "setGenesisInfo",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "name": "stateRootCommitments",
+        "outputs": [
+            {
+                "internalType": "bytes32",
+                "name": "",
+                "type": "bytes32"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_functionId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "updateAddNextAuthoritySetFunctionId",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_gateway",
+                "type": "address"
+            }
+        ],
+        "name": "updateGateway",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "bytes32",
+                "name": "_functionId",
+                "type": "bytes32"
+            }
+        ],
+        "name": "updateHeaderRangeFunctionId",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]

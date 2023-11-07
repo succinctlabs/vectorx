@@ -21,7 +21,7 @@ contract VectorX is IVectorX {
     bytes32 public rotateFunctionId;
 
     /// @notice The maximum header range that can be requested.
-    uint32 public constant MAX_HEADER_RANGE = 128;
+    uint32 public constant MAX_HEADER_RANGE = 256;
 
     /// @notice Maps block height to the header hash of the block.
     mapping(uint32 => bytes32) public blockHeightToHeaderHash;
@@ -57,7 +57,7 @@ contract VectorX is IVectorX {
 
     // TODO: In production, this would be `onlyOwner`
     /// @notice Update the function id for requesting a rotate.
-    function updateRotateFunctionId(bytes32 _functionId) external {
+    function updateAddNextAuthoritySetFunctionId(bytes32 _functionId) external {
         rotateFunctionId = _functionId;
     }
 
@@ -71,6 +71,7 @@ contract VectorX is IVectorX {
     ) external {
         blockHeightToHeaderHash[_blockHeight] = _header;
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestBlock = _blockHeight;
     }
 
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
@@ -156,7 +157,9 @@ contract VectorX is IVectorX {
 
         bytes memory input = abi.encodePacked(
             _trustedBlock,
+            trustedHeader,
             _authoritySetId,
+            authoritySetHash,
             _targetBlock
         );
 
@@ -230,7 +233,7 @@ contract VectorX is IVectorX {
             data,
             500000
         );
-        emit RotateRequested(
+        emit NextAuthoritySetIdRequested(
             _currentAuthoritySetId,
             currentAuthoritySetHash,
             _epochEndBlock

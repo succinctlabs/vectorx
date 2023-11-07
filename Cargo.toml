@@ -1,12 +1,68 @@
-[workspace]
-members = ["circuits"]
-resolver = "2"
+[package]
+name = "vectorx"
+version = "0.1.0"
+edition = "2021"
 
-[profile.release]
-opt-level = 3
-incremental = true
-#lto = "fat"
-#codegen-units = 1
+[lib]
+path = "circuits/lib.rs"
 
-[profile.bench]
-opt-level = 3
+[[bin]]
+name = "step"
+path = "bin/step.rs"
+
+[[bin]]
+name = "rotate"
+path = "bin/rotate.rs"
+
+[[bin]]
+name = "vectorx"
+path = "bin/vectorx.rs"
+
+[[bin]]
+name = "indexer"
+path = "bin/indexer.rs"
+
+[features]
+ci = []
+
+[dependencies]
+env_logger = { version = "0.9.0", default-features = false }
+ed25519-dalek = "1.0.1"
+hex = "0.4.3"
+itertools = "0.10.5"
+ff = { package = "ff_ce", version = "0.11", features = ["derive"] }
+log = { version = "0.4.14", default-features = false }
+num = { version = "0.4", features = ["rand"] }
+plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
+plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
+plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.86"
+tokio = { version = "1.2.0", features = ["full"] }
+async-trait = "0.1.73"
+reqwest = "0.11.20"
+ethers = "2.0.10"
+sha256 = "1.4.0"
+primitive-types = "0.12.1"
+
+redis = { version = "0.23.3", features = [
+    "tokio-native-tls-comp",
+    "json",
+    "tokio-comp",
+] }
+
+# TODO: Update to latest version/new pinned version with new testnet.
+avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "5d2595a" }
+sp-core = { version = "21.0.0", default-features = false }
+codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
+    "derive",
+    "full",
+    "bit-vec",
+] }
+sha2 = "0.10.8"
+dotenv = "0.15.0"
+alloy-sol-types = "0.4.2"
+alloy-primitives = "0.4.2"
+subxt = "0.29"
+[dev-dependencies]
+anyhow = "1.0.68"

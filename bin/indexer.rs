@@ -1,0 +1,171 @@
+//! To build the binary:
+//!
+//!     `cargo build --release --bin indexer`
+//!
+//!
+//!
+//!
+//!
+use std::collections::HashMap;
+use std::env;
+use std::ops::Deref;
+
+use avail_subxt::avail::Client;
+use avail_subxt::config::Header as HeaderTrait;
+use avail_subxt::{api, build_client};
+use codec::Encode;
+use log::debug;
+use plonky2x::frontend::ecc::ed25519::gadgets::verify::DUMMY_SIGNATURE;
+use sp_core::ed25519::{self};
+use sp_core::{blake2_256, Pair, H256};
+use subxt::rpc::RpcParams;
+use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
+use vectorx::input::{RedisClient, RpcDataFetcher};
+
+#[tokio::main]
+pub async fn main() {
+    env::set_var("RUST_LOG", "debug");
+    dotenv::dotenv().ok();
+    env_logger::init();
+
+    // Save every 90 blocks (every 30 minutes).
+    const BLOCK_SAVE_INTERVAL: usize = 90;
+    debug!(
+        "Starting indexer, saving every {} blocks.",
+        BLOCK_SAVE_INTERVAL
+    );
+
+    let url: &str = "wss://kate.avail.tools:443/ws";
+
+    let c: Client = build_client(url, false).await.unwrap();
+    let t = c.rpc().deref();
+    let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = t
+        .subscribe(
+            "grandpa_subscribeJustifications",
+            RpcParams::new(),
+            "grandpa_unsubscribeJustifications",
+        )
+        .await;
+
+    let mut r: RedisClient = RedisClient::new().await;
+
+    let mut sub = sub.unwrap();
+    // Initialize data fetcher (re-initialize every new event to avoid connection reset).
+    let mut fetcher = RpcDataFetcher::new().await;
+
+    // Wait for new justification.
+    while let Some(Ok(justification)) = sub.next().await {
+        if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
+            continue;
+        }
+        debug!(
+            "New justification from block {}",
+            justification.commit.target_number
+        );
+
+        // Get the header corresponding to the new justification.
+        let header = c
+            .rpc()
+            .header(Some(justification.commit.target_hash))
+            .await
+            .unwrap()
+            .unwrap();
+
+        // A bit redundant, but just to make sure the hash is correct. This confirms that the
+        // header encoding + block encoding match.
+        let block_hash = justification.commit.target_hash;
+        let header_hash = header.hash();
+        let calculated_hash: H256 = Encode::using_encoded(&header, blake2_256).into();
+        if header_hash != calculated_hash || block_hash != calculated_hash {
+            panic!("Header hash does not match block hash, avail-subxt crate is out of sync.");
+        }
+
+        // Get current authority set ID.
+        let set_id_key = api::storage().grandpa().current_set_id();
+        let authority_set_id = c
+            .storage()
+            .at(block_hash)
+            .fetch(&set_id_key)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Form a message which is signed in the justification.
+        let signed_message = Encode::encode(&(
+            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
+            &justification.round,
+            &authority_set_id,
+        ));
+
+        // Verify all the signatures of the justification and extract the public keys. The ordering
+        // of the authority set will already be canonical and sorted in the justification on ID.
+
+        // TODO: Add a check that the authority set hash is correctly computed. Fetch the authorities
+        // for the previous block and check that the hash matches.
+
+        let validators = justification
+            .commit
+            .precommits
+            .iter()
+            .filter_map(|precommit| {
+                let is_ok = <ed25519::Pair as Pair>::verify(
+                    &precommit.clone().signature,
+                    signed_message.as_slice(),
+                    &precommit.clone().id,
+                );
+                if is_ok {
+                    Some((
+                        precommit.clone().id.0.to_vec(),
+                        precommit.clone().signature.0.to_vec(),
+                    ))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let pubkeys = validators.iter().map(|v| v.0.clone()).collect::<Vec<_>>();
+        let signatures = validators.iter().map(|v| v.1.clone()).collect::<Vec<_>>();
+
+        // Create map from pubkey to signature.
+        let mut pubkey_to_signature = HashMap::new();
+        for (pubkey, signature) in pubkeys.iter().zip(signatures.iter()) {
+            pubkey_to_signature.insert(pubkey.to_vec(), signature.to_vec());
+        }
+
+        // Check that at least 2/3 of the validators signed the justification.
+        // Note: Assumes the validator set have equal voting power.
+        let authorities = fetcher.get_authorities(header.number - 1).await;
+        let num_authorities = authorities.len();
+        if 3 * pubkeys.len() < num_authorities * 2 {
+            continue;
+        }
+
+        // Create justification data.
+        let mut justification_pubkeys = Vec::new();
+        let mut justification_signatures = Vec::new();
+        let mut validator_signed = Vec::new();
+        for authority_pubkey in authorities.iter() {
+            if let Some(signature) = pubkey_to_signature.get(authority_pubkey) {
+                justification_pubkeys.push(authority_pubkey.to_vec());
+                justification_signatures.push(signature.to_vec());
+                validator_signed.push(true);
+            } else {
+                justification_pubkeys.push(authority_pubkey.to_vec());
+                justification_signatures.push(DUMMY_SIGNATURE.to_vec());
+                validator_signed.push(false);
+            }
+        }
+
+        // Add justification to Redis.
+        let store_justification_data = StoredJustificationData {
+            block_number: header.number,
+            signed_message: signed_message.clone(),
+            pubkeys: justification_pubkeys,
+            signatures: justification_signatures,
+            num_authorities: authorities.len(),
+            validator_signed,
+        };
+        r.add_justification(store_justification_data).await;
+    }
+}

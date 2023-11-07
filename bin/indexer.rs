@@ -51,7 +51,7 @@ pub async fn main() {
 
     let mut sub = sub.unwrap();
     // Initialize data fetcher (re-initialize every new event to avoid connection reset).
-    let fetcher = RpcDataFetcher::new().await;
+    let mut fetcher = RpcDataFetcher::new().await;
 
     // Wait for new justification.
     while let Some(Ok(justification)) = sub.next().await {

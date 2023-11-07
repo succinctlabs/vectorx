@@ -92,7 +92,7 @@ impl<
         let mut headers = Vec::new();
         if last_block >= start_block {
             headers.extend({
-                let data_fetcher = RpcDataFetcher::new().await;
+                let mut data_fetcher = RpcDataFetcher::new().await;
                 data_fetcher
                     .get_block_headers_range(start_block, last_block)
                     .await
@@ -179,7 +179,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         // Note: Returns NUM_BLOCKS + 1 headers.
         let headers = rt.block_on(async {
-            let data_fetcher = RpcDataFetcher::new().await;
+            let mut data_fetcher = RpcDataFetcher::new().await;
             data_fetcher
                 .get_block_headers_range(HEAD_BLOCK_NUM, HEAD_BLOCK_NUM + NUM_HEADERS as u32)
                 .await
@@ -225,7 +225,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
         // Note: Returns NUM_BLOCKS + 1 headers.
         let headers = rt.block_on(async {
-            let data_fetcher = RpcDataFetcher::new().await;
+            let mut data_fetcher = RpcDataFetcher::new().await;
             data_fetcher
                 .get_block_headers_range(START_BLOCK_NUM, START_BLOCK_NUM + NUM_BLOCKS as u32)
                 .await

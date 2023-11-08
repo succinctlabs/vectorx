@@ -14,7 +14,8 @@ use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
 use log::debug;
-use plonky2x::frontend::ecc::ed25519::gadgets::verify::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
+use plonky2x::frontend::curta::ec::point::CompressedEdwardsY;
+use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::Digest;
@@ -28,7 +29,6 @@ use crate::consts::{
     BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
 };
 use crate::input::types::SimpleJustificationData;
-use crate::vars::{AffinePoint, Curve};
 
 pub struct RedisClient {
     pub redis: redis::Client,
@@ -144,13 +144,13 @@ pub fn verify_signature(pubkey_bytes: &[u8], signed_message: &[u8], signature: &
 }
 
 // Compute the chained hash of the authority set.
-pub fn compute_authority_set_hash(authorities: &[Vec<u8>]) -> Vec<u8> {
+pub fn compute_authority_set_hash(authorities: &[CompressedEdwardsY]) -> Vec<u8> {
     let mut hash_so_far = Vec::new();
     for i in 0..authorities.len() {
-        let authority = authorities[i].clone();
+        let authority = authorities[i];
         let mut hasher = sha2::Sha256::new();
         hasher.update(hash_so_far);
-        hasher.update(authority);
+        hasher.update(authority.as_bytes());
         hash_so_far = hasher.finalize().to_vec();
     }
     hash_so_far
@@ -378,7 +378,7 @@ impl RpcDataFetcher {
 
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
-    pub async fn get_authorities(&mut self, block_number: u32) -> Vec<Vec<u8>> {
+    pub async fn get_authorities(&mut self, block_number: u32) -> Vec<CompressedEdwardsY> {
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities_bytes = self
@@ -413,13 +413,10 @@ impl RpcDataFetcher {
 
         let pubkey_and_weight_bytes = &grandpa_authorities_bytes[offset..];
 
-        let mut authorities: Vec<AffinePoint<Curve>> = Vec::new();
-        let mut authories_pubkey_bytes: Vec<Vec<u8>> = Vec::new();
+        let mut authorities: Vec<CompressedEdwardsY> = Vec::new();
         for authority_pubkey_weight in pubkey_and_weight_bytes.chunks(VALIDATOR_LENGTH) {
-            let pub_key_vec = authority_pubkey_weight[..32].to_vec();
-            let pub_key_point = AffinePoint::<Curve>::new_from_compressed_point(&pub_key_vec);
-            authorities.push(pub_key_point);
-            authories_pubkey_bytes.push(pub_key_vec);
+            let pub_key = CompressedEdwardsY::from_slice(&authority_pubkey_weight[..32]).unwrap();
+            authorities.push(pub_key);
 
             // Assert that the weight is 1 (weight is in LE representation).
             assert_eq!(authority_pubkey_weight[32], 1);
@@ -428,7 +425,7 @@ impl RpcDataFetcher {
             }
         }
 
-        authories_pubkey_bytes
+        authorities
     }
 
     // Computes the authority_set_hash for a given block number.
@@ -438,10 +435,10 @@ impl RpcDataFetcher {
 
         let mut hash_so_far = Vec::new();
         for i in 0..authorities.len() {
-            let authority = authorities[i].clone();
+            let authority = authorities[i];
             let mut hasher = sha2::Sha256::new();
             hasher.update(hash_so_far);
-            hasher.update(authority);
+            hasher.update(authority.as_bytes());
             hash_so_far = hasher.finalize().to_vec();
         }
         H256::from_slice(&hash_so_far)
@@ -450,7 +447,14 @@ impl RpcDataFetcher {
     async fn get_justification_data<const VALIDATOR_SET_SIZE_MAX: usize>(
         &mut self,
         block_number: u32,
-    ) -> (Vec<Vec<u8>>, Vec<Vec<u8>>, Vec<bool>, Vec<u8>, u64, u64) {
+    ) -> (
+        Vec<CompressedEdwardsY>,
+        Vec<Vec<u8>>,
+        Vec<bool>,
+        Vec<u8>,
+        u64,
+        u64,
+    ) {
         // Note: grandpa_proveFinality will serve the proof for the last justified block in an epoch.
         // This means that get_simple_justification should fail for any block that is not the last
         // justified block in an epoch.
@@ -516,18 +520,22 @@ impl RpcDataFetcher {
             let mut padded_pubkeys = Vec::new();
             let mut voting_weight = 0;
             for pubkey_bytes in authorities_pubkey_bytes.iter() {
-                let signature = pubkey_bytes_to_signature.get(pubkey_bytes);
+                let signature = pubkey_bytes_to_signature.get(&pubkey_bytes.as_bytes().to_vec());
                 // let authority = AffinePoint::<Curve>::new_from_compressed_point(pubkey_bytes);
 
                 if let Some(valid_signature) = signature {
-                    verify_signature(pubkey_bytes, &signed_message, valid_signature);
+                    verify_signature(pubkey_bytes.as_bytes(), &signed_message, valid_signature);
                     validator_signed.push(true);
-                    padded_pubkeys.push(pubkey_bytes.clone());
+                    padded_pubkeys.push(
+                        CompressedEdwardsY::from_slice(pubkey_bytes.as_bytes().as_ref()).unwrap(),
+                    );
                     padded_signatures.push((*valid_signature).to_vec());
                     voting_weight += 1;
                 } else {
                     validator_signed.push(false);
-                    padded_pubkeys.push(pubkey_bytes.clone());
+                    padded_pubkeys.push(
+                        CompressedEdwardsY::from_slice(pubkey_bytes.as_bytes().as_ref()).unwrap(),
+                    );
                     // Push a dummy signature, since this validator did not sign.
                     padded_signatures.push(DUMMY_SIGNATURE.to_vec());
                 }
@@ -553,8 +561,14 @@ impl RpcDataFetcher {
                     voting_weight += 1;
                 }
             }
+
+            let pubkeys = stored_justification_data
+                .pubkeys
+                .iter()
+                .map(|pubkey| CompressedEdwardsY::from_slice(pubkey).unwrap())
+                .collect::<Vec<CompressedEdwardsY>>();
             (
-                stored_justification_data.pubkeys,
+                pubkeys,
                 stored_justification_data.signatures,
                 stored_justification_data.validator_signed,
                 stored_justification_data.signed_message,
@@ -593,7 +607,7 @@ impl RpcDataFetcher {
         let mut padded_signatures = Vec::new();
         let mut padded_validator_signed = Vec::new();
         for i in 0..num_authorities as usize {
-            padded_pubkeys.push(AffinePoint::new_from_compressed_point(&pubkeys[i]));
+            padded_pubkeys.push(pubkeys[i]);
             padded_signatures.push(signatures[i].clone().as_slice().try_into().unwrap());
             padded_validator_signed.push(validator_signed[i]);
         }
@@ -601,7 +615,7 @@ impl RpcDataFetcher {
         for _ in num_authorities as usize..VALIDATOR_SET_SIZE_MAX {
             validator_signed.push(false);
             // Push a dummy pubkey and signature, to pad the array to VALIDATOR_SET_SIZE_MAX.
-            padded_pubkeys.push(AffinePoint::new_from_compressed_point(&DUMMY_PUBLIC_KEY));
+            padded_pubkeys.push(CompressedEdwardsY::from_slice(&DUMMY_PUBLIC_KEY).unwrap());
             padded_signatures.push(DUMMY_SIGNATURE);
         }
 
@@ -680,7 +694,7 @@ impl RpcDataFetcher {
                         let weight = &authority_chunk[PUBKEY_LENGTH..];
 
                         // Assert the pubkey in the encoded log is correct.
-                        assert_eq!(*pubkey, new_authorities[i]);
+                        assert_eq!(*pubkey, new_authorities[i].0);
 
                         // Assert weight's LE representation == 1
                         for j in 0..WEIGHT_LENGTH {
@@ -720,11 +734,11 @@ impl RpcDataFetcher {
         let new_authority_set_hash = compute_authority_set_hash(&new_authorities);
         let mut padded_pubkeys = Vec::new();
         for i in 0..new_authorities.len() {
-            padded_pubkeys.push(H256::from_slice(&new_authorities[i].clone()));
+            padded_pubkeys.push(CompressedEdwardsY::from_slice(&new_authorities[i].0).unwrap());
         }
         for _ in new_authorities.len()..VALIDATOR_SET_SIZE_MAX {
             // Pad the array with dummy pubkeys to VALIDATOR_SET_SIZE_MAX.
-            padded_pubkeys.push(H256::from_slice(&DUMMY_PUBLIC_KEY));
+            padded_pubkeys.push(CompressedEdwardsY::from_slice(&DUMMY_PUBLIC_KEY).unwrap());
         }
 
         // TODO: Find out what the unknown bytes are (probably an enum).

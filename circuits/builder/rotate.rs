@@ -1,3 +1,4 @@
+use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
@@ -32,7 +33,7 @@ pub trait RotateMethods {
         header_hash: &Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
-        new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
+        new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     );
 }
@@ -97,7 +98,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         header_hash: &Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
-        new_pubkeys: &ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>,
+        new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) {
         let true_v = self._true();
@@ -182,7 +183,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             // increment the cursor by the pubkey length.
             let extracted_pubkey =
                 Bytes32Variable::from(&enc_validator_subarray[idx..idx + PUBKEY_LENGTH]);
-            let pubkey_match = self.is_equal(extracted_pubkey, new_pubkeys[i]);
+            let pubkey_match = self.is_equal(extracted_pubkey, new_pubkeys[i].0);
             let pubkey_check = self.or(pubkey_match, validator_disabled);
             self.assert_is_equal(pubkey_check, true_v);
             cursor = self.add(cursor, pubkey_len);
@@ -227,6 +228,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 pub mod tests {
     use std::env;
 
+    use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
     use plonky2x::prelude::{
         ArrayVariable, Bytes32Variable, DefaultBuilder, U32Variable, Variable, VariableStream,
     };
@@ -234,7 +236,7 @@ pub mod tests {
     use crate::builder::rotate::RotateMethods;
     use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, VALIDATOR_LENGTH};
     use crate::rotate::RotateHint;
-    use crate::vars::{AvailPubkeyVariable, EncodedHeaderVariable};
+    use crate::vars::EncodedHeaderVariable;
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -262,8 +264,8 @@ pub mod tests {
         let num_authorities = output_stream.read::<Variable>(&mut builder);
         let start_position = output_stream.read::<Variable>(&mut builder);
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
-        let new_pubkeys =
-            output_stream.read::<ArrayVariable<AvailPubkeyVariable, NUM_AUTHORITIES>>(&mut builder);
+        let new_pubkeys = output_stream
+            .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
 
         // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
         // so it's fine to just use the expected_new_authority_set_hash during this test.
@@ -314,8 +316,8 @@ pub mod tests {
         let num_authorities = output_stream.read::<Variable>(&mut builder);
         let start_position = output_stream.read::<Variable>(&mut builder);
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
-        let new_pubkeys =
-            output_stream.read::<ArrayVariable<AvailPubkeyVariable, NUM_AUTHORITIES>>(&mut builder);
+        let new_pubkeys = output_stream
+            .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
 
         // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
         // so it's fine to just use the expected_new_authority_set_hash during this test.

@@ -15,7 +15,7 @@ use avail_subxt::config::Header as HeaderTrait;
 use avail_subxt::{api, build_client};
 use codec::Encode;
 use log::debug;
-use plonky2x::frontend::ecc::ed25519::gadgets::verify::DUMMY_SIGNATURE;
+use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::DUMMY_SIGNATURE;
 use sp_core::ed25519::{self};
 use sp_core::{blake2_256, Pair, H256};
 use subxt::rpc::RpcParams;
@@ -146,12 +146,12 @@ pub async fn main() {
         let mut justification_signatures = Vec::new();
         let mut validator_signed = Vec::new();
         for authority_pubkey in authorities.iter() {
-            if let Some(signature) = pubkey_to_signature.get(authority_pubkey) {
-                justification_pubkeys.push(authority_pubkey.to_vec());
+            if let Some(signature) = pubkey_to_signature.get(&authority_pubkey.0.to_vec()) {
+                justification_pubkeys.push(authority_pubkey.0.to_vec());
                 justification_signatures.push(signature.to_vec());
                 validator_signed.push(true);
             } else {
-                justification_pubkeys.push(authority_pubkey.to_vec());
+                justification_pubkeys.push(authority_pubkey.0.to_vec());
                 justification_signatures.push(DUMMY_SIGNATURE.to_vec());
                 validator_signed.push(false);
             }

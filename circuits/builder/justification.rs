@@ -1,15 +1,16 @@
 use async_trait::async_trait;
+use ethers::types::U256;
 use log::debug;
-use num::traits::ToBytes;
-use num::BigUint;
-use plonky2x::frontend::ecc::ed25519::gadgets::curve::CircuitBuilderCurveGadget;
-use plonky2x::frontend::ecc::ed25519::gadgets::verify::EDDSABatchVerify;
+use plonky2x::frontend::curta::ec::point::{CompressedEdwardsY, CompressedEdwardsYVariable};
+use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{
+    EDDSASignatureVariable, EDDSASignatureVariableValue,
+};
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Field, PlonkParameters, RichField, Variable,
+    Field, PlonkParameters, Variable,
 };
 use serde::{Deserialize, Serialize};
 
@@ -17,20 +18,6 @@ use super::decoder::DecodingMethods;
 use crate::consts::ENCODED_PRECOMMIT_LENGTH;
 use crate::input::types::SimpleJustificationData;
 use crate::input::{verify_signature, RpcDataFetcher};
-use crate::vars::*;
-
-type SignatureValueType<F> = <EDDSASignatureTarget<Curve> as CircuitVariable>::ValueType<F>;
-
-fn signature_to_value_type<F: RichField>(sig_bytes: &[u8]) -> SignatureValueType<F> {
-    let sig_r = AffinePoint::new_from_compressed_point(&sig_bytes[0..32]);
-    assert!(sig_r.is_valid());
-    let sig_s_biguint = BigUint::from_bytes_le(&sig_bytes[32..64]);
-    if sig_s_biguint.to_u32_digits().is_empty() {
-        panic!("sig_s_biguint has 0 limbs which will cause problems down the line")
-    }
-    let sig_s = Ed25519Scalar::from_noncanonical_biguint(sig_s_biguint);
-    SignatureValueType::<F> { r: sig_r, s: sig_s }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
@@ -71,7 +58,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
                 continue;
             }
             verify_signature(
-                &justification_data.pubkeys[i].compress_point().to_le_bytes(),
+                justification_data.pubkeys[i].as_bytes(),
                 &encoded_precommit,
                 &justification_data.signatures[i],
             );
@@ -83,14 +70,17 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         output_stream.write_value::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(
             justification_data.validator_signed,
         );
-        output_stream.write_value::<ArrayVariable<EDDSASignatureTarget<Curve>, NUM_AUTHORITIES>>(
+        output_stream.write_value::<ArrayVariable<EDDSASignatureVariable, NUM_AUTHORITIES>>(
             justification_data
                 .signatures
                 .iter()
-                .map(|x| signature_to_value_type::<L::Field>(x))
+                .map(|sig| EDDSASignatureVariableValue {
+                    r: CompressedEdwardsY::from_slice(&sig[0..32]).unwrap(),
+                    s: U256::from_little_endian(&sig[32..64]),
+                })
                 .collect(),
         );
-        output_stream.write_value::<ArrayVariable<EDDSAPublicKeyVariable, NUM_AUTHORITIES>>(
+        output_stream.write_value::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(
             justification_data.pubkeys,
         );
         output_stream.write_value::<U32Variable>(justification_data.num_authorities as u32);
@@ -107,7 +97,7 @@ pub trait GrandpaJustificationVerifier {
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     );
 
     /// Verify the number of validators that signed is greater than or equal to the threshold.
@@ -145,11 +135,11 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         &mut self,
         num_active_authorities: Variable,
         authority_set_commitment: Bytes32Variable,
-        authority_set_signers: &ArrayVariable<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>,
+        authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     ) {
         let mut authority_enabled = self._true();
 
-        let mut commitment_so_far = self.curta_sha256(&authority_set_signers[0].as_bytes());
+        let mut commitment_so_far = self.curta_sha256(&authority_set_signers[0].0.as_bytes());
 
         for i in 1..MAX_NUM_AUTHORITIES {
             let curr_idx = self.constant::<Variable>(L::Field::from_canonical_usize(i));
@@ -162,7 +152,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 
             let mut input_to_hash = Vec::new();
             input_to_hash.extend_from_slice(&commitment_so_far.as_bytes());
-            input_to_hash.extend_from_slice(&authority_set_signers[i].as_bytes());
+            input_to_hash.extend_from_slice(&authority_set_signers[i].0.as_bytes());
 
             // Compute the chained hash of the authority set commitment.
             let chained_hash = self.curta_sha256(&input_to_hash);
@@ -222,26 +212,17 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         let encoded_precommit = output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(self);
         let validator_signed =
             output_stream.read::<ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>>(self);
-        let signatures = output_stream
-            .read::<ArrayVariable<EDDSASignatureTarget<Curve>, MAX_NUM_AUTHORITIES>>(self);
-        let pubkeys =
-            output_stream.read::<ArrayVariable<EDDSAPublicKeyVariable, MAX_NUM_AUTHORITIES>>(self);
+        let signatures =
+            output_stream.read::<ArrayVariable<EDDSASignatureVariable, MAX_NUM_AUTHORITIES>>(self);
+        let pubkeys = output_stream
+            .read::<ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>>(self);
         let num_active_authorities = output_stream.read::<U32Variable>(self);
-
-        // Compress the pubkeys from affine points to bytes.
-        let compressed_pubkeys = ArrayVariable::<AvailPubkeyVariable, MAX_NUM_AUTHORITIES>::from(
-            pubkeys
-                .as_vec()
-                .iter()
-                .map(|x| self.compress_point(x).0)
-                .collect::<Vec<Bytes32Variable>>(),
-        );
 
         // Verify the authority set commitment is valid.
         self.verify_authority_set_commitment(
             num_active_authorities.variable,
             authority_set_hash,
-            &compressed_pubkeys,
+            &pubkeys,
         );
 
         // Verify the correctness of the encoded_precommit message.
@@ -251,8 +232,8 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         self.assert_is_equal(decoded_precommit.block_hash, block_hash);
 
         // We verify the signatures of the validators on the encoded_precommit message.
-        // `conditional_batch_eddsa_verify` doesn't assume all messages are the same, but in our case they are
-        // and they are also constant length, so we can have `message_byte_lengths` be a constant array
+        // `curta_eddsa_verify_sigs_conditional` doesn't assume all messages are the same, but in our case they are
+        // and they are also constant length, so we can have `message_byte_lengths` be a constant array.
         let message_byte_lengths = self
             .constant::<ArrayVariable<U32Variable, MAX_NUM_AUTHORITIES>>(vec![
                 ENCODED_PRECOMMIT_LENGTH
@@ -260,9 +241,9 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                 MAX_NUM_AUTHORITIES
             ]);
         let messages = vec![encoded_precommit; MAX_NUM_AUTHORITIES];
-        self.conditional_batch_eddsa_verify::<MAX_NUM_AUTHORITIES, ENCODED_PRECOMMIT_LENGTH>(
+        self.curta_eddsa_verify_sigs_conditional(
             validator_signed.clone(),
-            message_byte_lengths,
+            Some(message_byte_lengths),
             messages.into(),
             signatures,
             pubkeys,

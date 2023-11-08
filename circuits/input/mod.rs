@@ -964,4 +964,14 @@ mod tests {
             start_epoch += 100;
         }
     }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_last_justified_block() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+        let last_justified_block = data_fetcher.last_justified_block(0).await;
+        println!("last_justified_block {:?}", last_justified_block);
+        let header = data_fetcher.get_header(last_justified_block).await;
+        println!("header hash {:?}", hex::encode(header.hash().0));
+    }
 }

@@ -43,6 +43,6 @@ pub struct SignedPrecommitVariable {
 
 #[derive(Clone)]
 pub struct AuthoritySetSignerVariable {
-    pub pub_keys: CompressedEdwardsYVariable, // Array of pub keys (in compressed form)
+    pub pub_keys: CompressedEdwardsYVariable, // Array of public keys.
     pub weights: U64Variable, // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
 }

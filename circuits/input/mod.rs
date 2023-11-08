@@ -188,6 +188,7 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
 
 pub struct RpcDataFetcher {
     pub client: Client,
+    pub avail_url: String,
     pub redis_client: RedisClient,
     pub save: Option<String>,
 }
@@ -197,12 +198,12 @@ impl RpcDataFetcher {
     const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
     pub async fn new() -> Self {
-        // let mut url = env::var(format!("RPC_{}", chain_id)).expect("RPC url not set in .env");
-        let url = "wss://kate.avail.tools:443/ws".to_string();
+        let url = env::var("AVAIL_URL").expect("AVAIL_URL must be set");
         let client = build_client(url.as_str(), false).await.unwrap();
         let redis_client = RedisClient::new().await;
         RpcDataFetcher {
             client,
+            avail_url: url,
             redis_client,
             save: None,
         }
@@ -212,19 +213,16 @@ impl RpcDataFetcher {
         for _ in 0..Self::MAX_RECONNECT_ATTEMPTS {
             match self.client.rpc().system_health().await {
                 Ok(_) => return Ok(()),
-                Err(_) => {
-                    let url = "wss://kate.avail.tools:443/ws".to_string();
-                    match build_client(url.as_str(), false).await {
-                        Ok(new_client) => {
-                            self.client = new_client;
-                            return Ok(());
-                        }
-                        Err(_) => {
-                            debug!("Failed to connect to client, retrying...");
-                            tokio::time::sleep(Self::RECONNECT_DELAY).await;
-                        }
+                Err(_) => match build_client(self.avail_url.as_str(), false).await {
+                    Ok(new_client) => {
+                        self.client = new_client;
+                        return Ok(());
                     }
-                }
+                    Err(_) => {
+                        debug!("Failed to connect to client, retrying...");
+                        tokio::time::sleep(Self::RECONNECT_DELAY).await;
+                    }
+                },
             }
         }
         Err("Failed to connect to Avail client after multiple attempts!".to_string())

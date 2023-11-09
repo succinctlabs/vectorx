@@ -244,7 +244,8 @@ mod tests {
         let authority_set_id = 1u64;
         // TODO: Get authority set hash from rotate inputs, or a similar function.
         let authority_set_hash = H256::from_slice(
-            &hex::decode("0a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728").unwrap(),
+            &hex::decode("5da464c9956e6e50fad7ae2dcc85e1e15213b60cc0e4da3144a4ed0b5a487dbb")
+                .unwrap(),
         );
         let epoch_end_block_number = 2161u32;
 
@@ -286,7 +287,8 @@ mod tests {
         let mut input = circuit.input();
         let authority_set_id = 1u64;
         let authority_set_hash = H256::from_slice(
-            &hex::decode("0a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728").unwrap(),
+            &hex::decode("5da464c9956e6e50fad7ae2dcc85e1e15213b60cc0e4da3144a4ed0b5a487dbb")
+                .unwrap(),
         );
         let epoch_end_block_number = 2161u32;
 

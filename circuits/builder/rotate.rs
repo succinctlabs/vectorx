@@ -230,13 +230,79 @@ pub mod tests {
 
     use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
     use plonky2x::prelude::{
-        ArrayVariable, Bytes32Variable, DefaultBuilder, U32Variable, Variable, VariableStream,
+        ArrayVariable, ByteVariable, Bytes32Variable, DefaultBuilder, U32Variable, Variable,
+        VariableStream,
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, VALIDATOR_LENGTH};
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, VALIDATOR_LENGTH};
     use crate::rotate::RotateHint;
     use crate::vars::EncodedHeaderVariable;
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_verify_prefix_epoch_end_header() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const NUM_AUTHORITIES: usize = 100;
+        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+
+        let mut builder = DefaultBuilder::new();
+
+        let epoch_end_block_number = builder.read::<U32Variable>();
+
+        // Fetch the header at epoch_end_block.
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let mut input_stream = VariableStream::new();
+        input_stream.write(&epoch_end_block_number);
+        let output_stream = builder.async_hint(input_stream, header_fetcher);
+
+        let target_header =
+            output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
+
+        let num_authorities = output_stream.read::<Variable>(&mut builder);
+        let start_position = output_stream.read::<Variable>(&mut builder);
+        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
+        let _ = output_stream
+            .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+
+        // Convert header to Variables from ByteVariables for get_fixed_subarray.
+        let header_variables = target_header
+            .header_bytes
+            .as_vec()
+            .iter()
+            .map(|x: &ByteVariable| x.to_variable(&mut builder))
+            .collect::<Vec<_>>();
+        let header_as_variables =
+            ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
+
+        // Get the subarray of the header bytes that we want to verify. In the test
+        // we can use the expected_new_authority_set_hash as the seed for randomness.
+        let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
+            &header_as_variables,
+            start_position,
+            &expected_new_authority_set_hash.as_bytes(),
+        );
+        let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
+            prefix_subarray
+                .data
+                .iter()
+                .map(|x| ByteVariable::from_target(&mut builder, x.0))
+                .collect::<Vec<_>>(),
+        );
+
+        builder.verify_prefix_epoch_end_header(&prefix_subarray, &num_authorities);
+
+        let circuit = builder.build();
+        let mut input = circuit.input();
+
+        let epoch_end_block_number = 1081u32;
+        input.write::<U32Variable>(epoch_end_block_number);
+        let (proof, output) = circuit.prove(&input);
+
+        circuit.verify(&proof, &input, &output);
+    }
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -283,7 +349,7 @@ pub mod tests {
         let circuit = builder.build();
         let mut input = circuit.input();
 
-        let epoch_end_block_number = 645610u32;
+        let epoch_end_block_number = 1081u32;
         input.write::<U32Variable>(epoch_end_block_number);
         let (proof, output) = circuit.prove(&input);
 
@@ -335,7 +401,7 @@ pub mod tests {
         let circuit = builder.build();
         let mut input = circuit.input();
 
-        let epoch_end_block_number = 317857u32;
+        let epoch_end_block_number = 2161u32;
         input.write::<U32Variable>(epoch_end_block_number);
         let (proof, output) = circuit.prove(&input);
 

@@ -650,7 +650,7 @@ impl RpcDataFetcher {
         let encoded_num_authorities_len = Compact(num_authorities as u32).encode().len();
 
         let mut position = 0;
-        let number_encoded = epoch_end_block.encode();
+        let number_encoded = Compact(epoch_end_block).encode();
         // Skip past parent_hash, number, state_root, extrinsics_root.
         position += HASH_SIZE + number_encoded.len() + HASH_SIZE + HASH_SIZE;
 
@@ -969,14 +969,22 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_last_justified_block() {
         let mut data_fetcher = RpcDataFetcher::new().await;
-        let last_justified_block = data_fetcher.last_justified_block(1).await;
-        println!("last_justified_block {:?}", last_justified_block);
-        let header = data_fetcher.get_header(last_justified_block).await;
-        println!("header hash {:?}", hex::encode(header.hash().0));
 
-        let authorities = data_fetcher.get_authorities(last_justified_block - 1).await;
-        println!("num authorities {:?}", authorities.len());
-        let authority_set_hash = compute_authority_set_hash(&authorities);
-        println!("authority_set_hash {:?}", hex::encode(authority_set_hash));
+        let mut epoch = 0;
+        loop {
+            if epoch > 3 {
+                break;
+            }
+            let last_justified_block = data_fetcher.last_justified_block(epoch).await;
+            println!("last_justified_block {:?}", last_justified_block);
+            let header = data_fetcher.get_header(last_justified_block).await;
+            println!("header hash {:?}", hex::encode(header.hash().0));
+
+            let authorities = data_fetcher.get_authorities(last_justified_block - 1).await;
+            println!("num authorities {:?}", authorities.len());
+            let authority_set_hash = compute_authority_set_hash(&authorities);
+            println!("authority_set_hash {:?}", hex::encode(authority_set_hash));
+            epoch += 1;
+        }
     }
 }

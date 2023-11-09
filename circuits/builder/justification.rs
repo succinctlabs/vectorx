@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use super::decoder::DecodingMethods;
 use crate::consts::ENCODED_PRECOMMIT_LENGTH;
-use crate::input::types::SimpleJustificationData;
+use crate::input::types::CircuitJustification;
 use crate::input::{verify_signature, RpcDataFetcher};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,8 +40,8 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         );
 
         let mut data_fetcher = RpcDataFetcher::new().await;
-        let justification_data: SimpleJustificationData = data_fetcher
-            .get_simple_justification::<NUM_AUTHORITIES>(block_number)
+        let justification_data: CircuitJustification = data_fetcher
+            .get_justification_from_block::<NUM_AUTHORITIES>(block_number)
             .await;
 
         if justification_data.authority_set_id != authority_set_id {

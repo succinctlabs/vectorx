@@ -31,7 +31,7 @@ pub struct StoredJustificationData {
     pub num_authorities: usize,
 }
 
-pub struct SimpleJustificationData {
+pub struct CircuitJustification {
     pub authority_set_id: u64,
     pub signed_message: Vec<u8>,
     pub validator_signed: Vec<bool>,
@@ -39,6 +39,15 @@ pub struct SimpleJustificationData {
     pub signatures: Vec<[u8; 64]>,
     pub num_authorities: usize,
     pub current_authority_set_hash: Vec<u8>,
+}
+
+pub struct SimpleJustificationData {
+    pub pubkeys: Vec<CompressedEdwardsY>,
+    pub signatures: Vec<Vec<u8>>,
+    pub validator_signed: Vec<bool>,
+    pub signed_message: Vec<u8>,
+    pub voting_weight: u64,
+    pub num_authorities: u64,
 }
 
 #[derive(Clone, Debug, Decode, Encode, Deserialize)]

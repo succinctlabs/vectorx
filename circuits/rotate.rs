@@ -224,7 +224,7 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 16;
+        const NUM_AUTHORITIES: usize = 8;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const MAX_HEADER_CHUNK_SIZE: usize = 100;
         const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
@@ -241,12 +241,12 @@ mod tests {
         log::debug!("Done building circuit");
 
         let mut input = circuit.input();
-        let authority_set_id = 616u64;
+        let authority_set_id = 1u64;
         // TODO: Get authority set hash from rotate inputs, or a similar function.
-        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
-            .parse()
-            .unwrap();
-        let epoch_end_block_number = 645610;
+        let authority_set_hash = H256::from_slice(
+            &hex::decode("0a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728").unwrap(),
+        );
+        let epoch_end_block_number = 2161u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(authority_set_hash);
@@ -284,16 +284,14 @@ mod tests {
         log::debug!("Done building circuit");
 
         let mut input = circuit.input();
-        let authority_set_id = 298u64;
-        // TODO: Get authority set hash from rotate inputs, or a similar function.
-        let authority_set_hash: [u8; 32] = [
-            193, 181, 216, 51, 32, 48, 126, 89, 38, 31, 89, 159, 112, 228, 179, 11, 129, 3, 26, 72,
-            123, 98, 94, 232, 199, 38, 175, 201, 115, 224, 140, 176,
-        ];
-        let epoch_end_block_number = 317857u32;
+        let authority_set_id = 1u64;
+        let authority_set_hash = H256::from_slice(
+            &hex::decode("0a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728").unwrap(),
+        );
+        let epoch_end_block_number = 2161u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
-        input.evm_write::<Bytes32Variable>(H256::from_slice(authority_set_hash.as_slice()));
+        input.evm_write::<Bytes32Variable>(authority_set_hash);
         input.evm_write::<U32Variable>(epoch_end_block_number);
 
         log::debug!("Generating proof");

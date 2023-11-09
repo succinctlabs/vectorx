@@ -453,6 +453,12 @@ impl RpcDataFetcher {
         let curr_authority_set_id = self.get_authority_set_id(block_number).await;
         let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
+        debug!("block_number {:?}", block_number);
+        debug!(
+            "curr_authority_set_id {:?}, prev_authority_set_id {:?}",
+            curr_authority_set_id, prev_authority_set_id
+        );
+
         // If epoch end block, use grandpa_proveFinality to get the justification.
         if curr_authority_set_id == prev_authority_set_id + 1 {
             let mut params = RpcParams::new();
@@ -970,21 +976,45 @@ mod tests {
     async fn test_get_last_justified_block() {
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        let mut epoch = 0;
-        loop {
-            if epoch > 3 {
-                break;
-            }
-            let last_justified_block = data_fetcher.last_justified_block(epoch).await;
-            println!("last_justified_block {:?}", last_justified_block);
-            let header = data_fetcher.get_header(last_justified_block).await;
-            println!("header hash {:?}", hex::encode(header.hash().0));
+        let epoch = 0;
+        let last_justified_block = data_fetcher.last_justified_block(epoch).await;
+        println!("last_justified_block {:?}", last_justified_block);
 
-            let authorities = data_fetcher.get_authorities(last_justified_block - 1).await;
-            println!("num authorities {:?}", authorities.len());
-            let authority_set_hash = compute_authority_set_hash(&authorities);
-            println!("authority_set_hash {:?}", hex::encode(authority_set_hash));
-            epoch += 1;
-        }
+        let header = data_fetcher.get_header(last_justified_block).await;
+        println!("header hash {:?}", hex::encode(header.hash().0));
+        let authorities = data_fetcher.get_authorities(last_justified_block - 1).await;
+        println!("num authorities {:?}", authorities.len());
+        let authority_set_hash = compute_authority_set_hash(&authorities);
+        println!("authority_set_hash {:?}", hex::encode(authority_set_hash));
+
+        println!(
+            "curr epoch {:?}",
+            data_fetcher
+                .get_authority_set_id(last_justified_block)
+                .await
+        );
+        println!(
+            "prev epoch {:?}",
+            data_fetcher
+                .get_authority_set_id(last_justified_block - 1)
+                .await
+        );
+        // loop {
+        //     if epoch > 3 {
+        //         break;
+        //     }
+        //     let last_justified_block = data_fetcher.last_justified_block(epoch).await;
+        //     println!("last_justified_block {:?}", last_justified_block);
+        //     let header = data_fetcher.get_header(last_justified_block).await;
+        //     println!("header hash {:?}", hex::encode(header.hash().0));
+        //     let block = data_fetcher.get_block_hash(last_justified_block).await;
+        //     println!("block hash {:?}", hex::encode(block.0));
+
+        //     let authorities = data_fetcher.get_authorities(last_justified_block - 1).await;
+        //     println!("num authorities {:?}", authorities.len());
+        //     let authority_set_hash = compute_authority_set_hash(&authorities);
+        //     println!("authority_set_hash {:?}", hex::encode(authority_set_hash));
+        //     epoch += 1;
+        // }
     }
 }

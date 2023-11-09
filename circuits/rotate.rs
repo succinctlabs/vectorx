@@ -241,13 +241,13 @@ mod tests {
         log::debug!("Done building circuit");
 
         let mut input = circuit.input();
-        let authority_set_id = 1u64;
+        let authority_set_id = 0u64;
         // TODO: Get authority set hash from rotate inputs, or a similar function.
         let authority_set_hash = H256::from_slice(
-            &hex::decode("5da464c9956e6e50fad7ae2dcc85e1e15213b60cc0e4da3144a4ed0b5a487dbb")
+            &hex::decode("54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb")
                 .unwrap(),
         );
-        let epoch_end_block_number = 2161u32;
+        let epoch_end_block_number = 4321u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(authority_set_hash);
@@ -285,12 +285,12 @@ mod tests {
         log::debug!("Done building circuit");
 
         let mut input = circuit.input();
-        let authority_set_id = 1u64;
+        let authority_set_id = 0u64;
         let authority_set_hash = H256::from_slice(
-            &hex::decode("5da464c9956e6e50fad7ae2dcc85e1e15213b60cc0e4da3144a4ed0b5a487dbb")
+            &hex::decode("54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb")
                 .unwrap(),
         );
-        let epoch_end_block_number = 2161u32;
+        let epoch_end_block_number = 4321u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(authority_set_hash);

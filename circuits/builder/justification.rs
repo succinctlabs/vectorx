@@ -271,7 +271,7 @@ mod tests {
         dotenv::dotenv().ok();
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 76;
+        const NUM_AUTHORITIES: usize = 8;
         let mut builder = DefaultBuilder::new();
 
         let block_number = builder.read::<U32Variable>();
@@ -293,12 +293,12 @@ mod tests {
         let mut input = circuit.input();
 
         // target_block is a non-era end block block in epoch 616 with 10 authorities.
-        let target_block = 645570u32;
-        let target_header = "ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
+        let target_block = 4321u32;
+        let target_header = "c70877fed9ae5a040edb11e8800b3df53ec4c9ec67d07b5655a300ae11727dc1"
             .parse()
             .unwrap();
-        let authority_set_id = 616u64;
-        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+        let authority_set_id = 0u64;
+        let authority_set_hash = "54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb"
             .parse()
             .unwrap();
 

@@ -1,12 +1,11 @@
 use avail_subxt::primitives::Header;
 use codec::{Decode, Encode};
 use ethers::types::H256;
+use plonky2x::frontend::curta::ec::point::CompressedEdwardsY;
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
 use sp_core::ed25519::{Public as EdPublic, Signature};
 use sp_core::{bytes, Bytes};
-
-use crate::vars::{AffinePoint, Curve};
 
 pub struct HeaderRotateData {
     pub header_bytes: Vec<u8>,
@@ -15,7 +14,7 @@ pub struct HeaderRotateData {
     pub start_position: usize,
     pub end_position: usize,
     pub new_authority_set_hash: Vec<u8>,
-    pub padded_pubkeys: Vec<H256>,
+    pub padded_pubkeys: Vec<CompressedEdwardsY>,
 }
 
 // Stores the signed messages, valid signatures and pubkeys for a given block number justification.
@@ -32,14 +31,23 @@ pub struct StoredJustificationData {
     pub num_authorities: usize,
 }
 
-pub struct SimpleJustificationData {
+pub struct CircuitJustification {
     pub authority_set_id: u64,
     pub signed_message: Vec<u8>,
     pub validator_signed: Vec<bool>,
-    pub pubkeys: Vec<AffinePoint<Curve>>,
+    pub pubkeys: Vec<CompressedEdwardsY>,
     pub signatures: Vec<[u8; 64]>,
     pub num_authorities: usize,
     pub current_authority_set_hash: Vec<u8>,
+}
+
+pub struct SimpleJustificationData {
+    pub pubkeys: Vec<CompressedEdwardsY>,
+    pub signatures: Vec<Vec<u8>>,
+    pub validator_signed: Vec<bool>,
+    pub signed_message: Vec<u8>,
+    pub voting_weight: u64,
+    pub num_authorities: u64,
 }
 
 #[derive(Clone, Debug, Decode, Encode, Deserialize)]

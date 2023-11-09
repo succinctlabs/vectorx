@@ -1,13 +1,14 @@
 use std::cmp::min;
 use std::env;
 
+use alloy_primitives::{Address, Bytes, B256};
 use alloy_sol_types::{sol, SolType};
+use anyhow::Result;
 use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
-use ethers::core::types::Address;
 use ethers::providers::{Http, Provider};
-use ethers::types::{Bytes, H256};
 use log::{error, info};
+use succinct_client::request::SuccinctClient;
 use vectorx::input::RpcDataFetcher;
 
 // Note: Update ABI when updating contract.
@@ -16,18 +17,8 @@ abigen!(VectorX, "./abi/VectorX.abi.json",);
 struct VectorXConfig {
     address: Address,
     chain_id: u32,
-    step_function_id: H256,
-    rotate_function_id: H256,
-}
-
-#[allow(non_snake_case)]
-#[derive(serde::Serialize, serde::Deserialize)]
-struct OffchainInput {
-    chainId: u32,
-    to: String,
-    data: String,
-    functionId: String,
-    input: String,
+    step_function_id: B256,
+    rotate_function_id: B256,
 }
 
 type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
@@ -37,6 +28,7 @@ type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint
 struct VectorXOperator {
     config: VectorXConfig,
     contract: VectorX<Provider<Http>>,
+    client: SuccinctClient,
     data_fetcher: RpcDataFetcher,
 }
 
@@ -50,13 +42,17 @@ impl VectorXOperator {
         let provider =
             Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
 
-        let contract = VectorX::new(config.address, provider.into());
+        let contract = VectorX::new(config.address.0 .0, provider.into());
 
         let data_fetcher = RpcDataFetcher::new().await;
+
+        let succinct_rpc_url = env::var("SUCCINCT_RPC_URL").expect("SUCCINCT_RPC_URL must be set");
+        let client = SuccinctClient::new(succinct_rpc_url);
 
         Self {
             config,
             contract,
+            client,
             data_fetcher,
         }
     }
@@ -71,12 +67,12 @@ impl VectorXOperator {
 
         // Load the function IDs.
         let step_id_env = env::var("STEP_FUNCTION_ID").expect("STEP_FUNCTION_ID must be set");
-        let step_function_id = H256::from_slice(
+        let step_function_id = B256::from_slice(
             &hex::decode(step_id_env.strip_prefix("0x").unwrap_or(&step_id_env))
                 .expect("invalid hex for step_function_id, expected 0x prefix"),
         );
         let rotate_id_env = env::var("ROTATE_FUNCTION_ID").expect("ROTATE_FUNCTION_ID must be set");
-        let rotate_function_id = H256::from_slice(
+        let rotate_function_id = B256::from_slice(
             &hex::decode(rotate_id_env.strip_prefix("0x").unwrap_or(&rotate_id_env))
                 .expect("invalid hex for rotate_function_id, expected 0x prefix"),
         );
@@ -89,46 +85,12 @@ impl VectorXOperator {
         }
     }
 
-    async fn submit_request(&self, function_data: Vec<u8>, input: Vec<u8>, function_id: H256) {
-        // All data except for chainId is a string, and needs a 0x prefix.
-        let data = OffchainInput {
-            chainId: self.config.chain_id,
-            to: Bytes::from(self.config.address.0).to_string(),
-            data: Bytes::from(function_data).to_string(),
-            functionId: Bytes::from(function_id.0).to_string(),
-            input: Bytes::from(input).to_string(),
-        };
-
-        // Stringify the data into JSON format.
-        let serialized_data = serde_json::to_string(&data).unwrap();
-
-        // TODO: Load from config.
-        let request_url = "https://alpha.succinct.xyz/api/request/new";
-
-        // Submit POST request to the offchain worker.
-        let client = reqwest::Client::new();
-        let res = client
-            .post(request_url)
-            .header("Content-Type", "application/json")
-            .body(serialized_data)
-            .send()
-            .await
-            .expect("Failed to send request.");
-
-        if res.status().is_success() {
-            info!("Successfully submitted request.");
-        } else {
-            // TODO: Log more specific error message.
-            error!("Failed to submit request.");
-        }
-    }
-
     async fn request_header_range(
         &self,
         trusted_block: u32,
         trusted_authority_set_id: u64,
         target_block: u32,
-    ) {
+    ) -> Result<String> {
         let trusted_header_hash = self
             .contract
             .block_height_to_header_hash(trusted_block)
@@ -157,15 +119,25 @@ impl VectorXOperator {
         };
         let function_data = commit_header_range_call.encode();
 
-        self.submit_request(function_data, input, self.config.step_function_id)
-            .await;
+        let request_id = self
+            .client
+            .submit_platform_request(
+                self.config.chain_id,
+                self.config.address,
+                function_data.into(),
+                self.config.step_function_id,
+                Bytes::copy_from_slice(&input),
+            )
+            .await?;
+
+        Ok(request_id)
     }
 
     async fn request_next_authority_set_id(
         &self,
         current_authority_set_id: u64,
         epoch_end_block: u32,
-    ) {
+    ) -> Result<String> {
         info!("Current authority set id: {:?}", current_authority_set_id);
         let current_authority_set_hash = self
             .contract
@@ -191,8 +163,18 @@ impl VectorXOperator {
         };
         let function_data = add_next_authority_set_id_call.encode();
 
-        self.submit_request(function_data, input, self.config.rotate_function_id)
-            .await;
+        let request_id = self
+            .client
+            .submit_platform_request(
+                self.config.chain_id,
+                self.config.address,
+                function_data.into(),
+                self.config.rotate_function_id,
+                Bytes::copy_from_slice(&input),
+            )
+            .await?;
+
+        Ok(request_id)
     }
 
     async fn run(&mut self) {
@@ -240,12 +222,18 @@ impl VectorXOperator {
 
                 info!("Stepping to block {:?}.", block_to_step_to);
 
-                self.request_header_range(
-                    current_block,
-                    current_authority_set_id,
-                    block_to_step_to,
-                )
-                .await;
+                match self
+                    .request_header_range(current_block, current_authority_set_id, block_to_step_to)
+                    .await
+                {
+                    Ok(request_id) => {
+                        info!("Header range request submitted: {}", request_id)
+                    }
+                    Err(e) => {
+                        error!("Header range request failed: {}", e);
+                        continue;
+                    }
+                };
             }
 
             if current_authority_set_id < head_authority_set_id {
@@ -267,17 +255,27 @@ impl VectorXOperator {
                     .last_justified_block(current_authority_set_id)
                     .await;
 
-                if H256::from_slice(&next_authority_set_hash) == H256::zero() {
+                if B256::from_slice(&next_authority_set_hash) == B256::ZERO {
                     info!(
                         "Requesting next authority set id, which is {:?}.",
                         current_authority_set_id + 1
                     );
                     // Request the next authority set id.
-                    self.request_next_authority_set_id(
-                        current_authority_set_id,
-                        last_justified_block,
-                    )
-                    .await;
+                    match self
+                        .request_next_authority_set_id(
+                            current_authority_set_id,
+                            last_justified_block,
+                        )
+                        .await
+                    {
+                        Ok(request_id) => {
+                            info!("Next authority set request submitted: {}", request_id)
+                        }
+                        Err(e) => {
+                            error!("Next authority set request failed: {}", e);
+                            continue;
+                        }
+                    };
                 }
 
                 // Check if step needed to the last justified block by the current authority set.
@@ -302,12 +300,22 @@ impl VectorXOperator {
                     info!("Stepping to block {:?}.", block_to_step_to);
 
                     // Step to block_to_step_to.
-                    self.request_header_range(
-                        current_block,
-                        current_authority_set_id,
-                        block_to_step_to,
-                    )
-                    .await;
+                    match self
+                        .request_header_range(
+                            current_block,
+                            current_authority_set_id,
+                            block_to_step_to,
+                        )
+                        .await
+                    {
+                        Ok(request_id) => {
+                            info!("Header range request submitted: {}", request_id)
+                        }
+                        Err(e) => {
+                            error!("Header range request failed: {}", e);
+                            continue;
+                        }
+                    };
                 } else if current_block == last_justified_block {
                     // If the current block is the last justified block, then call step for the next
                     // authority set id.
@@ -335,17 +343,27 @@ impl VectorXOperator {
 
                     info!("Stepping to block {:?}.", block_to_step_to);
                     // Step to block_to_step_to.
-                    self.request_header_range(
-                        last_justified_block,
-                        next_authority_set_id,
-                        block_to_step_to,
-                    )
-                    .await;
+                    match self
+                        .request_header_range(
+                            current_block,
+                            next_authority_set_id,
+                            block_to_step_to,
+                        )
+                        .await
+                    {
+                        Ok(request_id) => {
+                            info!("Header range request submitted: {}", request_id)
+                        }
+                        Err(e) => {
+                            error!("Header range request failed: {}", e);
+                            continue;
+                        }
+                    };
                 }
             }
 
             // Sleep for N minutes.
-            println!("Sleeping for {} minutes.", LOOP_DELAY);
+            info!("Sleeping for {} minutes.", LOOP_DELAY);
             tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY)).await;
         }
     }

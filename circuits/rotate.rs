@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use ethers::types::H256;
 use log::{debug, Level};
 use plonky2x::backend::circuit::Circuit;
+use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
@@ -15,7 +16,7 @@ use crate::builder::header::HeaderMethods;
 use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
 use crate::builder::rotate::RotateMethods;
 use crate::input::RpcDataFetcher;
-use crate::vars::{AvailPubkeyVariable, EncodedHeader, EncodedHeaderVariable};
+use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
 // Fetch a single header.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,9 +68,10 @@ impl<
         ));
 
         // Pubkeys of the new authority set.
-        output_stream.write_value::<ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>>(
-            rotate_data.padded_pubkeys,
-        );
+        output_stream
+            .write_value::<ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>>(
+                rotate_data.padded_pubkeys,
+            );
     }
 }
 
@@ -134,7 +136,7 @@ impl<
         let start_position = output_stream.read::<Variable>(builder);
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(builder);
         let new_pubkeys = output_stream
-            .read::<ArrayVariable<AvailPubkeyVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
+            .read::<ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
 
         // Hash the header at epoch_end_block.
         let target_header_hash =

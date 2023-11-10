@@ -20,7 +20,7 @@ contract VectorX is IVectorX {
     /// @notice The function for requesting a rotate.
     bytes32 public rotateFunctionId;
 
-    /// @notice The maximum header range that can be requested.
+    /// @notice The maximum header range that can be requested, which is set to the size of one era.
     uint32 public constant MAX_HEADER_RANGE = 256;
 
     /// @notice Maps block height to the header hash of the block.

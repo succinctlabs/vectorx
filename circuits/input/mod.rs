@@ -974,7 +974,7 @@ mod tests {
         // let last_justified_block = data_fetcher.last_justified_block(epoch).await;
         // println!("last_justified_block {:?}", last_justified_block);
 
-        let block = 4310;
+        let block = 1;
 
         let header = data_fetcher.get_header(block).await;
         println!("header hash {:?}", hex::encode(header.hash().0));

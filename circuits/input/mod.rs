@@ -599,7 +599,7 @@ impl RpcDataFetcher {
         let mut padded_validator_signed = Vec::new();
         for i in 0..data.num_authorities as usize {
             padded_pubkeys.push(data.pubkeys[i]);
-            padded_signatures.push(data.signatures[i].clone().as_slice().try_into().unwrap());
+            padded_signatures.push(data.signatures[i].as_slice().try_into().unwrap());
             padded_validator_signed.push(data.validator_signed[i]);
         }
 
@@ -982,6 +982,8 @@ mod tests {
 
         let header = data_fetcher.get_header(last_justified_block).await;
         println!("header hash {:?}", hex::encode(header.hash().0));
+        let block_hash = data_fetcher.get_block_hash(last_justified_block).await;
+        println!("block hash {:?}", hex::encode(block_hash.0));
         let authorities = data_fetcher.get_authorities(last_justified_block - 1).await;
         println!("num authorities {:?}", authorities.len());
         let authority_set_hash = compute_authority_set_hash(&authorities);

@@ -292,7 +292,7 @@ mod tests {
 
         let mut input = circuit.input();
 
-        // target_block is a non-era end block block in epoch 616 with 10 authorities.
+        // target_block is an era end block in epoch 0 with 5 authorities.
         let target_block = 4321u32;
         let target_header = "c70877fed9ae5a040edb11e8800b3df53ec4c9ec67d07b5655a300ae11727dc1"
             .parse()

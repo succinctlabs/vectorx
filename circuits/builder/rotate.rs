@@ -349,6 +349,7 @@ pub mod tests {
         let circuit = builder.build();
         let mut input = circuit.input();
 
+        // Authority set size is 5.
         let epoch_end_block_number = 4321u32;
         input.write::<U32Variable>(epoch_end_block_number);
         let (proof, output) = circuit.prove(&input);

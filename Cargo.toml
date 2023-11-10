@@ -35,7 +35,7 @@ log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = ["rand"] }
 plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
-succinct-client = { git = "https://github.com/succinctlabs/succinctx.git" }
+succinct-client = { git = "https://github.com/succinctlabs/succinctx.git"}
 plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.86"
@@ -52,8 +52,7 @@ redis = { version = "0.23.3", features = [
     "tokio-comp",
 ] }
 
-# TODO: Update to latest version/new pinned version with new testnet.
-avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "5d2595a" }
+avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "df16508" }
 sp-core = { version = "21.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",

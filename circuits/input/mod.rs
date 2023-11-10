@@ -13,7 +13,7 @@ use avail_subxt::{api, build_client};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
-use log::debug;
+use log::{debug, info};
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsY;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use redis::aio::Connection;
@@ -239,11 +239,17 @@ impl RpcDataFetcher {
         self.check_client_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
+        info!(
+            "Finding justifications in range [{}, {}].",
+            start_block, end_block
+        );
         // Query Redis for all keys in the range [start_block, end_block].
         let redis_blocks: Vec<u32> = self
             .redis_client
             .get_blocks_in_range(start_block, end_block)
             .await;
+
+        info!("Found {} blocks in Redis.", redis_blocks.len());
 
         // Query the chain for all era end blocks in the range [start_block, end_block].
         let start_era = self.get_authority_set_id(start_block - 1).await;
@@ -253,6 +259,11 @@ impl RpcDataFetcher {
         let mut epoch_end_blocks = Vec::new();
         while curr_block < end_block {
             let epoch_end_block = self.last_justified_block(curr_era).await;
+            if epoch_end_block == 0 {
+                // This era is currently active, so there are no epoch end blocks.
+                break;
+            }
+
             if epoch_end_block <= end_block {
                 epoch_end_blocks.push(epoch_end_block);
                 curr_block = epoch_end_block;
@@ -272,6 +283,7 @@ impl RpcDataFetcher {
 
     // This function returns the last block justified by target_authority_set_id. This block
     // also specifies the new authority set, which starts justifying after this block.
+    // Returns 0 if curr_authority_set_id <= target_authority_set_id.
     pub async fn last_justified_block(&mut self, target_authority_set_id: u64) -> u32 {
         self.check_client_connection()
             .await
@@ -593,7 +605,7 @@ impl RpcDataFetcher {
         let mut padded_validator_signed = Vec::new();
         for i in 0..data.num_authorities as usize {
             padded_pubkeys.push(data.pubkeys[i]);
-            padded_signatures.push(data.signatures[i].clone().as_slice().try_into().unwrap());
+            padded_signatures.push(data.signatures[i].as_slice().try_into().unwrap());
             padded_validator_signed.push(data.validator_signed[i]);
         }
 
@@ -650,7 +662,7 @@ impl RpcDataFetcher {
         let encoded_num_authorities_len = Compact(num_authorities as u32).encode().len();
 
         let mut position = 0;
-        let number_encoded = epoch_end_block.encode();
+        let number_encoded = Compact(epoch_end_block).encode();
         // Skip past parent_hash, number, state_root, extrinsics_root.
         position += HASH_SIZE + number_encoded.len() + HASH_SIZE + HASH_SIZE;
 
@@ -963,5 +975,31 @@ mod tests {
 
             start_epoch += 100;
         }
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_last_justified_block() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+
+        let block = 14200;
+
+        let header = data_fetcher.get_header(block).await;
+        println!("header hash {:?}", hex::encode(header.hash().0));
+        let block_hash = data_fetcher.get_block_hash(block).await;
+        println!("block hash {:?}", hex::encode(block_hash.0));
+        let authorities = data_fetcher.get_authorities(block - 1).await;
+        println!("num authorities {:?}", authorities.len());
+        let authority_set_hash = compute_authority_set_hash(&authorities);
+        println!("authority_set_hash {:?}", hex::encode(authority_set_hash));
+
+        println!(
+            "curr epoch {:?}",
+            data_fetcher.get_authority_set_id(block).await
+        );
+        println!(
+            "prev epoch {:?}",
+            data_fetcher.get_authority_set_id(block - 1).await
+        );
     }
 }

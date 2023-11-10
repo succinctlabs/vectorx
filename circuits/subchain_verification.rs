@@ -70,6 +70,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         }
         let num_jobs_power_of_2 = f32::log2(num_map_jobs as f32).ceil() as u32;
         num_map_jobs = 2usize.pow(num_jobs_power_of_2);
+        assert!(num_map_jobs >= 2, "Number of map jobs must be at least 2!");
+
         debug!("verify_subchain - num_map_jobs: {}", num_map_jobs);
 
         let relative_block_nums =

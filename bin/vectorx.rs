@@ -47,7 +47,8 @@ impl VectorXOperator {
         let data_fetcher = RpcDataFetcher::new().await;
 
         let succinct_rpc_url = env::var("SUCCINCT_RPC_URL").expect("SUCCINCT_RPC_URL must be set");
-        let client = SuccinctClient::new(succinct_rpc_url);
+        let succinct_api_key = env::var("SUCCINCT_API_KEY").expect("SUCCINCT_API_KEY must be set");
+        let client = SuccinctClient::new(succinct_rpc_url, succinct_api_key);
 
         Self {
             config,
@@ -181,7 +182,7 @@ impl VectorXOperator {
         info!("Starting VectorX offchain worker");
 
         // Sleep for N minutes.
-        const LOOP_DELAY: u64 = 40;
+        const LOOP_DELAY: u64 = 60;
 
         loop {
             // Source STEP_RANGE_MAX from the contract.
@@ -215,6 +216,7 @@ impl VectorXOperator {
                     .find_justifications_in_range(current_block, block_to_step_to)
                     .await;
                 if valid_blocks.is_empty() {
+                    info!("No valid blocks found in range.");
                     continue;
                 }
                 // Get the most recent valid block in the range.

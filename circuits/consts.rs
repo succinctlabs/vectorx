@@ -1,6 +1,6 @@
 // The data root start byte number from the end.
 // E.g. data root byte start idx is N - DATA_ROOT_OFFSET_FROM_END where N is the header size.
-pub const DATA_ROOT_OFFSET_FROM_END: usize = 132;
+pub const DATA_ROOT_OFFSET_FROM_END: usize = 32;
 
 // Number of headers processed per map job for subchain_verification map reduce.
 pub const HEADERS_PER_MAP: usize = 16;
@@ -40,7 +40,7 @@ pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 // Max number of authorities this circuit currently supports.
 pub const MAX_AUTHORITY_SET_SIZE: usize = 100;
 
-// Max number of headers this circuit currently supports.
+// Max number of headers this circuit currently supports. This is one era.
 pub const MAX_NUM_HEADERS: usize = 256;
 
 // Can need up to 5 bytes to represent a compact u32.

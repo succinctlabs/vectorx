@@ -31,6 +31,7 @@ pub struct StoredJustificationData {
     pub num_authorities: usize,
 }
 
+#[derive(Debug)]
 pub struct CircuitJustification {
     pub authority_set_id: u64,
     pub signed_message: Vec<u8>,

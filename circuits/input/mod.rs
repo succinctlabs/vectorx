@@ -453,12 +453,6 @@ impl RpcDataFetcher {
         let curr_authority_set_id = self.get_authority_set_id(block_number).await;
         let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
-        debug!("block_number {:?}", block_number);
-        debug!(
-            "curr_authority_set_id {:?}, prev_authority_set_id {:?}",
-            curr_authority_set_id, prev_authority_set_id
-        );
-
         // If epoch end block, use grandpa_proveFinality to get the justification.
         if curr_authority_set_id == prev_authority_set_id + 1 {
             let mut params = RpcParams::new();

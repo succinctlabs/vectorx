@@ -216,6 +216,7 @@ impl VectorXOperator {
                     .find_justifications_in_range(current_block, block_to_step_to)
                     .await;
                 if valid_blocks.is_empty() {
+                    info!("No valid blocks found in range.");
                     continue;
                 }
                 // Get the most recent valid block in the range.

@@ -12,10 +12,10 @@ contract DeployScript is Script {
     function run() public {
         vm.startBroadcast();
         bytes32 stepFunctionId = bytes32(
-            hex"aa13f6af4ebdc8b36f9ac6fd0dfa87b16f0cf366592dbc84af4266906b9bd2f3"
+            hex"f4b46f5b73762d985f11666d014b5708a79f374e1177856dc83915f788496194"
         );
         bytes32 rotateFunctionId = bytes32(
-            hex"7d8eea4d1b6cc47af5cbfc3da675bd1dbd7ae9c1a06eca29103a8ec434e52cbc"
+            hex"6963f81447be45b18aa9ca0abd79d5ed44ff2e91cd7037f5e45c5fb620934b06"
         );
 
         // Use the below to interact with an already deployed ZK light client

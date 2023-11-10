@@ -17,13 +17,13 @@ contract DeployScript is Script {
             0x38dbC93f51Fe296544Ba8a8b629644e2EaBB416a
         );
 
-        uint32 trustedBlock = 1;
-        uint64 authoritySetId = 0;
+        uint32 trustedBlock = 14200;
+        uint64 authoritySetId = 6;
         bytes32 authoritySetHash = bytes32(
-            hex"54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb"
+            hex"98745514f65ae12932902d30b72e0af57b41e43c6c8d2213d651276abbf0ed1b"
         );
         bytes32 header = bytes32(
-            hex"d9e6fa8a039a40f7764d15a38eed7a346fcae71b61a5d15943a1ea18811c239a"
+            hex"5d3064ea08dbb1f51e1c92d6f414b608ebd4e5cd932805aabd70d8059e5b5352"
         );
 
         lightClient.setGenesisInfo(

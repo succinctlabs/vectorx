@@ -13,7 +13,7 @@ use avail_subxt::{api, build_client};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
-use log::debug;
+use log::{debug, info};
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsY;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use redis::aio::Connection;
@@ -239,11 +239,17 @@ impl RpcDataFetcher {
         self.check_client_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
+        info!(
+            "Finding justifications in range [{}, {}].",
+            start_block, end_block
+        );
         // Query Redis for all keys in the range [start_block, end_block].
         let redis_blocks: Vec<u32> = self
             .redis_client
             .get_blocks_in_range(start_block, end_block)
             .await;
+
+        info!("Found {} blocks in Redis.", redis_blocks.len());
 
         // Query the chain for all era end blocks in the range [start_block, end_block].
         let start_era = self.get_authority_set_id(start_block - 1).await;
@@ -253,6 +259,11 @@ impl RpcDataFetcher {
         let mut epoch_end_blocks = Vec::new();
         while curr_block < end_block {
             let epoch_end_block = self.last_justified_block(curr_era).await;
+            if epoch_end_block == 0 {
+                // This era is currently active, so there are no epoch end blocks.
+                break;
+            }
+
             if epoch_end_block <= end_block {
                 epoch_end_blocks.push(epoch_end_block);
                 curr_block = epoch_end_block;
@@ -272,6 +283,7 @@ impl RpcDataFetcher {
 
     // This function returns the last block justified by target_authority_set_id. This block
     // also specifies the new authority set, which starts justifying after this block.
+    // Returns 0 if curr_authority_set_id <= target_authority_set_id.
     pub async fn last_justified_block(&mut self, target_authority_set_id: u64) -> u32 {
         self.check_client_connection()
             .await
@@ -974,7 +986,7 @@ mod tests {
         // let last_justified_block = data_fetcher.last_justified_block(epoch).await;
         // println!("last_justified_block {:?}", last_justified_block);
 
-        let block = 1;
+        let block = 14200;
 
         let header = data_fetcher.get_header(block).await;
         println!("header hash {:?}", hex::encode(header.hash().0));

@@ -40,8 +40,8 @@ pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 // Max number of authorities this circuit currently supports.
 pub const MAX_AUTHORITY_SET_SIZE: usize = 100;
 
-// Max number of headers this circuit currently supports.
-pub const MAX_NUM_HEADERS: usize = 256;
+// Max number of headers this circuit currently supports. This is one era.
+pub const MAX_NUM_HEADERS: usize = 4320;
 
 // Can need up to 5 bytes to represent a compact u32.
 pub const MAX_COMPACT_UINT_BYTES: usize = 5;

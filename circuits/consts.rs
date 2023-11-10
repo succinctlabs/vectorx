@@ -1,6 +1,6 @@
 // The data root start byte number from the end.
 // E.g. data root byte start idx is N - DATA_ROOT_OFFSET_FROM_END where N is the header size.
-pub const DATA_ROOT_OFFSET_FROM_END: usize = 132;
+pub const DATA_ROOT_OFFSET_FROM_END: usize = 32;
 
 // Number of headers processed per map job for subchain_verification map reduce.
 pub const HEADERS_PER_MAP: usize = 16;

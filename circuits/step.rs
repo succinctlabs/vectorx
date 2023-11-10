@@ -215,9 +215,9 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 10;
+        const NUM_AUTHORITIES: usize = 5;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const NUM_HEADERS: usize = 64;
+        const NUM_HEADERS: usize = 16;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
@@ -229,13 +229,14 @@ mod tests {
 
         let mut input = circuit.input();
 
-        let trusted_header = "ea9dac06abb37b7539fda0f218db407e0ed9317eec96f332f39bebcea2543d6d"
+        let trusted_header = "087ee7c739e35c46b2ac422cf683ecf6d4cb4571610efe6a5dff6f5b3d5818c9"
             .parse()
             .unwrap();
-        let trusted_block = 645570u32;
-        let target_block = 645610u32; // mimics test_step_small
-        let authority_set_id = 616u64;
-        let authority_set_hash = "be9b8bb905a62631b70c2f5ed2c9988e4580d4bc4e617fa30809a463f77744c0"
+        let trusted_block = 4310u32;
+        // Step to an epoch end block, so it's not reliant on a stored justification.
+        let target_block = 4321u32; // mimics test_step_small
+        let authority_set_id = 0u64;
+        let authority_set_hash = "54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb"
             .parse()
             .unwrap();
 

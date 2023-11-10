@@ -3914,7 +3914,7 @@ source = "git+https://github.com/mir-protocol/plonky2.git#ec41b754a67ac4e8fe1975
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/eddsa-conditional-fixes#f704d7ad41fe1bd338eeec00fa9777b63723b6b7"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/eddsa-conditional-fixes#3473a2c839a3af8dca636613e9a5c82a602a7fff"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -3956,7 +3956,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/eddsa-conditional-fixes#f704d7ad41fe1bd338eeec00fa9777b63723b6b7"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/eddsa-conditional-fixes#3473a2c839a3af8dca636613e9a5c82a602a7fff"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5823,7 +5823,7 @@ dependencies = [
 [[package]]
 name = "succinct-client"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/eddsa-conditional-fixes#f704d7ad41fe1bd338eeec00fa9777b63723b6b7"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/eddsa-conditional-fixes#3473a2c839a3af8dca636613e9a5c82a602a7fff"
 dependencies = [
  "alloy-primitives",
  "anyhow",

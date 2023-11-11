@@ -156,7 +156,7 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const HEAD_BLOCK_NUM: u32 = 272515;
+        const HEAD_BLOCK_NUM: u32 = 1000;
         const NUM_HEADERS: usize = 1;
 
         type F = GoldilocksField;

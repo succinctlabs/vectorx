@@ -12,7 +12,7 @@ contract DeployScript is Script {
 
         // Use the below to interact with an already deployed ZK light client
         VectorX lightClient = VectorX(
-            0x38dbC93f51Fe296544Ba8a8b629644e2EaBB416a
+            0xc862F17Ebb256679D8b428634B8D1E5D8d9EBf67
         );
 
         uint32 trustedBlock = 14200;

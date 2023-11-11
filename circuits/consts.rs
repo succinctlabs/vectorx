@@ -3,7 +3,7 @@
 pub const DATA_ROOT_OFFSET_FROM_END: usize = 32;
 
 // Number of headers processed per map job for subchain_verification map reduce.
-pub const HEADERS_PER_MAP: usize = 16;
+pub const HEADERS_PER_MAP: usize = 8;
 
 // Maximum header size (in blake2b chunks) that can be processed by the circuit.
 pub const MAX_HEADER_CHUNK_SIZE: usize = 200;

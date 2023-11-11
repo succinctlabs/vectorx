@@ -1,6 +1,6 @@
 # VectorX
-Implementation of zero-knowledge proof circuits for Vector, Avail's data availability solution
-for Ethereum.
+Implementation of zero-knowledge proof circuits for Vector, Avail's Data Attestation Bridge.
+
 ## Overview
 Vector X's core contract is `VectorX`, which stores commitments to ranges of data roots and state
 roots from Avail blocks.

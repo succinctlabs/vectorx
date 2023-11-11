@@ -182,7 +182,7 @@ impl VectorXOperator {
         info!("Starting VectorX offchain worker");
 
         // Sleep for N minutes.
-        const LOOP_DELAY: u64 = 60;
+        const LOOP_DELAY: u64 = 240;
 
         loop {
             // Source STEP_RANGE_MAX from the contract.

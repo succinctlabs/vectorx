@@ -21,7 +21,7 @@ Verify a `VectorX` contract, if not already verified.
 forge verify-contract --etherscan-api-key $ETHERSCAN_API_KEY <ADDRESS> <CONTRACT> --chain-id [chain-id]
 ```
 
-Initialize the `VectorX`` contract with genesis parameters.
+Initialize the `VectorX` contract with genesis parameters.
 ```
 forge script script/Genesis.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
 ```

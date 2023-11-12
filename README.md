@@ -8,7 +8,7 @@ roots from Avail blocks.
 ## Deployment
 The circuits are available on Succinct X [here](https://platform.succinct.xyz/succinctlabs/vectorx).
 
-Vector X is currently deployed for Avail's Goldberg testnet on Goerli [here](https://goerli.etherscan.io/address/0x38dbC93f51Fe296544Ba8a8b629644e2EaBB416a).
+Vector X is currently deployed for Avail's Goldberg testnet on Goerli [here](https://goerli.etherscan.io/address/0xc862F17Ebb256679D8b428634B8D1E5D8d9EBf67#events).
 
 ## Integrate
 Deploy a `VectorX` contract.

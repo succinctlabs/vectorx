@@ -976,30 +976,4 @@ mod tests {
             start_epoch += 100;
         }
     }
-
-    #[tokio::test]
-    #[cfg_attr(feature = "ci", ignore)]
-    async fn test_get_last_justified_block() {
-        let mut data_fetcher = RpcDataFetcher::new().await;
-
-        let block = 14200;
-
-        let header = data_fetcher.get_header(block).await;
-        println!("header hash {:?}", hex::encode(header.hash().0));
-        let block_hash = data_fetcher.get_block_hash(block).await;
-        println!("block hash {:?}", hex::encode(block_hash.0));
-        let authorities = data_fetcher.get_authorities(block - 1).await;
-        println!("num authorities {:?}", authorities.len());
-        let authority_set_hash = compute_authority_set_hash(&authorities);
-        println!("authority_set_hash {:?}", hex::encode(authority_set_hash));
-
-        println!(
-            "curr epoch {:?}",
-            data_fetcher.get_authority_set_id(block).await
-        );
-        println!(
-            "prev epoch {:?}",
-            data_fetcher.get_authority_set_id(block - 1).await
-        );
-    }
 }

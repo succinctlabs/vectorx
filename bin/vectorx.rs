@@ -38,7 +38,7 @@ impl VectorXOperator {
 
         let config = Self::get_config();
 
-        let ethereum_rpc_url = env::var("RPC_URL").expect("RPC_URL must be set");
+        let ethereum_rpc_url = env::var("ETHEREUM_RPC_URL").expect("ETHEREUM_RPC_URL must be set");
         let provider =
             Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
 
@@ -68,14 +68,14 @@ impl VectorXOperator {
 
         // Load the function IDs.
         let header_range_id_env =
-            env::var("HEADER_RANGE_FUNCTION_ID").expect("STEP_FUNCTION_ID must be set");
+            env::var("HEADER_RANGE_FUNCTION_ID").expect("HEADER_RANGE_FUNCTION_ID must be set");
         let header_range_function_id = B256::from_slice(
             &hex::decode(
                 header_range_id_env
                     .strip_prefix("0x")
                     .unwrap_or(&header_range_id_env),
             )
-            .expect("invalid hex for step_function_id, expected 0x prefix"),
+            .expect("invalid hex for header_range_function_id, expected 0x prefix"),
         );
         let rotate_id_env = env::var("ROTATE_FUNCTION_ID").expect("ROTATE_FUNCTION_ID must be set");
         let rotate_function_id = B256::from_slice(

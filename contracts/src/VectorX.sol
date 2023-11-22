@@ -3,11 +3,12 @@ pragma solidity ^0.8.13;
 
 import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
 import {IVectorX} from "./interfaces/IVectorX.sol";
+import {TimelockedUpgradeable} from "@succinctx/upgrades/TimelockedUpgradeable.sol";
 
 /// @notice VectorX is a light client for Avail's consensus.
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
-contract VectorX is IVectorX {
+contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice The address of the gateway contract.
     address public gateway;
 
@@ -37,41 +38,54 @@ contract VectorX is IVectorX {
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
-    /// @notice Initialize the contract with the address of the gateway contract.
+    /// @dev Initializes the contract.
+    /// @param _guardian The address of the guardian.
     /// @param _gateway The address of the gateway contract.
-    constructor(address _gateway) {
+    /// @param _height The height of the genesis block.
+    /// @param _header The header hash of the genesis block.
+    /// @param _authoritySetId The authority set id of the genesis block.
+    /// @param _authoritySetHash The authority set hash of the genesis block.
+    /// @param _headerRangeFunctionId The function ID for header range.
+    /// @param _rotateFunctionId The function ID for rotate.
+    function initialize(
+        address _guardian,
+        address _gateway,
+        uint32 _height,
+        bytes32 _header,
+        uint64 _authoritySetId,
+        bytes32 _authoritySetHash,
+        bytes32 _headerRangeFunctionId,
+        bytes32 _rotateFunctionId
+    ) external initializer {
+        __TimelockedUpgradeable_init(_guardian, _guardian);
+
         gateway = _gateway;
+
+        blockHeightToHeaderHash[_height] = _header;
+        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestBlock = _height;
+
+        rotateFunctionId = _rotateFunctionId;
+        headerRangeFunctionId = _headerRangeFunctionId;
     }
 
-    // TODO: In production, this would be `onlyOwner`
     /// @notice Update the address of the gateway contract.
-    function updateGateway(address _gateway) external {
+    function updateGateway(address _gateway) external onlyGuardian {
         gateway = _gateway;
     }
 
-    // TODO: In production, this would be `onlyOwner`
     /// @notice Update the function id for requesting a header range.
-    function updateHeaderRangeFunctionId(bytes32 _functionId) external {
+    function updateHeaderRangeFunctionId(
+        bytes32 _functionId
+    ) external onlyGuardian {
         headerRangeFunctionId = _functionId;
     }
 
-    // TODO: In production, this would be `onlyOwner`
     /// @notice Update the function id for requesting a rotate.
-    function updateAddNextAuthoritySetFunctionId(bytes32 _functionId) external {
+    function updateAddNextAuthoritySetFunctionId(
+        bytes32 _functionId
+    ) external onlyGuardian {
         rotateFunctionId = _functionId;
-    }
-
-    // TODO: In production, this would be part of a constructor and/or `onlyOwner`
-    /// @notice Set the genesis info for the light client.
-    function setGenesisInfo(
-        uint32 _blockHeight,
-        bytes32 _header,
-        uint64 _authoritySetId,
-        bytes32 _authoritySetHash
-    ) external {
-        blockHeightToHeaderHash[_blockHeight] = _header;
-        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
-        latestBlock = _blockHeight;
     }
 
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].

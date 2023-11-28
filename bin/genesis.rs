@@ -15,7 +15,7 @@ use subxt::config::Header;
 use vectorx::input::RpcDataFetcher;
 
 #[derive(Parser, Debug, Clone)]
-#[command(about = "Compile a program.")]
+#[command(about = "Get the genesis parameters from a block.")]
 pub struct GenesisArgs {
     #[arg(long, default_value = "1")]
     pub block: u32,

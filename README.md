@@ -11,27 +11,22 @@ The circuits are available on Succinct X [here](https://platform.succinct.xyz/su
 Vector X is currently deployed for Avail's Goldberg testnet on Goerli [here](https://goerli.etherscan.io/address/0xc862F17Ebb256679D8b428634B8D1E5D8d9EBf67#events).
 
 ## Integrate
-Deploy a `VectorX` contract.
+Get the genesis parameters for the `VectorX` contract with a specific Avail block (with no input defaults to block 1).
 ```
-forge create --rpc-url $RPC_URL --private-key $PRIVATE_KEY --constructor-args 0x6e4f1e9ea315ebfd69d18c2db974eef6105fb803 --etherscan-api-key $ETHERSCAN_API_KEY --verify VectorX
-```
-
-Verify a `VectorX` contract, if not already verified.
-```
-forge verify-contract --etherscan-api-key $ETHERSCAN_API_KEY <ADDRESS> <CONTRACT> --chain-id [chain-id]
+cargo run --bin genesis -- --block 100
 ```
 
-Initialize the `VectorX` contract with genesis parameters.
+Update `contracts/.env` following `contracts/.env.example`.
+
+Deploy the `VectorX` contract with genesis parameters.
 ```
-forge script script/Genesis.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
+forge install
+
+forge script script/Deploy.s.sol --rpc-url $ETHEREUM_RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_API_KEY --verify VectorX --broadcast
 ```
 
-Update the function ID's on the `VectorX` contract.
-```
-forge script script/FunctionId.s.sol --rpc-url $RPC_URL --private-key $PRIVATE_KEY --broadcast
-```
+Update `.env` following `.env.example`.
 
-Update .env file with contract address, chain id and Succinct X API key.
 Run `VectorX` script to update the LC continuously.
 ```
 cargo run --bin vectorx

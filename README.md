@@ -11,12 +11,12 @@ The circuits are available on Succinct X [here](https://platform.succinct.xyz/su
 Vector X is currently deployed for Avail's Goldberg testnet on Goerli [here](https://goerli.etherscan.io/address/0xc862F17Ebb256679D8b428634B8D1E5D8d9EBf67#events).
 
 ## Integrate
-Update `contracts/.env` following `contracts/.env.example`.
+Get the genesis parameters for the `VectorX` contract from a specific Avail block (with no input defaults to block 1).
+```
+cargo run --bin genesis -- --block 100
+```
 
-Get the genesis parameters for the `VectorX` contract from a specific Avail block.
-```
-cargo run --bin genesis -- --block 10000
-```
+Update `contracts/.env` following `contracts/.env.example`.
 
 Deploy the `VectorX` contract with genesis parameters.
 ```

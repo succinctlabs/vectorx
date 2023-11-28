@@ -822,9 +822,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.4.8"
+version = "4.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2275f18819641850fa26c89acc84d465c1bf91ce57bc2748b28c420473352f64"
+checksum = "46ca43acc1b21c6cc2d1d3129c19e323a613935b5bc28fb3b33b5b2e5fb00030"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -832,9 +832,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.4.8"
+version = "4.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07cdf1b148b25c1e1f7a42225e30a0d99a615cd4637eae7365548dd4529b95bc"
+checksum = "63361bae7eef3771745f02d8d892bec2fee5f6e34af316ba556e7f97a7069ff1"
 dependencies = [
  "anstream",
  "anstyle",
@@ -3922,7 +3922,7 @@ dependencies = [
  "backtrace",
  "base64 0.13.1",
  "bincode",
- "clap 4.4.8",
+ "clap 4.4.9",
  "curta",
  "curve25519-dalek 4.1.1",
  "digest 0.10.7",
@@ -6500,6 +6500,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "avail-subxt",
+ "clap 4.4.9",
  "dotenv",
  "ed25519-dalek 1.0.1",
  "env_logger 0.9.3",

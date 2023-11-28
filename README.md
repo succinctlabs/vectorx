@@ -13,6 +13,11 @@ Vector X is currently deployed for Avail's Goldberg testnet on Goerli [here](htt
 ## Integrate
 Update `contracts/.env` following `contracts/.env.example`.
 
+Get the genesis parameters for the `VectorX` contract from a specific Avail block.
+```
+cargo run --bin genesis -- --genesis-block 10000
+```
+
 Deploy the `VectorX` contract with genesis parameters.
 ```
 forge install

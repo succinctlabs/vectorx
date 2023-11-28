@@ -19,6 +19,10 @@ name = "vectorx"
 path = "bin/vectorx.rs"
 
 [[bin]]
+name = "genesis"
+path = "bin/genesis.rs"
+
+[[bin]]
 name = "indexer"
 path = "bin/indexer.rs"
 
@@ -65,5 +69,6 @@ alloy-sol-types = "0.4.2"
 alloy-primitives = "0.4.2"
 subxt = "0.29"
 anyhow = "1.0.68"
+clap = "4.4.9"
 [dev-dependencies]
 anyhow = "1.0.68"

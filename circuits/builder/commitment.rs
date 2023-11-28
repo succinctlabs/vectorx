@@ -1,3 +1,4 @@
+use plonky2x::frontend::merkle::simple::SimpleMerkleTree;
 use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
@@ -66,9 +67,6 @@ impl<L: PlonkParameters<D>, const D: usize> CommitmentMethods for CircuitBuilder
         leaves: &ArrayVariable<Bytes32Variable, N>,
         enabled: &ArrayVariable<BoolVariable, N>,
     ) -> Bytes32Variable {
-        self.compute_root_from_leaves::<N, 32>(
-            leaves.as_vec().iter().map(|x| x.0).collect(),
-            enabled.as_vec(),
-        )
+        self.get_root_from_hashed_leaves::<N>(leaves.as_vec(), enabled.as_vec())
     }
 }

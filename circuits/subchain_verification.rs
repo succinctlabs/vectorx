@@ -3,6 +3,7 @@ use itertools::Itertools;
 use log::{debug, Level};
 use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
+use plonky2x::frontend::merkle::simple::SimpleMerkleTree;
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
 use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, RichField, Variable,
@@ -10,7 +11,7 @@ use plonky2x::prelude::{
 
 use crate::builder::decoder::DecodingMethods;
 use crate::builder::header::{HeaderMethods, HeaderRangeFetcherHint};
-use crate::consts::{HASH_SIZE, HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
+use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
 use crate::vars::EncodedHeaderVariable;
 
 #[derive(Clone, Debug, CircuitVariable)]
@@ -150,8 +151,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
                         block_nums.push(header_variable.block_number);
                         block_parent_hashes.push(header_variable.parent_hash);
-                        block_state_roots.push(header_variable.state_root.0);
-                        block_data_roots.push(header_variable.data_root.0);
+                        block_state_roots.push(header_variable.state_root);
+                        block_data_roots.push(header_variable.data_root);
 
                         // The header is a pad-header if it's size is 0.
                         let is_pad_block = builder.is_zero(header.header_size);
@@ -192,19 +193,19 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     builder.watch_with_level(&end_header_hash, "end header hash", Level::Debug);
 
                     // Need to pad block_state_roots and block_data_roots to be of length 16;
-                    block_state_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable.0);
-                    block_data_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable.0);
+                    block_state_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
+                    block_data_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
 
                     let false_const = builder._false();
                     leaves_enabled.resize(HEADERS_PER_MAP, false_const);
 
                     // Calculate the state and data merkle roots.
-                    let state_merkle_root = builder.compute_root_from_leaves::<HEADERS_PER_MAP, HASH_SIZE>(
-                        block_state_roots,
+                    let state_merkle_root = builder.get_root_from_hashed_leaves::<HEADERS_PER_MAP>(
+                        block_state_roots.to_vec(),
                         leaves_enabled.clone(),
                     );
-                    let data_merkle_root = builder.compute_root_from_leaves::<HEADERS_PER_MAP, HASH_SIZE>(
-                        block_data_roots,
+                    let data_merkle_root = builder.get_root_from_hashed_leaves::<HEADERS_PER_MAP>(
+                        block_data_roots.to_vec(),
                         leaves_enabled,
                     );
 

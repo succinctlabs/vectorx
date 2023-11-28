@@ -18,7 +18,7 @@ use vectorx::input::RpcDataFetcher;
 #[command(about = "Compile a program.")]
 pub struct GenesisArgs {
     #[arg(long, default_value = "1")]
-    pub genesis_block: u32,
+    pub block: u32,
 }
 
 #[tokio::main]
@@ -30,7 +30,7 @@ pub async fn main() {
 
     let args = GenesisArgs::parse();
 
-    let genesis_block = args.genesis_block;
+    let genesis_block = args.block;
 
     let header = fetcher.get_header(genesis_block).await;
     let header_hash = header.hash();

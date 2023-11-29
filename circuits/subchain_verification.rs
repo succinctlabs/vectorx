@@ -139,7 +139,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     // This is a bitmap used for "compute_root_from_leaves".  The size of it will be
                     // equal to BATCH_SIZE.  It specifies which downloaded headers are not pad
                     // headers.
-                    let mut leaves_enabled = Vec::new();
+                    let mut nb_enabled_leaves = builder.zero();
 
                     for (i, header) in headers.as_vec().iter().enumerate() {
                         // Calculate and save the block hash.
@@ -186,7 +186,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         let num_headers_increment = builder.select(is_pad_block, zero, one);
                         num_headers = builder.add(num_headers, num_headers_increment);
 
-                        leaves_enabled.push(builder.not(is_pad_block));
+                        // Increment the number of enabled leaves if the header is not a pad header.
+                        let val = builder.select(is_pad_block, zero, one);
+                        nb_enabled_leaves = builder.add(
+                            nb_enabled_leaves,
+                            val,
+                        )
                     }
 
                     builder.watch_with_level(&end_block_num, "end block num", Level::Debug);
@@ -196,17 +201,15 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     block_state_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
                     block_data_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
 
-                    let false_const = builder._false();
-                    leaves_enabled.resize(HEADERS_PER_MAP, false_const);
 
                     // Calculate the state and data merkle roots.
                     let state_merkle_root = builder.get_root_from_hashed_leaves::<HEADERS_PER_MAP>(
-                        block_state_roots.to_vec(),
-                        leaves_enabled.clone(),
+                        ArrayVariable::<Bytes32Variable, HEADERS_PER_MAP>::new(block_state_roots),
+                        nb_enabled_leaves,
                     );
                     let data_merkle_root = builder.get_root_from_hashed_leaves::<HEADERS_PER_MAP>(
-                        block_data_roots.to_vec(),
-                        leaves_enabled,
+                        ArrayVariable::<Bytes32Variable, HEADERS_PER_MAP>::new(block_data_roots),
+                        nb_enabled_leaves,
                     );
 
                     MapReduceSubchainVariable {

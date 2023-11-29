@@ -1,4 +1,3 @@
-use plonky2x::frontend::merkle::simple::SimpleMerkleTree;
 use plonky2x::prelude::{
     ArrayVariable, BoolVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
@@ -17,12 +16,6 @@ pub trait CommitmentMethods {
         hashes: &ArrayVariable<Bytes32Variable, N>,
         enabled: &ArrayVariable<BoolVariable, N>,
     );
-
-    fn hash_data_root<const N: usize>(
-        &mut self,
-        data_roots: &ArrayVariable<Bytes32Variable, N>,
-        enabled: &ArrayVariable<BoolVariable, N>,
-    ) -> Bytes32Variable;
 }
 
 impl<L: PlonkParameters<D>, const D: usize> CommitmentMethods for CircuitBuilder<L, D> {
@@ -60,13 +53,5 @@ impl<L: PlonkParameters<D>, const D: usize> CommitmentMethods for CircuitBuilder
             let parent_hash_matches_or_is_enabled = self.or(parent_hash_matches, is_enabled);
             self.assert_is_equal(parent_hash_matches_or_is_enabled, true_);
         }
-    }
-
-    fn hash_data_root<const N: usize>(
-        &mut self,
-        leaves: &ArrayVariable<Bytes32Variable, N>,
-        enabled: &ArrayVariable<BoolVariable, N>,
-    ) -> Bytes32Variable {
-        self.get_root_from_hashed_leaves::<N>(leaves.as_vec(), enabled.as_vec())
     }
 }

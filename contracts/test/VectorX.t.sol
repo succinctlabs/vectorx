@@ -8,7 +8,7 @@ contract VectorXTest is Test {
     VectorX public lightClient;
 
     function setUp() public {
-        lightClient = new VectorX(address(0));
+        lightClient = new VectorX();
     }
 
     function testEncoding() public view {

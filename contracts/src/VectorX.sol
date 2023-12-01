@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {IFunctionGateway} from "./interfaces/IFunctionGateway.sol";
 import {IVectorX} from "./interfaces/IVectorX.sol";
 import {TimelockedUpgradeable} from "@succinctx/upgrades/TimelockedUpgradeable.sol";
+import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 
 /// @notice VectorX is a light client for Avail's consensus.
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
@@ -129,7 +129,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             _requestedBlock
         );
 
-        IFunctionGateway(gateway).requestCall{value: msg.value}(
+        ISuccinctGateway(gateway).requestCall{value: msg.value}(
             headerRangeFunctionId,
             input,
             address(this),
@@ -177,7 +177,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             _targetBlock
         );
 
-        bytes memory output = IFunctionGateway(gateway).verifiedCall(
+        bytes memory output = ISuccinctGateway(gateway).verifiedCall(
             headerRangeFunctionId,
             input
         );
@@ -240,7 +240,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             _epochEndBlock
         );
 
-        IFunctionGateway(gateway).requestCall{value: msg.value}(
+        ISuccinctGateway(gateway).requestCall{value: msg.value}(
             rotateFunctionId,
             input,
             address(this),
@@ -275,7 +275,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             _epochEndBlock
         );
 
-        bytes memory output = IFunctionGateway(gateway).verifiedCall(
+        bytes memory output = ISuccinctGateway(gateway).verifiedCall(
             rotateFunctionId,
             input
         );

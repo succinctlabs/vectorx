@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.22;
+pragma solidity ^0.8.16;
 
 import "forge-std/Script.sol";
 import {VectorX} from "../src/VectorX.sol";

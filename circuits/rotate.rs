@@ -184,7 +184,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;
-    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, VALIDATOR_LENGTH};
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE, VALIDATOR_LENGTH};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -225,14 +225,12 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 8;
-        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_HEADER_CHUNK_SIZE: usize = 100;
         const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
             &mut builder,
         );
 

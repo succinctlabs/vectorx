@@ -21,6 +21,22 @@ contract DeployScript is Script {
 
         address gateway = 0x6e4f1e9eA315EBFd69d18C2DB974EEf6105FB803;
 
+        bytes32 CREATE2_SALT = blockhash(block.number - 1);
+
+        // Deploy contract
+        VectorX lightClientImpl = new VectorX{salt: bytes32(CREATE2_SALT)}();
+        VectorX lightClient;
+        lightClient = VectorX(
+            address(
+                new ERC1967Proxy{salt: bytes32(CREATE2_SALT)}(
+                    address(lightClientImpl),
+                    ""
+                )
+            )
+        );
+        console.logAddress(address(lightClient));
+        console.logAddress(address(lightClientImpl));
+
         VectorX lightClient = new VectorX();
         // Initialize the Vector X light client.
         lightClient.initialize(

@@ -22,6 +22,8 @@ Deploy the `VectorX` contract with genesis parameters.
 ```
 forge install
 
+source .env
+
 forge script script/Deploy.s.sol --rpc-url $ETHEREUM_RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $ETHERSCAN_API_KEY --verify VectorX --broadcast
 ```
 

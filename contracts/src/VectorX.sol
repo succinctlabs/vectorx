@@ -38,35 +38,30 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
+    struct InitParameters {
+        address guardian;
+        address gateway;
+        uint32 height;
+        bytes32 header;
+        uint64 authoritySetId;
+        bytes32 authoritySetHash;
+        bytes32 headerRangeFunctionId;
+        bytes32 rotateFunctionId;
+    }
+
     /// @dev Initializes the contract.
-    /// @param _guardian The address of the guardian.
-    /// @param _gateway The address of the gateway contract.
-    /// @param _height The height of the genesis block.
-    /// @param _header The header hash of the genesis block.
-    /// @param _authoritySetId The authority set id of the genesis block.
-    /// @param _authoritySetHash The authority set hash of the genesis block.
-    /// @param _headerRangeFunctionId The function ID for header range.
-    /// @param _rotateFunctionId The function ID for rotate.
-    function initialize(
-        address _guardian,
-        address _gateway,
-        uint32 _height,
-        bytes32 _header,
-        uint64 _authoritySetId,
-        bytes32 _authoritySetHash,
-        bytes32 _headerRangeFunctionId,
-        bytes32 _rotateFunctionId
-    ) external initializer {
-        __TimelockedUpgradeable_init(_guardian, _guardian);
+    /// @param _params The initialization parameters for the contract.
+    function initialize(InitParameters memory _params) external initializer {
+        __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
 
-        gateway = _gateway;
+        gateway = _params.gateway;
 
-        blockHeightToHeaderHash[_height] = _header;
-        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
-        latestBlock = _height;
+        blockHeightToHeaderHash[_params.height] = _params.header;
+        authoritySetIdToHash[_params.authoritySetId] = _params.authoritySetHash;
+        latestBlock = _params.height;
 
-        rotateFunctionId = _rotateFunctionId;
-        headerRangeFunctionId = _headerRangeFunctionId;
+        rotateFunctionId = _params.rotateFunctionId;
+        headerRangeFunctionId = _params.headerRangeFunctionId;
     }
 
     /// @notice Update the address of the gateway contract.

@@ -1134,7 +1134,7 @@ dependencies = [
 [[package]]
 name = "curta"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git#bd14c11a17827042109dd9ba1771365070ebc98f"
+source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_refactor#3080bbb0d18942385855b9a4731e3d1b273ff5c9"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3916,7 +3916,7 @@ source = "git+https://github.com/mir-protocol/plonky2.git#47e24306b7dc224383712a
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#38340176b4aea3d55a116762e2b1fd101c6a5ba5"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_integration#3b4de7ae076ae3d86d5f7a1ac0cd93c71fb71846"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -3958,7 +3958,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#38340176b4aea3d55a116762e2b1fd101c6a5ba5"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_integration#3b4de7ae076ae3d86d5f7a1ac0cd93c71fb71846"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5825,7 +5825,7 @@ dependencies = [
 [[package]]
 name = "succinct-client"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#38340176b4aea3d55a116762e2b1fd101c6a5ba5"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_integration#3b4de7ae076ae3d86d5f7a1ac0cd93c71fb71846"
 dependencies = [
  "alloy-primitives",
  "anyhow",

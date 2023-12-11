@@ -51,7 +51,7 @@ impl<
         // Encoded header.
         output_stream.write_value::<EncodedHeaderVariable<HEADER_LENGTH>>(EncodedHeader {
             header_bytes: rotate_data.header_bytes,
-            header_size: L::Field::from_canonical_usize(rotate_data.header_size),
+            header_size: rotate_data.header_size as u32,
         });
 
         // Number of authorities.

@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_rotate_large_authority_set() {
+    fn test_rotate_medium_authority_set() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
@@ -289,6 +289,47 @@ mod tests {
                 .unwrap(),
         );
         let epoch_end_block_number = 4321u32;
+
+        input.evm_write::<U64Variable>(authority_set_id);
+        input.evm_write::<Bytes32Variable>(authority_set_hash);
+        input.evm_write::<U32Variable>(epoch_end_block_number);
+
+        log::debug!("Generating proof");
+        let (proof, mut output) = circuit.prove(&input);
+        log::debug!("Done generating proof");
+
+        circuit.verify(&proof, &input, &output);
+        let new_authority_set_hash = output.evm_read::<Bytes32Variable>();
+        println!("new_authority_set_hash {:?}", new_authority_set_hash);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_rotate_large_authority_set() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const NUM_AUTHORITIES: usize = 512;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
+
+        let mut builder = DefaultBuilder::new();
+
+        log::debug!("Defining circuit");
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
+            &mut builder,
+        );
+
+        log::debug!("Building circuit");
+        let circuit = builder.build();
+        log::debug!("Done building circuit");
+
+        let mut input = circuit.input();
+        let authority_set_id = 48u64;
+        let authority_set_hash = H256::from_slice(
+            &hex::decode("a699e49272d2d23f12e1624fba2ed8d28e1fc777ef25a40a7bcacbb8c0d8d252")
+                .unwrap(),
+        );
+        let epoch_end_block_number = 100005u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(authority_set_hash);

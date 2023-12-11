@@ -38,18 +38,18 @@ contract DeployScript is Script {
         console.logAddress(address(lightClient));
         console.logAddress(address(lightClientImpl));
 
-        VectorX.InitParameters memory params = VectorX.InitParameters({
-            guardian: msg.sender,
-            gateway: gateway,
-            height: height,
-            header: header,
-            authoritySetId: authoritySetId,
-            authoritySetHash: authoritySetHash,
-            headerRangeFunctionId: headerRangeFunctionId,
-            rotateFunctionId: rotateFunctionId
-        });
-
         // Initialize the Vector X light client.
-        lightClient.initialize(params);
+        lightClient.initialize(
+            VectorX.InitParameters({
+                guardian: msg.sender,
+                gateway: gateway,
+                height: height,
+                header: header,
+                authoritySetId: authoritySetId,
+                authoritySetHash: authoritySetHash,
+                headerRangeFunctionId: headerRangeFunctionId,
+                rotateFunctionId: rotateFunctionId
+            })
+        );
     }
 }

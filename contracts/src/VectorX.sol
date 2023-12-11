@@ -51,7 +51,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
     /// @dev Initializes the contract.
     /// @param _params The initialization parameters for the contract.
-    function initialize(InitParameters memory _params) external initializer {
+    function initialize(InitParameters calldata _params) external initializer {
         __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
 
         gateway = _params.gateway;

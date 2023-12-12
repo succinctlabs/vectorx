@@ -1134,7 +1134,7 @@ dependencies = [
 [[package]]
 name = "curta"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git?branch=kevjue/blake2b_refactor#3080bbb0d18942385855b9a4731e3d1b273ff5c9"
+source = "git+https://github.com/succinctlabs/curta.git#c4dd8dd43709134051303f1353dd4131078faca6"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1953,9 +1953,9 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "eyre"
-version = "0.6.10"
+version = "0.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bbb8258be8305fb0237d7b295f47bb24ff1b136a535f473baf40e70468515aa"
+checksum = "80f656be11ddf91bd709454d15d5bd896fbaf4cc3314e69349e4d1569f5b46cd"
 dependencies = [
  "indenter",
  "once_cell",
@@ -3855,7 +3855,7 @@ checksum = "14e6ab3f592e6fb464fc9712d8d6e6912de6473954635fd76a589d832cffcbb0"
 [[package]]
 name = "plonky2"
 version = "0.1.4"
-source = "git+https://github.com/mir-protocol/plonky2.git#bfcfcdb498d253ff33121dba03a130be89fcc96c"
+source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
 dependencies = [
  "ahash 0.8.6",
  "anyhow",
@@ -3879,7 +3879,7 @@ dependencies = [
 [[package]]
 name = "plonky2_field"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#bfcfcdb498d253ff33121dba03a130be89fcc96c"
+source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -3903,7 +3903,7 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#bfcfcdb498d253ff33121dba03a130be89fcc96c"
+source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
 dependencies = [
  "rayon",
 ]
@@ -3911,12 +3911,12 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#bfcfcdb498d253ff33121dba03a130be89fcc96c"
+source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
 
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_integration#6373c2854d3ebd379cfd457b62b973c9bce164da"
+source = "git+https://github.com/succinctlabs/succinctx.git#92f14c044e6351d4b87845cc6149bb8c4591f714"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -3958,7 +3958,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_integration#6373c2854d3ebd379cfd457b62b973c9bce164da"
+source = "git+https://github.com/succinctlabs/succinctx.git#92f14c044e6351d4b87845cc6149bb8c4591f714"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5826,7 +5826,7 @@ dependencies = [
 [[package]]
 name = "succinct-client"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=kevjue/blake2b_integration#6373c2854d3ebd379cfd457b62b973c9bce164da"
+source = "git+https://github.com/succinctlabs/succinctx.git#92f14c044e6351d4b87845cc6149bb8c4591f714"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -7040,9 +7040,9 @@ checksum = "dff9641d1cd4be8d1a070daf9e3773c5f67e78b4d9d42263020c057706765c04"
 
 [[package]]
 name = "winnow"
-version = "0.5.27"
+version = "0.5.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb877ca3232bec99a6472ed63f7241de2a250165260908b2d24c09d867907a85"
+checksum = "6c830786f7720c2fd27a1a0e27a709dbd3c4d009b56d098fc742d4f4eab91fe2"
 dependencies = [
  "memchr",
 ]

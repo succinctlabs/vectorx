@@ -3,6 +3,7 @@ pragma solidity ^0.8.16;
 
 import "forge-std/Script.sol";
 import {VectorX} from "../src/VectorX.sol";
+import {ERC1967Proxy} from "@openzeppelin/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployScript is Script {
     function setUp() public {}
@@ -21,17 +22,34 @@ contract DeployScript is Script {
 
         address gateway = 0x6e4f1e9eA315EBFd69d18C2DB974EEf6105FB803;
 
-        VectorX lightClient = new VectorX();
+        bytes32 CREATE2_SALT = bytes32(vm.envBytes("CREATE2_SALT"));
+
+        // Deploy contract
+        VectorX lightClientImpl = new VectorX{salt: bytes32(CREATE2_SALT)}();
+        VectorX lightClient;
+        lightClient = VectorX(
+            address(
+                new ERC1967Proxy{salt: bytes32(CREATE2_SALT)}(
+                    address(lightClientImpl),
+                    ""
+                )
+            )
+        );
+        console.logAddress(address(lightClient));
+        console.logAddress(address(lightClientImpl));
+
         // Initialize the Vector X light client.
         lightClient.initialize(
-            msg.sender,
-            gateway,
-            height,
-            header,
-            authoritySetId,
-            authoritySetHash,
-            headerRangeFunctionId,
-            rotateFunctionId
+            VectorX.InitParameters({
+                guardian: msg.sender,
+                gateway: gateway,
+                height: height,
+                header: header,
+                authoritySetId: authoritySetId,
+                authoritySetHash: authoritySetHash,
+                headerRangeFunctionId: headerRangeFunctionId,
+                rotateFunctionId: rotateFunctionId
+            })
         );
     }
 }

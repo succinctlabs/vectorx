@@ -34,8 +34,13 @@ pub async fn main() {
 
     let header = fetcher.get_header(genesis_block).await;
     let header_hash = header.hash();
+    let authority_set_id = fetcher.get_authority_set_id(genesis_block).await;
     let authority_set_hash = fetcher.compute_authority_set_hash(genesis_block).await;
     info!("Block {}'s header hash: {:?}", genesis_block, header_hash);
+    info!(
+        "Block {}'s authority set id: {:?}",
+        genesis_block, authority_set_id
+    );
     info!(
         "Block {}'s authority set hash: {:?}",
         genesis_block, authority_set_hash

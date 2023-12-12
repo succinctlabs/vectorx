@@ -22,7 +22,7 @@ contract DeployScript is Script {
 
         address gateway = 0x6e4f1e9eA315EBFd69d18C2DB974EEf6105FB803;
 
-        bytes32 CREATE2_SALT = blockhash(block.number - 1);
+        bytes32 CREATE2_SALT = bytes32(vm.envBytes("CREATE2_SALT"));
 
         // Deploy contract
         VectorX lightClientImpl = new VectorX{salt: bytes32(CREATE2_SALT)}();

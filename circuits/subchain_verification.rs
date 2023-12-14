@@ -75,9 +75,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
         debug!("verify_subchain - num_map_jobs: {}", num_map_jobs);
 
-        // TODO: This should start from 0. Otherwise, the genesis block won't be included. This will
-        // be resolved in a later PR. Additionally, "head" in the smart contract should refer to the
-        // last block of the range, not the next block after the range.
         let relative_block_nums =
             (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();
 

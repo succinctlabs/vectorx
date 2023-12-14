@@ -134,7 +134,6 @@ impl RedisClient {
     }
 
     /// Stores merkle tree branch data in Redis. Errors if setting the key fails.
-    /// TODO: Batch add merkle tree data to Redis
     pub async fn add_merkle_tree_branch(&mut self, branch: MerkleTreeBranch) {
         let mut con = match self.get_connection().await {
             Ok(con) => con,

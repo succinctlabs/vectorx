@@ -15,6 +15,20 @@ abigen!(VectorX, "./abi/VectorX.abi.json",);
 
 type HeaderRangeCommitmentStoredTuple = sol! { tuple(uint32, uint32, bytes32, bytes32) };
 
+// total_num_leaves is the size of the merkle tree.
+// Returns the path for the given index.
+fn get_path_indices(index: usize, total_num_leaves: usize) -> Vec<bool> {
+    let mut path_indices = Vec::new();
+    let mut i = index;
+    let mut level_leaves = total_num_leaves;
+    while level_leaves > 1 {
+        path_indices.push(i % 2 == 1);
+        i /= 2;
+        level_leaves /= 2;
+    }
+    path_indices
+}
+
 // Note: Not inclusive of start, but inclusive of end. Head in the contract matches end, so this
 // is semantically correct.
 async fn add_merkle_tree(
@@ -48,6 +62,7 @@ async fn add_merkle_tree(
             // Starts at start + 1 (the first uncommitted header from the new range).
             block_number: trusted_block + i + 1,
             branch: proof_hashes.to_vec(),
+            path_indices: get_path_indices(i as usize, tree_num_leaves),
             root: root.to_vec(),
             leaf: data_hashes[i as usize].to_vec(),
         };

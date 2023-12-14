@@ -94,7 +94,6 @@ async fn main() {
 
     let client = Arc::new(client);
 
-    // TODO: Change to HeaderRangeCommitmentStoredFilter type.
     let header_range_filter = Filter::new()
         .address(address)
         .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");

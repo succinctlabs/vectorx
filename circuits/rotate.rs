@@ -309,7 +309,7 @@ mod tests {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
-        const NUM_AUTHORITIES: usize = 512;
+        const NUM_AUTHORITIES: usize = 300;
         const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();

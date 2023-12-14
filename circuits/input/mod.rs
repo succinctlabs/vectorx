@@ -23,7 +23,8 @@ use tokio::time::sleep;
 
 use self::types::{
     CircuitJustification, EncodedFinalityProof, FinalityProof, GrandpaJustification,
-    HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
+    HeaderRotateData, MerkleTreeBranch, SignerMessage, SimpleJustificationData,
+    StoredJustificationData,
 };
 use crate::consts::{
     BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
@@ -130,6 +131,23 @@ impl RedisClient {
         con.zrangebyscore("blocks", start, end)
             .await
             .expect("Failed to get keys")
+    }
+
+    /// Stores justification data in Redis. Errors if setting the key fails.
+    pub async fn add_merkle_tree_branch(&mut self, branch: MerkleTreeBranch) {
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
+
+        let key = format!("branch:{}", branch.block_number);
+        // Branch is stored as a JSON object.
+        let _: () = con
+            .json_set(key, "$", &branch)
+            .await
+            .expect("Failed to set key");
+
+        debug!("Added branch for block {:?}", branch.block_number)
     }
 }
 

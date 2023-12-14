@@ -31,6 +31,15 @@ pub struct StoredJustificationData {
     pub num_authorities: usize,
 }
 
+// Stores the Merkle tree data for Avail data commitments.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MerkleTreeBranch {
+    pub block_number: u32,
+    pub branch: Vec<[u8; 32]>,
+    pub root: Vec<u8>,
+    pub leaf: Vec<u8>,
+}
+
 #[derive(Debug)]
 pub struct CircuitJustification {
     pub authority_set_id: u64,

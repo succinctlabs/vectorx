@@ -45,7 +45,7 @@ async fn add_merkle_tree(
 
     let merkle_tree = MerkleTree::<Sha256>::from_leaves(&data_hashes);
     let root = merkle_tree.root().unwrap();
-    // assert_eq!(root.to_vec(), expected_data_commitment);
+    assert_eq!(root.to_vec(), expected_data_commitment);
     println!("root: {:?}", root);
 
     for i in 0..(end - start) {
@@ -121,6 +121,4 @@ async fn main() {
         )
         .await;
     }
-    // dotenv::dotenv().ok();
-    // add_merkle_tree(1, 2, vec![0u8; 32], 4).await;
 }

@@ -158,7 +158,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         block_data_roots.push(header_variable.data_root);
 
                         // The header is a pad-header if it's size is 0.
-                        let is_pad_block = builder.is_zero(header.header_size);
+                        let is_pad_block = builder.is_zero(header.header_size.variable);
 
                         // Verify that the headers are linked correctly.
                         if i > 0 {

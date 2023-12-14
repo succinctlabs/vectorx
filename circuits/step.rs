@@ -146,7 +146,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;
-    use crate::consts::MAX_HEADER_SIZE;
+    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -287,6 +287,55 @@ mod tests {
         let target_block = 4321u32;
         let authority_set_id = 0u64;
         let authority_set_hash = "54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb"
+            .parse()
+            .unwrap();
+
+        input.evm_write::<U32Variable>(trusted_block);
+        input.evm_write::<Bytes32Variable>(trusted_header);
+        input.evm_write::<U64Variable>(authority_set_id);
+        input.evm_write::<Bytes32Variable>(authority_set_hash);
+        input.evm_write::<U32Variable>(target_block);
+
+        log::debug!("Generating proof");
+        let (proof, mut output) = circuit.prove(&input);
+        log::debug!("Done generating proof");
+
+        circuit.verify(&proof, &input, &output);
+        let target_header = output.evm_read::<Bytes32Variable>();
+        let state_root_merkle_root = output.evm_read::<Bytes32Variable>();
+        let data_root_merkle_root = output.evm_read::<Bytes32Variable>();
+        println!("target_header {:?}", target_header);
+        println!("state root merkle root {:?}", state_root_merkle_root);
+        println!("data root merkle root {:?}", data_root_merkle_root);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_step_large() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        let mut builder = DefaultBuilder::new();
+
+        log::debug!("Defining circuit");
+        StepCircuit::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>::define(
+            &mut builder,
+        );
+
+        log::debug!("Building circuit");
+        let circuit = builder.build();
+        log::debug!("Done building circuit");
+
+        let mut input = circuit.input();
+
+        let trusted_header = "cb9d49dc075848689c730c9067ed9c28c7a8d5aa5f86641f68427c29eae26a76"
+            .parse()
+            .unwrap();
+        let trusted_block = 99990u32;
+        // Step to an epoch end block, so it's not reliant on a stored justification.
+        let target_block = 100005u32;
+        let authority_set_id = 48u64;
+        let authority_set_hash = "a699e49272d2d23f12e1624fba2ed8d28e1fc777ef25a40a7bcacbb8c0d8d252"
             .parse()
             .unwrap();
 

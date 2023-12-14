@@ -142,12 +142,11 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .collect::<Vec<_>>();
 
         // The next field is the data root. The data root is located at the end of the header.
-        let data_root_offset =
-            self.constant(L::Field::from_canonical_usize(DATA_ROOT_OFFSET_FROM_END));
+        let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END as u32);
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
 
         // If header_size == 0, then set data_root_start to 0.
-        let header_is_zero_size = self.is_zero(header.header_size);
+        let header_is_zero_size = self.is_zero(header.header_size.variable);
         let zero = self.zero();
         data_root_start = self.select(header_is_zero_size, zero, data_root_start);
 
@@ -155,7 +154,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let data_root_variables: Vec<Variable> = self
             .get_fixed_subarray::<S, HASH_SIZE>(
                 &ArrayVariable::<Variable, S>::from(header_variables),
-                data_root_start,
+                data_root_start.variable,
                 // Seed the challenger with the first 15 bytes (120 bits) of the header hash.
                 &header_hash.as_bytes()[0..15],
             )
@@ -326,7 +325,7 @@ pub mod tests {
                 header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
                     header_bytes: header.as_slice().try_into().unwrap(),
-                    header_size: F::from_canonical_u64(header_len as u64),
+                    header_size: header_len as u32,
                 }
             })
             .collect::<_>();

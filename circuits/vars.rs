@@ -15,7 +15,7 @@ use crate::consts::ENCODED_PRECOMMIT_LENGTH;
 #[value_name(EncodedHeader)]
 pub struct EncodedHeaderVariable<const S: usize> {
     pub header_bytes: ArrayVariable<ByteVariable, S>,
-    pub header_size: Variable,
+    pub header_size: U32Variable,
 }
 
 #[derive(Clone, Debug, CircuitVariable)]

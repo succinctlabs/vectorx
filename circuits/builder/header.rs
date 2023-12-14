@@ -3,8 +3,7 @@ use codec::Encode;
 use log::debug;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, U32Variable,
-    ValueStream,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkParameters, U32Variable, ValueStream,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,10 +35,7 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable {
         assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
-        self.curta_blake2b_variable::<MAX_CHUNK_SIZE>(
-            header.header_bytes.as_slice(),
-            header.header_size,
-        )
+        self.curta_blake2b_variable(header.header_bytes.as_slice(), header.header_size)
     }
 
     fn hash_encoded_headers<
@@ -114,7 +110,7 @@ impl<
             header_bytes.resize(HEADER_LENGTH, 0);
             let header_variable = EncodedHeader {
                 header_bytes,
-                header_size: L::Field::from_canonical_usize(header_size),
+                header_size: header_size as u32,
             };
             header_variables.push(header_variable);
         }
@@ -123,7 +119,7 @@ impl<
         for _i in headers.len()..NUM_HEADERS {
             let header_variable = EncodedHeader {
                 header_bytes: vec![0u8; HEADER_LENGTH],
-                header_size: L::Field::from_canonical_usize(0),
+                header_size: 0u32,
             };
             header_variables.push(header_variable);
         }
@@ -141,9 +137,7 @@ mod tests {
     use avail_subxt::config::Header;
     use codec::Encode;
     use ethers::types::H256;
-    use plonky2x::prelude::{
-        ArrayVariable, Bytes32Variable, DefaultBuilder, Field, GoldilocksField,
-    };
+    use plonky2x::prelude::{ArrayVariable, Bytes32Variable, DefaultBuilder, GoldilocksField};
 
     use crate::builder::header::HeaderMethods;
     use crate::consts::{MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
@@ -194,7 +188,7 @@ mod tests {
                 header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
                     header_bytes: header.as_slice().try_into().unwrap(),
-                    header_size: F::from_canonical_u64(header_len as u64),
+                    header_size: header_len as u32,
                 }
             })
             .collect::<_>();

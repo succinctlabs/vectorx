@@ -79,7 +79,7 @@ async fn main() {
 
     let client = Arc::new(client);
 
-    // TODO: Use Header range commitment stored ABI type
+    // TODO: Change to HeaderRangeCommitmentStoredFilter type.
     let header_range_filter = Filter::new()
         .address(address)
         .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
@@ -87,7 +87,6 @@ async fn main() {
     let mut stream = client.subscribe_logs(&header_range_filter).await.unwrap();
     while let Some(log) = stream.next().await {
         let log_bytes = log.data;
-        // Parse abi encoded logBytes (uint32, uint32, bytes32, bytes32)
         let decoded = HeaderRangeCommitmentStoredTuple::abi_decode(&log_bytes.0, true).unwrap();
 
         let trusted_block = decoded.0;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use alloy_sol_types::{sol, SolType};
 use ethers::contract::abigen;
-use ethers::core::types::{Address, BlockNumber, Filter};
+use ethers::core::types::{Address, Filter};
 use ethers::providers::{Middleware, Provider, StreamExt, Ws};
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::MerkleTree;
@@ -15,17 +15,10 @@ abigen!(VectorX, "./abi/VectorX.abi.json",);
 
 type HeaderRangeCommitmentStoredTuple = sol! { tuple(uint32, uint32, bytes32, bytes32) };
 
-// fn next_power_of_two(n: usize) -> usize {
-//     let mut power = 1;
-//     while power < n {
-//         power *= 2;
-//     }
-//     power
-// }
-
-// Not inclusive of start, but inclusive of end.
+// Note: Not inclusive of start, but inclusive of end. Head in the contract matches end, so this
+// is semantically correct.
 async fn add_merkle_tree(
-    start: u32,
+    trusted_block: u32,
     end: u32,
     expected_data_commitment: Vec<u8>,
     tree_num_leaves: usize,
@@ -33,9 +26,9 @@ async fn add_merkle_tree(
     // Listen to logs
     let mut data_fetcher = RpcDataFetcher::new().await;
 
-    // Get all data_hashes for the range
+    // Get all data_hashes for the range [start + 1, end].
     let mut data_hashes = Vec::new();
-    for i in start + 1..end + 1 {
+    for i in trusted_block + 1..end + 1 {
         let header = data_fetcher.get_header(i).await;
         data_hashes.push(header.data_root().0);
     }
@@ -48,12 +41,12 @@ async fn add_merkle_tree(
     assert_eq!(root.to_vec(), expected_data_commitment);
     println!("root: {:?}", root);
 
-    for i in 0..(end - start) {
+    for i in 0..(end - trusted_block) {
         let proof = merkle_tree.proof(&[i as usize]);
         let proof_hashes = proof.proof_hashes();
         let branch = MerkleTreeBranch {
-            // Starts at start + 1
-            block_number: start + i + 1,
+            // Starts at start + 1 (the first uncommitted header from the new range).
+            block_number: trusted_block + i + 1,
             branch: proof_hashes.to_vec(),
             root: root.to_vec(),
             leaf: data_hashes[i as usize].to_vec(),
@@ -86,35 +79,23 @@ async fn main() {
 
     let client = Arc::new(client);
 
-    let last_block = client
-        .get_block(BlockNumber::Latest)
-        .await
-        .unwrap()
-        .unwrap()
-        .number
-        .unwrap();
-    println!("last_block: {last_block}");
-
     // TODO: Use Header range commitment stored ABI type
     let header_range_filter = Filter::new()
         .address(address)
-        // TODO: Remove from_block
-        .from_block(last_block - 2000)
         .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
     let mut stream = client.subscribe_logs(&header_range_filter).await.unwrap();
     while let Some(log) = stream.next().await {
-        // println!("log: {:?}", log);
         let log_bytes = log.data;
         // Parse abi encoded logBytes (uint32, uint32, bytes32, bytes32)
         let decoded = HeaderRangeCommitmentStoredTuple::abi_decode(&log_bytes.0, true).unwrap();
 
-        let start_block = decoded.0;
+        let trusted_block = decoded.0;
         let end_block = decoded.1;
         let expected_data_commitment = decoded.2.to_vec();
 
         add_merkle_tree(
-            start_block,
+            trusted_block,
             end_block,
             expected_data_commitment,
             step_range_max as usize,

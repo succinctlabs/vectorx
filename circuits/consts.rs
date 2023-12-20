@@ -6,7 +6,7 @@ pub const DATA_ROOT_OFFSET_FROM_END: usize = 32;
 pub const HEADERS_PER_MAP: usize = 8;
 
 // Maximum header size (in blake2b chunks) that can be processed by the circuit.
-pub const MAX_HEADER_CHUNK_SIZE: usize = 200;
+pub const MAX_HEADER_CHUNK_SIZE: usize = 280;
 
 // Maximum header size (in bytes) that can be processed by the circuit.
 // (Data limit is 512KB).

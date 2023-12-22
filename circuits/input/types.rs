@@ -31,6 +31,18 @@ pub struct StoredJustificationData {
     pub num_authorities: usize,
 }
 
+// Stores the Merkle tree data for Avail data commitments.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct MerkleTreeBranch {
+    pub block_number: u32,
+    pub branch: Vec<[u8; 32]>,
+    // If path_index is true (1), then the new hash_so_far is sha256(branch_node || hash_so_far)
+    // Otherwise, sha256(hash_so_far || branch_node)
+    pub path_indices: Vec<bool>,
+    pub root: Vec<u8>,
+    pub leaf: Vec<u8>,
+}
+
 #[derive(Debug)]
 pub struct CircuitJustification {
     pub authority_set_id: u64,

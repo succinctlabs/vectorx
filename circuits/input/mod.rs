@@ -147,7 +147,7 @@ impl RedisClient {
             .await
             .expect("Failed to set key");
 
-        debug!("Added branch for block {:?}", branch.block_number)
+        println!("Added branch for block {:?}", branch.block_number);
     }
 }
 

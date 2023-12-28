@@ -1,7 +1,7 @@
 use std::env;
 use std::sync::Arc;
 
-use alloy_sol_types::{sol, SolType};
+use alloy_sol_types::{sol, SolType, SolValue};
 use ethers::contract::abigen;
 use ethers::core::types::{Address, Filter};
 use ethers::providers::{Middleware, Provider, StreamExt, Ws};
@@ -14,6 +14,10 @@ use vectorx::input::RpcDataFetcher;
 abigen!(VectorX, "./abi/VectorX.abi.json",);
 
 type HeaderRangeCommitmentStoredTuple = sol! { tuple(uint32, uint32, bytes32, bytes32) };
+sol! { struct RangeHashInput {
+    uint32 trusted_block;
+    uint32 end_block;
+} }
 
 // total_num_leaves is the size of the merkle tree.
 // Returns the path for the given index.
@@ -34,6 +38,7 @@ fn get_path_indices(index: usize, total_num_leaves: usize) -> Vec<bool> {
 async fn add_merkle_tree(
     trusted_block: u32,
     end: u32,
+    range_hash: Vec<u8>,
     expected_data_commitment: Vec<u8>,
     tree_num_leaves: usize,
 ) {
@@ -63,6 +68,7 @@ async fn add_merkle_tree(
             block_number: trusted_block + i + 1,
             branch: proof_hashes.to_vec(),
             path_indices: get_path_indices(i as usize, tree_num_leaves),
+            range_hash: range_hash.clone(),
             root: root.to_vec(),
             leaf: data_hashes[i as usize].to_vec(),
         };
@@ -107,9 +113,18 @@ async fn main() {
         let end_block = decoded.1;
         let expected_data_commitment = decoded.2.to_vec();
 
+        // range_hash = keccak256(abi.encode(trusted_block, end_block))
+        let input = RangeHashInput {
+            trusted_block,
+            end_block,
+        };
+
+        let range_hash = ethers::utils::keccak256(input.abi_encode());
+
         add_merkle_tree(
             trusted_block,
             end_block,
+            range_hash.to_vec(),
             expected_data_commitment,
             step_range_max as usize,
         )

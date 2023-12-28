@@ -39,6 +39,8 @@ pub struct MerkleTreeBranch {
     // If path_index is true (1), then the new hash_so_far is sha256(branch_node || hash_so_far)
     // Otherwise, sha256(hash_so_far || branch_node)
     pub path_indices: Vec<bool>,
+    // The hash of the range the data commitment (root) corresponds to.
+    pub range_hash: Vec<u8>,
     pub root: Vec<u8>,
     pub leaf: Vec<u8>,
 }

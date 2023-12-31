@@ -20,7 +20,7 @@ contract DeployScript is Script {
         uint64 authoritySetId = uint64(vm.envUint("GENESIS_AUTHORITY_SET_ID"));
         bytes32 authoritySetHash = vm.envBytes32("GENESIS_AUTHORITY_SET_HASH");
 
-        address gateway = 0x6e4f1e9eA315EBFd69d18C2DB974EEf6105FB803;
+        address gateway = vm.envAddress("GATEWAY_ADDRESS");
 
         bytes32 CREATE2_SALT = bytes32(vm.envBytes("CREATE2_SALT"));
 

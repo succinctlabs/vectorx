@@ -47,3 +47,17 @@ proofs.
 ```
 cargo run --bin indexer
 ```
+
+## Avail Merkle Proof Service
+Whenever a new data root commitment is stored on-chain, the merkle proofs need to be made available for end-users to prove the data root's of blocks within those data commitments. This service listens for data root commitment events on-chain and stores the merkle proofs for each data root in the range, which is then exposed via a separate endpoint.
+
+### Run the Merkle Proof Service
+```
+cargo run --bin events
+```
+
+### Query for a `dataRoot` Proof
+Example of querying for the merkle proof data for Goldberg testnet block 156961.
+```
+curl https://beaconapi.succinct.xyz/api/integrations/vectorx/156961
+```

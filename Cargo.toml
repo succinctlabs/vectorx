@@ -15,6 +15,14 @@ name = "rotate"
 path = "bin/rotate.rs"
 
 [[bin]]
+name = "dummy_step"
+path = "bin/dummy_step.rs"
+
+[[bin]]
+name = "dummy_rotate"
+path = "bin/dummy_rotate.rs"
+
+[[bin]]
 name = "vectorx"
 path = "bin/vectorx.rs"
 

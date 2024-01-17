@@ -24,19 +24,22 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice The maximum header range that can be requested.
     uint32 public constant MAX_HEADER_RANGE = 256;
 
+    /// @notice The reset counter.
+    uint8 public resetCounter;
+
     /// @notice Maps block height to the header hash of the block.
-    mapping(uint32 => bytes32) public blockHeightToHeaderHash;
+    mapping(uint8 => mapping(uint32 => bytes32)) public blockHeightToHeaderHash;
 
     /// @notice Maps authority set id to the authority set hash.
-    mapping(uint64 => bytes32) public authoritySetIdToHash;
+    mapping(uint8 => mapping(uint64 => bytes32)) public authoritySetIdToHash;
 
     /// @notice Maps block ranges to data commitments. Block ranges are stored as
     ///     keccak256(abi.encode(startBlock, endBlock)).
-    mapping(bytes32 => bytes32) public dataRootCommitments;
+    mapping(uint8 => mapping(bytes32 => bytes32)) public dataRootCommitments;
 
     /// @notice Maps block ranges to state commitments. Block ranges are stored as
     ///     keccak256(abi.encode(startBlock, endBlock)).
-    mapping(bytes32 => bytes32) public stateRootCommitments;
+    mapping(uint8 => mapping(bytes32 => bytes32)) public stateRootCommitments;
 
     struct InitParameters {
         address guardian;
@@ -56,8 +59,27 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         gateway = _params.gateway;
 
-        blockHeightToHeaderHash[_params.height] = _params.header;
-        authoritySetIdToHash[_params.authoritySetId] = _params.authoritySetHash;
+        resetCounter = 0;
+
+        blockHeightToHeaderHash[resetCounter][_params.height] = _params.header;
+        authoritySetIdToHash[resetCounter][_params.authoritySetId] = _params
+            .authoritySetHash;
+        latestBlock = _params.height;
+
+        rotateFunctionId = _params.rotateFunctionId;
+        headerRangeFunctionId = _params.headerRangeFunctionId;
+    }
+
+    /// @notice Update the address of the gateway contract.
+    function reinitializeContract(
+        InitParameters calldata _params
+    ) public onlyGuardian {
+        // Reset all metadata of this contract.
+        resetCounter++;
+
+        blockHeightToHeaderHash[resetCounter][_params.height] = _params.header;
+        authoritySetIdToHash[resetCounter][_params.authoritySetId] = _params
+            .authoritySetHash;
         latestBlock = _params.height;
 
         rotateFunctionId = _params.rotateFunctionId;
@@ -93,13 +115,17 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint64 _authoritySetId,
         uint32 _requestedBlock
     ) external payable {
-        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        bytes32 trustedHeader = blockHeightToHeaderHash[resetCounter][
+            _trustedBlock
+        ];
         if (trustedHeader == bytes32(0)) {
             revert("Trusted header not found");
         }
         // Note: In the case that the trusted block is an epoch end block, the authority set id will
         // be the authority set id of the next epoch.
-        bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
+        bytes32 authoritySetHash = authoritySetIdToHash[resetCounter][
+            _authoritySetId
+        ];
         if (authoritySetHash == bytes32(0)) {
             revert("Authority set hash not found");
         }
@@ -150,11 +176,15 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint64 _authoritySetId,
         uint32 _targetBlock
     ) external {
-        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        bytes32 trustedHeader = blockHeightToHeaderHash[resetCounter][
+            _trustedBlock
+        ];
         if (trustedHeader == bytes32(0)) {
             revert("Trusted header not found");
         }
-        bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
+        bytes32 authoritySetHash = authoritySetIdToHash[resetCounter][
+            _authoritySetId
+        ];
         if (authoritySetHash == bytes32(0)) {
             revert("Authority set hash not found");
         }
@@ -183,12 +213,14 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             bytes32 data_root_commitment
         ) = abi.decode(output, (bytes32, bytes32, bytes32));
 
-        blockHeightToHeaderHash[_targetBlock] = target_header_hash;
+        blockHeightToHeaderHash[resetCounter][
+            _targetBlock
+        ] = target_header_hash;
 
         // Store the data and state commitments for the range (trustedBlock, targetBlock].
         bytes32 key = keccak256(abi.encode(_trustedBlock, _targetBlock));
-        dataRootCommitments[key] = data_root_commitment;
-        stateRootCommitments[key] = state_root_commitment;
+        dataRootCommitments[resetCounter][key] = data_root_commitment;
+        stateRootCommitments[resetCounter][key] = state_root_commitment;
 
         // Update latest block.
         latestBlock = _targetBlock;
@@ -216,7 +248,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         // This ensures we don't call rotate twice for the same epoch.
         require(_epochEndBlock >= latestBlock);
 
-        bytes32 currentAuthoritySetHash = authoritySetIdToHash[
+        bytes32 currentAuthoritySetHash = authoritySetIdToHash[resetCounter][
             _currentAuthoritySetId
         ];
         if (currentAuthoritySetHash == bytes32(0)) {
@@ -256,7 +288,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint64 _currentAuthoritySetId,
         uint32 _epochEndBlock
     ) external {
-        bytes32 currentAuthoritySetHash = authoritySetIdToHash[
+        bytes32 currentAuthoritySetHash = authoritySetIdToHash[resetCounter][
             _currentAuthoritySetId
         ];
         // Note: Occurs if requesting a new authority set id that is not the next authority set id.
@@ -278,7 +310,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 new_authority_set_hash = abi.decode(output, (bytes32));
 
         // Store the authority set hash for the next authority set id.
-        authoritySetIdToHash[
+        authoritySetIdToHash[resetCounter][
             _currentAuthoritySetId + 1
         ] = new_authority_set_hash;
 

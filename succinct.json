@@ -16,6 +16,20 @@
             "baseDir": ".",
             "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin rotate --release build && mv ./target/release/rotate ./build/rotate",
             "proveCommand": "RUST_LOG=debug ./build/rotate prove input.json"
+        },
+        {
+            "name": "dummy_step",
+            "framework": "rustx",
+            "baseDir": ".",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_step --release build && mv ./target/release/dummy_step ./build/dummy_step",
+            "proveCommand": "RUST_LOG=debug ./build/dummy_step prove input.json"
+        },
+        {
+            "name": "dummy_rotate",
+            "framework": "rustx",
+            "baseDir": ".",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_rotate --release build && mv ./target/release/dummy_rotate ./build/dummy_rotate",
+            "proveCommand": "RUST_LOG=debug ./build/dummy_rotate prove input.json"
         }
     ]
 }

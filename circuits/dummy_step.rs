@@ -29,11 +29,11 @@ impl Program for DummyStep {
                 .0
                 .to_vec();
 
-            let (data_merkle_root, state_merkle_root) = data_fetcher
+            let (state_merkle_root, data_merkle_root) = data_fetcher
                 .get_merkle_root_commitments(trusted_block, target_block)
                 .await;
 
-            (target_header_hash, data_merkle_root, state_merkle_root)
+            (target_header_hash, state_merkle_root, data_merkle_root)
         });
 
         // Encode the result tuple into bytes by concatenating the fields.

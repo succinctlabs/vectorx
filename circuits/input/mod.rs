@@ -248,6 +248,30 @@ impl RpcDataFetcher {
         Err("Failed to connect to Avail client after multiple attempts!".to_string())
     }
 
+    pub async fn check_data_commitment(&mut self, block: u32) {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
+        let header = self.get_header(block).await;
+        let data_root = header.data_root().0.to_vec();
+        println!("data_root {:?}", data_root);
+
+        let encoded_header_bytes = header.encode();
+        println!("encoded_header_bytes {:?}", encoded_header_bytes);
+
+        // Find the data_root in the header.
+        let mut data_root_index = -1;
+        for i in 0..(encoded_header_bytes.len() - HASH_SIZE) + 1 {
+            if encoded_header_bytes[i..i + HASH_SIZE] == data_root[..] {
+                data_root_index = i as i32;
+                break;
+            }
+        }
+
+        println!("data_root_index {:?}", data_root_index);
+    }
+
     /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch
     /// end blocks within the given range of block numbers. Includes start and end blocks.
     pub async fn find_justifications_in_range(
@@ -393,14 +417,14 @@ impl RpcDataFetcher {
             state_root_leaves.push(header.state_root.0.to_vec());
         }
 
-        for _ in headers.len()..MAX_NUM_HEADERS {
+        for _ in headers.len() - 1..MAX_NUM_HEADERS {
             data_root_leaves.push([0u8; 32].to_vec());
             state_root_leaves.push([0u8; 32].to_vec());
         }
 
         (
-            Self::get_merkle_root(data_root_leaves),
             Self::get_merkle_root(state_root_leaves),
+            Self::get_merkle_root(data_root_leaves),
         )
     }
 
@@ -1046,5 +1070,13 @@ mod tests {
 
             start_epoch += 100;
         }
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_data_commitment() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+
+        data_fetcher.check_data_commitment(300000).await;
     }
 }

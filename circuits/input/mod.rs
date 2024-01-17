@@ -34,6 +34,12 @@ pub struct RedisClient {
     pub redis: redis::Client,
 }
 
+pub struct DataCommitmentRange {
+    pub start: u32,
+    pub end: u32,
+    pub data_commitment: Vec<u8>,
+}
+
 impl RedisClient {
     const MAX_RECONNECT_ATTEMPTS: usize = 3;
     const RECONNECT_DELAY: Duration = Duration::from_secs(5);
@@ -131,6 +137,36 @@ impl RedisClient {
         con.zrangebyscore("blocks", start, end)
             .await
             .expect("Failed to get keys")
+    }
+
+    /// Stores data commitment range data in Redis. Errors if setting the key fails.
+    pub async fn add_data_commitment_range(
+        &mut self,
+        chain_id: u64,
+        address: Vec<u8>,
+        range: (u32, u32, Vec<u8>),
+    ) {
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
+
+        // Add 0x prefix to address.
+        let address = format!("0x{}", hex::encode(address));
+
+        let key = format!("{}:{}:ranges", chain_id, address);
+        // Branch is stored as a JSON object.
+        let _: () = con
+            .zadd(key, range.clone(), range.1)
+            .await
+            .expect("Failed to set key");
+
+        println!(
+            "Added range: {:?}-{:?} with data commitment: {:?}",
+            range.0,
+            range.1,
+            hex::encode(range.2)
+        );
     }
 
     /// Stores merkle tree branch data in Redis. Errors if setting the key fails.

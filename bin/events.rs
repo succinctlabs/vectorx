@@ -8,7 +8,7 @@ use ethers::providers::{Middleware, Provider, StreamExt, Ws};
 use rs_merkle::algorithms::Sha256;
 use rs_merkle::MerkleTree;
 use vectorx::input::types::MerkleTreeBranch;
-use vectorx::input::RpcDataFetcher;
+use vectorx::input::{DataCommitmentRange, RpcDataFetcher};
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);
@@ -93,10 +93,14 @@ async fn main() {
         .expect("invalid address");
 
     let client = Provider::<Ws>::connect(ethereum_ws).await.unwrap();
-    let contract = VectorX::new(address.0, client.clone().into());
+    let chain_id = client.get_chainid().await.unwrap();
+
+    // let contract = VectorX::new(address.0, client.clone().into());
+
+    let mut data_fetcher = RpcDataFetcher::new().await;
 
     // Note: This should be a power of 2, and is the size of the merkle tree.
-    let step_range_max = contract.max_header_range().await.unwrap();
+    // let step_range_max = contract.max_header_range().await.unwrap();
 
     let client = Arc::new(client);
 
@@ -114,20 +118,19 @@ async fn main() {
         let expected_data_commitment = decoded.2.to_vec();
 
         // range_hash = keccak256(abi.encode(trusted_block, end_block))
-        let input = RangeHashInput {
-            trusted_block,
-            end_block,
-        };
+        // let data = DataCommitmentRange {
+        //     start: trusted_block,
+        //     end: end_block,
+        //     data_commitment: expected_data_commitment.clone(),
+        // };
 
-        let range_hash = ethers::utils::keccak256(input.abi_encode());
-
-        add_merkle_tree(
-            trusted_block,
-            end_block,
-            range_hash.to_vec(),
-            expected_data_commitment,
-            step_range_max as usize,
-        )
-        .await;
+        data_fetcher
+            .redis_client
+            .add_data_commitment_range(
+                chain_id.as_u64(),
+                address.0.to_vec(),
+                (trusted_block, end_block, expected_data_commitment),
+            )
+            .await;
     }
 }

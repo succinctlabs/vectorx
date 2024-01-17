@@ -357,15 +357,8 @@ impl RpcDataFetcher {
             return vec![];
         }
 
-        let mut nodes = leaves
-            .into_iter()
-            .map(|leaf| {
-                let mut hasher = Sha256::new();
-                hasher.update(leaf);
-                hasher.finalize().to_vec()
-            })
-            .collect::<Vec<_>>();
-
+        // In VectorX, the leaves are not hashed.
+        let mut nodes = leaves.clone();
         while nodes.len() > 1 {
             nodes = (0..nodes.len() / 2)
                 .map(|i| {
@@ -396,8 +389,8 @@ impl RpcDataFetcher {
         let mut state_root_leaves = Vec::new();
         for i in 1..headers.len() {
             let header = &headers[i];
-            data_root_leaves.push(header.data_root().encode());
-            state_root_leaves.push(header.state_root.encode());
+            data_root_leaves.push(header.data_root().0.to_vec());
+            state_root_leaves.push(header.state_root.0.to_vec());
         }
 
         for _ in headers.len()..MAX_NUM_HEADERS {

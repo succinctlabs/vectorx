@@ -453,7 +453,9 @@ impl RpcDataFetcher {
             .await
             .expect("Failed to establish connection to Avail WS.");
         let block_hash = self.get_block_hash(block_number).await;
+        println!("block_hash {:?}", block_hash);
         let header_result = self.client.rpc().header(Some(block_hash)).await;
+        println!("header_result {:?}", header_result);
         header_result.unwrap().unwrap()
     }
 

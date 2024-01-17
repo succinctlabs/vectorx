@@ -2,11 +2,10 @@
 pragma solidity ^0.8.16;
 
 import "forge-std/Script.sol";
-import {VectorX} from "../src/VectorX.sol";
 import {DummyVectorX} from "../src/DummyVectorX.sol";
 import {ERC1967Proxy} from "@openzeppelin/proxy/ERC1967/ERC1967Proxy.sol";
 
-contract ReinitializeScript is Script {
+contract DeployScript is Script {
     function setUp() public {}
 
     function run() public {
@@ -23,13 +22,26 @@ contract ReinitializeScript is Script {
 
         address gateway = vm.envAddress("GATEWAY_ADDRESS");
 
-        address contractAddress = vm.envAddress("CONTRACT_ADDRESS");
+        bytes32 create2Salt = bytes32(vm.envBytes("CREATE2_SALT"));
 
-        // Get existing VectorX contract.
-        DummyVectorX lightClient = DummyVectorX(contractAddress);
+        // Deploy contract
+        DummyVectorX lightClientImpl = new DummyVectorX{
+            salt: bytes32(create2Salt)
+        }();
+        DummyVectorX lightClient;
+        lightClient = DummyVectorX(
+            address(
+                new ERC1967Proxy{salt: bytes32(create2Salt)}(
+                    address(lightClientImpl),
+                    ""
+                )
+            )
+        );
+        console.logAddress(address(lightClient));
+        console.logAddress(address(lightClientImpl));
 
         // Initialize the Vector X light client.
-        lightClient.reinitializeContract(
+        lightClient.initialize(
             DummyVectorX.InitParameters({
                 guardian: msg.sender,
                 gateway: gateway,

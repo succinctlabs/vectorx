@@ -1,7 +1,6 @@
 use ethers::types::H256;
 use itertools::Itertools;
 use log::{debug, Level};
-use plonky2::plonk::config::{AlgebraicHasher, GenericConfig};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
 use plonky2x::frontend::merkle::simple::SimpleMerkleTree;
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
@@ -29,8 +28,10 @@ pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
         target_block: U32Variable,
     ) -> (Bytes32Variable, Bytes32Variable, Bytes32Variable)
     where
-        <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
-            AlgebraicHasher<<L as PlonkParameters<D>>::Field>;
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+            plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<
+                <L as PlonkParameters<D>>::Field,
+            >;
 }
 
 #[derive(Clone, Debug, CircuitVariable)]
@@ -53,8 +54,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         target_block: U32Variable,
     ) -> (Bytes32Variable, Bytes32Variable, Bytes32Variable)
     where
-        <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
-            AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+        plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
     {
         let ctx = SubchainVerificationCtx {
             trusted_block,
@@ -319,8 +320,8 @@ mod tests {
     {
         fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
         where
-            <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
-                AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
+            <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+            plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
         {
             let trusted_block = builder.evm_read::<U32Variable>();
             let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
@@ -338,8 +339,8 @@ mod tests {
         fn register_generators<L: PlonkParameters<D>, const D: usize>(
             registry: &mut HintRegistry<L, D>,
         ) where
-            <<L as PlonkParameters<D>>::Config as GenericConfig<D>>::Hasher:
-                AlgebraicHasher<L::Field>,
+            <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+            plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
         {
             registry
                 .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();

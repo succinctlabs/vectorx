@@ -3,6 +3,8 @@
 
 pub mod builder;
 pub mod consts;
+pub mod dummy_rotate;
+pub mod dummy_step;
 pub mod input;
 pub mod rotate;
 pub mod step;

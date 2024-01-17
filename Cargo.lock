@@ -1134,7 +1134,7 @@ dependencies = [
 [[package]]
 name = "curta"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/curta.git#c4dd8dd43709134051303f1353dd4131078faca6"
+source = "git+https://github.com/succinctlabs/curta.git#ebbd97c0f4f91bfa792fa5746e1d3f5334316189"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3478,7 +3478,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c11e44798ad209ccdd91fc192f0526a369a01234f7373e1b141c96d7cee4f0e"
 dependencies = [
- "proc-macro-crate 2.0.1",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "syn 2.0.40",
@@ -3619,7 +3619,7 @@ version = "3.6.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be30eaf4b0a9fba5336683b38de57bb86d179a35862ba6bfcf57625d006bde5b"
 dependencies = [
- "proc-macro-crate 2.0.1",
+ "proc-macro-crate 2.0.0",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
@@ -3856,7 +3856,7 @@ checksum = "14e6ab3f592e6fb464fc9712d8d6e6912de6473954635fd76a589d832cffcbb0"
 [[package]]
 name = "plonky2"
 version = "0.1.4"
-source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d#2d36559dad7adaff46631f31c7e6b24b80096eee"
 dependencies = [
  "ahash 0.8.6",
  "anyhow",
@@ -3867,10 +3867,9 @@ dependencies = [
  "log",
  "num",
  "plonky2_field",
- "plonky2_maybe_rayon 0.1.1 (git+https://github.com/mir-protocol/plonky2.git)",
+ "plonky2_maybe_rayon 0.1.1 (git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d)",
  "plonky2_util",
  "rand 0.8.5",
- "rand_chacha 0.3.1",
  "serde",
  "serde_json",
  "static_assertions",
@@ -3880,7 +3879,7 @@ dependencies = [
 [[package]]
 name = "plonky2_field"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d#2d36559dad7adaff46631f31c7e6b24b80096eee"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -3904,7 +3903,7 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d#2d36559dad7adaff46631f31c7e6b24b80096eee"
 dependencies = [
  "rayon",
 ]
@@ -3912,12 +3911,12 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "0.1.1"
-source = "git+https://github.com/mir-protocol/plonky2.git#51ff8c5b51b070d77cd3e1b6a27cffbb05b293b8"
+source = "git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d#2d36559dad7adaff46631f31c7e6b24b80096eee"
 
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#92f14c044e6351d4b87845cc6149bb8c4591f714"
+source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -3959,7 +3958,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#92f14c044e6351d4b87845cc6149bb8c4591f714"
+source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4030,11 +4029,10 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-crate"
-version = "2.0.1"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97dc5fea232fc28d2f597b37c4876b348a40e33f3b02cc975c8d006d78d94b1a"
+checksum = "7e8366a6159044a37876a2b9817124296703c586a5c92e2c53751fa06d8d43e8"
 dependencies = [
- "toml_datetime",
  "toml_edit 0.20.2",
 ]
 
@@ -4636,6 +4634,26 @@ name = "rustversion"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
+
+[[package]]
+name = "rustx"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
+dependencies = [
+ "alloy-primitives",
+ "alloy-sol-types",
+ "clap 4.4.11",
+ "dotenv",
+ "env_logger 0.10.1",
+ "ethers",
+ "hex",
+ "log",
+ "plonky2",
+ "plonky2x",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "rusty-fork"
@@ -5836,14 +5854,18 @@ dependencies = [
 [[package]]
 name = "succinct-client"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#92f14c044e6351d4b87845cc6149bb8c4591f714"
+source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
 dependencies = [
  "alloy-primitives",
  "anyhow",
+ "ethers",
  "log",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
+ "toml",
+ "uuid 1.6.1",
 ]
 
 [[package]]
@@ -6159,21 +6181,21 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.8.2"
+version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "185d8ab0dfbb35cf1399a6344d8484209c088f75f8f68230da55d48d95d43e3d"
+checksum = "a1a195ec8c9da26928f773888e0742ca3ca1040c6cd859c919c9f59c1954ab35"
 dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.20.2",
+ "toml_edit 0.21.0",
 ]
 
 [[package]]
 name = "toml_datetime"
-version = "0.6.3"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cda73e2f1397b1262d6dfdcef8aafae14d1de7748d66822d3bfeeb6d03e5e4b"
+checksum = "3550f4e9685620ac18a50ed434eb3aec30db8ba93b0287467bca5826ea25baf1"
 dependencies = [
  "serde",
 ]
@@ -6194,6 +6216,17 @@ name = "toml_edit"
 version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "396e4d48bbb2b7554c944bde63101b5ae446cff6ec4a24227428f15eb72ef338"
+dependencies = [
+ "indexmap 2.1.0",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d34d383cd00a163b4a5b85053df514d45bc330f6de7737edfe0a93311d1eaa03"
 dependencies = [
  "indexmap 2.1.0",
  "serde",
@@ -6349,7 +6382,7 @@ checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
  "digest 0.10.7",
- "rand 0.8.5",
+ "rand 0.4.6",
  "static_assertions",
 ]
 
@@ -6483,6 +6516,7 @@ version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
 dependencies = [
+ "getrandom 0.2.11",
  "serde",
 ]
 
@@ -6524,13 +6558,13 @@ dependencies = [
  "log",
  "num",
  "parity-scale-codec",
- "plonky2",
  "plonky2x",
  "plonky2x-derive",
  "primitive-types 0.12.2",
  "redis",
  "reqwest",
  "rs_merkle",
+ "rustx",
  "serde",
  "serde_json",
  "sha2 0.10.8",

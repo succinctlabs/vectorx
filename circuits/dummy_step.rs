@@ -55,6 +55,7 @@ mod tests {
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_dummy_step() {
+        // Proof: https://alpha.succinct.xyz/explorer/e5d18a42-fe89-48fc-9742-e21454437415
         // Assert that the encoding matches.
         let input = "0003c18695f303b01e4834da35e5fdc3971fe297d1b48feb0c3f330491639136a6ada5980000000000000075f2da06eb7ec36f683d2908648c431a1b3f968fa5212b72cc7e8eddce8b80958d0003c23a";
         let input_bytes = hex::decode(input).unwrap();

@@ -39,6 +39,7 @@ mod tests {
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_dummy_rotate() {
+        // Proof: https://alpha.succinct.xyz/explorer/a16e1261-7fc5-4642-b5f2-910a3fd11e70
         // Assert that the encoding matches.
         let input = "0000000000000075f2da06eb7ec36f683d2908648c431a1b3f968fa5212b72cc7e8eddce8b80958d0003c6f0";
         let input_bytes = hex::decode(input).unwrap();

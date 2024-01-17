@@ -12,12 +12,12 @@ use std::ops::Deref;
 
 use avail_subxt::api;
 use avail_subxt::config::Header as HeaderTrait;
+use avail_subxt::subxt_rpc::RpcParams;
 use codec::Encode;
 use log::debug;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::DUMMY_SIGNATURE;
 use sp_core::ed25519::{self};
 use sp_core::{blake2_256, Pair, H256};
-use subxt::rpc::RpcParams;
 use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
 use vectorx::input::RpcDataFetcher;
 
@@ -35,7 +35,10 @@ pub async fn main() {
     );
 
     let mut fetcher = RpcDataFetcher::new().await;
-    let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = fetcher
+    let sub: Result<
+        avail_subxt::subxt_rpc::Subscription<GrandpaJustification>,
+        subxt::error::Error,
+    > = fetcher
         .client
         .rpc()
         .deref()

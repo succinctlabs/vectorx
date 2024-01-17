@@ -1,5 +1,5 @@
+use avail_subxt::config::Header;
 use rustx::program::Program;
-use subxt::config::Header;
 
 use crate::input::RpcDataFetcher;
 

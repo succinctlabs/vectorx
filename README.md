@@ -38,6 +38,25 @@ In `/`, run
 cargo run --bin vectorx
 ```
 
+### Reset the Contract
+Get the new genesis parameters for the `VectorX` contract with a specific Avail block (with no input defaults to block 1).
+```
+cargo run --bin genesis -- --block 100
+```
+
+Update `contracts/.env` following `contracts/.env.example`.
+
+Deploy the `VectorX` contract with genesis parameters.
+
+In `contracts/`, run
+```
+forge install
+
+source .env
+
+forge script script/Reinitialize.s.sol --rpc-url $ETHEREUM_RPC_URL --private-key $PRIVATE_KEY --broadcast --verify --verifier etherscan --etherscan-api-key $ETHERSCAN_API_KEY
+```
+
 ## Avail Indexer
 Avail does not currently store justifications for non-era end blocks on archive nodes, so the 
 following service indexes Avail and stores the ephermal justifications, which are used for `step` 

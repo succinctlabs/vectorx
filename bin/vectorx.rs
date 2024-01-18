@@ -6,8 +6,9 @@ use alloy_sol_types::{sol, SolType};
 use anyhow::Result;
 use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
-use ethers::core::types::{Address, Filter};
+use ethers::core::types::Filter;
 use ethers::providers::{Http, Middleware, Provider};
+use ethers::types::H160;
 use log::{error, info};
 use succinct_client::request::SuccinctClient;
 use vectorx::input::RpcDataFetcher;
@@ -44,7 +45,7 @@ impl VectorXOperator {
         let provider =
             Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
 
-        let contract = VectorX::new(config.address.0 .0, provider.into());
+        let contract = VectorX::new(config.address.0 .0, provider.clone().into());
 
         let data_fetcher = RpcDataFetcher::new().await;
 
@@ -190,7 +191,7 @@ impl VectorXOperator {
         info!("Starting VectorX offchain worker");
 
         // Loop every for N minutes.
-        const LOOP_DELAY: u64 = 20;
+        const LOOP_DELAY_MINS: u64 = 20;
         // Update every 4 hours.
         const UPDATE_DELAY_MINS: u64 = 240;
 
@@ -200,13 +201,17 @@ impl VectorXOperator {
 
             // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
             let header_range_filter = Filter::new()
-                .address(address)
+                .address(H160::from_slice(&self.config.address.0 .0))
                 .from_block(head - (UPDATE_DELAY_MINS * 5) as u64)
                 .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
             let logs = self.provider.get_logs(&header_range_filter).await.unwrap();
-            if logs.is_empty() {
-                tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY)).await;
+            if !logs.is_empty() {
+                info!(
+                    "Found header range commitment(s) in the last {} minutes, sleeping for {} minutes.",
+                    UPDATE_DELAY_MINS, LOOP_DELAY_MINS
+                );
+                tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY_MINS)).await;
                 continue;
             }
 
@@ -390,8 +395,8 @@ impl VectorXOperator {
             }
 
             // Sleep for N minutes.
-            info!("Sleeping for {} minutes.", LOOP_DELAY);
-            tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY)).await;
+            info!("Sleeping for {} minutes.", LOOP_DELAY_MINS);
+            tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY_MINS)).await;
         }
     }
 }

@@ -14,6 +14,7 @@ use vectorx::input::{DataCommitmentRange, RpcDataFetcher};
 abigen!(VectorX, "./abi/VectorX.abi.json",);
 
 type HeaderRangeCommitmentStoredTuple = sol! { tuple(uint32, uint32, bytes32, bytes32) };
+
 sol! { struct RangeHashInput {
     uint32 trusted_block;
     uint32 end_block;
@@ -106,6 +107,7 @@ async fn main() {
 
     let header_range_filter = Filter::new()
         .address(address)
+        .from_block(5103508)
         .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
     let mut stream = client.subscribe_logs(&header_range_filter).await.unwrap();
@@ -115,15 +117,10 @@ async fn main() {
 
         let trusted_block = decoded.0;
         let end_block = decoded.1;
-        let expected_data_commitment = decoded.2.to_vec();
+        let expected_data_commitment: Vec<u8> = decoded.2.to_vec();
+        let expected_data_commitment: [u8; 32] = expected_data_commitment.try_into().unwrap();
 
         // range_hash = keccak256(abi.encode(trusted_block, end_block))
-        // let data = DataCommitmentRange {
-        //     start: trusted_block,
-        //     end: end_block,
-        //     data_commitment: expected_data_commitment.clone(),
-        // };
-
         data_fetcher
             .redis_client
             .add_data_commitment_range(

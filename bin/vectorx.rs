@@ -202,7 +202,7 @@ impl VectorXOperator {
             // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
             let header_range_filter = Filter::new()
                 .address(H160::from_slice(&self.config.address.0 .0))
-                .from_block(head - (UPDATE_DELAY_MINS * 5) as u64)
+                .from_block(head - (UPDATE_DELAY_MINS * 5))
                 .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
             let logs = self.provider.get_logs(&header_range_filter).await.unwrap();

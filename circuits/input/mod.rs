@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
-use alloy_sol_types::{sol, SolType, SolValue};
+use alloy_sol_types::{sol, SolType};
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
@@ -147,7 +147,7 @@ impl RedisClient {
         &mut self,
         chain_id: u64,
         address: Vec<u8>,
-        range: (u32, u32, [u8; 32]),
+        range: DataCommitmentRange,
     ) {
         let mut con = match self.get_connection().await {
             Ok(con) => con,
@@ -159,26 +159,22 @@ impl RedisClient {
 
         let key = format!("{}:{}:ranges", chain_id, address);
 
+        let data_commitment: [u8; 32] = range.data_commitment.try_into().unwrap();
+
         let range_data: Vec<u8> =
-            DataCommitmentRangeTuple::abi_encode_packed(&(range.0, range.1, range.2));
+            DataCommitmentRangeTuple::abi_encode_packed(&(range.start, range.end, data_commitment));
         // Branch is stored as an ABI encode packed tuple.
         let _: () = con
-            .zadd(key.clone(), hex::encode(range_data), range.1)
+            .zadd(key.clone(), hex::encode(range_data), range.end)
             .await
             .expect("Failed to set key");
 
-        println!(
+        info!(
             "Added range: {:?}-{:?} with data commitment: {:?}",
-            range.0,
-            range.1,
-            hex::encode(range.2)
+            range.start,
+            range.end,
+            hex::encode(data_commitment)
         );
-
-        let result: Vec<String> = con
-            .zrangebyscore(key, range.1, range.1 + 100000)
-            .await
-            .expect("Failed to get keys");
-        println!("Result: {:?}", result);
     }
 
     /// Stores merkle tree branch data in Redis. Errors if setting the key fails.

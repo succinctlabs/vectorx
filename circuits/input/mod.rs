@@ -24,8 +24,7 @@ use tokio::time::sleep;
 
 use self::types::{
     CircuitJustification, EncodedFinalityProof, FinalityProof, GrandpaJustification,
-    HeaderRotateData, MerkleTreeBranch, SignerMessage, SimpleJustificationData,
-    StoredJustificationData,
+    HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
     BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,

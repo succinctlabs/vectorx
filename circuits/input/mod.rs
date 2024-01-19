@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
+use alloy_sol_types::{sol, SolType};
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
@@ -23,8 +24,7 @@ use tokio::time::sleep;
 
 use self::types::{
     CircuitJustification, EncodedFinalityProof, FinalityProof, GrandpaJustification,
-    HeaderRotateData, MerkleTreeBranch, SignerMessage, SimpleJustificationData,
-    StoredJustificationData,
+    HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
     BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH, VALIDATOR_LENGTH,
@@ -34,6 +34,14 @@ use crate::consts::{
 pub struct RedisClient {
     pub redis: redis::Client,
 }
+
+pub struct DataCommitmentRange {
+    pub start: u32,
+    pub end: u32,
+    pub data_commitment: Vec<u8>,
+}
+
+type DataCommitmentRangeTuple = sol! { tuple(uint32, uint32, bytes32) };
 
 impl RedisClient {
     const MAX_RECONNECT_ATTEMPTS: usize = 3;
@@ -134,21 +142,39 @@ impl RedisClient {
             .expect("Failed to get keys")
     }
 
-    /// Stores merkle tree branch data in Redis. Errors if setting the key fails.
-    pub async fn add_merkle_tree_branch(&mut self, branch: MerkleTreeBranch) {
+    /// Stores data commitment range data in Redis. Errors if setting the key fails.
+    pub async fn add_data_commitment_range(
+        &mut self,
+        chain_id: u64,
+        address: Vec<u8>,
+        range: DataCommitmentRange,
+    ) {
         let mut con = match self.get_connection().await {
             Ok(con) => con,
             Err(e) => panic!("{}", e),
         };
 
-        let key = format!("branch:{}", branch.block_number);
-        // Branch is stored as a JSON object.
+        // Add 0x prefix to address.
+        let address = format!("0x{}", hex::encode(address));
+
+        let key = format!("{}:{}:ranges", chain_id, address);
+
+        let data_commitment: [u8; 32] = range.data_commitment.try_into().unwrap();
+
+        let range_data: Vec<u8> =
+            DataCommitmentRangeTuple::abi_encode_packed(&(range.start, range.end, data_commitment));
+        // Branch is stored as an ABI encode packed tuple.
         let _: () = con
-            .json_set(key, "$", &branch)
+            .zadd(key.clone(), hex::encode(range_data), range.end)
             .await
             .expect("Failed to set key");
 
-        println!("Added branch for block {:?}", branch.block_number);
+        info!(
+            "Added range: {:?}-{:?} with data commitment: {:?}",
+            range.start,
+            range.end,
+            hex::encode(data_commitment)
+        );
     }
 }
 

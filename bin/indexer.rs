@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::env;
 use std::ops::Deref;
 
-use avail_subxt::api;
 use avail_subxt::config::Header as HeaderTrait;
+use avail_subxt::{api, build_client};
 use codec::Encode;
 use log::debug;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::DUMMY_SIGNATURE;
@@ -21,20 +21,10 @@ use subxt::rpc::RpcParams;
 use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
 use vectorx::input::RpcDataFetcher;
 
-#[tokio::main]
-pub async fn main() {
-    env::set_var("RUST_LOG", "debug");
-    dotenv::dotenv().ok();
-    env_logger::init();
+// Save every 90 blocks (every 30 minutes).
+const BLOCK_SAVE_INTERVAL: usize = 90;
 
-    // Save every 90 blocks (every 30 minutes).
-    const BLOCK_SAVE_INTERVAL: usize = 90;
-    debug!(
-        "Starting indexer, saving every {} blocks.",
-        BLOCK_SAVE_INTERVAL
-    );
-
-    let mut fetcher = RpcDataFetcher::new().await;
+async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
     let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = fetcher
         .client
         .rpc()
@@ -164,7 +154,38 @@ pub async fn main() {
         };
         fetcher
             .redis_client
-            .add_justification(store_justification_data)
+            .add_justification(&fetcher.chain_name, store_justification_data)
             .await;
+    }
+}
+
+#[tokio::main]
+pub async fn main() {
+    env::set_var("RUST_LOG", "debug");
+    dotenv::dotenv().ok();
+    env_logger::init();
+
+    // Create a new map from chain name to WS URL.
+    let mut chain_to_url = HashMap::new();
+    chain_to_url.insert("goldberg", "wss://couscous-devnet.avail.tools:443/ws");
+    chain_to_url.insert("couscous", "wss://goldberg.avail.tools:443/ws");
+
+    // Spawn new listeners for each chain.
+    for (chain, url) in chain_to_url {
+        debug!(
+            "Starting {} indexer, saving every {} blocks.",
+            chain, BLOCK_SAVE_INTERVAL
+        );
+
+        let fetcher = RpcDataFetcher {
+            client: build_client(url, false).await.unwrap(),
+            redis_client: vectorx::input::RedisClient::new().await,
+            chain_name: String::from(chain),
+            avail_url: String::from(url),
+            save: None,
+        };
+        tokio::spawn(async move {
+            listen_for_justifications(fetcher).await;
+        });
     }
 }

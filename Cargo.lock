@@ -177,9 +177,9 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.6.8"
+version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "628a8f9bd1e24b4e0db2b4bc2d000b001e7dd032d54afa60a68836aeec5aa54a"
+checksum = "6e2e1ebcb11de5c03c67de28a7df593d32191b44939c482e97702baaaa6ab6a5"
 dependencies = [
  "anstyle",
  "anstyle-parse",
@@ -864,7 +864,7 @@ version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6100bc57b6209840798d95cb2775684849d332f7bd788db2a8c8caf7ef82a41a"
 dependencies = [
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -1808,9 +1808,9 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95b3f3e67048839cb0d0781f445682a35113da7121f7c949db0e2be96a4fbece"
+checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
 dependencies = [
  "humantime",
  "is-terminal",
@@ -2444,7 +2444,7 @@ dependencies = [
  "paste",
  "scale-info",
  "serde",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
  "sp-api",
  "sp-arithmetic",
  "sp-core",
@@ -4133,7 +4133,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
  "windows-targets 0.48.5",
 ]
 
@@ -4415,7 +4415,7 @@ source = "git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d#2d36559da
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
+source = "git+https://github.com/succinctlabs/succinctx.git#c4cc0d954d353c9c4e61b736dc968490d1146d71"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4429,7 +4429,7 @@ dependencies = [
  "digest 0.10.7",
  "dotenv",
  "ed25519-dalek 2.1.0",
- "env_logger 0.10.1",
+ "env_logger 0.10.2",
  "ethers",
  "ff 0.13.0",
  "futures",
@@ -4451,13 +4451,13 @@ dependencies = [
  "sha256",
  "tokio",
  "tracing",
- "uuid 1.6.1",
+ "uuid 1.7.0",
 ]
 
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
+source = "git+https://github.com/succinctlabs/succinctx.git#c4cc0d954d353c9c4e61b736dc968490d1146d71"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5174,13 +5174,13 @@ checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
 [[package]]
 name = "rustx"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
+source = "git+https://github.com/succinctlabs/succinctx.git#c4cc0d954d353c9c4e61b736dc968490d1146d71"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
  "clap 4.4.18",
  "dotenv",
- "env_logger 0.10.1",
+ "env_logger 0.10.2",
  "ethers",
  "hex",
  "log",
@@ -5249,7 +5249,7 @@ dependencies = [
  "scale-bits",
  "scale-decode-derive",
  "scale-info",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
  "thiserror",
 ]
 
@@ -5277,7 +5277,7 @@ dependencies = [
  "scale-bits",
  "scale-encode-derive",
  "scale-info",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
  "thiserror",
 ]
 
@@ -5789,9 +5789,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.12.0"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2593d31f82ead8df961d8bd23a64c2ccf2eb5dd34b0a34bfb4dd54011c72009e"
+checksum = "e6ecd384b10a64542d77071bd64bd7b231f4ed5940fba55e98c3de13824cf3d7"
 
 [[package]]
 name = "socket2"
@@ -6141,7 +6141,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot",
  "rand 0.8.5",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
  "sp-core",
  "sp-externalities",
  "sp-panic-handler",
@@ -6254,7 +6254,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
  "sp-arithmetic",
  "sp-core",
  "sp-debug-derive",
@@ -6523,7 +6523,7 @@ dependencies = [
 [[package]]
 name = "succinct-client"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#3a074efa7fc495cba818d04468eee5ff106e3500"
+source = "git+https://github.com/succinctlabs/succinctx.git#c4cc0d954d353c9c4e61b736dc968490d1146d71"
 dependencies = [
  "alloy-primitives",
  "anyhow",
@@ -6534,7 +6534,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
- "uuid 1.6.1",
+ "uuid 1.7.0",
 ]
 
 [[package]]
@@ -7007,7 +7007,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sharded-slab",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
  "thread_local",
  "tracing",
  "tracing-core",
@@ -7025,7 +7025,7 @@ dependencies = [
  "hashbrown 0.13.2",
  "log",
  "rustc-hex",
- "smallvec 1.12.0",
+ "smallvec 1.13.1",
 ]
 
 [[package]]
@@ -7207,9 +7207,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.6.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
+checksum = "f00cc9702ca12d3c81455259621e676d0f7251cec66a21e98fe2e9a37db93b2a"
 dependencies = [
  "getrandom 0.2.12",
  "serde",

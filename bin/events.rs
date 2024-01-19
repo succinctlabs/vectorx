@@ -108,7 +108,6 @@ async fn main() {
         join_handles.push(handle);
     }
 
-    // If you need to wait for all tasks to complete
     for handle in join_handles {
         handle.await.expect("Task panicked or failed");
     }

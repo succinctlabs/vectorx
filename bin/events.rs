@@ -23,7 +23,10 @@ async fn listen_for_events(ethereum_ws: &str, contract_address: &str) {
         .parse::<Address>()
         .expect("invalid address");
 
-    let client = Provider::<Ws>::connect(ethereum_ws).await.unwrap();
+    let client = Provider::<Ws>::connect(ethereum_ws)
+        .await
+        .expect("could not connect to client");
+
     let chain_id = client.get_chainid().await.unwrap();
 
     info!(
@@ -93,12 +96,20 @@ async fn main() {
         contract_addresses.push(contract_address.unwrap());
     }
 
+    let mut join_handles = Vec::new();
+
     for (ethereum_ws, contract_address) in ethereum_ws_vec
         .into_iter()
         .zip(contract_addresses.into_iter())
     {
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             listen_for_events(&ethereum_ws, &contract_address).await;
         });
+        join_handles.push(handle);
+    }
+
+    // If you need to wait for all tasks to complete
+    for handle in join_handles {
+        handle.await.expect("Task panicked or failed");
     }
 }

@@ -12,9 +12,9 @@ use succinct_client::request::SuccinctClient;
 use vectorx::input::RpcDataFetcher;
 
 // Note: Update ABI when updating contract.
-abigen!(VectorX, "./abi/VectorX.abi.json",);
+abigen!(DummyVectorX, "./abi/DummyVectorX.abi.json",);
 
-struct VectorXConfig {
+struct DummyVectorXConfig {
     address: Address,
     chain_id: u32,
     header_range_function_id: B256,
@@ -25,14 +25,14 @@ type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
 
 type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint32) };
 
-struct VectorXOperator {
-    config: VectorXConfig,
-    contract: VectorX<Provider<Http>>,
+struct DummyVectorXOperator {
+    config: DummyVectorXConfig,
+    contract: DummyVectorX<Provider<Http>>,
     client: SuccinctClient,
     data_fetcher: RpcDataFetcher,
 }
 
-impl VectorXOperator {
+impl DummyVectorXOperator {
     pub async fn new() -> Self {
         dotenv::dotenv().ok();
 
@@ -42,7 +42,7 @@ impl VectorXOperator {
         let provider =
             Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
 
-        let contract = VectorX::new(config.address.0 .0, provider.into());
+        let contract = DummyVectorX::new(config.address.0 .0, provider.into());
 
         let data_fetcher = RpcDataFetcher::new().await;
 
@@ -58,7 +58,7 @@ impl VectorXOperator {
         }
     }
 
-    fn get_config() -> VectorXConfig {
+    fn get_config() -> DummyVectorXConfig {
         let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
         let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
         // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
@@ -83,7 +83,7 @@ impl VectorXOperator {
                 .expect("invalid hex for rotate_function_id, expected 0x prefix"),
         );
 
-        VectorXConfig {
+        DummyVectorXConfig {
             address,
             chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
             header_range_function_id,
@@ -97,15 +97,18 @@ impl VectorXOperator {
         trusted_authority_set_id: u64,
         target_block: u32,
     ) -> Result<String> {
+        // Get reset counter.
+        let reset_counter = self.contract.reset_counter().await.unwrap();
+
         let trusted_header_hash = self
             .contract
-            .block_height_to_header_hash(trusted_block)
+            .block_height_to_header_hash(reset_counter, trusted_block)
             .await
             .unwrap();
 
         let trusted_authority_set_hash = self
             .contract
-            .authority_set_id_to_hash(trusted_authority_set_id)
+            .authority_set_id_to_hash(reset_counter, trusted_authority_set_id)
             .await
             .unwrap();
 
@@ -144,23 +147,8 @@ impl VectorXOperator {
         head_block: u32,
         current_block: u32,
         step_range_max: u32,
-    ) -> Option<u32> {
-        let mut block_to_step_to = min(head_block, current_block + step_range_max);
-
-        // Find all blocks in the range [current_block, block_to_step_to] that have a stored
-        // justification.
-        let valid_blocks = self
-            .data_fetcher
-            .find_justifications_in_range(current_block, block_to_step_to)
-            .await;
-        if valid_blocks.is_empty() {
-            info!("No valid blocks found in range.");
-            return None;
-        }
-        // Get the most recent valid block in the range.
-        block_to_step_to = valid_blocks[valid_blocks.len() - 1];
-
-        Some(block_to_step_to)
+    ) -> u32 {
+        min(head_block, current_block + step_range_max)
     }
 
     async fn request_next_authority_set_id(
@@ -168,10 +156,13 @@ impl VectorXOperator {
         current_authority_set_id: u64,
         epoch_end_block: u32,
     ) -> Result<String> {
+        // Get reset counter.
+        let reset_counter = self.contract.reset_counter().await.unwrap();
+
         info!("Current authority set id: {:?}", current_authority_set_id);
         let current_authority_set_hash = self
             .contract
-            .authority_set_id_to_hash(current_authority_set_id)
+            .authority_set_id_to_hash(reset_counter, current_authority_set_id)
             .await
             .unwrap();
 
@@ -208,7 +199,7 @@ impl VectorXOperator {
     }
 
     async fn run(&mut self) {
-        info!("Starting VectorX offchain worker");
+        info!("Starting DummyVectorX offchain worker");
 
         // Sleep for N minutes.
         const LOOP_DELAY: u64 = 240;
@@ -239,17 +230,10 @@ impl VectorXOperator {
                 let block_to_step_to = self
                     .get_block_to_step_to(head_block, current_block, step_range_max)
                     .await;
-                if block_to_step_to.is_none() {
-                    continue;
-                }
                 info!("Stepping to block {:?}.", block_to_step_to);
 
                 match self
-                    .request_header_range(
-                        current_block,
-                        current_authority_set_id,
-                        block_to_step_to.unwrap(),
-                    )
+                    .request_header_range(current_block, current_authority_set_id, block_to_step_to)
                     .await
                 {
                     Ok(request_id) => {
@@ -267,11 +251,13 @@ impl VectorXOperator {
 
                 let next_authority_set_id = current_authority_set_id + 1;
 
+                let reset_counter = self.contract.reset_counter().await.unwrap();
+
                 // Get the hash of the next authority set id in the contract.
                 // If the authority set id doesn't exist in the contract, the hash will be H256::zero().
                 let next_authority_set_hash = self
                     .contract
-                    .authority_set_id_to_hash(next_authority_set_id)
+                    .authority_set_id_to_hash(reset_counter, next_authority_set_id)
                     .await
                     .unwrap();
 
@@ -310,9 +296,6 @@ impl VectorXOperator {
                     let block_to_step_to = self
                         .get_block_to_step_to(head_block, current_block, step_range_max)
                         .await;
-                    if block_to_step_to.is_none() {
-                        continue;
-                    }
 
                     info!("Stepping to block {:?}.", block_to_step_to);
 
@@ -321,7 +304,7 @@ impl VectorXOperator {
                         .request_header_range(
                             current_block,
                             current_authority_set_id,
-                            block_to_step_to.unwrap(),
+                            block_to_step_to,
                         )
                         .await
                     {
@@ -392,6 +375,6 @@ async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
-    let mut operator = VectorXOperator::new().await;
+    let mut operator = DummyVectorXOperator::new().await;
     operator.run().await;
 }

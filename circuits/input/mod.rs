@@ -176,23 +176,6 @@ impl RedisClient {
             hex::encode(data_commitment)
         );
     }
-
-    /// Stores merkle tree branch data in Redis. Errors if setting the key fails.
-    pub async fn add_merkle_tree_branch(&mut self, branch: MerkleTreeBranch) {
-        let mut con = match self.get_connection().await {
-            Ok(con) => con,
-            Err(e) => panic!("{}", e),
-        };
-
-        let key = format!("branch:{}", branch.block_number);
-        // Branch is stored as a JSON object.
-        let _: () = con
-            .json_set(key, "$", &branch)
-            .await
-            .expect("Failed to set key");
-
-        println!("Added branch for block {:?}", branch.block_number);
-    }
 }
 
 /// This function is useful for verifying that a Ed25519 signature is valid, it will panic if the signature is not valid

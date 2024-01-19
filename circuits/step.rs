@@ -27,8 +27,8 @@ impl<
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
-        <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
-            plonky2::plonk::config::AlgebraicHasher<L::Field>,
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+        plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         // Read the on-chain inputs.
         let trusted_block = builder.evm_read::<U32Variable>();
@@ -109,8 +109,8 @@ impl<
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
         generator_registry: &mut plonky2x::prelude::HintRegistry<L, D>,
     ) where
-        <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
-            plonky2::plonk::config::AlgebraicHasher<L::Field>,
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+        plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         generator_registry
             .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_LENGTH, HEADERS_PER_MAP>>();

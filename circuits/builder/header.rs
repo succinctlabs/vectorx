@@ -52,8 +52,7 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
             .iter()
             .map(|x| self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_CHUNK_SIZE>(x))
             .collect::<Vec<Bytes32Variable>>()
-            .try_into()
-            .unwrap()
+            .into()
     }
 }
 
@@ -187,7 +186,7 @@ mod tests {
                 let header_len = header.len();
                 header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
-                    header_bytes: header.as_slice().try_into().unwrap(),
+                    header_bytes: header.as_slice().into(),
                     header_size: header_len as u32,
                 }
             })

@@ -99,8 +99,8 @@ impl<
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
-        <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
-            plonky2::plonk::config::AlgebraicHasher<L::Field>,
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+        plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         // Read the on-chain inputs. The validators that signed epoch_end_block_number are defined
         // by authority_set_id and authority_set_hash.
@@ -167,8 +167,8 @@ impl<
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
         generator_registry: &mut plonky2x::prelude::HintRegistry<L, D>,
     ) where
-        <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
-            plonky2::plonk::config::AlgebraicHasher<L::Field>,
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+        plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         generator_registry
             .register_async_hint::<RotateHint<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>>();

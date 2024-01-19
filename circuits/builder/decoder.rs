@@ -104,8 +104,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .zip(header_hashes.as_vec().iter())
             .map(|(header, header_hash)| self.decode_header::<S>(header, header_hash))
             .collect::<Vec<HeaderVariable>>()
-            .try_into()
-            .unwrap()
+            .into()
     }
 
     /// Decode a header into its components. header_hash is used for the RLC challenge.
@@ -324,7 +323,7 @@ pub mod tests {
                 let header_len = header.len();
                 header.resize(MAX_HEADER_SIZE, 0);
                 EncodedHeader {
-                    header_bytes: header.as_slice().try_into().unwrap(),
+                    header_bytes: header.as_slice().into(),
                     header_size: header_len as u32,
                 }
             })

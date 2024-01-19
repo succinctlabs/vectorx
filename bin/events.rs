@@ -33,18 +33,12 @@ async fn main() {
     let client = Provider::<Ws>::connect(ethereum_ws).await.unwrap();
     let chain_id = client.get_chainid().await.unwrap();
 
-    // let contract = VectorX::new(address.0, client.clone().into());
-
     let mut data_fetcher = RpcDataFetcher::new().await;
-
-    // Note: This should be a power of 2, and is the size of the merkle tree.
-    // let step_range_max = contract.max_header_range().await.unwrap();
 
     let client = Arc::new(client);
 
     let header_range_filter = Filter::new()
         .address(address)
-        .from_block(5109076)
         .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
     let mut stream = client.subscribe_logs(&header_range_filter).await.unwrap();

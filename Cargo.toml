@@ -41,7 +41,6 @@ itertools = "0.10.5"
 ff = { package = "ff_ce", version = "0.11", features = ["derive"] }
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = ["rand"] }
-plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
 plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
 succinct-client = { git = "https://github.com/succinctlabs/succinctx.git" }
 plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }

@@ -675,6 +675,13 @@ async fn main() {
     env_logger::init();
 
     let data_fetcher = RpcDataFetcher::new().await;
-    let mut operator = VectorXOperator::new(data_fetcher);
-    operator.run().await;
+
+    let is_dummy_operator = env::var("IS_DUMMY_OPERATOR");
+    if is_dummy_operator.is_ok() && is_dummy_operator.unwrap().parse::<bool>().unwrap() {
+        let mut operator = DummyVectorXOperator::new(data_fetcher);
+        operator.run().await;
+    } else {
+        let mut operator = VectorXOperator::new(data_fetcher);
+        operator.run().await;
+    }
 }

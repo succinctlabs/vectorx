@@ -415,6 +415,7 @@ impl RpcDataFetcher {
         header.unwrap().unwrap()
     }
 
+    // Note: This will error if the block does not exist.
     pub async fn get_authority_set_id(&mut self, block_number: u32) -> u64 {
         self.check_client_connection()
             .await

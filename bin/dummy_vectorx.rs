@@ -6,7 +6,9 @@ use alloy_sol_types::{sol, SolType};
 use anyhow::Result;
 use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
-use ethers::providers::{Http, Provider};
+use ethers::core::types::Filter;
+use ethers::providers::{Http, Middleware, Provider};
+use ethers::types::H160;
 use log::{error, info};
 use succinct_client::request::SuccinctClient;
 use vectorx::input::RpcDataFetcher;
@@ -14,7 +16,7 @@ use vectorx::input::RpcDataFetcher;
 // Note: Update ABI when updating contract.
 abigen!(DummyVectorX, "./abi/DummyVectorX.abi.json",);
 
-struct DummyVectorXConfig {
+struct VectorXConfig {
     address: Address,
     chain_id: u32,
     header_range_function_id: B256,
@@ -25,14 +27,15 @@ type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
 
 type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint32) };
 
-struct DummyVectorXOperator {
-    config: DummyVectorXConfig,
+struct VectorXOperator {
+    config: VectorXConfig,
+    provider: Provider<Http>,
     contract: DummyVectorX<Provider<Http>>,
     client: SuccinctClient,
     data_fetcher: RpcDataFetcher,
 }
 
-impl DummyVectorXOperator {
+impl VectorXOperator {
     pub async fn new() -> Self {
         dotenv::dotenv().ok();
 
@@ -42,7 +45,7 @@ impl DummyVectorXOperator {
         let provider =
             Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
 
-        let contract = DummyVectorX::new(config.address.0 .0, provider.into());
+        let contract = DummyVectorX::new(config.address.0 .0, provider.clone().into());
 
         let data_fetcher = RpcDataFetcher::new().await;
 
@@ -52,13 +55,14 @@ impl DummyVectorXOperator {
 
         Self {
             config,
+            provider,
             contract,
             client,
             data_fetcher,
         }
     }
 
-    fn get_config() -> DummyVectorXConfig {
+    fn get_config() -> VectorXConfig {
         let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
         let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
         // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
@@ -83,7 +87,7 @@ impl DummyVectorXOperator {
                 .expect("invalid hex for rotate_function_id, expected 0x prefix"),
         );
 
-        DummyVectorXConfig {
+        VectorXConfig {
             address,
             chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
             header_range_function_id,
@@ -97,7 +101,6 @@ impl DummyVectorXOperator {
         trusted_authority_set_id: u64,
         target_block: u32,
     ) -> Result<String> {
-        // Get reset counter.
         let reset_counter = self.contract.reset_counter().await.unwrap();
 
         let trusted_header_hash = self
@@ -142,23 +145,12 @@ impl DummyVectorXOperator {
         Ok(request_id)
     }
 
-    async fn get_block_to_step_to(
-        &mut self,
-        head_block: u32,
-        current_block: u32,
-        step_range_max: u32,
-    ) -> u32 {
-        min(head_block, current_block + step_range_max)
-    }
-
     async fn request_next_authority_set_id(
         &self,
         current_authority_set_id: u64,
         epoch_end_block: u32,
     ) -> Result<String> {
-        // Get reset counter.
         let reset_counter = self.contract.reset_counter().await.unwrap();
-
         info!("Current authority set id: {:?}", current_authority_set_id);
         let current_authority_set_hash = self
             .contract
@@ -198,173 +190,186 @@ impl DummyVectorXOperator {
         Ok(request_id)
     }
 
-    async fn run(&mut self) {
-        info!("Starting DummyVectorX offchain worker");
+    // Finds and requests rotate if available.
+    async fn find_and_request_rotate(&mut self) {
+        let head = self.data_fetcher.get_head().await;
+        let head_block = head.number;
+        let head_authority_set_id = self.data_fetcher.get_authority_set_id(head_block - 1).await;
 
-        // Sleep for N minutes.
-        const LOOP_DELAY: u64 = 240;
+        let current_block = self.contract.latest_block().await.unwrap();
+        let reset_counter = self.contract.reset_counter().await.unwrap();
 
-        loop {
-            // Source STEP_RANGE_MAX from the contract.
-            let step_range_max = self.contract.max_header_range().await.unwrap();
+        // The current authority set id is the authority set id of the block before the current block.
+        let current_authority_set_id = self
+            .data_fetcher
+            .get_authority_set_id(current_block - 1)
+            .await;
 
-            let head = self.data_fetcher.get_head().await;
-            let head_block = head.number;
-            let head_authority_set_id =
-                self.data_fetcher.get_authority_set_id(head_block - 1).await;
+        if current_authority_set_id < head_authority_set_id {
+            let next_authority_set_id = current_authority_set_id + 1;
+            // Get the hash of the next authority set id in the contract.
+            // If the authority set id doesn't exist in the contract, the hash will be H256::zero().
+            // The next authority set id can exist in the contract already if there has not been
+            // a step within the next authority set yet.
+            let next_authority_set_hash = self
+                .contract
+                .authority_set_id_to_hash(reset_counter, next_authority_set_id)
+                .await
+                .unwrap();
 
-            let current_block = self.contract.latest_block().await.unwrap();
-            // The current authority set id is the authority set id of the block before the current block.
-            let current_authority_set_id = self
+            // Get the last block justified by the current authority set id (also a rotate block).
+            let last_justified_block = self
                 .data_fetcher
-                .get_authority_set_id(current_block - 1)
+                .last_justified_block(current_authority_set_id)
                 .await;
 
-            // The logic for keeping the Vector LC up to date is as follows:
-            //      1. Fetch the current latest_block in the contract and the head of the chain.
-            //      2. If current_authority_set_id == head_authority_set_id, then no rotate is needed.
-            //      3. If current_authority_set_id < head_authority_set_id, request next authority set.
-            //          a) Step if current_block != the last block justified by current authority set.
-
-            if current_authority_set_id == head_authority_set_id {
-                let block_to_step_to = self
-                    .get_block_to_step_to(head_block, current_block, step_range_max)
-                    .await;
-                info!("Stepping to block {:?}.", block_to_step_to);
-
+            if B256::from_slice(&next_authority_set_hash) == B256::ZERO {
+                info!(
+                    "Requesting next authority set id, which is {:?}.",
+                    current_authority_set_id + 1
+                );
+                // Request the next authority set id.
                 match self
-                    .request_header_range(current_block, current_authority_set_id, block_to_step_to)
+                    .request_next_authority_set_id(current_authority_set_id, last_justified_block)
                     .await
                 {
                     Ok(request_id) => {
-                        info!("Header range request submitted: {}", request_id)
+                        info!("Next authority set request submitted: {}", request_id)
                     }
                     Err(e) => {
-                        error!("Header range request failed: {}", e);
-                        continue;
+                        error!("Next authority set request failed: {}", e);
                     }
                 };
             }
+        }
+    }
 
-            if current_authority_set_id < head_authority_set_id {
-                info!("Current authority set id is less than head authority set id.");
+    // Finds the highest block in the range [current_block, block_to_step_to] that has a stored
+    // justification that can be stepped to.
+    async fn find_block_to_step_to(
+        &mut self,
+        _current_block: u32,
+        head_block: u32,
+        max_block_to_request: u32,
+        authority_set_id: u64,
+    ) -> Option<u32> {
+        let last_justified_block = self
+            .data_fetcher
+            .last_justified_block(authority_set_id)
+            .await;
 
-                let next_authority_set_id = current_authority_set_id + 1;
+        // Last justified block will be 0 in this is the current authority set.
+        if last_justified_block == 0 {
+            return Some(min(max_block_to_request, head_block));
+        }
 
-                let reset_counter = self.contract.reset_counter().await.unwrap();
+        Some(min(max_block_to_request, last_justified_block))
+    }
 
-                // Get the hash of the next authority set id in the contract.
-                // If the authority set id doesn't exist in the contract, the hash will be H256::zero().
-                let next_authority_set_hash = self
-                    .contract
-                    .authority_set_id_to_hash(reset_counter, next_authority_set_id)
-                    .await
-                    .unwrap();
+    // Finds and requests step if available.
+    async fn find_and_request_step(&mut self) {
+        // Source STEP_RANGE_MAX & resetCounter from the contract.
+        let step_range_max = self.contract.max_header_range().await.unwrap();
+        let reset_counter = self.contract.reset_counter().await.unwrap();
 
-                // Get the last block justified by the current authority set id (also a rotate block).
-                let last_justified_block = self
-                    .data_fetcher
-                    .last_justified_block(current_authority_set_id)
-                    .await;
+        let head_block = self.data_fetcher.get_head().await.number;
 
-                if B256::from_slice(&next_authority_set_hash) == B256::ZERO {
-                    info!(
-                        "Requesting next authority set id, which is {:?}.",
-                        current_authority_set_id + 1
-                    );
-                    // Request the next authority set id.
-                    match self
-                        .request_next_authority_set_id(
-                            current_authority_set_id,
-                            last_justified_block,
-                        )
-                        .await
-                    {
-                        Ok(request_id) => {
-                            info!("Next authority set request submitted: {}", request_id)
-                        }
-                        Err(e) => {
-                            error!("Next authority set request failed: {}", e);
-                            continue;
-                        }
-                    };
-                }
+        let current_block = self.contract.latest_block().await.unwrap();
+        // The current authority set id is the authority set id of the block before the current block.
+        let current_authority_set_id = self
+            .data_fetcher
+            .get_authority_set_id(current_block - 1)
+            .await;
 
-                // Check if step needed to the last justified block by the current authority set.
-                #[allow(clippy::comparison_chain)]
-                if current_block < last_justified_block {
-                    let block_to_step_to = self
-                        .get_block_to_step_to(head_block, current_block, step_range_max)
-                        .await;
+        // Get the last justified block by the current authority set id.
+        let last_justified_block = self
+            .data_fetcher
+            .last_justified_block(current_authority_set_id)
+            .await;
 
-                    info!("Stepping to block {:?}.", block_to_step_to);
+        // If this is the last justified block, check if we can do a step in the next authority set.
+        let mut request_authority_set_id = current_authority_set_id;
+        if current_block == last_justified_block {
+            let next_authority_set_id = current_authority_set_id + 1;
 
-                    // Step to block_to_step_to.
-                    match self
-                        .request_header_range(
-                            current_block,
-                            current_authority_set_id,
-                            block_to_step_to,
-                        )
-                        .await
-                    {
-                        Ok(request_id) => {
-                            info!("Header range request submitted: {}", request_id)
-                        }
-                        Err(e) => {
-                            error!("Header range request failed: {}", e);
-                            continue;
-                        }
-                    };
-                } else if current_block == last_justified_block {
-                    // If the current block is the last justified block, then call step for the next
-                    // authority set id.
+            // Check if the next authority set id exists in the contract.
+            let next_authority_set_hash = self
+                .contract
+                .authority_set_id_to_hash(reset_counter, next_authority_set_id)
+                .await
+                .unwrap();
+            if B256::from_slice(&next_authority_set_hash) == B256::ZERO {
+                return;
+            }
+            request_authority_set_id = next_authority_set_id;
+        }
 
-                    let next_last_justified_block = self
-                        .data_fetcher
-                        .last_justified_block(next_authority_set_id)
-                        .await;
+        // Step as far as we can within blocks attested by the requested authority set.
+        let block_to_step_to = self
+            .find_block_to_step_to(
+                current_block,
+                head_block,
+                current_block + step_range_max,
+                request_authority_set_id,
+            )
+            .await;
+        if block_to_step_to.is_none() {
+            return;
+        }
 
-                    let mut block_to_step_to = min(
-                        next_last_justified_block,
-                        last_justified_block + step_range_max,
-                    );
+        // Request the header range proof to block_to_step_to.
+        match self
+            .request_header_range(
+                current_block,
+                request_authority_set_id,
+                block_to_step_to.unwrap(),
+            )
+            .await
+        {
+            Ok(request_id) => {
+                info!(
+                    "Header range request submitted from block {} to block {} with request ID: {}",
+                    current_block,
+                    block_to_step_to.unwrap(),
+                    request_id
+                )
+            }
+            Err(e) => {
+                error!("Header range request failed: {}", e);
+            }
+        };
+    }
 
-                    // Find all blocks in the range [current_block, block_to_step_to] that have a stored
-                    // justification.
-                    let valid_blocks = self
-                        .data_fetcher
-                        .find_justifications_in_range(current_block, block_to_step_to)
-                        .await;
-                    if valid_blocks.is_empty() {
-                        continue;
-                    }
-                    block_to_step_to = valid_blocks[valid_blocks.len() - 1];
+    async fn run(&mut self) {
+        info!("Starting VectorX offchain worker");
 
-                    info!("Stepping to block {:?}.", block_to_step_to);
-                    // Step to block_to_step_to.
-                    match self
-                        .request_header_range(
-                            current_block,
-                            next_authority_set_id,
-                            block_to_step_to,
-                        )
-                        .await
-                    {
-                        Ok(request_id) => {
-                            info!("Header range request submitted: {}", request_id)
-                        }
-                        Err(e) => {
-                            error!("Header range request failed: {}", e);
-                            continue;
-                        }
-                    };
-                }
+        // Loop every for N minutes.
+        const LOOP_DELAY_MINS: u64 = 20;
+        // Update if there hasn't been an event emitted for 3 hours.
+        const UPDATE_DELAY_MINS: u64 = 20;
+
+        loop {
+            // Get latest block of the chain.
+            let head = self.provider.get_block_number().await.unwrap();
+
+            // Always check if there is a rotate available.
+            self.find_and_request_rotate().await;
+
+            // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
+            let header_range_filter = Filter::new()
+                .address(H160::from_slice(&self.config.address.0 .0))
+                .from_block(head - (UPDATE_DELAY_MINS * 5))
+                .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
+
+            let logs = self.provider.get_logs(&header_range_filter).await.unwrap();
+            if logs.is_empty() {
+                // Check if there is a step available, and submit a request if so.
+                self.find_and_request_step().await;
             }
 
             // Sleep for N minutes.
-            info!("Sleeping for {} minutes.", LOOP_DELAY);
-            tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY)).await;
+            info!("Sleeping for {} minutes.", LOOP_DELAY_MINS);
+            tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY_MINS)).await;
         }
     }
 }
@@ -375,6 +380,6 @@ async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
-    let mut operator = DummyVectorXOperator::new().await;
+    let mut operator = VectorXOperator::new().await;
     operator.run().await;
 }

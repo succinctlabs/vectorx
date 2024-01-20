@@ -23,10 +23,6 @@ name = "dummy_rotate"
 path = "bin/dummy_rotate.rs"
 
 [[bin]]
-name = "dummy_vectorx"
-path = "bin/dummy_vectorx.rs"
-
-[[bin]]
 name = "vectorx"
 path = "bin/vectorx.rs"
 

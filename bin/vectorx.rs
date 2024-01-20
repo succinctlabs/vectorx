@@ -677,6 +677,7 @@ async fn main() {
     let data_fetcher = RpcDataFetcher::new().await;
 
     let is_dummy_operator = env::var("IS_DUMMY_OPERATOR");
+    // Optional flag, if set to true, will use the dummy operator.
     if is_dummy_operator.is_ok() && is_dummy_operator.unwrap().parse::<bool>().unwrap() {
         let mut operator = DummyVectorXOperator::new(data_fetcher);
         operator.run().await;

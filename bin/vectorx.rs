@@ -322,7 +322,7 @@ trait Operator {
         // Loop every for N minutes.
         const LOOP_DELAY_MINS: u64 = 5;
         // Update if there hasn't been an event emitted for 3 hours.
-        const UPDATE_DELAY_MINS: u64 = 5;
+        const UPDATE_DELAY_MINS: u64 = 10;
 
         loop {
             // Get latest block of the chain.

@@ -291,6 +291,8 @@ trait Operator {
             return;
         }
 
+        info!("Requesting step to block: {:?}.", block_to_step_to.unwrap());
+
         // Request the header range proof to block_to_step_to.
         match self
             .request_header_range(
@@ -314,8 +316,6 @@ trait Operator {
         };
     }
     async fn run(&mut self) {
-        info!("Starting VectorX offchain worker");
-
         let config = self.get_config();
         let provider = self.get_provider();
 
@@ -679,9 +679,11 @@ async fn main() {
     let is_dummy_operator = env::var("IS_DUMMY_OPERATOR");
     // Optional flag, if set to true, will use the dummy operator.
     if is_dummy_operator.is_ok() && is_dummy_operator.unwrap().parse::<bool>().unwrap() {
+        info!("Starting dummy VectorX operator!");
         let mut operator = DummyVectorXOperator::new(data_fetcher);
         operator.run().await;
     } else {
+        info!("Starting VectorX operator!");
         let mut operator = VectorXOperator::new(data_fetcher);
         operator.run().await;
     }

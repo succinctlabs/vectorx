@@ -315,14 +315,9 @@ trait Operator {
             }
         };
     }
-    async fn run(&mut self) {
+    async fn run(&mut self, loop_delay_mins: u64, update_delay_mins: u64) {
         let config = self.get_config();
         let provider = self.get_provider();
-
-        // Loop every for N minutes.
-        const LOOP_DELAY_MINS: u64 = 5;
-        // Update if there hasn't been an event emitted for 3 hours.
-        const UPDATE_DELAY_MINS: u64 = 10;
 
         loop {
             // Get latest block of the chain.
@@ -334,7 +329,7 @@ trait Operator {
             // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
             let header_range_filter = Filter::new()
                 .address(H160::from_slice(&config.address.0 .0))
-                .from_block(head - (UPDATE_DELAY_MINS * 5))
+                .from_block(head - (update_delay_mins * 5))
                 .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
             let logs = provider.get_logs(&header_range_filter).await.unwrap();
@@ -344,8 +339,8 @@ trait Operator {
             }
 
             // Sleep for N minutes.
-            info!("Sleeping for {} minutes.", LOOP_DELAY_MINS);
-            tokio::time::sleep(tokio::time::Duration::from_secs(60 * LOOP_DELAY_MINS)).await;
+            info!("Sleeping for {} minutes.", loop_delay_mins);
+            tokio::time::sleep(tokio::time::Duration::from_secs(60 * loop_delay_mins)).await;
         }
     }
 }
@@ -677,14 +672,31 @@ async fn main() {
     let data_fetcher = RpcDataFetcher::new().await;
 
     let is_dummy_operator = env::var("IS_DUMMY_OPERATOR");
+
+    let loop_delay_mins_env = env::var("LOOP_DELAY_MINS");
+    let mut loop_delay_mins = 5;
+    if loop_delay_mins_env.is_ok() {
+        loop_delay_mins = loop_delay_mins_env
+            .unwrap()
+            .parse::<u64>()
+            .expect("invalid LOOP_DELAY_MINS");
+    }
+    let update_delay_mins_env = env::var("UPDATE_DELAY_MINS");
+    let mut update_delay_mins = 20;
+    if update_delay_mins_env.is_ok() {
+        update_delay_mins = update_delay_mins_env
+            .unwrap()
+            .parse::<u64>()
+            .expect("invalid UPDATE_DELAY_MINS");
+    }
     // Optional flag, if set to true, will use the dummy operator.
     if is_dummy_operator.is_ok() && is_dummy_operator.unwrap().parse::<bool>().unwrap() {
         info!("Starting dummy VectorX operator!");
         let mut operator = DummyVectorXOperator::new(data_fetcher);
-        operator.run().await;
+        operator.run(loop_delay_mins, update_delay_mins).await;
     } else {
         info!("Starting VectorX operator!");
         let mut operator = VectorXOperator::new(data_fetcher);
-        operator.run().await;
+        operator.run(loop_delay_mins, update_delay_mins).await;
     }
 }

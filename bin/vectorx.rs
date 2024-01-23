@@ -45,12 +45,14 @@ struct DummyVectorXOperator {
     data_fetcher: RpcDataFetcher,
 }
 
+#[derive(Debug)]
 struct StepContractData {
     current_block: u32,
     step_range_max: u32,
     next_authority_set_hash_exists: bool,
 }
 
+#[derive(Debug)]
 struct RotateContractData {
     current_block: u32,
     next_authority_set_hash_exists: bool,
@@ -226,7 +228,7 @@ trait Operator {
             .await;
 
         if current_authority_set_id < head_authority_set_id
-            && rotate_contract_data.next_authority_set_hash_exists
+            && !rotate_contract_data.next_authority_set_hash_exists
         {
             info!(
                 "Requesting next authority set id, which is {:?}.",
@@ -272,7 +274,7 @@ trait Operator {
         if step_contract_data.current_block == last_justified_block {
             let next_authority_set_id = current_authority_set_id + 1;
 
-            // Check if the next authority set id exists in the contract.
+            // Check if the next authority set id exists in the contract. If not, a rotate is needed.
             if !step_contract_data.next_authority_set_hash_exists {
                 return;
             }
@@ -334,6 +336,10 @@ trait Operator {
 
             let logs = provider.get_logs(&header_range_filter).await.unwrap();
             if logs.is_empty() {
+                info!(
+                    "No header range commitments found in the last {} minutes. Looking for step update!",
+                    update_delay_mins
+                );
                 // Check if there is a step available, and submit a request if so.
                 self.find_and_request_step().await;
             }
@@ -426,7 +432,7 @@ impl Operator for VectorXOperator {
             current_block,
             step_range_max,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
-                == B256::ZERO,
+                != B256::ZERO,
         }
     }
 
@@ -449,7 +455,7 @@ impl Operator for VectorXOperator {
         RotateContractData {
             current_block,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
-                == B256::ZERO,
+                != B256::ZERO,
         }
     }
 
@@ -594,7 +600,7 @@ impl Operator for DummyVectorXOperator {
             current_block,
             step_range_max,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
-                == B256::ZERO,
+                != B256::ZERO,
         }
     }
 
@@ -619,7 +625,7 @@ impl Operator for DummyVectorXOperator {
         RotateContractData {
             current_block,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
-                == B256::ZERO,
+                != B256::ZERO,
         }
     }
 

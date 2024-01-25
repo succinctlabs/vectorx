@@ -49,6 +49,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 rotateFunctionId;
     }
 
+    function VERSION() external pure override returns (string memory) {
+        return "0.1.0";
+    }
+
     /// @dev Initializes the contract.
     /// @param _params The initialization parameters for the contract.
     function initialize(InitParameters calldata _params) external initializer {

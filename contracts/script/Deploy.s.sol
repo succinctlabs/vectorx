@@ -24,19 +24,30 @@ contract DeployScript is Script {
 
         bytes32 CREATE2_SALT = bytes32(vm.envBytes("CREATE2_SALT"));
 
+        bool UPGRADE = vm.envBool("UPGRADE_VIA_EOA");
+        address existingProxyAddress = vm.envAddress("CONTRACT_ADDRESS");
+
         // Deploy contract
         VectorX lightClientImpl = new VectorX{salt: bytes32(CREATE2_SALT)}();
-        VectorX lightClient;
-        lightClient = VectorX(
-            address(
-                new ERC1967Proxy{salt: bytes32(CREATE2_SALT)}(
-                    address(lightClientImpl),
-                    ""
-                )
-            )
-        );
-        console.logAddress(address(lightClient));
+
         console.logAddress(address(lightClientImpl));
+
+        VectorX lightClient;
+        if (!UPGRADE) {
+            lightClient = VectorX(
+                address(
+                    new ERC1967Proxy{salt: bytes32(CREATE2_SALT)}(
+                        address(lightClientImpl),
+                        ""
+                    )
+                )
+            );
+        } else {
+            lightClient = VectorX(existingProxyAddress);
+            lightClient.upgradeTo(address(lightClientImpl));
+        }
+
+        console.logAddress(address(lightClient));
 
         // Initialize the Vector X light client.
         lightClient.initialize(

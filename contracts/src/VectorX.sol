@@ -68,23 +68,22 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         headerRangeFunctionId = _params.headerRangeFunctionId;
     }
 
-    /// @notice Update the address of the gateway contract.
-    function updateGateway(address _gateway) external onlyGuardian {
+    /// @notice TODO: This should be removed for the mainnet release.
+    function updateGenesisState(
+        address _gateway,
+        uint32 _height,
+        bytes32 _header,
+        uint64 _authoritySetId,
+        bytes32 _authoritySetHash,
+        bytes32 _headerRangeFunctionId,
+        bytes32 _rotateFunctionId
+    ) external onlyGuardian {
         gateway = _gateway;
-    }
-
-    /// @notice Update the function id for requesting a header range.
-    function updateHeaderRangeFunctionId(
-        bytes32 _functionId
-    ) external onlyGuardian {
-        headerRangeFunctionId = _functionId;
-    }
-
-    /// @notice Update the function id for requesting a rotate.
-    function updateAddNextAuthoritySetFunctionId(
-        bytes32 _functionId
-    ) external onlyGuardian {
-        rotateFunctionId = _functionId;
+        blockHeightToHeaderHash[_height] = _header;
+        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestBlock = _height;
+        headerRangeFunctionId = _headerRangeFunctionId;
+        rotateFunctionId = _rotateFunctionId;
     }
 
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
@@ -182,28 +181,28 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         );
 
         (
-            bytes32 target_header_hash,
-            bytes32 state_root_commitment,
-            bytes32 data_root_commitment
+            bytes32 targetHeaderHash,
+            bytes32 stateRootCommitment,
+            bytes32 dataRootCommitment
         ) = abi.decode(output, (bytes32, bytes32, bytes32));
 
-        blockHeightToHeaderHash[_targetBlock] = target_header_hash;
+        blockHeightToHeaderHash[_targetBlock] = targetHeaderHash;
 
         // Store the data and state commitments for the range (trustedBlock, targetBlock].
         bytes32 key = keccak256(abi.encode(_trustedBlock, _targetBlock));
-        dataRootCommitments[key] = data_root_commitment;
-        stateRootCommitments[key] = state_root_commitment;
+        dataRootCommitments[key] = dataRootCommitment;
+        stateRootCommitments[key] = stateRootCommitment;
 
         // Update latest block.
         latestBlock = _targetBlock;
 
-        emit HeadUpdate(_targetBlock, target_header_hash);
+        emit HeadUpdate(_targetBlock, targetHeaderHash);
 
         emit HeaderRangeCommitmentStored(
             _trustedBlock,
             _targetBlock,
-            data_root_commitment,
-            state_root_commitment
+            dataRootCommitment,
+            stateRootCommitment
         );
     }
 
@@ -279,16 +278,14 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             input
         );
 
-        bytes32 new_authority_set_hash = abi.decode(output, (bytes32));
+        bytes32 newAuthoritySetHash = abi.decode(output, (bytes32));
 
         // Store the authority set hash for the next authority set id.
-        authoritySetIdToHash[
-            _currentAuthoritySetId + 1
-        ] = new_authority_set_hash;
+        authoritySetIdToHash[_currentAuthoritySetId + 1] = newAuthoritySetHash;
 
         emit AuthoritySetStored(
             _currentAuthoritySetId + 1,
-            new_authority_set_hash,
+            newAuthoritySetHash,
             _epochEndBlock
         );
     }

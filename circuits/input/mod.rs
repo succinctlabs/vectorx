@@ -9,7 +9,7 @@ use alloy_sol_types::{sol, SolType};
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
-use avail_subxt::rpc::RpcParams;
+use avail_subxt::subxt_rpc::RpcParams;
 use avail_subxt::{api, build_client};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
@@ -247,7 +247,7 @@ impl RpcDataFetcher {
         let client = build_client(url.as_str(), false).await.unwrap();
         let redis_client = RedisClient::new().await;
         RpcDataFetcher {
-            client,
+            client: client.0,
             avail_url: url,
             redis_client,
             save: None,
@@ -260,7 +260,7 @@ impl RpcDataFetcher {
                 Ok(_) => return Ok(()),
                 Err(_) => match build_client(self.avail_url.as_str(), false).await {
                     Ok(new_client) => {
-                        self.client = new_client;
+                        self.client = new_client.0;
                         return Ok(());
                     }
                     Err(_) => {

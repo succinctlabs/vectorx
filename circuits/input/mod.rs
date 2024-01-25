@@ -19,7 +19,7 @@ use plonky2x::frontend::curta::ec::point::CompressedEdwardsY;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
-use sha2::Digest;
+use sha2::{Digest, Sha256};
 use tokio::time::sleep;
 
 use self::types::{
@@ -27,7 +27,8 @@ use self::types::{
     HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
-    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
+    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH, VALIDATOR_LENGTH,
+    WEIGHT_LENGTH,
 };
 
 #[derive(Clone)]
@@ -275,6 +276,30 @@ impl RpcDataFetcher {
         Err("Failed to connect to Avail client after multiple attempts!".to_string())
     }
 
+    pub async fn check_data_commitment(&mut self, block: u32) {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
+        let header = self.get_header(block).await;
+        let data_root = header.data_root().0.to_vec();
+        println!("data_root {:?}", data_root);
+
+        let encoded_header_bytes = header.encode();
+        println!("encoded_header_bytes {:?}", encoded_header_bytes);
+
+        // Find the data_root in the header.
+        let mut data_root_index = -1;
+        for i in 0..(encoded_header_bytes.len() - HASH_SIZE) + 1 {
+            if encoded_header_bytes[i..i + HASH_SIZE] == data_root[..] {
+                data_root_index = i as i32;
+                break;
+            }
+        }
+
+        println!("data_root_index {:?}", data_root_index);
+    }
+
     /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch
     /// end blocks within the given range of block numbers. Includes start and end blocks.
     pub async fn find_justifications_in_range(
@@ -377,6 +402,58 @@ impl RpcDataFetcher {
             .block_hash(Some(block_number.into()))
             .await;
         block_hash.unwrap().unwrap()
+    }
+
+    fn get_merkle_root(leaves: Vec<Vec<u8>>) -> Vec<u8> {
+        if leaves.is_empty() {
+            return vec![];
+        }
+
+        // In VectorX, the leaves are not hashed.
+        let mut nodes = leaves.clone();
+        while nodes.len() > 1 {
+            nodes = (0..nodes.len() / 2)
+                .map(|i| {
+                    let mut hasher = Sha256::new();
+                    hasher.update(&nodes[2 * i]);
+                    hasher.update(&nodes[2 * i + 1]);
+                    hasher.finalize().to_vec()
+                })
+                .collect();
+        }
+
+        nodes[0].clone()
+    }
+
+    pub async fn get_merkle_root_commitments(
+        &mut self,
+        start_block: u32,
+        end_block: u32,
+    ) -> (Vec<u8>, Vec<u8>) {
+        if (end_block - start_block) as usize > MAX_NUM_HEADERS {
+            panic!("Range too large!");
+        }
+
+        // Uses the simple merkle tree implementation, which defaults to 256 leaves in Avail.
+        let headers = self.get_block_headers_range(start_block, end_block).await;
+
+        let mut data_root_leaves = Vec::new();
+        let mut state_root_leaves = Vec::new();
+        for i in 1..headers.len() {
+            let header = &headers[i];
+            data_root_leaves.push(header.data_root().0.to_vec());
+            state_root_leaves.push(header.state_root.0.to_vec());
+        }
+
+        for _ in headers.len() - 1..MAX_NUM_HEADERS {
+            data_root_leaves.push([0u8; 32].to_vec());
+            state_root_leaves.push([0u8; 32].to_vec());
+        }
+
+        (
+            Self::get_merkle_root(state_root_leaves),
+            Self::get_merkle_root(data_root_leaves),
+        )
     }
 
     // This function returns a vector of headers for a given range of block numbers, inclusive of the start and end block numbers.
@@ -1021,5 +1098,13 @@ mod tests {
 
             start_epoch += 100;
         }
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_data_commitment() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+
+        data_fetcher.check_data_commitment(300000).await;
     }
 }

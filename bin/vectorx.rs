@@ -50,8 +50,32 @@ struct RotateContractData {
     next_authority_set_hash_exists: bool,
 }
 
-trait Operator {
-    fn new(data_fetcher: RpcDataFetcher, is_dummy_operator: bool) -> Self;
+impl VectorXOperator {
+    fn new(data_fetcher: RpcDataFetcher, is_dummy_operator: bool) -> Self {
+        dotenv::dotenv().ok();
+
+        let config = Self::create_vectorx_config();
+
+        let ethereum_rpc_url = env::var("ETHEREUM_RPC_URL").expect("ETHEREUM_RPC_URL must be set");
+        let provider =
+            Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
+
+        let contract = VectorX::new(config.address.0 .0, provider.clone().into());
+
+        let succinct_rpc_url = env::var("SUCCINCT_RPC_URL").expect("SUCCINCT_RPC_URL must be set");
+        let succinct_api_key = env::var("SUCCINCT_API_KEY").expect("SUCCINCT_API_KEY must be set");
+        let client = SuccinctClient::new(succinct_rpc_url, succinct_api_key, false, false);
+
+        Self {
+            config,
+            provider,
+            contract,
+            client,
+            data_fetcher,
+            is_dummy_operator,
+        }
+    }
+
     fn create_vectorx_config() -> VectorXConfig {
         let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
         let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
@@ -84,39 +108,6 @@ trait Operator {
             rotate_function_id,
         }
     }
-
-    // Trusted header hash and authority set hash. (Implement!)
-    async fn get_header_range_input_data(
-        &mut self,
-        trusted_block: u32,
-        trusted_authority_set_id: u64,
-    ) -> (B256, B256);
-
-    // Current authority set hash. (Implement!)
-    async fn get_next_authority_set_id_input_data(&mut self, current_authority_set_id: u64)
-        -> B256;
-
-    // Current block, step_range_max and whether next authority set hash exists. (Implement!)
-    async fn get_contract_data_for_step(&mut self) -> StepContractData;
-
-    // Current block and whether next authority set hash exists. (Implement!)
-    async fn get_contract_data_for_rotate(&mut self) -> RotateContractData;
-
-    fn get_succinct_client(&mut self) -> SuccinctClient;
-
-    fn get_config(&mut self) -> VectorXConfig;
-
-    fn get_data_fetcher(&mut self) -> RpcDataFetcher;
-
-    fn get_provider(&self) -> Provider<Http>;
-
-    // Get block to step to (implement!)
-    async fn find_block_to_step_to(
-        &mut self,
-        current_block: u32,
-        max_block_to_request: u32,
-        authority_set_id: u64,
-    ) -> Option<u32>;
 
     async fn request_header_range(
         &mut self,
@@ -308,65 +299,6 @@ trait Operator {
             }
         };
     }
-    async fn run(&mut self, loop_delay_mins: u64, update_delay_mins: u64) {
-        let config = self.get_config();
-        let provider = self.get_provider();
-
-        loop {
-            // Get latest block of the chain.
-            let head = provider.get_block_number().await.unwrap();
-
-            // Always check if there is a rotate available.
-            self.find_and_request_rotate().await;
-
-            // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
-            let header_range_filter = Filter::new()
-                .address(H160::from_slice(&config.address.0 .0))
-                .from_block(head - (update_delay_mins * 5))
-                .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
-
-            let logs = provider.get_logs(&header_range_filter).await.unwrap();
-            if logs.is_empty() {
-                info!(
-                    "No header range commitments found in the last {} minutes. Looking for step update!",
-                    update_delay_mins
-                );
-                // Check if there is a step available, and submit a request if so.
-                self.find_and_request_step().await;
-            }
-
-            // Sleep for N minutes.
-            info!("Sleeping for {} minutes.", loop_delay_mins);
-            tokio::time::sleep(tokio::time::Duration::from_secs(60 * loop_delay_mins)).await;
-        }
-    }
-}
-
-impl Operator for VectorXOperator {
-    fn new(data_fetcher: RpcDataFetcher, is_dummy_operator: bool) -> Self {
-        dotenv::dotenv().ok();
-
-        let config = Self::create_vectorx_config();
-
-        let ethereum_rpc_url = env::var("ETHEREUM_RPC_URL").expect("ETHEREUM_RPC_URL must be set");
-        let provider =
-            Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
-
-        let contract = VectorX::new(config.address.0 .0, provider.clone().into());
-
-        let succinct_rpc_url = env::var("SUCCINCT_RPC_URL").expect("SUCCINCT_RPC_URL must be set");
-        let succinct_api_key = env::var("SUCCINCT_API_KEY").expect("SUCCINCT_API_KEY must be set");
-        let client = SuccinctClient::new(succinct_rpc_url, succinct_api_key, false, false);
-
-        Self {
-            config,
-            provider,
-            contract,
-            client,
-            data_fetcher,
-            is_dummy_operator,
-        }
-    }
 
     async fn get_header_range_input_data(
         &mut self,
@@ -518,6 +450,39 @@ impl Operator for VectorXOperator {
                 idx -= 1;
             }
             Some(valid_blocks[idx])
+        }
+    }
+
+    async fn run(&mut self, loop_delay_mins: u64, update_delay_mins: u64) {
+        let config = self.get_config();
+        let provider = self.get_provider();
+
+        loop {
+            // Get latest block of the chain.
+            let head = provider.get_block_number().await.unwrap();
+
+            // Always check if there is a rotate available.
+            self.find_and_request_rotate().await;
+
+            // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
+            let header_range_filter = Filter::new()
+                .address(H160::from_slice(&config.address.0 .0))
+                .from_block(head - (update_delay_mins * 5))
+                .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
+
+            let logs = provider.get_logs(&header_range_filter).await.unwrap();
+            if logs.is_empty() {
+                info!(
+                    "No header range commitments found in the last {} minutes. Looking for step update!",
+                    update_delay_mins
+                );
+                // Check if there is a step available, and submit a request if so.
+                self.find_and_request_step().await;
+            }
+
+            // Sleep for N minutes.
+            info!("Sleeping for {} minutes.", loop_delay_mins);
+            tokio::time::sleep(tokio::time::Duration::from_secs(60 * loop_delay_mins)).await;
         }
     }
 }

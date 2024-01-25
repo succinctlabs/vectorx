@@ -30,6 +30,7 @@ use crate::consts::{
     BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
 };
 
+#[derive(Clone)]
 pub struct RedisClient {
     pub redis: redis::Client,
 }
@@ -229,6 +230,7 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
     )
 }
 
+#[derive(Clone)]
 pub struct RpcDataFetcher {
     pub client: Client,
     pub avail_url: String,

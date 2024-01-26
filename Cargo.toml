@@ -7,6 +7,14 @@ edition = "2021"
 path = "circuits/lib.rs"
 
 [[bin]]
+name = "dummy_step"
+path = "bin/dummy_step.rs"
+
+[[bin]]
+name = "dummy_rotate"
+path = "bin/dummy_rotate.rs"
+
+[[bin]]
 name = "step"
 path = "bin/step.rs"
 

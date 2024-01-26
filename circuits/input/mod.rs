@@ -1105,6 +1105,19 @@ mod tests {
     async fn test_data_commitment() {
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        data_fetcher.check_data_commitment(300000).await;
+        let trusted_block = 338901;
+        let target_block = 339157;
+
+        let (state_merkle_root, data_merkle_root) = data_fetcher
+            .get_merkle_root_commitments(trusted_block, target_block)
+            .await;
+        println!(
+            "state_merkle_root {:?}",
+            hex::encode(state_merkle_root.as_slice())
+        );
+        println!(
+            "data_merkle_root {:?}",
+            hex::encode(data_merkle_root.as_slice())
+        );
     }
 }

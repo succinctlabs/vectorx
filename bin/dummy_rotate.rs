@@ -8,7 +8,7 @@
 //!
 
 use rustx::function::RustFunction;
-use vectorx::dummy_step::DummyRotate;
+use vectorx::dummy_rotate::DummyRotate;
 
 fn main() {
     DummyRotate::entrypoint();

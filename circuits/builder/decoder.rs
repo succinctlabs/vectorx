@@ -133,8 +133,8 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .get_fixed_subarray::<S, HASH_SIZE>(
                 &ArrayVariable::<Variable, S>::from(header_variables),
                 data_root_start.variable,
-                // Seed the challenger with the first 15 bytes (120 bits) of the header hash.
-                &header_hash.as_bytes()[0..15],
+                // Seed the challenger with the bytes of the header hash.
+                &header_hash.as_bytes(),
             )
             .as_vec();
         let data_root_bytes = data_root_variables

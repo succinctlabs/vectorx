@@ -27,24 +27,25 @@ pub async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
-    // Save every 90 blocks (every 30 minutes).
-    const BLOCK_SAVE_INTERVAL: usize = 90;
+    // Save every 30 blocks (every 10 minutes).
+    const BLOCK_SAVE_INTERVAL: usize = 30;
     debug!(
         "Starting indexer, saving every {} blocks.",
         BLOCK_SAVE_INTERVAL
     );
 
     let mut fetcher = RpcDataFetcher::new().await;
-    let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = fetcher
-        .client
-        .rpc()
-        .deref()
-        .subscribe(
-            "grandpa_subscribeJustifications",
-            RpcParams::new(),
-            "grandpa_unsubscribeJustifications",
-        )
-        .await;
+    let sub: Result<avail_subxt::subxt_rpc::Subscription<GrandpaJustification>, subxt::Error> =
+        fetcher
+            .client
+            .rpc()
+            .deref()
+            .subscribe(
+                "grandpa_subscribeJustifications",
+                RpcParams::new(),
+                "grandpa_unsubscribeJustifications",
+            )
+            .await;
     let mut sub = sub.unwrap();
 
     // Wait for new justification.

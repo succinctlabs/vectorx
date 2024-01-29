@@ -15,12 +15,6 @@ pub trait DecodingMethods {
         compact_bytes: ArrayVariable<ByteVariable, 5>,
     ) -> (U32Variable, Variable);
 
-    fn decode_headers<const S: usize, const N: usize>(
-        &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
-        header_hashes: &ArrayVariable<Bytes32Variable, N>,
-    ) -> ArrayVariable<HeaderVariable, N>;
-
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
@@ -41,7 +35,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         &mut self,
         compact_bytes: ArrayVariable<ByteVariable, MAX_COMPACT_UINT_BYTES>,
     ) -> (U32Variable, Variable) {
-        // Flip the bit order within each byte and flatten the array.
+        // Flip the bit order within each byte to LE bits and flatten the array.
         let bool_targets = compact_bytes
             .data
             .iter()
@@ -90,21 +84,6 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         self.assert_is_equal(is_mode_three, is_valid_encoded_length_check);
 
         (value, compress_mode)
-    }
-
-    // Decode an array of headers into their components. header_hashes are used for RLC challenge.
-    fn decode_headers<const S: usize, const N: usize>(
-        &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<S>, N>,
-        header_hashes: &ArrayVariable<Bytes32Variable, N>,
-    ) -> ArrayVariable<HeaderVariable, N> {
-        headers
-            .as_vec()
-            .iter()
-            .zip(header_hashes.as_vec().iter())
-            .map(|(header, header_hash)| self.decode_header::<S>(header, header_hash))
-            .collect::<Vec<HeaderVariable>>()
-            .into()
     }
 
     /// Decode a header into its components. header_hash is used for the RLC challenge.

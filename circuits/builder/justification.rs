@@ -129,7 +129,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
     /// Verify the authority set commitment of an authority set. This is the chained hash of the
     /// first num_active_authorities public keys.
     ///
-    /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
+    /// Ex. For a chained hash of 3 public keys, the chained hash takes the form:
     ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
     fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,

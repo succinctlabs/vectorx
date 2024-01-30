@@ -6,24 +6,23 @@ use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters};
 
 use crate::builder::header::HeaderRangeFetcherHint;
-use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
+use crate::builder::justification::HintSimpleJustification;
+use crate::builder::step::StepMethods;
 use crate::consts::HEADERS_PER_MAP;
-use crate::subchain_verification::{
-    MapReduceSubchainVariable, SubChainVerifier, SubchainVerificationCtx,
-};
+use crate::subchain_verification::{MapReduceSubchainVariable, SubchainVerificationCtx};
 
 #[derive(Clone, Debug)]
 pub struct StepCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
-    const MAX_HEADER_LENGTH: usize,
+    const MAX_HEADER_SIZE: usize,
     const MAX_NUM_HEADERS: usize,
 > {}
 
 impl<
         const MAX_AUTHORITY_SET_SIZE: usize,
-        const MAX_HEADER_LENGTH: usize,
+        const MAX_HEADER_SIZE: usize,
         const MAX_NUM_HEADERS: usize,
-    > Circuit for StepCircuit<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_LENGTH, MAX_NUM_HEADERS>
+    > Circuit for StepCircuit<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
@@ -66,40 +65,14 @@ impl<
             Level::Debug,
         );
 
-        let (target_header_hash, state_root_merkle_root, data_root_merkle_root) = builder
-            .verify_subchain::<StepCircuit<
-            MAX_AUTHORITY_SET_SIZE,
-            MAX_HEADER_LENGTH,
-            MAX_NUM_HEADERS,
-        >, MAX_NUM_HEADERS>(
-            trusted_block,
-            trusted_header_hash,
-            target_block,
-        );
-
-        builder.watch_with_level(
-            &target_header_hash,
-            "step circuit verify_subchain target header hash",
-            Level::Debug,
-        );
-
-        builder.watch_with_level(
-            &state_root_merkle_root,
-            "step circuit verify_subchain state root merkle root",
-            Level::Debug,
-        );
-        builder.watch_with_level(
-            &data_root_merkle_root,
-            "step circuit verify_subchain merkle root",
-            Level::Debug,
-        );
-
-        builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
-            target_block,
-            target_header_hash,
-            authority_set_id,
-            authority_set_hash,
-        );
+        let (target_header_hash, state_root_merkle_root, data_root_merkle_root) =
+            builder.step::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>(
+                trusted_block,
+                trusted_header_hash,
+                authority_set_id,
+                authority_set_hash,
+                target_block,
+            );
 
         builder.evm_write::<Bytes32Variable>(target_header_hash);
         builder.evm_write::<Bytes32Variable>(state_root_merkle_root);
@@ -113,7 +86,7 @@ impl<
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         generator_registry
-            .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_LENGTH, HEADERS_PER_MAP>>();
+            .register_async_hint::<HeaderRangeFetcherHint<MAX_HEADER_SIZE, HEADERS_PER_MAP>>();
         generator_registry.register_async_hint::<HintSimpleJustification<MAX_AUTHORITY_SET_SIZE>>();
 
         let mr_id = MapReduceGenerator::<
@@ -155,22 +128,21 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 4;
-        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const NUM_HEADERS: usize = 36;
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
         let circuit = builder.build();
         log::debug!("Done building circuit");
 
         let mut hint_registry = HintRegistry::new();
         let mut gate_registry = GateRegistry::new();
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_generators(
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::register_generators(
             &mut hint_registry,
         );
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::register_gates(
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::register_gates(
             &mut gate_registry,
         );
 
@@ -216,12 +188,11 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 5;
-        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const NUM_HEADERS: usize = 32;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();
@@ -266,12 +237,11 @@ mod tests {
         env_logger::try_init().unwrap_or_default();
 
         const NUM_AUTHORITIES: usize = 76;
-        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
         const NUM_HEADERS: usize = 100;
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();

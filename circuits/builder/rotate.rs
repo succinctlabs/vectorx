@@ -1,9 +1,12 @@
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
+use plonky2x::frontend::uint::uint64::U64Variable;
+use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
 
 use super::decoder::DecodingMethods;
+use super::header::HeaderMethods;
 use crate::builder::justification::GrandpaJustificationVerifier;
 use crate::consts::{
     BASE_PREFIX_LENGTH, DELAY_LENGTH, MAX_COMPACT_UINT_BYTES, MAX_PREFIX_LENGTH, PUBKEY_LENGTH,
@@ -30,12 +33,32 @@ pub trait RotateMethods {
     >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
-        header_hash: &Bytes32Variable,
+        header_hash: Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     );
+
+    // Verify the justification from the current authority set on the epoch end header and extract
+    // the new authority set commitment.
+    fn rotate<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_HEADER_CHUNK_SIZE: usize,
+        const MAX_AUTHORITY_SET_SIZE: usize,
+        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH)
+        const MAX_SUBARRAY_SIZE: usize,
+    >(
+        &mut self,
+        epoch_end_block_number: &U32Variable,
+        current_authority_set_id: &U64Variable,
+        current_authority_set_hash: &Bytes32Variable,
+        target_header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
+        target_header_num_authorities: &Variable,
+        next_authority_set_start_position: &Variable,
+        new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
+        expected_new_authority_set_hash: &Bytes32Variable,
+    ) -> Bytes32Variable;
 }
 
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
@@ -95,7 +118,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
-        header_hash: &Bytes32Variable,
+        header_hash: Bytes32Variable,
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
@@ -222,6 +245,48 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             new_pubkeys,
         );
     }
+
+    fn rotate<
+        const MAX_HEADER_SIZE: usize,
+        const MAX_HEADER_CHUNK_SIZE: usize,
+        const MAX_AUTHORITY_SET_SIZE: usize,
+        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH)
+        const MAX_SUBARRAY_SIZE: usize,
+    >(
+        &mut self,
+        epoch_end_block_number: &U32Variable,
+        current_authority_set_id: &U64Variable,
+        current_authority_set_hash: &Bytes32Variable,
+        target_header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
+        target_header_num_authorities: &Variable,
+        next_authority_set_start_position: &Variable,
+        new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
+        expected_new_authority_set_hash: &Bytes32Variable,
+    ) -> Bytes32Variable {
+        // Hash the header at epoch_end_block.
+        let target_header_hash =
+            self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(target_header);
+
+        // Verify the epoch end header and the new authority set are valid.
+        self.verify_epoch_end_header::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+            target_header,
+            target_header_hash,
+            target_header_num_authorities,
+            next_authority_set_start_position,
+            new_pubkeys,
+            expected_new_authority_set_hash,
+        );
+
+        // Verify the justification from the current authority set on the epoch end header.
+        self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
+            *epoch_end_block_number,
+            target_header_hash,
+            *current_authority_set_id,
+            *current_authority_set_hash,
+        );
+
+        *expected_new_authority_set_hash
+    }
 }
 
 #[cfg(test)]
@@ -263,7 +328,7 @@ pub mod tests {
 
         let num_authorities = output_stream.read::<Variable>(&mut builder);
         let start_position = output_stream.read::<Variable>(&mut builder);
-        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
+        let _ = output_stream.read::<Bytes32Variable>(&mut builder);
         let _ = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
 
@@ -278,11 +343,13 @@ pub mod tests {
             ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
 
         // Get the subarray of the header bytes that we want to verify. In the test
-        // we can use the expected_new_authority_set_hash as the seed for randomness.
+        // we can use the first 32 bytes of the header as the seed to get_fixed_subarray, but this
+        // is not correct.
+        let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
         let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &header_as_variables,
             start_position,
-            &expected_new_authority_set_hash.as_bytes(),
+            target_header_dummy_hash,
         );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
             prefix_subarray
@@ -339,7 +406,7 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            &target_header_hash,
+            target_header_hash,
             &num_authorities,
             &start_position,
             &new_pubkeys,
@@ -392,7 +459,7 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            &target_header_hash,
+            target_header_hash,
             &num_authorities,
             &start_position,
             &new_pubkeys,

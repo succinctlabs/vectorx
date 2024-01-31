@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use ethers::types::U256;
-use log::debug;
+use log::{debug, info};
 use plonky2x::frontend::curta::ec::point::{CompressedEdwardsY, CompressedEdwardsYVariable};
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{
     EDDSASignatureVariable, EDDSASignatureVariableValue,
@@ -31,6 +31,8 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         input_stream: &mut ValueStream<L, D>,
         output_stream: &mut ValueStream<L, D>,
     ) {
+        info!("Verifying signatures");
+
         let block_number = input_stream.read_value::<U32Variable>();
         let authority_set_id = input_stream.read_value::<U64Variable>();
 
@@ -53,6 +55,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             panic!("Encoded precommit is not the correct length");
         }
 
+        info!("Verifying signatures");
         for i in 0..justification_data.num_authorities {
             if !justification_data.validator_signed[i] {
                 continue;
@@ -62,6 +65,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
                 &encoded_precommit,
                 &justification_data.signatures[i],
             );
+            info!("Verified signature for validator {}", i);
         }
 
         output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(

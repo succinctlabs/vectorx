@@ -492,7 +492,7 @@ dependencies = [
 [[package]]
 name = "avail-subxt"
 version = "0.4.0"
-source = "git+https://github.com/availproject/avail.git?rev=e976c56#e976c560ee3f8c7d36d9fbec8e98c29283f1aa34"
+source = "git+https://github.com/availproject/avail.git?rev=aac4398#aac43980af4865ed76d884c17021610bc093f8e8"
 dependencies = [
  "anyhow",
  "avail-core",

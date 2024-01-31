@@ -605,14 +605,21 @@ impl RpcDataFetcher {
             let justification: GrandpaJustification =
                 Decode::decode(&mut finality_proof.justification.as_slice()).unwrap();
 
-            // The authority set id for the current block is defined in the previous block.
-            let authority_set_id = self.get_authority_set_id(block_number - 1).await;
-
             // The authorities for the current block are defined in the previous block.
             let authorities_pubkey_bytes = self.get_authorities(block_number - 1).await;
 
             if authorities_pubkey_bytes.len() > VALIDATOR_SET_SIZE_MAX {
                 panic!("Too many authorities");
+            }
+
+            // Check the precommits are all the same.
+            let first_precommit = justification.commit.precommits[0].clone().precommit;
+            for precommit in justification.commit.precommits.iter() {
+                assert_eq!(
+                    precommit.clone().precommit,
+                    first_precommit,
+                    "Precommits are not all the same"
+                );
             }
 
             // Form a message which is signed in the justification.
@@ -621,13 +628,13 @@ impl RpcDataFetcher {
                     justification.commit.precommits[0].clone().precommit,
                 ),
                 &justification.round,
-                &authority_set_id,
+                &prev_authority_set_id,
             ));
             // TODO: verify above that signed_message = block_hash || block_number || round || set_id
 
             let mut pubkey_bytes_to_signature = HashMap::new();
 
-            // Verify all the signatures of the justification.
+            // Verify all the signatures of the justification. Which are all the same.
             // TODO: panic if the justification is not not a simple justification
             justification
                 .commit
@@ -637,6 +644,10 @@ impl RpcDataFetcher {
                     let pubkey = precommit.clone().id;
                     let signature = precommit.clone().signature.0;
                     let pubkey_bytes = pubkey.0.to_vec();
+
+                    info!("pubkey_bytes {:?}", hex::encode(pubkey_bytes.clone()));
+                    info!("signed message {:?}", signed_message.clone());
+                    info!("signature {:?}", hex::encode(signature));
 
                     verify_signature(&pubkey_bytes, &signed_message, &signature);
                     pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
@@ -650,8 +661,11 @@ impl RpcDataFetcher {
                 let signature = pubkey_bytes_to_signature.get(&pubkey_bytes.as_bytes().to_vec());
                 // let authority = AffinePoint::<Curve>::new_from_compressed_point(pubkey_bytes);
 
+                info!("pubkey_bytes {:?}", pubkey_bytes.as_bytes().to_vec());
+
                 if let Some(valid_signature) = signature {
                     verify_signature(pubkey_bytes.as_bytes(), &signed_message, valid_signature);
+                    info!("valid_signature {:?}", valid_signature);
                     validator_signed.push(true);
                     pubkeys.push(
                         CompressedEdwardsY::from_slice(pubkey_bytes.as_bytes().as_ref()).unwrap(),
@@ -885,7 +899,7 @@ mod tests {
     use avail_subxt::config::Header;
 
     use super::*;
-    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
+    use crate::consts::{ENCODED_PRECOMMIT_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
 
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -1119,5 +1133,47 @@ mod tests {
             "data_merkle_root {:?}",
             hex::encode(data_merkle_root.as_slice())
         );
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_step_after_degrading() {
+        env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
+        env_logger::try_init().unwrap_or_default();
+
+        let epoch_end_block = 344728;
+        let authority_set_id = 166;
+
+        let mut data_fetcher = RpcDataFetcher::new().await;
+
+        let correct_authority_set_id = data_fetcher.get_authority_set_id(epoch_end_block - 1).await;
+        assert_eq!(correct_authority_set_id, authority_set_id);
+
+        let justification_data: CircuitJustification = data_fetcher
+            .get_justification_from_block::<MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
+            .await;
+
+        if justification_data.authority_set_id != authority_set_id {
+            panic!("Authority set id does not match");
+        }
+
+        let encoded_precommit = justification_data.signed_message;
+        if encoded_precommit.len() != ENCODED_PRECOMMIT_LENGTH {
+            panic!("Encoded precommit is not the correct length");
+        }
+
+        info!("Verifying signatures");
+        for i in 0..justification_data.num_authorities {
+            if !justification_data.validator_signed[i] {
+                continue;
+            }
+            verify_signature(
+                justification_data.pubkeys[i].as_bytes(),
+                &encoded_precommit,
+                &justification_data.signatures[i],
+            );
+            info!("Verified signature for validator {}", i);
+        }
     }
 }

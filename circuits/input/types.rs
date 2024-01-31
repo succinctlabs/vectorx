@@ -51,7 +51,7 @@ pub struct SimpleJustificationData {
     pub num_authorities: u64,
 }
 
-#[derive(Clone, Debug, Decode, Encode, Deserialize)]
+#[derive(Clone, Debug, Decode, Encode, Deserialize, PartialEq)]
 pub struct Precommit {
     pub target_hash: H256,
     /// The target block's number

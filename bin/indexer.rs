@@ -28,7 +28,7 @@ pub async fn main() {
     env_logger::init();
 
     // Save every 30 blocks (every 10 minutes).
-    const BLOCK_SAVE_INTERVAL: usize = 30;
+    const BLOCK_SAVE_INTERVAL: usize = 1;
     debug!(
         "Starting indexer, saving every {} blocks.",
         BLOCK_SAVE_INTERVAL
@@ -100,6 +100,11 @@ pub async fn main() {
         // TODO: Add a check that the authority set hash is correctly computed. Fetch the authorities
         // for the previous block and check that the hash matches.
 
+        debug!(
+            "Number of precommits: {}",
+            justification.commit.precommits.len()
+        );
+
         let validators = justification
             .commit
             .precommits
@@ -110,6 +115,7 @@ pub async fn main() {
                     signed_message.as_slice(),
                     &precommit.clone().id,
                 );
+                debug!("Is ok: {}", is_ok);
                 if is_ok {
                     Some((
                         precommit.clone().id.0.to_vec(),
@@ -134,7 +140,11 @@ pub async fn main() {
         // Note: Assumes the validator set have equal voting power.
         let authorities = fetcher.get_authorities(header.number - 1).await;
         let num_authorities = authorities.len();
+
+        debug!("Num authorities: {}", num_authorities);
+        debug!("Num pubkeys: {}", pubkeys.len());
         if 3 * pubkeys.len() < num_authorities * 2 {
+            debug!("Not enough signatures, skipping justification.");
             continue;
         }
 

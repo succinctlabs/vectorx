@@ -27,7 +27,7 @@ pub async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
-    // Save every 30 blocks (every 10 minutes).
+    // Save every 1 blocks (every 20 seconds).
     const BLOCK_SAVE_INTERVAL: usize = 1;
     debug!(
         "Starting indexer, saving every {} blocks.",
@@ -115,7 +115,7 @@ pub async fn main() {
                     signed_message.as_slice(),
                     &precommit.clone().id,
                 );
-                debug!("Is ok: {}", is_ok);
+                debug!("Is signature ok: {}", is_ok);
                 if is_ok {
                     Some((
                         precommit.clone().id.0.to_vec(),

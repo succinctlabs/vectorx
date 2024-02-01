@@ -99,7 +99,7 @@ pub mod tests {
 
         let epoch_end_block_number = builder.read::<U32Variable>();
 
-        // Fetch the header at epoch_end_block.
+        // Fetch the data for the rotate at epoch_end_block_number.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
@@ -155,7 +155,7 @@ pub mod tests {
 
         let epoch_end_block_number = builder.read::<U32Variable>();
 
-        // Fetch the header at epoch_end_block.
+        // Fetch the data for the rotate at epoch_end_block_number.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);

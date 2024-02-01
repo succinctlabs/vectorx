@@ -133,7 +133,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .get_fixed_subarray_unsafe::<S, HASH_SIZE>(
                 &ArrayVariable::<Variable, S>::from(header_variables),
                 data_root_start.variable,
-                // Seed the challenger with the bytes of the header hash.
+                // Seed the challenger.
                 seed,
             )
             .as_vec();

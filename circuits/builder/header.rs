@@ -95,11 +95,10 @@ impl<
             });
         }
 
-        // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
+        // Note: The headers are padded to HEADER_LENGTH to turn them into `EncodedHeader` variables.
         let mut header_variables = Vec::new();
         let mut data_roots = Vec::new();
         for header in headers.iter() {
-            // TODO: replace with `to_header_variable` from vars.rs
             let mut header_bytes = header.encode();
             let header_size = header_bytes.len();
             if header_size > HEADER_LENGTH {
@@ -117,7 +116,7 @@ impl<
             data_roots.push(H256::from_slice(&header.data_root().0));
         }
 
-        // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
+        // Pad `header_variables` and `data_roots` with empty values to ensure length is NUM_HEADERS.
         for _i in headers.len()..NUM_HEADERS {
             let header_variable = EncodedHeader {
                 header_bytes: vec![0u8; HEADER_LENGTH],

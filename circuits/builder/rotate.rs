@@ -150,11 +150,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // corresponding to an authority set change event in the epoch end header.
         let mut cursor = *start_position;
 
-        // Get the subarray of the header bytes that we want to verify. The header_hash is used as
-        // the seed for randomness.
+        // Get the subarray of the header bytes that we want to verify.
         let prefix_subarray = self.get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &header_as_variables,
             cursor,
+            // Use prefix_seed as the seed for randomness in get_fixed_subarray.
             prefix_seed,
         );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
@@ -192,6 +192,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
                 &header_as_variables,
                 cursor,
+                // Use enc_val_subarray_seed as the seed for randomness in get_fixed_subarray.
                 enc_val_subarray_seed,
             );
         let enc_validator_subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
@@ -275,9 +276,12 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let target_header_hash =
             self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(target_header);
 
+        // Note: The seed for get_fixed_subarray must include a commitment or the value of both the array and subarray.
+        // prefix_seed = target_header_hash || prefix_subarray
         let mut prefix_seed = target_header_hash.as_bytes().to_vec().clone();
         prefix_seed.extend_from_slice(prefix_subarray.data.as_slice());
 
+        // enc_val_subarray_seed = target_header_hash || enc_val_subarray
         let mut enc_val_subarray_seed = target_header_hash.as_bytes().to_vec().clone();
         enc_val_subarray_seed.extend_from_slice(enc_val_subarray.data.as_slice());
 
@@ -333,7 +337,7 @@ pub mod tests {
 
         let epoch_end_block_number = builder.read::<U32Variable>();
 
-        // Fetch the header at epoch_end_block.
+        // Fetch the data for the rotate at epoch_end_block_number.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
@@ -404,7 +408,7 @@ pub mod tests {
 
         let epoch_end_block_number = builder.read::<U32Variable>();
 
-        // Fetch the header at epoch_end_block.
+        // Fetch the data for the rotate at epoch_end_block_number.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
@@ -458,7 +462,7 @@ pub mod tests {
 
         let epoch_end_block_number = builder.read::<U32Variable>();
 
-        // Fetch the header at epoch_end_block.
+        // Fetch the data for the rotate at epoch_end_block_number.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);

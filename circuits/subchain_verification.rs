@@ -107,8 +107,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     input_stream.write(&max_block);
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
 
-                    // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
-                    // Note that the latter number may be greater than start_block.
+                    // Retrieve the headers and data roots from start_block to min(last_block, max_block) inclusive.
+                    // Note that the latter number may be less than start_block. The hint handles this.
                     let output_stream = builder
                         .async_hint(input_stream, header_fetcher);
 

@@ -142,7 +142,7 @@ impl<
             Level::Debug,
         );
 
-        // Fetch the header at epoch_end_block.
+        // Fetch the data for the rotate at epoch_end_block_number.
         let header_fetcher =
             RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();

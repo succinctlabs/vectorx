@@ -315,9 +315,7 @@ pub mod tests {
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{
-        DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, MAX_SUBARRAY_SIZE, VALIDATOR_LENGTH,
-    };
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, VALIDATOR_LENGTH};
     use crate::rotate::RotateHint;
     use crate::vars::EncodedHeaderVariable;
 
@@ -329,6 +327,7 @@ pub mod tests {
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
+        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 

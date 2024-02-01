@@ -4440,7 +4440,7 @@ source = "git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d#2d36559da
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray#e20e74cf90939be3dab759dc15f7832d06ba93ef"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray#254cffcdd48d4e831eb70332032d4e324aff1d3e"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4524,7 +4524,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray#e20e74cf90939be3dab759dc15f7832d06ba93ef"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray#254cffcdd48d4e831eb70332032d4e324aff1d3e"
 dependencies = [
  "proc-macro2",
  "quote",

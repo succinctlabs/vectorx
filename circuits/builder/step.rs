@@ -81,79 +81,9 @@ pub mod tests {
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{
-        DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, MAX_SUBARRAY_SIZE, VALIDATOR_LENGTH,
-    };
+    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, VALIDATOR_LENGTH};
     use crate::rotate::RotateHint;
     use crate::vars::EncodedHeaderVariable;
-
-    #[test]
-    #[cfg_attr(feature = "ci", ignore)]
-    fn test_verify_prefix_epoch_end_header() {
-        env::set_var("RUST_LOG", "debug");
-        env_logger::try_init().unwrap_or_default();
-
-        const NUM_AUTHORITIES: usize = 100;
-        const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-
-        let mut builder = DefaultBuilder::new();
-
-        let epoch_end_block_number = builder.read::<U32Variable>();
-
-        // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
-        let mut input_stream = VariableStream::new();
-        input_stream.write(&epoch_end_block_number);
-        let output_stream = builder.async_hint(input_stream, header_fetcher);
-
-        let target_header =
-            output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
-
-        let num_authorities = output_stream.read::<Variable>(&mut builder);
-        let start_position = output_stream.read::<Variable>(&mut builder);
-        let _ = output_stream.read::<Bytes32Variable>(&mut builder);
-        let _ = output_stream
-            .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
-
-        // Convert header to Variables from ByteVariables for get_fixed_subarray.
-        let header_variables = target_header
-            .header_bytes
-            .as_vec()
-            .iter()
-            .map(|x: &ByteVariable| x.to_variable(&mut builder))
-            .collect::<Vec<_>>();
-        let header_as_variables =
-            ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
-
-        // Get the subarray of the header bytes that we want to verify. In the test
-        // we can use the first 32 bytes of the header as the seed to get_fixed_subarray, but this
-        // is not correct.
-        let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
-        let prefix_subarray = builder
-            .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
-                &header_as_variables,
-                start_position,
-                target_header_dummy_hash,
-            );
-        let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
-            prefix_subarray
-                .data
-                .iter()
-                .map(|x| ByteVariable::from_target(&mut builder, x.0))
-                .collect::<Vec<_>>(),
-        );
-
-        builder.verify_prefix_epoch_end_header(&prefix_subarray, &num_authorities);
-
-        let circuit = builder.build();
-        let mut input = circuit.input();
-
-        let epoch_end_block_number = 4321u32;
-        input.write::<U32Variable>(epoch_end_block_number);
-        let (proof, output) = circuit.prove(&input);
-
-        circuit.verify(&proof, &input, &output);
-    }
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -183,6 +113,8 @@ pub mod tests {
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
         let new_pubkeys = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(&mut builder);
+        let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(&mut builder);
 
         // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
         // so it's fine to just use the expected_new_authority_set_hash during this test.
@@ -237,6 +169,8 @@ pub mod tests {
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
         let new_pubkeys = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(&mut builder);
+        let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(&mut builder);
 
         // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
         // so it's fine to just use the expected_new_authority_set_hash during this test.

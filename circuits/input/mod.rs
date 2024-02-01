@@ -27,8 +27,8 @@ use self::types::{
     HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
-    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH, VALIDATOR_LENGTH,
-    WEIGHT_LENGTH,
+    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, MAX_PREFIX_LENGTH, PUBKEY_LENGTH,
+    VALIDATOR_LENGTH, WEIGHT_LENGTH,
 };
 
 #[derive(Clone)]
@@ -869,7 +869,7 @@ impl RpcDataFetcher {
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
         let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 
-        let prefix_subarray = &header_bytes[position..position + prefix_length];
+        let prefix_subarray = &header_bytes[position..position + MAX_PREFIX_LENGTH];
 
         // Header is already padded, extract the entire enc_val_subarray.
         debug!(

@@ -347,6 +347,8 @@ pub mod tests {
         let _ = output_stream.read::<Bytes32Variable>(&mut builder);
         let _ = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(&mut builder);
+        let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(&mut builder);
 
         // Convert header to Variables from ByteVariables for get_fixed_subarray.
         let header_variables = target_header

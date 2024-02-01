@@ -5,6 +5,7 @@ use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkParameters, U32Variable, ValueStream,
 };
+use primitive_types::H256;
 use serde::{Deserialize, Serialize};
 
 use crate::input::RpcDataFetcher;
@@ -96,6 +97,7 @@ impl<
 
         // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
         let mut header_variables = Vec::new();
+        let mut data_roots = Vec::new();
         for header in headers.iter() {
             // TODO: replace with `to_header_variable` from vars.rs
             let mut header_bytes = header.encode();
@@ -112,6 +114,7 @@ impl<
                 header_size: header_size as u32,
             };
             header_variables.push(header_variable);
+            data_roots.push(H256::from_slice(&header.data_root().0));
         }
 
         // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
@@ -121,11 +124,13 @@ impl<
                 header_size: 0u32,
             };
             header_variables.push(header_variable);
+            data_roots.push(H256::zero());
         }
         output_stream
             .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
                 header_variables,
             );
+        output_stream.write_value::<ArrayVariable<Bytes32Variable, NUM_HEADERS>>(data_roots);
     }
 }
 

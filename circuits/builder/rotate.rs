@@ -155,7 +155,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let prefix_subarray = self.get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &header_as_variables,
             cursor,
-            &prefix_seed,
+            prefix_seed,
         );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
             prefix_subarray
@@ -192,7 +192,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
                 &header_as_variables,
                 cursor,
-                &enc_val_subarray_seed,
+                enc_val_subarray_seed,
             );
         let enc_validator_subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
             enc_validator_subarray

@@ -109,11 +109,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
                     // Note that the latter number may be greater than start_block.
-                    let headers = builder
-                        .async_hint(input_stream, header_fetcher)
-                        .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
-                            builder,
-                        );
+                    let output_stream = builder
+                        .async_hint(input_stream, header_fetcher);
+
+                    let headers = output_stream.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(builder);
+                    let expected_data_roots = output_stream.read::<ArrayVariable<Bytes32Variable, HEADERS_PER_MAP>>(builder);
 
                     let mut block_nums = Vec::new();
                     let mut block_hashes = Vec::new();
@@ -145,9 +145,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
                         block_hashes.push(hash);
 
+                        // Seed for extracting the data root from the header.
+                        let mut seed = hash.as_bytes().to_vec();
+                        seed.extend(&expected_data_roots.as_vec()[i].as_bytes());
                         // Decode the header and save relevant fields.
                         let header_variable =
-                            builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
+                            builder.decode_header::<MAX_HEADER_SIZE>(header, &seed);
                         block_nums.push(header_variable.block_number);
                         block_parent_hashes.push(header_variable.parent_hash);
                         block_state_roots.push(header_variable.state_root);

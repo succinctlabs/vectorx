@@ -81,7 +81,9 @@ pub mod tests {
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, VALIDATOR_LENGTH};
+    use crate::consts::{
+        DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, MAX_SUBARRAY_SIZE, VALIDATOR_LENGTH,
+    };
     use crate::rotate::RotateHint;
     use crate::vars::EncodedHeaderVariable;
 
@@ -99,7 +101,7 @@ pub mod tests {
         let epoch_end_block_number = builder.read::<U32Variable>();
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -127,11 +129,12 @@ pub mod tests {
         // we can use the first 32 bytes of the header as the seed to get_fixed_subarray, but this
         // is not correct.
         let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
-        let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
-            &header_as_variables,
-            start_position,
-            target_header_dummy_hash,
-        );
+        let prefix_subarray = builder
+            .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
+                &header_as_variables,
+                start_position,
+                target_header_dummy_hash,
+            );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
             prefix_subarray
                 .data
@@ -167,7 +170,7 @@ pub mod tests {
         let epoch_end_block_number = builder.read::<U32Variable>();
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -187,7 +190,8 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            target_header_hash,
+            &target_header_hash.as_bytes(),
+            &target_header_hash.as_bytes(),
             &num_authorities,
             &start_position,
             &new_pubkeys,
@@ -220,7 +224,7 @@ pub mod tests {
         let epoch_end_block_number = builder.read::<U32Variable>();
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -240,7 +244,8 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            target_header_hash,
+            &target_header_hash.as_bytes(),
+            &target_header_hash.as_bytes(),
             &num_authorities,
             &start_position,
             &new_pubkeys,

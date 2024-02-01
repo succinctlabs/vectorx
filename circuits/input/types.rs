@@ -15,6 +15,8 @@ pub struct HeaderRotateData {
     pub end_position: usize,
     pub new_authority_set_hash: Vec<u8>,
     pub padded_pubkeys: Vec<CompressedEdwardsY>,
+    pub prefix_subarray: Vec<u8>,
+    pub enc_val_subarray: Vec<u8>,
 }
 
 // Stores the signed messages, valid signatures and pubkeys for a given block number justification.

@@ -34,6 +34,10 @@ pub const BASE_PREFIX_LENGTH: usize = 9;
 // including the encoded new authority set length.
 pub const MAX_PREFIX_LENGTH: usize = BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES;
 
+// The maximum size of the subarray is the max length of the encoded
+// authorities + the delay length.
+pub const MAX_SUBARRAY_SIZE: usize = MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH + DELAY_LENGTH;
+
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;

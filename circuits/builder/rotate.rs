@@ -33,7 +33,8 @@ pub trait RotateMethods {
     >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
-        header_hash: Bytes32Variable,
+        prefix_seed: &[ByteVariable],
+        enc_val_subarray_seed: &[ByteVariable],
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
@@ -58,6 +59,8 @@ pub trait RotateMethods {
         next_authority_set_start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
+        prefix_subarray: ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        enc_val_subarray: ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>,
     ) -> Bytes32Variable;
 }
 
@@ -111,6 +114,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         self.select_array_random_gate(&all_possible_lengths, compress_mode)
     }
 
+    // Seed is used for the randomness in get_fixed_subarray.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -118,7 +122,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
-        header_hash: Bytes32Variable,
+        prefix_seed: &[ByteVariable],
+        enc_val_subarray_seed: &[ByteVariable],
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
@@ -147,10 +152,10 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Get the subarray of the header bytes that we want to verify. The header_hash is used as
         // the seed for randomness.
-        let prefix_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
+        let prefix_subarray = self.get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &header_as_variables,
             cursor,
-            &header_hash.as_bytes(),
+            &prefix_seed,
         );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
             prefix_subarray
@@ -183,11 +188,12 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         cursor = self.add(cursor, base_prefix_len);
         cursor = self.add(cursor, encoded_num_authorities_byte_len);
 
-        let enc_validator_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
-            &header_as_variables,
-            cursor,
-            &header_hash.as_bytes(),
-        );
+        let enc_validator_subarray = self
+            .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
+                &header_as_variables,
+                cursor,
+                &enc_val_subarray_seed,
+            );
         let enc_validator_subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
             enc_validator_subarray
                 .data
@@ -262,15 +268,24 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         next_authority_set_start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
+        prefix_subarray: ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        enc_val_subarray: ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>,
     ) -> Bytes32Variable {
         // Hash the header at epoch_end_block.
         let target_header_hash =
             self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(target_header);
 
+        let mut prefix_seed = target_header_hash.as_bytes().to_vec().clone();
+        prefix_seed.extend_from_slice(prefix_subarray.data.as_slice());
+
+        let mut enc_val_subarray_seed = target_header_hash.as_bytes().to_vec().clone();
+        enc_val_subarray_seed.extend_from_slice(enc_val_subarray.data.as_slice());
+
         // Verify the epoch end header and the new authority set are valid.
         self.verify_epoch_end_header::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
             target_header,
-            target_header_hash,
+            &prefix_seed,
+            &enc_val_subarray_seed,
             target_header_num_authorities,
             next_authority_set_start_position,
             new_pubkeys,
@@ -300,7 +315,9 @@ pub mod tests {
     };
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, VALIDATOR_LENGTH};
+    use crate::consts::{
+        DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, MAX_SUBARRAY_SIZE, VALIDATOR_LENGTH,
+    };
     use crate::rotate::RotateHint;
     use crate::vars::EncodedHeaderVariable;
 
@@ -318,7 +335,7 @@ pub mod tests {
         let epoch_end_block_number = builder.read::<U32Variable>();
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -346,11 +363,12 @@ pub mod tests {
         // we can use the first 32 bytes of the header as the seed to get_fixed_subarray, but this
         // is not correct.
         let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
-        let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
-            &header_as_variables,
-            start_position,
-            target_header_dummy_hash,
-        );
+        let prefix_subarray = builder
+            .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
+                &header_as_variables,
+                start_position,
+                target_header_dummy_hash,
+            );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
             prefix_subarray
                 .data
@@ -386,7 +404,7 @@ pub mod tests {
         let epoch_end_block_number = builder.read::<U32Variable>();
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -406,7 +424,8 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            target_header_hash,
+            &target_header_hash.as_bytes(),
+            &target_header_hash.as_bytes(),
             &num_authorities,
             &start_position,
             &new_pubkeys,
@@ -439,7 +458,7 @@ pub mod tests {
         let epoch_end_block_number = builder.read::<U32Variable>();
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -459,7 +478,8 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            target_header_hash,
+            &target_header_hash.as_bytes(),
+            &target_header_hash.as_bytes(),
             &num_authorities,
             &start_position,
             &new_pubkeys,

@@ -1295,6 +1295,26 @@ dependencies = [
 [[package]]
 name = "curta"
 version = "0.1.0"
+source = "git+https://github.com/succinctlabs/curta.git?branch=tamir/audit_fixes#f9e08fa5db35f38a6308000cc4ed8ac3abcd6d10"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "curve25519-dalek 4.1.1",
+ "env_logger 0.9.3",
+ "hex",
+ "itertools 0.10.5",
+ "log",
+ "num",
+ "plonky2",
+ "plonky2_maybe_rayon 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.8.5",
+ "serde",
+ "subtle-encoding",
+]
+
+[[package]]
+name = "curta"
+version = "0.1.0"
 source = "git+https://github.com/succinctlabs/curta.git#ebbd97c0f4f91bfa792fa5746e1d3f5334316189"
 dependencies = [
  "anyhow",
@@ -4415,7 +4435,7 @@ source = "git+https://github.com/mir-protocol/plonky2.git?rev=2d36559d#2d36559da
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git#3c89370dacdb0f98b2af4e804d858c23ab61597d"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray#e20e74cf90939be3dab759dc15f7832d06ba93ef"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4424,7 +4444,7 @@ dependencies = [
  "base64 0.13.1",
  "bincode",
  "clap 4.4.18",
- "curta",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git?branch=tamir/audit_fixes)",
  "curve25519-dalek 4.1.1",
  "digest 0.10.7",
  "dotenv",
@@ -4440,7 +4460,7 @@ dependencies = [
  "num",
  "num-bigint 0.4.4",
  "plonky2",
- "plonky2x-derive",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray)",
  "rand 0.8.5",
  "reqwest",
  "serde",
@@ -4452,6 +4472,58 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid 1.7.0",
+]
+
+[[package]]
+name = "plonky2x"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git#3c89370dacdb0f98b2af4e804d858c23ab61597d"
+dependencies = [
+ "anyhow",
+ "array-macro",
+ "async-trait",
+ "backtrace",
+ "base64 0.13.1",
+ "bincode",
+ "clap 4.4.18",
+ "curta 0.1.0 (git+https://github.com/succinctlabs/curta.git)",
+ "curve25519-dalek 4.1.1",
+ "digest 0.10.7",
+ "dotenv",
+ "ed25519-dalek 2.1.0",
+ "env_logger 0.10.2",
+ "ethers",
+ "ff 0.13.0",
+ "futures",
+ "hex",
+ "itertools 0.10.5",
+ "lazy_static",
+ "log",
+ "num",
+ "num-bigint 0.4.4",
+ "plonky2",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
+ "rand 0.8.5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_plain",
+ "serde_with",
+ "sha2 0.10.8",
+ "sha256",
+ "tokio",
+ "tracing",
+ "uuid 1.7.0",
+]
+
+[[package]]
+name = "plonky2x-derive"
+version = "0.1.0"
+source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray#e20e74cf90939be3dab759dc15f7832d06ba93ef"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.48",
 ]
 
 [[package]]
@@ -5185,7 +5257,7 @@ dependencies = [
  "hex",
  "log",
  "plonky2",
- "plonky2x",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
  "serde",
  "serde_json",
  "tokio",
@@ -7253,8 +7325,8 @@ dependencies = [
  "log",
  "num",
  "parity-scale-codec",
- "plonky2x",
- "plonky2x-derive",
+ "plonky2x 0.1.0 (git+https://github.com/succinctlabs/succinctx.git?branch=ratan/refactor-get-fixed-subarray)",
+ "plonky2x-derive 0.1.0 (git+https://github.com/succinctlabs/succinctx.git)",
  "primitive-types 0.12.2",
  "redis",
  "reqwest",

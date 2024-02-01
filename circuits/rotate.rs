@@ -5,7 +5,7 @@ use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
-use plonky2x::frontend::vars::U32Variable;
+use plonky2x::frontend::vars::{ByteVariable, U32Variable};
 use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, ValueStream, Variable,
     VariableStream,
@@ -14,20 +14,26 @@ use serde::{Deserialize, Serialize};
 
 use crate::builder::justification::HintSimpleJustification;
 use crate::builder::rotate::RotateMethods;
+use crate::consts::MAX_PREFIX_LENGTH;
 use crate::input::RpcDataFetcher;
 use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
 // Fetch a single header.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RotateHint<const HEADER_LENGTH: usize, const MAX_AUTHORITY_SET_SIZE: usize> {}
+pub struct RotateHint<
+    const HEADER_LENGTH: usize,
+    const MAX_AUTHORITY_SET_SIZE: usize,
+    const MAX_SUBARRAY_SIZE: usize,
+> {}
 
 #[async_trait]
 impl<
         const HEADER_LENGTH: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
+        const MAX_SUBARRAY_SIZE: usize,
         L: PlonkParameters<D>,
         const D: usize,
-    > AsyncHint<L, D> for RotateHint<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>
+    > AsyncHint<L, D> for RotateHint<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>
 {
     async fn hint(
         &self,
@@ -44,7 +50,9 @@ impl<
         let mut data_fetcher = RpcDataFetcher::new().await;
 
         let rotate_data = data_fetcher
-            .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(block_number)
+            .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+                block_number,
+            )
             .await;
 
         // Encoded header.
@@ -71,6 +79,16 @@ impl<
             .write_value::<ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>>(
                 rotate_data.padded_pubkeys,
             );
+
+        // enc_prefix_subarray
+        output_stream.write_value::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(
+            rotate_data.prefix_subarray,
+        );
+
+        // enc_val_subarray
+        output_stream.write_value::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(
+            rotate_data.enc_val_subarray,
+        );
     }
 }
 
@@ -125,7 +143,8 @@ impl<
         );
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE> {};
+        let header_fetcher =
+            RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE> {};
         let mut input_stream = VariableStream::new();
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
@@ -136,6 +155,10 @@ impl<
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(builder);
         let new_pubkeys = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
+        let prefix_subarray =
+            output_stream.read::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(builder);
+        let enc_val_subarray =
+            output_stream.read::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(builder);
 
         builder.rotate::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
             &epoch_end_block_number,
@@ -146,6 +169,8 @@ impl<
             &start_position,
             &new_pubkeys,
             &expected_new_authority_set_hash,
+            prefix_subarray,
+            enc_val_subarray,
         );
 
         // Write the hash of the new authority set to the output.
@@ -159,7 +184,7 @@ impl<
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         generator_registry
-            .register_async_hint::<RotateHint<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>();
+            .register_async_hint::<RotateHint<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>>();
         generator_registry.register_async_hint::<HintSimpleJustification<MAX_AUTHORITY_SET_SIZE>>();
     }
 }

@@ -757,6 +757,7 @@ impl RpcDataFetcher {
     pub async fn get_header_rotate<
         const HEADER_LENGTH: usize,
         const VALIDATOR_SET_SIZE_MAX: usize,
+        const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
         epoch_end_block: u32,
@@ -868,14 +869,25 @@ impl RpcDataFetcher {
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
         let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 
+        let prefix_subarray = &header_bytes[position..position + prefix_length];
+
+        // Header is already padded, extract the entire enc_val_subarray.
+        let enc_val_subarray =
+            &header_bytes[position + prefix_length..position + prefix_length + MAX_SUBARRAY_SIZE];
+
+        // prefix_subarray and enc_val_subarray are used in the seed for get_fixed_subarray against
+        // the header.
+
         HeaderRotateData {
-            header_bytes,
+            header_bytes: header_bytes.clone(),
             header_size,
             num_authorities: new_authorities.len(),
             start_position: position,
             end_position,
             new_authority_set_hash,
             padded_pubkeys,
+            prefix_subarray: prefix_subarray.to_vec(),
+            enc_val_subarray: enc_val_subarray.to_vec(),
         }
     }
 }
@@ -885,7 +897,7 @@ mod tests {
     use avail_subxt::config::Header;
 
     use super::*;
-    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
+    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE};
 
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -999,7 +1011,9 @@ mod tests {
         assert_eq!(authority_set_id, target_authority_set_id);
 
         let rotate_data = fetcher
-            .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_number)
+            .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+                epoch_end_block_number,
+            )
             .await;
         println!(
             "new authority set hash {:?}",
@@ -1088,7 +1102,9 @@ mod tests {
             let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
 
             let _ = data_fetcher
-                .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
+                .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+                    epoch_end_block,
+                )
                 .await;
 
             println!("epoch_end_block {:?}", epoch_end_block);

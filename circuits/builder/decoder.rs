@@ -18,7 +18,7 @@ pub trait DecodingMethods {
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-        header_hash: &Bytes32Variable,
+        seed: &[ByteVariable],
     ) -> HeaderVariable;
 
     fn decode_precommit(
@@ -86,11 +86,11 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         (value, compress_mode)
     }
 
-    /// Decode a header into its components. header_hash is used for the RLC challenge.
+    /// Decode a header into its components. seed is used for the RLC challenge.
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-        header_hash: &Bytes32Variable,
+        seed: &[ByteVariable],
     ) -> HeaderVariable {
         // The first 32 bytes are the parent hash.
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
@@ -130,11 +130,11 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // Extract the data root from the header.
         let data_root_variables: Vec<Variable> = self
-            .get_fixed_subarray::<S, HASH_SIZE>(
+            .get_fixed_subarray_unsafe::<S, HASH_SIZE>(
                 &ArrayVariable::<Variable, S>::from(header_variables),
                 data_root_start.variable,
                 // Seed the challenger with the bytes of the header hash.
-                &header_hash.as_bytes(),
+                &seed,
             )
             .as_vec();
         let data_root_bytes = data_root_variables
@@ -273,8 +273,10 @@ pub mod tests {
         let expected_data_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
 
         for i in 0..NUM_BLOCKS {
-            let decoded_header =
-                builder.decode_header::<MAX_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
+            let decoded_header = builder.decode_header::<MAX_HEADER_SIZE>(
+                &encoded_headers[i],
+                &header_hashes[i].as_bytes(),
+            );
 
             builder.assert_is_equal(decoded_header.block_number, expected_header_nums[i]);
             builder.assert_is_equal(decoded_header.parent_hash, expected_parent_hashes[i]);

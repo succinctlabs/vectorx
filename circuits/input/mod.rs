@@ -872,12 +872,6 @@ impl RpcDataFetcher {
         let prefix_subarray = &header_bytes[position..position + MAX_PREFIX_LENGTH];
 
         // Header is already padded, extract the entire enc_val_subarray.
-        debug!(
-            "position: {:?}, end_position: {:?}, total length: {:?}",
-            position,
-            position + prefix_length + MAX_SUBARRAY_SIZE,
-            header_bytes.len()
-        );
         let enc_val_subarray =
             &header_bytes[position + prefix_length..position + prefix_length + MAX_SUBARRAY_SIZE];
 

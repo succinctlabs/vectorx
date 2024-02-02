@@ -145,12 +145,9 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
                         block_hashes.push(hash);
 
-                        // Seed for extracting the data root from the header.
-                        let mut seed = hash.as_bytes().to_vec();
-                        seed.extend(&expected_data_roots.as_vec()[i].as_bytes());
                         // Decode the header and save relevant fields.
                         let header_variable =
-                            builder.decode_header::<MAX_HEADER_SIZE>(header, &seed);
+                            builder.decode_header::<MAX_HEADER_SIZE>(header, &hash, &expected_data_roots[i]);
                         block_nums.push(header_variable.block_number);
                         block_parent_hashes.push(header_variable.parent_hash);
                         block_state_roots.push(header_variable.state_root);

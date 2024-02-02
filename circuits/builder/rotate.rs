@@ -25,6 +25,8 @@ pub trait RotateMethods {
     ) -> Variable;
 
     /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
+    /// header_hash, prefix_subarray and enc_val_subarray are used as seeds for randomness in
+    /// get_fixed_subarray.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -33,12 +35,13 @@ pub trait RotateMethods {
     >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
-        prefix_seed: &[ByteVariable],
-        enc_val_subarray_seed: &[ByteVariable],
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
+        header_hash: &Bytes32Variable,
+        expected_prefix_subarray: ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        expected_enc_val_subarray: ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>,
     );
 
     // Verify the justification from the current authority set on the epoch end header and extract
@@ -122,12 +125,13 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     >(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
-        prefix_seed: &[ByteVariable],
-        enc_val_subarray_seed: &[ByteVariable],
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
+        header_hash: &Bytes32Variable,
+        expected_prefix_subarray: ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        expected_enc_val_subarray: ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>,
     ) {
         let true_v = self._true();
         let one = self.one();
@@ -150,12 +154,17 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // corresponding to an authority set change event in the epoch end header.
         let mut cursor = *start_position;
 
+        // Note: The seed for get_fixed_subarray must include a commitment or the value of both the array and subarray.
+        // prefix_seed = header_hash || expected_prefix_subarray
+        let mut prefix_seed = header_hash.as_bytes().to_vec().clone();
+        prefix_seed.extend_from_slice(expected_prefix_subarray.data.as_slice());
+
         // Get the subarray of the header bytes that we want to verify.
         let prefix_subarray = self.get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &header_as_variables,
             cursor,
             // Use prefix_seed as the seed for randomness in get_fixed_subarray.
-            prefix_seed,
+            &prefix_seed,
         );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
             prefix_subarray
@@ -164,6 +173,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
                 .map(|x| ByteVariable::from_target(self, x.0))
                 .collect::<Vec<_>>(),
         );
+        self.assert_is_equal(expected_prefix_subarray, prefix_subarray.clone());
 
         // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
         // Returns the byte length of the compact encoding of the new authority set length.
@@ -188,12 +198,16 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         cursor = self.add(cursor, base_prefix_len);
         cursor = self.add(cursor, encoded_num_authorities_byte_len);
 
+        // enc_val_subarray_seed = target_header_hash || enc_val_subarray
+        let mut enc_val_subarray_seed = header_hash.as_bytes().to_vec().clone();
+        enc_val_subarray_seed.extend_from_slice(expected_enc_val_subarray.data.as_slice());
+
         let enc_validator_subarray = self
             .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
                 &header_as_variables,
                 cursor,
                 // Use enc_val_subarray_seed as the seed for randomness in get_fixed_subarray.
-                enc_val_subarray_seed,
+                &enc_val_subarray_seed,
             );
         let enc_validator_subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
             enc_validator_subarray
@@ -202,6 +216,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
                 .map(|x| ByteVariable::from_target(self, x.0))
                 .collect::<Vec<_>>(),
         );
+        self.assert_is_equal(enc_validator_subarray.clone(), expected_enc_val_subarray);
 
         let mut validator_disabled = self._false();
         // Verify num_authorities validators are present and valid.
@@ -276,24 +291,16 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let target_header_hash =
             self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(target_header);
 
-        // Note: The seed for get_fixed_subarray must include a commitment or the value of both the array and subarray.
-        // prefix_seed = target_header_hash || prefix_subarray
-        let mut prefix_seed = target_header_hash.as_bytes().to_vec().clone();
-        prefix_seed.extend_from_slice(prefix_subarray.data.as_slice());
-
-        // enc_val_subarray_seed = target_header_hash || enc_val_subarray
-        let mut enc_val_subarray_seed = target_header_hash.as_bytes().to_vec().clone();
-        enc_val_subarray_seed.extend_from_slice(enc_val_subarray.data.as_slice());
-
         // Verify the epoch end header and the new authority set are valid.
         self.verify_epoch_end_header::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
             target_header,
-            &prefix_seed,
-            &enc_val_subarray_seed,
             target_header_num_authorities,
             next_authority_set_start_position,
             new_pubkeys,
             expected_new_authority_set_hash,
+            &target_header_hash,
+            prefix_subarray,
+            enc_val_subarray,
         );
 
         // Verify the justification from the current authority set on the epoch end header.
@@ -422,6 +429,10 @@ pub mod tests {
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
         let new_pubkeys = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let prefix_subarray =
+            output_stream.read::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(&mut builder);
+        let enc_val_subarray =
+            output_stream.read::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(&mut builder);
 
         // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
         // so it's fine to just use the expected_new_authority_set_hash during this test.
@@ -429,12 +440,13 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            &target_header_hash.as_bytes(),
-            &target_header_hash.as_bytes(),
             &num_authorities,
             &start_position,
             &new_pubkeys,
             &expected_new_authority_set_hash,
+            &target_header_hash,
+            prefix_subarray,
+            enc_val_subarray,
         );
 
         let circuit = builder.build();
@@ -476,6 +488,10 @@ pub mod tests {
         let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
         let new_pubkeys = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let prefix_subarray =
+            output_stream.read::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(&mut builder);
+        let enc_val_subarray =
+            output_stream.read::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(&mut builder);
 
         // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
         // so it's fine to just use the expected_new_authority_set_hash during this test.
@@ -483,12 +499,13 @@ pub mod tests {
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
             &target_header,
-            &target_header_hash.as_bytes(),
-            &target_header_hash.as_bytes(),
             &num_authorities,
             &start_position,
             &new_pubkeys,
             &expected_new_authority_set_hash,
+            &target_header_hash,
+            prefix_subarray,
+            enc_val_subarray,
         );
 
         let circuit = builder.build();

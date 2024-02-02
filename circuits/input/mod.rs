@@ -875,8 +875,8 @@ impl RpcDataFetcher {
         let enc_val_subarray =
             &header_bytes[position + prefix_length..position + prefix_length + MAX_SUBARRAY_SIZE];
 
-        // prefix_subarray and enc_val_subarray are used in the seed for get_fixed_subarray against
-        // the header.
+        // prefix_subarray and enc_val_subarray are used in creating the seed for extracting the
+        // prefix and encoded validator subarrays with get_fixed_subarray_unsafe.
 
         HeaderRotateData {
             header_bytes: header_bytes.clone(),

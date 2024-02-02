@@ -114,7 +114,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         let state_root = self.select_array_random_gate(&all_possible_state_roots, compress_mode);
 
-        // Convert the encoded header bytes to variables for get_fixed_subarray.
+        // Convert the encoded header bytes to variables for get_fixed_subarray_unsafe.
         let header_variables = header
             .header_bytes
             .as_vec()

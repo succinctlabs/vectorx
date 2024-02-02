@@ -26,7 +26,7 @@ pub trait RotateMethods {
 
     /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
     /// header_hash, prefix_subarray and enc_val_subarray are used as seeds for randomness in
-    /// get_fixed_subarray.
+    /// get_fixed_subarray_unsafe.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -117,7 +117,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         self.select_array_random_gate(&all_possible_lengths, compress_mode)
     }
 
-    // Seed is used for the randomness in get_fixed_subarray.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -140,7 +139,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let num_authorities_check = self.gte(*num_authorities, one);
         self.assert_is_equal(num_authorities_check, true_v);
 
-        // Convert header to Variables from ByteVariables for get_fixed_subarray.
+        // Convert header to Variables from ByteVariables for get_fixed_subarray_unsafe.
         let header_variables = header
             .header_bytes
             .as_vec()
@@ -154,7 +153,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // corresponding to an authority set change event in the epoch end header.
         let mut cursor = *start_position;
 
-        // Note: The seed for get_fixed_subarray must include a commitment or the value of both the array and subarray.
+        // Note: The seed for get_fixed_subarray_unsafe must include the value of or a commitment to
+        // both the array and subarray.
         // prefix_seed = header_hash || expected_prefix_subarray
         let mut prefix_seed = header_hash.as_bytes().to_vec().clone();
         prefix_seed.extend_from_slice(expected_prefix_subarray.data.as_slice());
@@ -163,7 +163,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let prefix_subarray = self.get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &header_as_variables,
             cursor,
-            // Use prefix_seed as the seed for randomness in get_fixed_subarray.
             &prefix_seed,
         );
         let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
@@ -173,7 +172,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
                 .map(|x| ByteVariable::from_target(self, x.0))
                 .collect::<Vec<_>>(),
         );
-        self.assert_is_equal(expected_prefix_subarray, prefix_subarray.clone());
+        self.assert_is_equal(prefix_subarray.clone(), expected_prefix_subarray);
 
         // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
         // Returns the byte length of the compact encoding of the new authority set length.
@@ -206,7 +205,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
                 &header_as_variables,
                 cursor,
-                // Use enc_val_subarray_seed as the seed for randomness in get_fixed_subarray.
                 &enc_val_subarray_seed,
             );
         let enc_validator_subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
@@ -361,7 +359,7 @@ pub mod tests {
         let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>>(&mut builder);
         let _ = output_stream.read::<ArrayVariable<ByteVariable, MAX_SUBARRAY_SIZE>>(&mut builder);
 
-        // Convert header to Variables from ByteVariables for get_fixed_subarray.
+        // Convert header to Variables from ByteVariables for get_fixed_subarray_unsafe.
         let header_variables = target_header
             .header_bytes
             .as_vec()
@@ -371,9 +369,9 @@ pub mod tests {
         let header_as_variables =
             ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
 
-        // Get the subarray of the header bytes that we want to verify. In the test
-        // we can use the first 32 bytes of the header as the seed to get_fixed_subarray, but this
-        // is not correct.
+        // Get the subarray of the header bytes that we want to verify. Note: THIS SEED IS INSECURE,
+        // but it's fine for testing purposes. We avoid doing the hashing of the full header, and
+        // instead use some bytes from the header as the seed for randomness in get_fixed_subarray_unsafe.
         let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
         let prefix_subarray = builder
             .get_fixed_subarray_unsafe::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(

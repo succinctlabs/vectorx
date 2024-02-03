@@ -43,4 +43,13 @@ interface IVectorX {
         bytes32 authoritySetHash,
         uint64 epochEndBlock
     );
+
+    /// @notice Contract is frozen.
+    error ContractFrozen();
+
+    /// @notice Trusted header not found.
+    error TrustedHeaderNotFound();
+
+    /// @notice Authority set not found.
+    error AuthoritySetNotFound();
 }

@@ -9,6 +9,9 @@ import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
 contract VectorX is IVectorX, TimelockedUpgradeable {
+    /// @notice Indicator of if the contract is frozen.
+    bool public frozen;
+
     /// @notice The address of the gateway contract.
     address public gateway;
 
@@ -58,6 +61,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     function initialize(InitParameters calldata _params) external initializer {
         __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
 
+        frozen = false;
+
         gateway = _params.gateway;
 
         blockHeightToHeaderHash[_params.height] = _params.header;
@@ -66,6 +71,11 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         rotateFunctionId = _params.rotateFunctionId;
         headerRangeFunctionId = _params.headerRangeFunctionId;
+    }
+
+    /// @notice Update the freeze parameter.
+    function updateFreeze(bool _freeze) external onlyGuardian {
+        frozen = _freeze;
     }
 
     /// @notice TODO: This should be removed for the mainnet release.
@@ -98,13 +108,13 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ) external payable {
         bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
         if (trustedHeader == bytes32(0)) {
-            revert("Trusted header not found");
+            revert AuthoritySetNotFound();
         }
         // Note: In the case that the trusted block is an epoch end block, the authority set id will
         // be the authority set id of the next epoch.
         bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
         if (authoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
         require(_requestedBlock > _trustedBlock);
@@ -155,11 +165,11 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ) external {
         bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
         if (trustedHeader == bytes32(0)) {
-            revert("Trusted header not found");
+            revert TrustedHeaderNotFound();
         }
         bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
         if (authoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
         require(_targetBlock > _trustedBlock);
@@ -223,7 +233,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             _currentAuthoritySetId
         ];
         if (currentAuthoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
         bytes memory input = abi.encodePacked(
@@ -264,7 +274,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         ];
         // Note: Occurs if requesting a new authority set id that is not the next authority set id.
         if (currentAuthoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
         bytes memory input = abi.encodePacked(

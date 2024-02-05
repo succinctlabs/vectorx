@@ -124,22 +124,12 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
         expected_new_authority_set_hash: &Bytes32Variable,
     ) {
+        let false_v = self._false();
         let true_v = self._true();
-        let one = self.one();
 
-        // Check num_authorities is >= 1.
-        let num_authorities_check = self.gte(*num_authorities, one);
-        self.assert_is_equal(num_authorities_check, true_v);
-
-        // Convert header to Variables from ByteVariables for get_fixed_subarray.
-        let header_variables = header
-            .header_bytes
-            .as_vec()
-            .iter()
-            .map(|x: &ByteVariable| x.to_variable(self))
-            .collect::<Vec<_>>();
-        let header_as_variables =
-            ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
+        // Assert num_authorities is not 0.
+        let num_authorities_zero = self.is_zero(*num_authorities);
+        self.assert_is_equal(num_authorities_zero, false_v);
 
         // Initialize the cursor to the start position, which is the start of the consensus log
         // corresponding to an authority set change event in the epoch end header.
@@ -148,16 +138,9 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // Get the subarray of the header bytes that we want to verify. The header_hash is used as
         // the seed for randomness.
         let prefix_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
-            &header_as_variables,
+            &header.header_bytes,
             cursor,
             &header_hash.as_bytes(),
-        );
-        let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
-            prefix_subarray
-                .data
-                .iter()
-                .map(|x| ByteVariable::from_target(self, x.0))
-                .collect::<Vec<_>>(),
         );
 
         // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
@@ -184,16 +167,9 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         cursor = self.add(cursor, encoded_num_authorities_byte_len);
 
         let enc_validator_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
-            &header_as_variables,
+            &header.header_bytes,
             cursor,
             &header_hash.as_bytes(),
-        );
-        let enc_validator_subarray = ArrayVariable::<ByteVariable, MAX_SUBARRAY_SIZE>::from(
-            enc_validator_subarray
-                .data
-                .iter()
-                .map(|x| ByteVariable::from_target(self, x.0))
-                .collect::<Vec<_>>(),
         );
 
         let mut validator_disabled = self._false();
@@ -295,8 +271,7 @@ pub mod tests {
 
     use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
     use plonky2x::prelude::{
-        ArrayVariable, ByteVariable, Bytes32Variable, DefaultBuilder, U32Variable, Variable,
-        VariableStream,
+        ArrayVariable, Bytes32Variable, DefaultBuilder, U32Variable, Variable, VariableStream,
     };
 
     use crate::builder::rotate::RotateMethods;
@@ -332,31 +307,14 @@ pub mod tests {
         let _ = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
 
-        // Convert header to Variables from ByteVariables for get_fixed_subarray.
-        let header_variables = target_header
-            .header_bytes
-            .as_vec()
-            .iter()
-            .map(|x: &ByteVariable| x.to_variable(&mut builder))
-            .collect::<Vec<_>>();
-        let header_as_variables =
-            ArrayVariable::<Variable, MAX_HEADER_SIZE>::from(header_variables);
-
         // Get the subarray of the header bytes that we want to verify. In the test
         // we can use the first 32 bytes of the header as the seed to get_fixed_subarray, but this
         // is not correct.
         let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
         let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
-            &header_as_variables,
+            &target_header.header_bytes,
             start_position,
             target_header_dummy_hash,
-        );
-        let prefix_subarray = ArrayVariable::<ByteVariable, MAX_PREFIX_LENGTH>::from(
-            prefix_subarray
-                .data
-                .iter()
-                .map(|x| ByteVariable::from_target(&mut builder, x.0))
-                .collect::<Vec<_>>(),
         );
 
         builder.verify_prefix_epoch_end_header(&prefix_subarray, &num_authorities);

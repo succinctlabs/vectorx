@@ -38,6 +38,10 @@ pub const MAX_PREFIX_LENGTH: usize = BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES
 // signed by the authorities.
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 
+// The maximum size of the subarray is the max length of the encoded
+// authorities + the delay length.
+pub const MAX_SUBARRAY_SIZE: usize = MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH + DELAY_LENGTH;
+
 // Max number of authorities this circuit currently supports.
 pub const MAX_AUTHORITY_SET_SIZE: usize = 300;
 

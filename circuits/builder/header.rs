@@ -16,16 +16,6 @@ pub trait HeaderMethods {
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable;
-
-    /// Get the Blake2b hashes of an array of encoded headers.
-    fn hash_encoded_headers<
-        const MAX_HEADER_SIZE: usize,
-        const MAX_CHUNK_SIZE: usize,
-        const N: usize,
-    >(
-        &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
-    ) -> ArrayVariable<Bytes32Variable, N>;
 }
 
 // This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
@@ -36,23 +26,6 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
     ) -> Bytes32Variable {
         assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
         self.curta_blake2b_variable(header.header_bytes.as_slice(), header.header_size)
-    }
-
-    fn hash_encoded_headers<
-        const MAX_HEADER_SIZE: usize,
-        const MAX_CHUNK_SIZE: usize,
-        const N: usize,
-    >(
-        &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
-    ) -> ArrayVariable<Bytes32Variable, N> {
-        assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
-        headers
-            .as_vec()
-            .iter()
-            .map(|x| self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_CHUNK_SIZE>(x))
-            .collect::<Vec<Bytes32Variable>>()
-            .into()
     }
 }
 

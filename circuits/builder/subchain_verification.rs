@@ -308,7 +308,7 @@ mod tests {
     use super::*;
     use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
 
-    // Test circuit, as MapReduce requires a circuit to be defined.
+    // MapReduce circuits requires a circuit to be defined in order to invoke the mapreduce method.
     #[derive(Clone, Debug)]
     struct TestSubchainVerificationCircuit<
         const MAX_HEADER_SIZE: usize,
@@ -327,7 +327,7 @@ mod tests {
             let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
             let target_block = builder.evm_read::<U32Variable>();
 
-            // Currently assuming that target_block - trusted_block <= MAX_EPOCH_SIZE
+            // Note: Trusted_block and target_block are always in the same authority set.
             let subchain_output = builder.verify_subchain::<Self, MAX_NUM_HEADERS>(
                 trusted_block,
                 trusted_header_hash,

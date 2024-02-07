@@ -45,6 +45,7 @@ impl<L: PlonkParameters<D>, const D: usize> StepMethods<L, D> for CircuitBuilder
         <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>
     {
+        // Get the target_header_hash, state_root, and data_root over the range [trusted_block + 1, target_block].
         let subchain_output = self.verify_subchain::<StepCircuit<
             MAX_AUTHORITY_SET_SIZE,
             MAX_HEADER_SIZE,

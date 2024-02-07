@@ -11,7 +11,7 @@ use plonky2x::prelude::{
 use crate::builder::decoder::DecodingMethods;
 use crate::builder::header::{HeaderMethods, HeaderRangeFetcherHint};
 use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
-use crate::vars::EncodedHeaderVariable;
+use crate::vars::{EncodedHeaderVariable, SubchainVerificationVariable};
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
@@ -21,12 +21,15 @@ pub struct SubchainVerificationCtx {
 }
 
 pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
+    /// Verify a chain of headers and compute the state and data merkle root commitments over the
+    /// range [trusted_block + 1, target_block] inclusive, and also return the verified target
+    /// header hash.
     fn verify_subchain<C: Circuit, const MAX_HEADER_LENGTH: usize>(
         &mut self,
         trusted_block: U32Variable,
         trusted_header_hash: Bytes32Variable,
         target_block: U32Variable,
-    ) -> (Bytes32Variable, Bytes32Variable, Bytes32Variable)
+    ) -> SubchainVerificationVariable
     where
         <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>;
@@ -50,7 +53,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         trusted_block: U32Variable,
         trusted_header_hash: Bytes32Variable,
         target_block: U32Variable,
-    ) -> (Bytes32Variable, Bytes32Variable, Bytes32Variable)
+    ) -> SubchainVerificationVariable
     where
         <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
@@ -61,9 +64,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
             target_block,
         };
 
-        // Calculate the number of map jobs.
-        // It should be the smallest power of 2 that is >= to
-        // MAX_NUM_HEADERS / HEADERS_PER_MAP.
+        // The number of map jobs is the smallest power of 2 that is >= to MAX_NUM_HEADERS / HEADERS_PER_MAP.
         let mut num_map_jobs = MAX_NUM_HEADERS / HEADERS_PER_MAP;
         if MAX_NUM_HEADERS % HEADERS_PER_MAP != 0 {
             num_map_jobs += 1;
@@ -108,7 +109,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
 
                     // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
-                    // Note that the latter number may be greater than start_block.
+                    // Note that the latter number may be less than start_block.
                     let headers = builder
                         .async_hint(input_stream, header_fetcher)
                         .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
@@ -291,11 +292,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         );
         self.assert_is_equal(trusted_header_hash, output.start_parent);
 
-        (
-            output.end_header_hash,
-            output.state_merkle_root,
-            output.data_merkle_root,
-        )
+        SubchainVerificationVariable {
+            target_header_hash: output.end_header_hash,
+            state_root_merkle_root: output.state_merkle_root,
+            data_root_merkle_root: output.data_merkle_root,
+        }
     }
 }
 
@@ -327,12 +328,12 @@ mod tests {
             let target_block = builder.evm_read::<U32Variable>();
 
             // Currently assuming that target_block - trusted_block <= MAX_EPOCH_SIZE
-            let (target_header_hash, _, _) = builder.verify_subchain::<Self, MAX_NUM_HEADERS>(
+            let subchain_output = builder.verify_subchain::<Self, MAX_NUM_HEADERS>(
                 trusted_block,
                 trusted_header_hash,
                 target_block,
             );
-            builder.watch(&target_header_hash, "target header hash");
+            builder.watch(&subchain_output.target_header_hash, "target header hash");
         }
 
         fn register_generators<L: PlonkParameters<D>, const D: usize>(

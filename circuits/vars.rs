@@ -69,3 +69,11 @@ pub struct RotateVariable<const MAX_HEADER_SIZE: usize, const MAX_AUTHORITY_SET_
     pub new_pubkeys: ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
     pub expected_new_authority_set_hash: Bytes32Variable,
 }
+
+#[derive(Clone, Debug, CircuitVariable)]
+#[value_name(SubchainVerificationStruct)]
+pub struct SubchainVerificationVariable {
+    pub target_header_hash: Bytes32Variable,
+    pub state_root_merkle_root: Bytes32Variable,
+    pub data_root_merkle_root: Bytes32Variable,
+}

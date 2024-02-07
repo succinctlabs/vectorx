@@ -15,7 +15,7 @@ use crate::vars::*;
 pub trait RotateMethods {
     /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
     /// for the epoch end header. Returns the length of the compact encoding of the new authority set
-    /// length.
+    /// length. TODO: Link to spec.
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
@@ -26,7 +26,6 @@ pub trait RotateMethods {
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
-        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH)
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
@@ -44,7 +43,6 @@ pub trait RotateMethods {
         const MAX_HEADER_SIZE: usize,
         const MAX_HEADER_CHUNK_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
-        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH)
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
@@ -58,6 +56,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
         expected_num_authorities: &Variable,
     ) -> Variable {
+        // TODO: Link to the spec for the prefix of an epoch end header.
         // Skip 1 unknown byte.
 
         // Verify subarray[1] is 0x04 (Consensus Flag = 4u32).
@@ -217,12 +216,17 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         const MAX_HEADER_SIZE: usize,
         const MAX_HEADER_CHUNK_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
-        // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH)
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
         rotate: RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>,
     ) -> Bytes32Variable {
+        assert_eq!(
+            MAX_SUBARRAY_SIZE,
+            MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH + DELAY_LENGTH,
+            "MAX_SUBARRAY_SIZE must be equal to MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH + DELAY_LENGTH."
+        );
+
         // Hash the header at epoch_end_block.
         let target_header_hash = self
             .hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&rotate.target_header);

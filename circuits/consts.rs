@@ -15,7 +15,7 @@ pub const BLAKE2B_CHUNK_SIZE_BYTES: usize = 128;
 // (Data limit is 512KB).
 pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * BLAKE2B_CHUNK_SIZE_BYTES;
 
-// Digest byte size
+// Digest byte size.
 pub const HASH_SIZE: usize = 32;
 
 // Length of an Avail validator (pubkey + weight).

@@ -26,7 +26,7 @@ contract UpdateGenesisScript is Script {
 
         VectorX lightClient = VectorX(existingProxyAddress);
 
-        // Initialize the Vector X light client.
+        // Update the genesis state of the Vector X light client.
         lightClient.updateGenesisState(
             gateway,
             height,

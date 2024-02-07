@@ -305,6 +305,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
     use super::*;
+    use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
 
     // Test circuit, as MapReduce requires a circuit to be defined.
     #[derive(Clone, Debug)]
@@ -374,7 +375,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         const MAX_NUM_HEADERS: usize = 32;
-        const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
+        const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * BLAKE2B_CHUNK_SIZE_BYTES;
 
         TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::define(&mut builder);
         let circuit = builder.build();

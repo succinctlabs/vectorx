@@ -8,9 +8,12 @@ pub const HEADERS_PER_MAP: usize = 8;
 // Maximum header size (in blake2b chunks) that can be processed by the circuit.
 pub const MAX_HEADER_CHUNK_SIZE: usize = 280;
 
+// Size of a Blake2b chunk (in bytes).
+pub const BLAKE2B_CHUNK_SIZE_BYTES: usize = 128;
+
 // Maximum header size (in bytes) that can be processed by the circuit.
 // (Data limit is 512KB).
-pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
+pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * BLAKE2B_CHUNK_SIZE_BYTES;
 
 // Digest byte size
 pub const HASH_SIZE: usize = 32;

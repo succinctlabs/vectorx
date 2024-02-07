@@ -218,7 +218,6 @@ mod tests {
 
         let mut input = circuit.input();
         let authority_set_id = 0u64;
-        // TODO: Get authority set hash from rotate inputs, or a similar function.
         let authority_set_hash = H256::from_slice(
             &hex::decode("54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb")
                 .unwrap(),

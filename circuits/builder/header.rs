@@ -29,7 +29,7 @@ impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, 
     }
 }
 
-// Fetch a range of headers.
+// Fetch a range of headers with a hint. Used to generate a data commitment for step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderRangeFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 

@@ -96,20 +96,13 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     builder.watch_with_level(&start_block, "map job - start block", Level::Debug);
                     builder.watch_with_level(&last_block, "map job - last block", Level::Debug);
 
-                    // Get the max block that the whole MR job is responsible for
-                    // Note that the max block may be less than the last_block (or even the start_block).
-                    // Right now, there is a hard coded number of map leaves and if the block
-                    // range doesn't fill that up, then there could be "no-op" leaves.
-                    let max_block = map_ctx.target_block;
-
+                    // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
+                    // If max_block < start_block, then headers will be empty headers.
                     let mut input_stream = VariableStream::new();
                     input_stream.write(&start_block);
                     input_stream.write(&last_block);
-                    input_stream.write(&max_block);
+                    input_stream.write(&map_ctx.target_block);
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
-
-                    // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
-                    // Note that the latter number may be less than start_block.
                     let headers = builder
                         .async_hint(input_stream, header_fetcher)
                         .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
@@ -136,9 +129,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     let mut num_headers = zero;
 
-                    // This is a bitmap used for "compute_root_from_leaves".  The size of it will be
-                    // equal to BATCH_SIZE.  It specifies which downloaded headers are not pad
-                    // headers.
+                    // The number of enabled leaves in the merkle tree. All leaves after nb_enabled_leaves
+                    // are empty leaves.
                     let mut nb_enabled_leaves = builder.zero();
 
                     for (i, header) in headers.as_vec().iter().enumerate() {
@@ -159,6 +151,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                         // Verify that the headers are linked correctly.
                         if i > 0 {
+                            // Verify that the parent hash chain and block number chain are correct.
                             let hashes_linked =
                                 builder.is_equal(block_parent_hashes[i], block_hashes[i - 1]);
                             let expected_block_num = builder.add(block_nums[i - 1], one_u32);
@@ -168,21 +161,19 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             let header_correctly_linked =
                                 builder.and(hashes_linked, nums_sequential);
 
-                            // Either we are at a pad header or the header is correctly linked
+                            // If this is not a pad header, the headers must be correctly linked.
                             let link_check = builder.or(is_pad_block, header_correctly_linked);
                             builder.assert_is_equal(link_check, true_const);
                         }
 
-                        // Update the end_block_num value if the header is not a pad header.
+                        // If not a pad header, update end_block_num, end_header_hash and num_headers.
                         end_block_num = builder.select(
                             is_pad_block,
                             end_block_num,
                             header_variable.block_number,
                         );
-                        // Update the end_header_hash value if the header is not a pad header.
                         end_header_hash = builder.select(is_pad_block, end_header_hash, hash);
 
-                        // Update the num_headers counter
                         let num_headers_increment = builder.select(is_pad_block, zero, one);
                         num_headers = builder.add(num_headers, num_headers_increment);
 
@@ -197,7 +188,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     builder.watch_with_level(&end_block_num, "end block num", Level::Debug);
                     builder.watch_with_level(&end_header_hash, "end header hash", Level::Debug);
 
-                    // Need to pad block_state_roots and block_data_roots to be of length 16;
+                    // Pad block_state_roots and block_data_roots to be of length HEADERS_PER_MAP.
+                    // Avail's data commitment pads empty leaves with zero bytes.
                     block_state_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
                     block_data_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
 

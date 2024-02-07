@@ -89,7 +89,7 @@ impl RedisClient {
             .await
             .expect("Failed to set key");
 
-        // Add the block number to a sorted set, so we can query for all blocks with justifications.
+        // Add the block number to a sorted set, for easy querying of justifications in a range.
         let _: () = con
             .zadd(
                 "blocks",
@@ -125,7 +125,6 @@ impl RedisClient {
             Ok(justification) => Ok(justification[0].clone()),
             Err(e) => {
                 eprintln!("Failed to deserialize justification: {}", e);
-                // Handle the error appropriately, maybe return an Err if your function can return a Result
                 Err(())
             }
         }
@@ -844,7 +843,7 @@ impl RpcDataFetcher {
             }
         }
 
-        // Panic if we did not find the consensus log.
+        // Panic if there is not a consensus log.
         if !found_correct_log {
             panic!(
                 "Block: {:?} should be an epoch end block, but did not find corresponding consensus log!",
@@ -986,7 +985,7 @@ mod tests {
         let target_authority_set_id = 513;
         let epoch_end_block_number = fetcher.last_justified_block(target_authority_set_id).await;
 
-        // Verify that we found an epoch end block.
+        // Verify that this is an epoch end block.
         assert_ne!(epoch_end_block_number, 0);
         println!("epoch_end_block_number {:?}", epoch_end_block_number);
 

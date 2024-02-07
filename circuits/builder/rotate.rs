@@ -125,8 +125,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // corresponding to an authority set change event in the epoch end header.
         let mut cursor = *start_position;
 
-        // Get the subarray of the header bytes that we want to verify. The header_hash is used as
-        // the seed for randomness.
+        // Get the subarray of the header bytes to verify. The header_hash is used as the seed for
+        // randomness.
         let prefix_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &header.header_bytes,
             cursor,
@@ -295,9 +295,8 @@ pub mod tests {
         let _ = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
 
-        // Get the subarray of the header bytes that we want to verify. In the test
-        // we can use the first 32 bytes of the header as the seed to get_fixed_subarray, but this
-        // is not correct.
+        // Note: In prod, get_fixed_subarray uses the header_hash as the seed for randomness. The
+        // below is unsafe, but it's fine for testing purposes.
         let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
         let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
             &target_header.header_bytes,
@@ -346,8 +345,8 @@ pub mod tests {
         let new_pubkeys = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
 
-        // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
-        // so it's fine to just use the expected_new_authority_set_hash during this test.
+        // Note: In prod, get_fixed_subarray uses the header_hash as the seed for randomness. The
+        // below is unsafe, but it's fine for testing purposes.
         let target_header_hash = expected_new_authority_set_hash;
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
@@ -399,8 +398,8 @@ pub mod tests {
         let new_pubkeys = output_stream
             .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
 
-        // Note: In verify_epoch_end_header, we just use the header_hash as the seed for randomness,
-        // so it's fine to just use the expected_new_authority_set_hash during this test.
+        // Note: In prod, get_fixed_subarray uses the header_hash as the seed for randomness. The
+        // below is unsafe, but it's fine for testing purposes.
         let target_header_hash = expected_new_authority_set_hash;
 
         builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(

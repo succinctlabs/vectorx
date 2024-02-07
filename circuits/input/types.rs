@@ -109,6 +109,6 @@ pub struct FinalityProof {
     pub block: H256,
     /// Justification of the block F.
     pub justification: Vec<u8>,
-    /// The set of headers in the range (B; F] that we believe are unknown to the caller. Ordered.
+    /// The set of headers in the range (B; F] that are unknown to the caller, ordered by block number.
     pub unknown_headers: Vec<Header>,
 }

@@ -36,18 +36,6 @@ pub struct PrecommitVariable {
 }
 
 #[derive(Clone, Debug, CircuitVariable)]
-pub struct SignedPrecommitVariable {
-    pub encoded_precommit_message: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
-    pub signature: EDDSASignatureVariable,
-}
-
-#[derive(Clone)]
-pub struct AuthoritySetSignerVariable {
-    pub pub_keys: CompressedEdwardsYVariable, // Array of public keys.
-    pub weights: U64Variable, // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
-}
-
-#[derive(Clone, Debug, CircuitVariable)]
 #[value_name(JustificationStruct)]
 pub struct JustificationVariable<const MAX_AUTHORITY_SET_SIZE: usize> {
     pub encoded_precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,

@@ -152,7 +152,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             // Compute the chained hash of the authority set commitment.
             let chained_hash = self.curta_sha256(&input_to_hash);
 
-            // If we are before the end, update the commitment_so_far.
+            // Update the commitment_so_far if this authority is enabled.
             commitment_so_far = self.select(authority_enabled, chained_hash, commitment_so_far);
         }
 
@@ -178,7 +178,9 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 
         let scaled_num_signed = self.mul(num_signed, threshold_denominator);
         let scaled_threshold = self.mul(num_active_authorities, threshold_numerator);
-        let is_valid_num_signed = self.gte(scaled_num_signed, scaled_threshold);
+
+        // Verify that the number of validators that signed is greater than the threshold.
+        let is_valid_num_signed = self.gt(scaled_num_signed, scaled_threshold);
         self.assert_is_equal(is_valid_num_signed, true_v);
     }
 
@@ -219,9 +221,9 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
         self.assert_is_equal(decoded_precommit.block_hash, block_hash);
 
-        // We verify the signatures of the validators on the encoded_precommit message.
-        // `curta_eddsa_verify_sigs_conditional` doesn't assume all messages are the same, but in our case they are
-        // and they are also constant length, so we can have `message_byte_lengths` be a constant array.
+        // Verify the signatures of the validators on the encoded_precommit message.
+        // `curta_eddsa_verify_sigs_conditional` requires the message for each signature, but because
+        // the message is the same, pass a constant array of the same message.
         let message_byte_lengths = self
             .constant::<ArrayVariable<U32Variable, MAX_NUM_AUTHORITIES>>(vec![
                 ENCODED_PRECOMMIT_LENGTH

@@ -39,6 +39,7 @@ pub const MAX_PREFIX_LENGTH: usize = BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES
 
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.
+// TODO: Link to spec.
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 
 // The maximum size of the subarray is the max length of the encoded

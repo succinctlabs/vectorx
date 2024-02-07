@@ -2,15 +2,13 @@ use async_trait::async_trait;
 use ethers::types::U256;
 use log::debug;
 use plonky2x::frontend::curta::ec::point::{CompressedEdwardsY, CompressedEdwardsYVariable};
-use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{
-    EDDSASignatureVariable, EDDSASignatureVariableValue,
-};
+use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::EDDSASignatureVariableValue;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::{U32Variable, ValueStream, VariableStream};
 use plonky2x::prelude::{
-    ArrayVariable, BoolVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
-    Field, PlonkParameters, Variable,
+    ArrayVariable, BoolVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, Field,
+    PlonkParameters, Variable,
 };
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +16,9 @@ use super::decoder::DecodingMethods;
 use crate::consts::ENCODED_PRECOMMIT_LENGTH;
 use crate::input::types::CircuitJustification;
 use crate::input::{verify_signature, RpcDataFetcher};
+use crate::vars::{JustificationStruct, JustificationVariable};
 
+/// Fetch the simple justification for a block.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HintSimpleJustification<const NUM_AUTHORITIES: usize> {}
 
@@ -54,6 +54,7 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         }
 
         for i in 0..justification_data.num_authorities {
+            // Skip if the validator didn't sign.
             if !justification_data.validator_signed[i] {
                 continue;
             }
@@ -64,14 +65,10 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
             );
         }
 
-        output_stream.write_value::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(
-            encoded_precommit.try_into().unwrap(),
-        );
-        output_stream.write_value::<ArrayVariable<BoolVariable, NUM_AUTHORITIES>>(
-            justification_data.validator_signed,
-        );
-        output_stream.write_value::<ArrayVariable<EDDSASignatureVariable, NUM_AUTHORITIES>>(
-            justification_data
+        output_stream.write_value::<JustificationVariable<NUM_AUTHORITIES>>(JustificationStruct {
+            encoded_precommit: encoded_precommit.try_into().unwrap(),
+            validator_signed: justification_data.validator_signed,
+            signatures: justification_data
                 .signatures
                 .iter()
                 .map(|sig| EDDSASignatureVariableValue {
@@ -79,11 +76,9 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
                     s: U256::from_little_endian(&sig[32..64]),
                 })
                 .collect(),
-        );
-        output_stream.write_value::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(
-            justification_data.pubkeys,
-        );
-        output_stream.write_value::<U32Variable>(justification_data.num_authorities as u32);
+            pubkeys: justification_data.pubkeys,
+            num_authorities: justification_data.num_authorities as u32,
+        });
     }
 }
 
@@ -209,24 +204,17 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             HintSimpleJustification::<MAX_NUM_AUTHORITIES> {},
         );
 
-        let encoded_precommit = output_stream.read::<BytesVariable<ENCODED_PRECOMMIT_LENGTH>>(self);
-        let validator_signed =
-            output_stream.read::<ArrayVariable<BoolVariable, MAX_NUM_AUTHORITIES>>(self);
-        let signatures =
-            output_stream.read::<ArrayVariable<EDDSASignatureVariable, MAX_NUM_AUTHORITIES>>(self);
-        let pubkeys = output_stream
-            .read::<ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>>(self);
-        let num_active_authorities = output_stream.read::<U32Variable>(self);
+        let justification = output_stream.read::<JustificationVariable<MAX_NUM_AUTHORITIES>>(self);
 
         // Verify the authority set commitment is valid.
         self.verify_authority_set_commitment(
-            num_active_authorities.variable,
+            justification.num_authorities.variable,
             authority_set_hash,
-            &pubkeys,
+            &justification.pubkeys,
         );
 
         // Verify the correctness of the encoded_precommit message.
-        let decoded_precommit = self.decode_precommit(encoded_precommit);
+        let decoded_precommit = self.decode_precommit(justification.encoded_precommit);
         self.assert_is_equal(decoded_precommit.block_number, block_number);
         self.assert_is_equal(decoded_precommit.authority_set_id, authority_set_id);
         self.assert_is_equal(decoded_precommit.block_hash, block_hash);
@@ -240,19 +228,24 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                     as u32;
                 MAX_NUM_AUTHORITIES
             ]);
-        let messages = vec![encoded_precommit; MAX_NUM_AUTHORITIES];
+        let messages = vec![justification.encoded_precommit; MAX_NUM_AUTHORITIES];
         self.curta_eddsa_verify_sigs_conditional(
-            validator_signed.clone(),
+            justification.validator_signed.clone(),
             Some(message_byte_lengths),
             messages.into(),
-            signatures,
-            pubkeys,
+            justification.signatures,
+            justification.pubkeys,
         );
 
         // Verify at least 2/3 of the validators have signed the message.
         let two_v = self.constant::<U32Variable>(2u32);
         let three_v = self.constant::<U32Variable>(3u32);
-        self.verify_voting_threshold(num_active_authorities, &validator_signed, two_v, three_v)
+        self.verify_voting_threshold(
+            justification.num_authorities,
+            &justification.validator_signed,
+            two_v,
+            three_v,
+        )
     }
 }
 

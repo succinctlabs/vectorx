@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::EDDSASignatureVariable;
 use plonky2x::frontend::uint::uint64::U64Variable;
-use plonky2x::frontend::vars::U32Variable;
+use plonky2x::frontend::vars::{BoolVariable, U32Variable};
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, BytesVariable, CircuitBuilder, CircuitVariable,
     PlonkParameters, RichField, Variable,
@@ -45,6 +45,16 @@ pub struct SignedPrecommitVariable {
 pub struct AuthoritySetSignerVariable {
     pub pub_keys: CompressedEdwardsYVariable, // Array of public keys.
     pub weights: U64Variable, // Array of weights.  These are u64s, but we assume that they are going to be within the golidlocks field.
+}
+
+#[derive(Clone, Debug, CircuitVariable)]
+#[value_name(JustificationStruct)]
+pub struct JustificationVariable<const MAX_AUTHORITY_SET_SIZE: usize> {
+    pub encoded_precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
+    pub validator_signed: ArrayVariable<BoolVariable, MAX_AUTHORITY_SET_SIZE>,
+    pub signatures: ArrayVariable<EDDSASignatureVariable, MAX_AUTHORITY_SET_SIZE>,
+    pub pubkeys: ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
+    pub num_authorities: U32Variable,
 }
 
 #[derive(Clone, Debug, CircuitVariable)]

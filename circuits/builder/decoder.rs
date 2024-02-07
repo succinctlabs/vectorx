@@ -10,27 +10,29 @@ use crate::consts::{
 use crate::vars::*;
 
 pub trait DecodingMethods {
+    /// Decode the byte representation of a compact u32 into it's integer representation and SCALE
+    /// compress mode. Spec: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(
         &mut self,
         compact_bytes: ArrayVariable<ByteVariable, 5>,
     ) -> (U32Variable, Variable);
 
+    /// Decode a header into its components: {block_nb, parent_hash, state_root and data_root}.
+    /// header_hash is used for the RLC challenge in get_fixed_subarray.
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
         header_hash: &Bytes32Variable,
     ) -> HeaderVariable;
 
+    /// Decode a precommit message into its components: {block_hash, block_nb, justification_round, authority_set_id}.
     fn decode_precommit(
         &mut self,
         encoded_precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
     ) -> PrecommitVariable;
 }
 
-// Note: Assumes that all the inputted byte array are already range checked to be valid bytes.
 impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L, D> {
-    /// Decodes the byte representation of a compact u32 into integer representation and compress
-    /// mode. Spec: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(
         &mut self,
         compact_bytes: ArrayVariable<ByteVariable, MAX_COMPACT_UINT_BYTES>,
@@ -61,7 +63,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let two_mode_value = Variable(self.api.le_sum(bool_targets[2..32].iter()));
         let three_mode_value = Variable(self.api.le_sum(bool_targets[8..40].iter()));
 
-        // Select the correct value based on the compress mode.
+        // Select the correct int value based on compress mode.
         let value = self.select_array_random_gate(
             &[
                 zero_mode_value,
@@ -86,22 +88,23 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         (value, compress_mode)
     }
 
-    /// Decode a header into its components. header_hash is used for the RLC challenge.
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
         header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
+        // TODO: Link to spec of header in Avail.
+
         // The first 32 bytes are the parent hash.
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
 
-        // Next field is the block number. The block number is encoded as a compact u32.
+        // Next field is the block number in compact u32 SCALE encoding.
         let block_number_bytes = ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
             header.header_bytes[HASH_SIZE..HASH_SIZE + MAX_COMPACT_UINT_BYTES].to_vec(),
         );
         let (block_number, compress_mode) = self.decode_compact_int(block_number_bytes);
 
-        // Length of block_number is 1, 2, 4, or 5 bytes.
+        // The of block_number is 1, 2, 4, or 5 bytes.
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
             Bytes32Variable::from(&header.header_bytes[34..34 + HASH_SIZE]),
@@ -111,7 +114,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         let state_root = self.select_array_random_gate(&all_possible_state_roots, compress_mode);
 
-        // The next field is the data root. The data root is located at the end of the header.
+        // The next field is the data root. The data root is the last 32 bytes of the header.
         let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END as u32);
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
 
@@ -125,7 +128,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
             .get_fixed_subarray::<S, HASH_SIZE>(
                 &header.header_bytes,
                 data_root_start.variable,
-                // Seed the challenger with the bytes of the header hash.
+                // Seed the RLC challenge with a commitment of the header (header_hash).
                 &header_hash.as_bytes(),
             )
             .as_vec();
@@ -139,12 +142,13 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         }
     }
 
-    /// Decode a precommit message into its components.
     fn decode_precommit(
         &mut self,
         precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
     ) -> PrecommitVariable {
-        // The first byte is the varint number and should be 1.
+        // TODO: Link to Precommit spec.
+
+        // The first byte is the equivocation type (Precommit) and should be 1.
         let one = self.one();
         let precommit_first_byte = precommit[0].to_variable(self);
         self.assert_is_equal(precommit_first_byte, one);
@@ -154,20 +158,21 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // The next 4 bytes is the block number.
         let mut block_number_bytes = precommit[33..37].to_vec();
-        // Reverse the bytes since the block number bytes are stored as LE.
-        block_number_bytes.reverse();
-        let block_number = U32Variable::decode(self, &block_number_bytes);
 
         // The next 8 bytes is the justification round.
         let mut justification_round_bytes = precommit[37..45].to_vec();
-        // Reverse the bytes since the justification round are stored as LE.
-        justification_round_bytes.reverse();
-        let justification_round = U64Variable::decode(self, &precommit[37..45]);
 
         // The next 8 bytes is the authority set id.
         let mut authority_set_id_bytes = precommit[45..53].to_vec();
-        // Reverse the bytes since the authority set id are stored as LE.
+
+        // Reverse the bytes of block_number, justification_round and authority_set_id since they
+        // are stored in LE form.
+        block_number_bytes.reverse();
+        justification_round_bytes.reverse();
         authority_set_id_bytes.reverse();
+
+        let block_number = U32Variable::decode(self, &block_number_bytes);
+        let justification_round = U64Variable::decode(self, &precommit[37..45]);
         let authority_set_id = U64Variable::decode(self, &authority_set_id_bytes);
 
         PrecommitVariable {

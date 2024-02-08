@@ -50,7 +50,7 @@ ff = { package = "ff_ce", version = "0.11", features = ["derive"] }
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = ["rand"] }
 rustx = { git = "https://github.com/succinctlabs/succinctx.git" }
-plonky2x = { git = "https://github.com/succinctlabs/succinctx.git", branch = "ratan/fix-get-fixed-subarray-2" }
+plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
 succinct-client = { git = "https://github.com/succinctlabs/succinctx.git" }
 plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }
 serde = { version = "1", features = ["derive"] }

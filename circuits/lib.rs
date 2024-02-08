@@ -8,5 +8,4 @@ pub mod dummy_step;
 pub mod input;
 pub mod rotate;
 pub mod step;
-pub mod subchain_verification;
 pub mod vars;

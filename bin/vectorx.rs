@@ -79,7 +79,6 @@ impl VectorXOperator {
     fn create_vectorx_config() -> VectorXConfig {
         let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
         let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
-        // TODO: VectorX on Goerli: https://goerli.etherscan.io/address/#code
         let address = contract_address
             .parse::<Address>()
             .expect("invalid address");
@@ -251,7 +250,7 @@ impl VectorXOperator {
             .last_justified_block(current_authority_set_id)
             .await;
 
-        // If this is the last justified block, check if we can do a step in the next authority set.
+        // If this is the last justified block, check for step with next authority set.
         let mut request_authority_set_id = current_authority_set_id;
         if step_contract_data.current_block == last_justified_block {
             let next_authority_set_id = current_authority_set_id + 1;
@@ -263,7 +262,7 @@ impl VectorXOperator {
             request_authority_set_id = next_authority_set_id;
         }
 
-        // Step as far as we can within blocks attested by the requested authority set.
+        // Step as far as possible within blocks attested by the requested authority set.
         let block_to_step_to = self
             .find_block_to_step_to(
                 step_contract_data.current_block,

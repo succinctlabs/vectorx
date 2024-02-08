@@ -7,6 +7,7 @@ use plonky2x::prelude::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
 use crate::input::RpcDataFetcher;
 use crate::vars::*;
 
@@ -16,47 +17,19 @@ pub trait HeaderMethods {
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable;
-
-    /// Get the Blake2b hashes of an array of encoded headers.
-    fn hash_encoded_headers<
-        const MAX_HEADER_SIZE: usize,
-        const MAX_CHUNK_SIZE: usize,
-        const N: usize,
-    >(
-        &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
-    ) -> ArrayVariable<Bytes32Variable, N>;
 }
 
-// This assumes that all the inputted byte array are already range checked (e.g. all bytes are less than 256)
 impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, D> {
     fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable {
-        assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
+        assert!(MAX_CHUNK_SIZE * BLAKE2B_CHUNK_SIZE_BYTES == MAX_HEADER_SIZE);
         self.curta_blake2b_variable(header.header_bytes.as_slice(), header.header_size)
-    }
-
-    fn hash_encoded_headers<
-        const MAX_HEADER_SIZE: usize,
-        const MAX_CHUNK_SIZE: usize,
-        const N: usize,
-    >(
-        &mut self,
-        headers: &ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, N>,
-    ) -> ArrayVariable<Bytes32Variable, N> {
-        assert!(MAX_CHUNK_SIZE * 128 == MAX_HEADER_SIZE);
-        headers
-            .as_vec()
-            .iter()
-            .map(|x| self.hash_encoded_header::<MAX_HEADER_SIZE, MAX_CHUNK_SIZE>(x))
-            .collect::<Vec<Bytes32Variable>>()
-            .into()
     }
 }
 
-// Fetch a range of headers.
+// Fetch a range of headers with a hint. Used to generate a data commitment for step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderRangeFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 
@@ -94,16 +67,17 @@ impl<
             });
         }
 
-        // We take the returned headers and pad them to the correct length to turn them into an `EncodedHeader` variable.
+        // Pad `headers` to the correct length for `EncodedHeader` variables.
         let mut header_variables = Vec::new();
-        for header in headers.iter() {
-            // TODO: replace with `to_header_variable` from vars.rs
+        for (i, header) in headers.iter().enumerate() {
             let mut header_bytes = header.encode();
             let header_size = header_bytes.len();
             if header_size > HEADER_LENGTH {
                 panic!(
-                    "header size {} is greater than HEADER_LENGTH {}",
-                    header_size, HEADER_LENGTH
+                    "Block {}'s header size is {}, which is greater than the maximum header size of {} bytes.",
+                    start_block + i as u32,
+                    header_size,
+                    HEADER_LENGTH
                 );
             }
             header_bytes.resize(HEADER_LENGTH, 0);
@@ -114,7 +88,7 @@ impl<
             header_variables.push(header_variable);
         }
 
-        // We must pad the rest of `header_variables` with empty headers to ensure its length is NUM_HEADERS.
+        // Pad `header_variables` with empty headers to ensure its length is NUM_HEADERS.
         for _i in headers.len()..NUM_HEADERS {
             let header_variable = EncodedHeader {
                 header_bytes: vec![0u8; HEADER_LENGTH],

@@ -89,7 +89,7 @@ impl RedisClient {
             .await
             .expect("Failed to set key");
 
-        // Add the block number to a sorted set, so we can query for all blocks with justifications.
+        // Add the block number to a sorted set, for easy querying of justifications in a range.
         let _: () = con
             .zadd(
                 "blocks",
@@ -125,7 +125,6 @@ impl RedisClient {
             Ok(justification) => Ok(justification[0].clone()),
             Err(e) => {
                 eprintln!("Failed to deserialize justification: {}", e);
-                // Handle the error appropriately, maybe return an Err if your function can return a Result
                 Err(())
             }
         }
@@ -524,18 +523,18 @@ impl RpcDataFetcher {
             .unwrap()
             .unwrap();
 
-        // TODO: Reference the following comment for verifying the compact scale encoding inside of the circuit.
-        // The grandpa_authorities_bytes has one of the two following formats:
-        // [V, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
-        // [V, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
-        // Where V is a "Version" number (right now it's 1u8)
-        // Where X or XX is the compact scale encoding of the number of authorities
-        // This is a reference on how compact scale encoding works: https://docs.substrate.io/reference/scale-codec/#fn-1
+        // The grandpa_authorities_bytes is the following:
+        // V || X || <pub_key_compressed> || W || <pub_key_compressed> || W || ...
+        // V is a "Version" number (1u8), which in compact encoding will be 1 byte.
+        // X is the compact scale encoding of the number of authorities (1-2 bytes).
+        // <pub_key_compressed> is the compressed EdDDSA public key (32 bytes).
+        // W is the compact scale encoding of the weight (8 bytes long).
+        // Compact scale encoding reference: https://docs.substrate.io/reference/scale-codec/#fn-1
 
-        // The prefix length is 2 if the number of authorities is <=63, otherwise it is 3 (including)
-        // the version number. This is because the compact scale encoding will be only 1 byte if the
-        // number of authorities is <=63.
-        let offset = if grandpa_authorities_bytes.len() < ((32 + 8) * 63) + 3 {
+        // If the number of authorities is <=63, the compact encoding of the number of authorities is 1 byte.
+        // If the number of authorities is >63 & < 2^14, the compact encoding of the number of authorities is 2 bytes.
+        // So, the offset is 2 if the number of authorities is <=63, and 3 if the number of authorities is >63.
+        let offset = if grandpa_authorities_bytes.len() <= ((32 + 8) * 63) + 2 {
             2
         } else {
             3
@@ -552,18 +551,21 @@ impl RpcDataFetcher {
             let pub_key = CompressedEdwardsY::from_slice(&authority_pubkey_weight[..32]).unwrap();
             authorities.push(pub_key);
 
-            // Assert that the weight is 1 (weight is in LE representation).
-            assert_eq!(authority_pubkey_weight[32], 1);
-            for i in 33..VALIDATOR_LENGTH {
-                assert_eq!(authority_pubkey_weight[i], 0);
-            }
+            let expected_weight = [1, 0, 0, 0, 0, 0, 0, 0];
+
+            // Assert the LE representation of the weight of each validator is 1.
+            assert_eq!(
+                authority_pubkey_weight[32..40],
+                expected_weight,
+                "The weight of the authority is not 1!"
+            );
         }
 
         authorities
     }
 
-    // Computes the authority_set_hash for a given block number.
-    // This is the authority_set_hash of the next block.
+    // Computes the authority_set_hash for a given block number. Note: This is the authority set hash
+    // that validates the next block after the given block number.
     pub async fn compute_authority_set_hash(&mut self, block_number: u32) -> H256 {
         let authorities = self.get_authorities(block_number).await;
 
@@ -583,8 +585,8 @@ impl RpcDataFetcher {
         block_number: u32,
     ) -> SimpleJustificationData {
         // Note: grandpa_proveFinality will serve the proof for the last justified block in an epoch.
-        // This means that get_simple_justification should fail for any block that is not the last
-        // justified block in an epoch.
+        // get_simple_justification should fail for any block that is not the last justified block
+        // in an epoch.
         let curr_authority_set_id = self.get_authority_set_id(block_number).await;
         let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
@@ -623,12 +625,10 @@ impl RpcDataFetcher {
                 &justification.round,
                 &authority_set_id,
             ));
-            // TODO: verify above that signed_message = block_hash || block_number || round || set_id
 
             let mut pubkey_bytes_to_signature = HashMap::new();
 
             // Verify all the signatures of the justification.
-            // TODO: panic if the justification is not not a simple justification
             justification
                 .commit
                 .precommits
@@ -638,6 +638,7 @@ impl RpcDataFetcher {
                     let signature = precommit.clone().signature.0;
                     let pubkey_bytes = pubkey.0.to_vec();
 
+                    // Verify the signature by this validator over the signed_message which is shared.
                     verify_signature(&pubkey_bytes, &signed_message, &signature);
                     pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
                 });
@@ -648,10 +649,8 @@ impl RpcDataFetcher {
             let mut voting_weight = 0;
             for pubkey_bytes in authorities_pubkey_bytes.iter() {
                 let signature = pubkey_bytes_to_signature.get(&pubkey_bytes.as_bytes().to_vec());
-                // let authority = AffinePoint::<Curve>::new_from_compressed_point(pubkey_bytes);
 
                 if let Some(valid_signature) = signature {
-                    verify_signature(pubkey_bytes.as_bytes(), &signed_message, valid_signature);
                     validator_signed.push(true);
                     pubkeys.push(
                         CompressedEdwardsY::from_slice(pubkey_bytes.as_bytes().as_ref()).unwrap(),
@@ -676,6 +675,7 @@ impl RpcDataFetcher {
                 num_authorities: authorities_pubkey_bytes.len() as u64,
             }
         } else {
+            // If this is not an epoch end block, load the justification data from Redis.
             let stored_justification_data: StoredJustificationData = self
                 .redis_client
                 .get_justification(block_number)
@@ -705,9 +705,9 @@ impl RpcDataFetcher {
         }
     }
 
-    // This function takes in a block_number as input, fetches the authority set for that block and the finality proof
-    // for that block. If the finality proof is a simple justification, it will return a CircuitJustification
-    // containing all the encoded precommit that the authorities sign, the validator signatures, and the authority pubkeys.
+    // Fetch the authority set and justification proof for block_number. If the finality proof is a
+    // simple justification, return a CircuitJustification with the encoded precommit that all
+    // authorities sign, the validator signatures, and the authority set's pubkeys.
     pub async fn get_justification_from_block<const VALIDATOR_SET_SIZE_MAX: usize>(
         &mut self,
         block_number: u32,
@@ -843,7 +843,7 @@ impl RpcDataFetcher {
             }
         }
 
-        // Panic if we did not find the consensus log.
+        // Panic if there is not a consensus log.
         if !found_correct_log {
             panic!(
                 "Block: {:?} should be an epoch end block, but did not find corresponding consensus log!",
@@ -985,7 +985,7 @@ mod tests {
         let target_authority_set_id = 513;
         let epoch_end_block_number = fetcher.last_justified_block(target_authority_set_id).await;
 
-        // Verify that we found an epoch end block.
+        // Verify that this is an epoch end block.
         assert_ne!(epoch_end_block_number, 0);
         println!("epoch_end_block_number {:?}", epoch_end_block_number);
 
@@ -1078,25 +1078,29 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_rotate() {
+        env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
+        env_logger::init();
+
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        let mut start_epoch = 100;
+        // let head = data_fetcher.get_head().await.number;
+        let mut start_epoch = 180;
         loop {
-            if start_epoch > 617 {
+            let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
+            if epoch_end_block == 0 {
                 break;
             }
-            let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
+            log::debug!("epoch_end_block {:?}", epoch_end_block);
 
             let _ = data_fetcher
                 .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
                 .await;
 
-            println!("epoch_end_block {:?}", epoch_end_block);
-
             let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
             println!("num authorities {:?}", num_authorities);
 
-            start_epoch += 100;
+            start_epoch += 1;
         }
     }
 

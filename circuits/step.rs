@@ -8,8 +8,8 @@ use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters};
 use crate::builder::header::HeaderRangeFetcherHint;
 use crate::builder::justification::HintSimpleJustification;
 use crate::builder::step::StepMethods;
+use crate::builder::subchain_verification::{MapReduceSubchainVariable, SubchainVerificationCtx};
 use crate::consts::HEADERS_PER_MAP;
-use crate::subchain_verification::{MapReduceSubchainVariable, SubchainVerificationCtx};
 
 #[derive(Clone, Debug)]
 pub struct StepCircuit<
@@ -65,8 +65,8 @@ impl<
             Level::Debug,
         );
 
-        let (target_header_hash, state_root_merkle_root, data_root_merkle_root) =
-            builder.step::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>(
+        let subchain_output = builder
+            .step::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>(
                 trusted_block,
                 trusted_header_hash,
                 authority_set_id,
@@ -74,9 +74,9 @@ impl<
                 target_block,
             );
 
-        builder.evm_write::<Bytes32Variable>(target_header_hash);
-        builder.evm_write::<Bytes32Variable>(state_root_merkle_root);
-        builder.evm_write::<Bytes32Variable>(data_root_merkle_root);
+        builder.evm_write::<Bytes32Variable>(subchain_output.target_header_hash);
+        builder.evm_write::<Bytes32Variable>(subchain_output.state_root_merkle_root);
+        builder.evm_write::<Bytes32Variable>(subchain_output.data_root_merkle_root);
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(

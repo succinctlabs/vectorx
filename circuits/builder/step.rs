@@ -3,8 +3,9 @@ use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters};
 
 use super::justification::GrandpaJustificationVerifier;
+use crate::builder::subchain_verification::SubChainVerifier;
 use crate::step::StepCircuit;
-use crate::subchain_verification::SubChainVerifier;
+use crate::vars::SubchainVerificationVariable;
 
 pub trait StepMethods<L: PlonkParameters<D>, const D: usize> {
     // Verify the justification from the current authority set on target block, and compute the
@@ -21,7 +22,7 @@ pub trait StepMethods<L: PlonkParameters<D>, const D: usize> {
         authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
         target_block: U32Variable,
-    ) -> (Bytes32Variable, Bytes32Variable, Bytes32Variable)
+    ) -> SubchainVerificationVariable
     where
         <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>;
@@ -39,34 +40,28 @@ impl<L: PlonkParameters<D>, const D: usize> StepMethods<L, D> for CircuitBuilder
         authority_set_id: U64Variable,
         authority_set_hash: Bytes32Variable,
         target_block: U32Variable,
-    ) -> (Bytes32Variable, Bytes32Variable, Bytes32Variable)
+    ) -> SubchainVerificationVariable
     where
         <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>
     {
-        let (target_header_hash, state_root_merkle_root, data_root_merkle_root) = self
-            .verify_subchain::<StepCircuit<
+        // Get the target_header_hash, state_root, and data_root over the range [trusted_block + 1, target_block].
+        let subchain_output = self.verify_subchain::<StepCircuit<
             MAX_AUTHORITY_SET_SIZE,
             MAX_HEADER_SIZE,
             MAX_NUM_HEADERS,
         >, MAX_NUM_HEADERS>(
-            trusted_block,
-            trusted_header_hash,
-            target_block,
+            trusted_block, trusted_header_hash, target_block
         );
 
         self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
             target_block,
-            target_header_hash,
+            subchain_output.target_header_hash,
             authority_set_id,
             authority_set_hash,
         );
 
-        (
-            target_header_hash,
-            state_root_merkle_root,
-            data_root_merkle_root,
-        )
+        subchain_output
     }
 }
 

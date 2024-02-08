@@ -395,6 +395,8 @@ impl RpcDataFetcher {
             .await
             .expect("Failed to establish connection to Avail WS.");
 
+        log::debug!("Fetching block hash for block number: {:?}", block_number);
+
         let block_hash = self
             .client
             .rpc()
@@ -1078,25 +1080,29 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_rotate() {
+        env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
+        env_logger::init();
+
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        let mut start_epoch = 100;
+        let mut start_epoch = 179;
         loop {
-            if start_epoch > 617 {
+            let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
+            if epoch_end_block == 0 {
                 break;
             }
-            let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
 
             let _ = data_fetcher
                 .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
                 .await;
 
-            println!("epoch_end_block {:?}", epoch_end_block);
+            log::debug!("epoch_end_block {:?}", epoch_end_block);
 
             let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
             println!("num authorities {:?}", num_authorities);
 
-            start_epoch += 100;
+            start_epoch += 1;
         }
     }
 

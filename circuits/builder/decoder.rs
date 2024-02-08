@@ -93,7 +93,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         header: &EncodedHeaderVariable<S>,
         header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
-        // TODO: Link to spec of header in Avail.
+        // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v2.rs
 
         // The first 32 bytes are the parent hash.
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();

@@ -164,6 +164,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         let mut validator_disabled = self._false();
         // Verify num_authorities validators are present and valid.
+        // Spec: https://github.com/paritytech/subxt/blob/cb67f944558a76f53167be7855c4725cdf80580c/testing/integration-tests/src/full_client/codegen/polkadot.rs#L9484-L9501
         for i in 0..(MAX_AUTHORITY_SET_SIZE) {
             let idx = i * VALIDATOR_LENGTH;
             let curr_validator = self.constant::<Variable>(L::Field::from_canonical_usize(i + 1));

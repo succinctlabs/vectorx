@@ -395,8 +395,6 @@ impl RpcDataFetcher {
             .await
             .expect("Failed to establish connection to Avail WS.");
 
-        log::debug!("Fetching block hash for block number: {:?}", block_number);
-
         let block_hash = self
             .client
             .rpc()
@@ -1086,18 +1084,18 @@ mod tests {
 
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        let mut start_epoch = 179;
+        // let head = data_fetcher.get_head().await.number;
+        let mut start_epoch = 180;
         loop {
             let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
             if epoch_end_block == 0 {
                 break;
             }
+            log::debug!("epoch_end_block {:?}", epoch_end_block);
 
             let _ = data_fetcher
                 .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
                 .await;
-
-            log::debug!("epoch_end_block {:?}", epoch_end_block);
 
             let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
             println!("num authorities {:?}", num_authorities);

@@ -111,14 +111,6 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         let state_root = self.select_array_random_gate(&all_possible_state_roots, compress_mode);
 
-        // Convert the encoded header bytes to variables for get_fixed_subarray.
-        let header_variables = header
-            .header_bytes
-            .as_vec()
-            .iter()
-            .map(|x: &ByteVariable| x.to_variable(self))
-            .collect::<Vec<_>>();
-
         // The next field is the data root. The data root is located at the end of the header.
         let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END as u32);
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
@@ -129,18 +121,14 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         data_root_start = self.select(header_is_zero_size, zero, data_root_start);
 
         // Extract the data root from the header.
-        let data_root_variables: Vec<Variable> = self
+        let data_root_bytes: Vec<ByteVariable> = self
             .get_fixed_subarray::<S, HASH_SIZE>(
-                &ArrayVariable::<Variable, S>::from(header_variables),
+                &header.header_bytes,
                 data_root_start.variable,
                 // Seed the challenger with the bytes of the header hash.
                 &header_hash.as_bytes(),
             )
             .as_vec();
-        let data_root_bytes = data_root_variables
-            .iter()
-            .map(|x| ByteVariable::from_target(self, x.0))
-            .collect::<Vec<_>>();
         let data_root = Bytes32Variable::from(data_root_bytes.as_slice());
 
         HeaderVariable {

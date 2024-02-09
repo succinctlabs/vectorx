@@ -104,6 +104,35 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         latestBlock = _height;
     }
 
+    /// @notice Force update the data & state commitments for a range of blocks.
+    function updateBlockRangeData(
+        uint32[] calldata _startBlocks,
+        uint32[] calldata _endBlocks,
+        bytes32[] calldata _headerHashes,
+        bytes32[] calldata _dataRootCommitments,
+        bytes32[] calldata _stateRootCommitments
+    ) external onlyGuardian {
+        assert(
+            _startBlocks.length == _endBlocks.length &&
+                _endBlocks.length == _headerHashes.length &&
+                _headerHashes.length == _dataRootCommitments.length &&
+                _dataRootCommitments.length == _stateRootCommitments.length
+        );
+
+        for (uint256 i = 0; i < _startBlocks.length; i++) {
+            assert(_startBlocks[i] == latestBlock);
+            bytes32 key = keccak256(
+                abi.encode(_startBlocks[i], _endBlocks[i])
+            );
+            dataRootCommitments[key] = _dataRootCommitments[i];
+            stateRootCommitments[key] = _stateRootCommitments[i];
+
+            blockHeightToHeaderHash[_endBlocks[i]] = _header;
+            authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+            latestBlock = _endBlocks[i];
+        }
+    }
+
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
     /// @param _trustedBlock The block height of the trusted block.
     /// @param _authoritySetId The authority set id of the header range (trustedBlock, requestedBlock].

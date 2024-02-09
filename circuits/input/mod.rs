@@ -1085,7 +1085,7 @@ mod tests {
         let mut data_fetcher = RpcDataFetcher::new().await;
 
         // let head = data_fetcher.get_head().await.number;
-        let mut start_epoch = 180;
+        let mut start_epoch = 179;
         loop {
             let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
             if epoch_end_block == 0 {

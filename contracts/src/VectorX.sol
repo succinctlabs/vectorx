@@ -132,6 +132,15 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             blockHeightToHeaderHash[_endBlocks[i]] = _headerHashes[i];
             authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
             latestBlock = _endBlocks[i];
+
+            emit HeadUpdate(_endBlocks[i], _headerHashes[i]);
+
+            emit HeaderRangeCommitmentStored(
+                _startBlocks[i],
+                _endBlocks[i],
+                _dataRootCommitments[i],
+                _stateRootCommitments[i]
+            );
         }
     }
 

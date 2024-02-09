@@ -110,7 +110,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint32[] calldata _endBlocks,
         bytes32[] calldata _headerHashes,
         bytes32[] calldata _dataRootCommitments,
-        bytes32[] calldata _stateRootCommitments
+        bytes32[] calldata _stateRootCommitments,
+        uint64 _endAuthoritySetId,
+        bytes32 _endAuthoritySetHash
     ) external onlyGuardian {
         assert(
             _startBlocks.length == _endBlocks.length &&
@@ -127,8 +129,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             dataRootCommitments[key] = _dataRootCommitments[i];
             stateRootCommitments[key] = _stateRootCommitments[i];
 
-            blockHeightToHeaderHash[_endBlocks[i]] = _header;
-            authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+            blockHeightToHeaderHash[_endBlocks[i]] = _headerHashes[i];
+            authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
             latestBlock = _endBlocks[i];
         }
     }

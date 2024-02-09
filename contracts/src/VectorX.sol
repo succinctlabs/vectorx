@@ -130,7 +130,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             stateRootCommitments[key] = _stateRootCommitments[i];
 
             blockHeightToHeaderHash[_endBlocks[i]] = _headerHashes[i];
-            authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
             latestBlock = _endBlocks[i];
 
             emit HeadUpdate(_endBlocks[i], _headerHashes[i]);
@@ -142,6 +141,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
                 _stateRootCommitments[i]
             );
         }
+        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
     }
 
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].

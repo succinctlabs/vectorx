@@ -78,22 +78,30 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         frozen = _freeze;
     }
 
-    /// @notice TODO: This should be removed for the mainnet release.
+    /// @notice Update the function IDs.
+    function updateFunctionIds(
+        bytes32 _headerRangeFunctionId,
+        bytes32 _rotateFunctionId
+    ) external onlyGuardian {
+        headerRangeFunctionId = _headerRangeFunctionId;
+        rotateFunctionId = _rotateFunctionId;
+    }
+
+    /// @notice Update the gateway address.
+    function updateGateway(address _gateway) external onlyGuardian {
+        gateway = _gateway;
+    }
+
+    /// @notice Update the genesis state of the light client.
     function updateGenesisState(
-        address _gateway,
         uint32 _height,
         bytes32 _header,
         uint64 _authoritySetId,
         bytes32 _authoritySetHash,
-        bytes32 _headerRangeFunctionId,
-        bytes32 _rotateFunctionId
     ) external onlyGuardian {
-        gateway = _gateway;
         blockHeightToHeaderHash[_height] = _header;
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
         latestBlock = _height;
-        headerRangeFunctionId = _headerRangeFunctionId;
-        rotateFunctionId = _rotateFunctionId;
     }
 
     /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].

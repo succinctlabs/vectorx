@@ -5,6 +5,9 @@ import "forge-std/Script.sol";
 import {VectorX} from "../src/VectorX.sol";
 import {ERC1967Proxy} from "@openzeppelin/proxy/ERC1967/ERC1967Proxy.sol";
 
+// Deploy or upgrade a new contract.
+// If UPGRADE_VIA_EOA is true, the existing contract address must be provided. It will update
+// the contract to the new implementation with the new parameters.
 contract DeployScript is Script {
     function setUp() public {}
 
@@ -42,25 +45,29 @@ contract DeployScript is Script {
                     )
                 )
             );
+
+            // Initialize the Vector X light client.
+            lightClient.initialize(
+                VectorX.InitParameters({
+                    guardian: msg.sender,
+                    gateway: gateway,
+                    height: height,
+                    header: header,
+                    authoritySetId: authoritySetId,
+                    authoritySetHash: authoritySetHash,
+                    headerRangeFunctionId: headerRangeFunctionId,
+                    rotateFunctionId: rotateFunctionId
+                })
+            );
         } else {
             lightClient = VectorX(existingProxyAddress);
             lightClient.upgradeTo(address(lightClientImpl));
+
+            lightClient.updateGenesisState(height, header, authoritySetId, authoritySetHash);
+            lightClient.updateGateway(gateway);
+            lightClient.updateFunctionIds(headerRangeFunctionId, rotateFunctionId);
         }
 
         console.logAddress(address(lightClient));
-
-        // Initialize the Vector X light client.
-        lightClient.initialize(
-            VectorX.InitParameters({
-                guardian: msg.sender,
-                gateway: gateway,
-                height: height,
-                header: header,
-                authoritySetId: authoritySetId,
-                authoritySetHash: authoritySetHash,
-                headerRangeFunctionId: headerRangeFunctionId,
-                rotateFunctionId: rotateFunctionId
-            })
-        );
     }
 }

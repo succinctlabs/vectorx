@@ -97,7 +97,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint32 _height,
         bytes32 _header,
         uint64 _authoritySetId,
-        bytes32 _authoritySetHash,
+        bytes32 _authoritySetHash
     ) external onlyGuardian {
         blockHeightToHeaderHash[_height] = _header;
         authoritySetIdToHash[_authoritySetId] = _authoritySetHash;

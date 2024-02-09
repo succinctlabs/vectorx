@@ -211,6 +211,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint64 _authoritySetId,
         uint32 _targetBlock
     ) external {
+        if (frozen) {
+            revert ContractFrozen();
+        }
+
         bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
         if (trustedHeader == bytes32(0)) {
             revert TrustedHeaderNotFound();
@@ -317,6 +321,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint64 _currentAuthoritySetId,
         uint32 _epochEndBlock
     ) external {
+        if (frozen) {
+            revert ContractFrozen();
+        }
+
         bytes32 currentAuthoritySetHash = authoritySetIdToHash[
             _currentAuthoritySetId
         ];

@@ -73,6 +73,7 @@ async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeDat
 
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
     let args = FillBlockRangeArgs::parse();
 
     let end_block = args.end_block;

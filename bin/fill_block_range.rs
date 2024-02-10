@@ -1,125 +1,125 @@
-// use std::env;
-// use std::sync::Arc;
+use alloy_primitives::Address;
+use clap::Parser;
+use ethers::middleware::SignerMiddleware;
+use ethers::signers::{LocalWallet, Signer};
+use ethers::types::TransactionReceipt;
+use log::info;
+use subxt::config::Header;
 
-// use alloy_sol_types::{sol, SolType};
-// use ethers::contract::abigen;
-// use ethers::core::types::{Address, Filter};
-// use ethers::providers::{Middleware, Provider, StreamExt, Ws};
-// use log::info;
-// use vectorx::input::{DataCommitmentRange, RpcDataFetcher};
+// Note: Update ABI when updating contract.
+abigen!(VectorX, "./abi/VectorX.abi.json",);
 
-// // Note: Update ABI when updating contract.
-// abigen!(VectorX, "./abi/VectorX.abi.json",);
+use std::cmp::min;
+use std::env;
+use std::str::FromStr;
+use std::sync::Arc;
 
-// type HeaderRangeCommitmentStoredTuple = sol! { tuple(uint32, uint32, bytes32, bytes32) };
+use ethers::contract::abigen;
+use ethers::providers::{Http, Provider};
+use vectorx::input::RpcDataFetcher;
 
-// sol! { struct RangeHashInput {
-//     uint32 trusted_block;
-//     uint32 end_block;
-// } }
+#[derive(Parser, Debug, Clone)]
+#[command(about = "Get the last block of the block range to fill.")]
+pub struct FillBlockRangeArgs {
+    #[arg(long, default_value = "1")]
+    pub end_block: u32,
+}
 
-// const AVAIL_SUBGRAPH_URL: &str = "'https://subquery.goldberg.avail.tools/'";
+pub struct BlockRangeData {
+    pub start_blocks: Vec<u32>,
+    pub end_blocks: Vec<u32>,
+    pub header_hashes: Vec<[u8; 32]>,
+    pub data_root_commitments: Vec<[u8; 32]>,
+    pub state_root_commitments: Vec<[u8; 32]>,
+    pub end_authority_set_id: u64,
+    pub end_authority_set_hash: [u8; 32],
+}
 
-// const DATA_ROOT_QUERY
+async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeData {
+    let mut input_data_fetcher = RpcDataFetcher::new().await;
 
-// async fn fill_block_range(end_block: u32) {
-//     let mut input_data_fetcher = RpcDataFetcher::new().await;
-//     let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
+    let mut start_blocks = Vec::new();
+    let mut end_blocks = Vec::new();
+    let mut header_hashes = Vec::new();
+    let mut data_root_commitments = Vec::new();
+    let mut state_root_commitments = Vec::new();
 
-//     let address = contract_address
-//         .parse::<Address>()
-//         .expect("invalid address");
+    for i in (start_block..end_block).step_by(256) {
+        let block_range_end = min(i + 256, end_block);
+        let header = input_data_fetcher.get_header(block_range_end).await;
+        let (state_root_commitment, data_root_commitment) = input_data_fetcher
+            .get_merkle_root_commitments(i, block_range_end)
+            .await;
+        start_blocks.push(i);
+        end_blocks.push(block_range_end);
+        header_hashes.push(header.hash().as_bytes().try_into().unwrap());
+        data_root_commitments.push(data_root_commitment.try_into().unwrap());
+        state_root_commitments.push(state_root_commitment.try_into().unwrap());
+    }
+    let end_authority_set_id = input_data_fetcher.get_authority_set_id(end_block).await;
+    let end_authority_set_hash = input_data_fetcher
+        .compute_authority_set_hash(end_block)
+        .await;
+    BlockRangeData {
+        start_blocks,
+        end_blocks,
+        header_hashes,
+        data_root_commitments,
+        state_root_commitments,
+        end_authority_set_id,
+        end_authority_set_hash: end_authority_set_hash.0,
+    }
+}
 
-//     let client = Provider::<Ws>::connect(ethereum_ws)
-//         .await
-//         .expect("could not connect to client");
+#[tokio::main]
+async fn main() {
+    let args = FillBlockRangeArgs::parse();
 
-//     let chain_id = client.get_chainid().await.unwrap();
+    let end_block = args.end_block;
 
-//     info!(
-//         "Listening for VectorX events on chain {} at address: {}",
-//         chain_id, contract_address
-//     );
+    let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
 
-//     let mut data_fetcher = RpcDataFetcher::new().await;
+    let address = contract_address
+        .parse::<Address>()
+        .expect("invalid address");
 
-//     let client = Arc::new(client);
+    let ethereum_rpc_url = env::var("ETHEREUM_RPC_URL").expect("ETHEREUM_RPC_URL must be set");
 
-//     let header_range_filter = Filter::new()
-//         .address(address)
-//         .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
+    let private_key =
+        env::var("PRIVATE_KEY").unwrap_or(String::from("0x00000000000000000000000000000000"));
+    let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
+    let wallet = LocalWallet::from_str(&private_key).expect("invalid private key");
+    let wallet = wallet.with_chain_id(chain_id.parse::<u64>().unwrap());
 
-//     let mut stream = client.subscribe_logs(&header_range_filter).await.unwrap();
-//     while let Some(log) = stream.next().await {
-//         let log_bytes = log.data;
-//         let decoded = HeaderRangeCommitmentStoredTuple::abi_decode(&log_bytes.0, true).unwrap();
+    let provider =
+        Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
+    let client = Arc::new(SignerMiddleware::new(provider.clone(), wallet.clone()));
 
-//         let trusted_block = decoded.0;
-//         let end_block = decoded.1;
-//         let expected_data_commitment: Vec<u8> = decoded.2.to_vec();
-//         let expected_data_commitment: [u8; 32] = expected_data_commitment.try_into().unwrap();
+    let contract = VectorX::new(address.0 .0, client);
 
-//         let data_commitment_range = DataCommitmentRange {
-//             start: trusted_block,
-//             end: end_block,
-//             data_commitment: expected_data_commitment.to_vec(),
-//         };
+    let latest_block = contract.latest_block().await.unwrap();
 
-//         data_fetcher
-//             .redis_client
-//             .add_data_commitment_range(chain_id.as_u64(), address.0.to_vec(), data_commitment_range)
-//             .await;
-//     }
-// }
+    let block_range_data = get_block_range_data(latest_block, end_block).await;
 
-// #[tokio::main]
-// async fn main() {
-//     env::set_var("RUST_LOG", "info");
-//     dotenv::dotenv().ok();
-//     env_logger::init();
-
-//     // List of Avail chains to index.
-//     let chains = ["Couscous", "Goldberg"];
-
-//     // For each Avail chain `chainName` to index, set the following environment variables:
-//     //  {chainName}_ETHEREUM_WS: An Ethereum WS for the chain the deployed VectorX contract is on.
-//     //  {chainName}_CONTRACT_ADDRESS: The address of the deployed VectorX contract.
-//     // Note: Not all chains need to be indexed.
-//     let mut ethereum_ws_vec = Vec::new();
-//     let mut contract_addresses = Vec::new();
-//     for chain in &chains {
-//         let ethereum_ws_var = format!("{}_ETHEREUM_WS", chain.to_uppercase());
-//         let contract_address_var = format!("{}_CONTRACT_ADDRESS", chain.to_uppercase());
-
-//         let ethereum_ws = env::var(&ethereum_ws_var);
-//         let contract_address = env::var(&contract_address_var);
-
-//         if ethereum_ws.is_err() || contract_address.is_err() {
-//             info!("Not indexing {} for events!", chain);
-//             continue;
-//         }
-
-//         ethereum_ws_vec.push(ethereum_ws.unwrap());
-//         contract_addresses.push(contract_address.unwrap());
-//     }
-
-//     let mut join_handles = Vec::new();
-
-//     for (ethereum_ws, contract_address) in ethereum_ws_vec
-//         .into_iter()
-//         .zip(contract_addresses.into_iter())
-//     {
-//         let handle = tokio::spawn(async move {
-//             listen_for_events(&ethereum_ws, &contract_address).await;
-//         });
-//         join_handles.push(handle);
-//     }
-
-//     for handle in join_handles {
-//         handle.await.expect("Task panicked or failed");
-//     }
-// }
-
-fn main() {
-    println!("Hello, world!");
+    let tx: Option<TransactionReceipt> = contract
+        .update_block_range_data(
+            block_range_data.start_blocks,
+            block_range_data.end_blocks,
+            block_range_data.header_hashes,
+            block_range_data.data_root_commitments,
+            block_range_data.state_root_commitments,
+            block_range_data.end_authority_set_id,
+            block_range_data.end_authority_set_hash,
+        )
+        .send()
+        .await
+        .unwrap()
+        .await
+        .unwrap();
+    if let Some(tx) = tx {
+        info!(
+            "Proof relayed successfully! Transaction Hash: {:?}",
+            tx.transaction_hash
+        );
+    }
 }

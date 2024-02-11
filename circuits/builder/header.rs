@@ -6,6 +6,7 @@ use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkParameters, U32Variable, ValueStream,
 };
 use serde::{Deserialize, Serialize};
+use subxt::config::Header;
 
 use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
 use crate::input::RpcDataFetcher;
@@ -69,8 +70,10 @@ impl<
 
         // Pad `headers` to the correct length for `EncodedHeader` variables.
         let mut header_variables = Vec::new();
+        let mut header_hashes = Vec::new();
         for (i, header) in headers.iter().enumerate() {
             let mut header_bytes = header.encode();
+            let header_hash = header.hash();
             let header_size = header_bytes.len();
             if header_size > HEADER_LENGTH {
                 panic!(
@@ -86,6 +89,7 @@ impl<
                 header_size: header_size as u32,
             };
             header_variables.push(header_variable);
+            header_hashes.push(header_hash.0.into());
         }
 
         // Pad `header_variables` with empty headers to ensure its length is NUM_HEADERS.
@@ -100,6 +104,7 @@ impl<
             .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
                 header_variables,
             );
+        output_stream.write_value::<ArrayVariable<Bytes32Variable, NUM_HEADERS>>(header_hashes);
     }
 }
 

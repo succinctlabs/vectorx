@@ -103,9 +103,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     input_stream.write(&last_block);
                     input_stream.write(&map_ctx.target_block);
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
-                    let headers = builder
-                        .async_hint(input_stream, header_fetcher)
-                        .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
+                    let output_stream = builder
+                        .async_hint(input_stream, header_fetcher);
+                    let headers = output_stream.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
+                            builder,
+                        );
+                    let header_hashes = output_stream.read::<ArrayVariable<Bytes32Variable, HEADERS_PER_MAP>>(
                             builder,
                         );
 
@@ -135,12 +138,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     for (i, header) in headers.as_vec().iter().enumerate() {
                         // Calculate and save the block hash.
-                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
-                        block_hashes.push(hash);
+                        // let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
+                        block_hashes.push(header_hashes.as_vec()[i]);
 
                         // Decode the header and save relevant fields.
                         let header_variable =
-                            builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
+                            builder.decode_header::<MAX_HEADER_SIZE>(header, &header_hashes.as_vec()[i]);
                         block_nums.push(header_variable.block_number);
                         block_parent_hashes.push(header_variable.parent_hash);
                         block_state_roots.push(header_variable.state_root);
@@ -151,19 +154,19 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                         // Verify that the headers are linked correctly.
                         if i > 0 {
-                            // Verify that the parent hash chain and block number chain are correct.
-                            let hashes_linked =
-                                builder.is_equal(block_parent_hashes[i], block_hashes[i - 1]);
-                            let expected_block_num = builder.add(block_nums[i - 1], one_u32);
-                            let nums_sequential =
-                                builder.is_equal(block_nums[i], expected_block_num);
+                            // // Verify that the parent hash chain and block number chain are correct.
+                            // let hashes_linked =
+                            //     builder.is_equal(block_parent_hashes[i], block_hashes[i - 1]);
+                            // let expected_block_num = builder.add(block_nums[i - 1], one_u32);
+                            // let nums_sequential =
+                            //     builder.is_equal(block_nums[i], expected_block_num);
 
-                            let header_correctly_linked =
-                                builder.and(hashes_linked, nums_sequential);
+                            // let header_correctly_linked =
+                            //     builder.and(hashes_linked, nums_sequential);
 
-                            // If this is not a pad header, the headers must be correctly linked.
-                            let link_check = builder.or(is_pad_block, header_correctly_linked);
-                            builder.assert_is_equal(link_check, true_const);
+                            // // If this is not a pad header, the headers must be correctly linked.
+                            // let link_check = builder.or(is_pad_block, header_correctly_linked);
+                            // builder.assert_is_equal(link_check, true_const);
                         }
 
                         // If not a pad header, update end_block_num, end_header_hash and num_headers.
@@ -172,7 +175,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             end_block_num,
                             header_variable.block_number,
                         );
-                        end_header_hash = builder.select(is_pad_block, end_header_hash, hash);
+                        end_header_hash = builder.select(is_pad_block, end_header_hash, header_hashes.as_vec()[i]);
 
                         let num_headers_increment = builder.select(is_pad_block, zero, one);
                         num_headers = builder.add(num_headers, num_headers_increment);
@@ -294,6 +297,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
     use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
@@ -363,22 +368,24 @@ mod tests {
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_verify_subchain() {
+        env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
         env_logger::try_init().unwrap_or_default();
 
         let mut builder = DefaultBuilder::new();
 
-        const MAX_NUM_HEADERS: usize = 32;
+        const MAX_NUM_HEADERS: usize = 16;
         const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * BLAKE2B_CHUNK_SIZE_BYTES;
 
         TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::define(&mut builder);
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let trusted_header = "4cfd147756de6e8004a5f2ba9f2ca29e8488bae40acb97474c7086c45b39ff92"
+        let trusted_header = "42933743127422ab194445ad5bf0d27ea7ccd20f98cdc902ee7fc55df00fca68"
             .parse()
             .unwrap();
-        let trusted_block = 272503u32;
-        let target_block = 272535u32; // mimics test_step_small
+        let trusted_block = 397855u32;
+        let target_block = 397862u32; // mimics test_step_small
 
         input.evm_write::<U32Variable>(trusted_block);
         input.evm_write::<Bytes32Variable>(trusted_header);

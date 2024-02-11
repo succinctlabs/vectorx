@@ -279,6 +279,7 @@ mod tests {
         println!("data root merkle root {:?}", data_root_merkle_root);
     }
 
+    // TODO: THIS TEST FAILED ON MODAL.
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_step_large() {
@@ -298,14 +299,14 @@ mod tests {
 
         let mut input = circuit.input();
 
-        let trusted_header = "cb9d49dc075848689c730c9067ed9c28c7a8d5aa5f86641f68427c29eae26a76"
+        let trusted_header = "155e2363b33477fa51a88bfc7f8647a084853b5f2dcc329d0e21e9e1049ded93"
             .parse()
             .unwrap();
-        let trusted_block = 99990u32;
+        let trusted_block = 395190u32;
         // Step to an epoch end block, so it's not reliant on a stored justification.
-        let target_block = 100005u32;
-        let authority_set_id = 48u64;
-        let authority_set_hash = "a699e49272d2d23f12e1624fba2ed8d28e1fc777ef25a40a7bcacbb8c0d8d252"
+        let target_block = 395430u32;
+        let authority_set_id = 181u64;
+        let authority_set_hash = "a97ebe6c36b2bcde9b8193c0f03b54fe6df67c725ba7b53b915af1735150fc75"
             .parse()
             .unwrap();
 

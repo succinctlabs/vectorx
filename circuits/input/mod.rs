@@ -1130,4 +1130,23 @@ mod tests {
             hex::encode(data_merkle_root.as_slice())
         );
     }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_header_hash() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+
+        let start: u32 = 397855;
+        let end: u32 = 397862;
+
+        for block in start..end {
+            let header = data_fetcher.get_header(block).await;
+            let header_size = header.encode().len();
+            println!("header size {:?}", header_size);
+        }
+
+        // let header = data_fetcher.get_header(397855).await;
+
+        // println!("header hash {:?}", hex::encode(header.hash().0));
+    }
 }

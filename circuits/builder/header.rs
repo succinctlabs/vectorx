@@ -5,6 +5,7 @@ use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::prelude::{
     ArrayVariable, Bytes32Variable, CircuitBuilder, PlonkParameters, U32Variable, ValueStream,
 };
+use primitive_types::H256;
 use serde::{Deserialize, Serialize};
 use subxt::config::Header;
 
@@ -99,6 +100,7 @@ impl<
                 header_size: 0u32,
             };
             header_variables.push(header_variable);
+            header_hashes.push(H256::from_slice(&[0u8; 32]));
         }
         output_stream
             .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(

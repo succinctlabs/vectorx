@@ -9,8 +9,8 @@ use plonky2x::prelude::{
 };
 
 use crate::builder::decoder::DecodingMethods;
-use crate::builder::header::{HeaderMethods, HeaderRangeFetcherHint};
-use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
+use crate::builder::header::HeaderRangeFetcherHint;
+use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_SIZE};
 use crate::vars::{EncodedHeaderVariable, SubchainVerificationVariable};
 
 #[derive(Clone, Debug, CircuitVariable)]
@@ -303,7 +303,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
     use super::*;
-    use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
+    use crate::consts::{BLAKE2B_CHUNK_SIZE_BYTES, MAX_HEADER_CHUNK_SIZE};
 
     // MapReduce circuits requires a circuit to be defined in order to invoke the mapreduce method.
     #[derive(Clone, Debug)]
@@ -394,9 +394,9 @@ mod tests {
         let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        // TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_HEADER_SIZE>::test_serialization::<
-        //     L,
-        //     D,
-        // >();
+        TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::test_serialization::<
+            L,
+            D,
+        >();
     }
 }

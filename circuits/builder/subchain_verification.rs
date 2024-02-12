@@ -9,8 +9,8 @@ use plonky2x::prelude::{
 };
 
 use crate::builder::decoder::DecodingMethods;
-use crate::builder::header::HeaderRangeFetcherHint;
-use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_SIZE};
+use crate::builder::header::{HeaderMethods, HeaderRangeFetcherHint};
+use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
 use crate::vars::{EncodedHeaderVariable, SubchainVerificationVariable};
 
 #[derive(Clone, Debug, CircuitVariable)]
@@ -138,8 +138,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     for (i, header) in headers.as_vec().iter().enumerate() {
                         // Calculate and save the block hash.
-                        // let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
-                        block_hashes.push(header_hashes.as_vec()[i]);
+                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
+                        block_hashes.push(hash);
 
                         // Decode the header and save relevant fields.
                         let header_variable =
@@ -175,7 +175,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             end_block_num,
                             header_variable.block_number,
                         );
-                        end_header_hash = builder.select(is_pad_block, end_header_hash, header_hashes.as_vec()[i]);
+                        end_header_hash = builder.select(is_pad_block, end_header_hash, hash);
 
                         let num_headers_increment = builder.select(is_pad_block, zero, one);
                         num_headers = builder.add(num_headers, num_headers_increment);

@@ -293,6 +293,7 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_blake2b_correctness() {
+        // TODO: Failing block.
         let block_nbr = 397857;
 
         let mut data_fetcher = RpcDataFetcher::new().await;
@@ -301,22 +302,18 @@ mod tests {
         let header_size = header_bytes.len();
         println!("Header size: {:?}", header_size);
 
-        // Create a Blake2b object configured for a 32-byte (256-bit) hash
+        // Confirm the header hash computed by Avail is correct (i.e. matches the Blake2B hash of the
+        // encoded bytes.
+        // Hash the encoded bytes.
         let expected_hash = Blake2Hasher::hash(&header_bytes);
-
-        // Actual hash
+        // Hash from the header.
         let actual_hash = header.hash();
-
         assert_eq!(
             expected_hash, actual_hash,
-            "Actual header hash is incorrect! Doesn't match the Blake2B hash (out of circuit)."
+            "Avail's actual header hash is incorrect! Doesn't match the computed Blake2B hash."
         );
 
-        let hex_encoded_hash = hex::encode(actual_hash.0);
-
-        println!("Expected hash: {:?}", hex_encoded_hash);
-
-        // Compute the fixed Blake2B hash
+        // Confirm that the header hash computed by the circuit is correct. NOTE: IT IS CURRENTLY WRONG.
         const FAILING_HEADER_SIZE: usize = 15360;
         let mut builder = DefaultBuilder::new();
         let var_header = builder.read::<ArrayVariable<ByteVariable, FAILING_HEADER_SIZE>>();

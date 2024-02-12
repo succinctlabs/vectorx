@@ -87,6 +87,7 @@ alloy-primitives = "0.4.2"
 anyhow = "1.0.68"
 clap = "4.4.9"
 rs_merkle = "1.4.1"
+blake2 = "0.10.6"
 [dev-dependencies]
 anyhow = "1.0.68"
 

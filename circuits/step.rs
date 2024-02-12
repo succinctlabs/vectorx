@@ -303,7 +303,7 @@ mod tests {
             .parse()
             .unwrap();
         let trusted_block = 395190u32;
-        // Step to an epoch end block, so it's not reliant on a stored justification.
+        // Step to a block that is a stored justification.
         let target_block = 395430u32;
         let authority_set_id = 181u64;
         let authority_set_hash = "a97ebe6c36b2bcde9b8193c0f03b54fe6df67c725ba7b53b915af1735150fc75"

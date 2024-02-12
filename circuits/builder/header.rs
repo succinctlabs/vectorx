@@ -117,7 +117,9 @@ mod tests {
     use avail_subxt::config::Header;
     use codec::Encode;
     use ethers::types::H256;
+    use plonky2x::frontend::vars::ByteVariable;
     use plonky2x::prelude::{ArrayVariable, Bytes32Variable, DefaultBuilder, GoldilocksField};
+    use sp_core::{Blake2Hasher, Hasher};
 
     use crate::builder::header::HeaderMethods;
     use crate::consts::{MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
@@ -213,5 +215,126 @@ mod tests {
             }
         }
         println!("Max header size: {:?}", max_size);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "ci", ignore)]
+    fn test_hash_output_check() {
+        env::set_var("RUST_LOG", "debug");
+        env_logger::try_init().unwrap_or_default();
+
+        const HEAD_BLOCK_NUM: u32 = 397857;
+        const NUM_HEADERS: usize = 1;
+
+        type F = GoldilocksField;
+
+        let mut builder = DefaultBuilder::new();
+
+        let headers =
+            builder.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_HEADERS>>();
+
+        for i in 0..NUM_HEADERS {
+            let calculated_hash =
+                builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&headers[i]);
+            builder.write::<Bytes32Variable>(calculated_hash);
+        }
+
+        let circuit = builder.build();
+
+        let mut input = circuit.input();
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        // Note: Returns NUM_BLOCKS + 1 headers.
+        let headers = rt.block_on(async {
+            let mut data_fetcher = RpcDataFetcher::new().await;
+            data_fetcher
+                .get_block_headers_range(HEAD_BLOCK_NUM, HEAD_BLOCK_NUM + NUM_HEADERS as u32)
+                .await
+        });
+
+        let encoded_headers_values: Vec<EncodedHeader<MAX_HEADER_SIZE, F>> = headers
+            [0..NUM_HEADERS]
+            .iter()
+            .map(|x| {
+                let mut header: Vec<u8> = x.encode();
+                let header_len = header.len();
+                header.resize(MAX_HEADER_SIZE, 0);
+                EncodedHeader {
+                    header_bytes: header.as_slice().into(),
+                    header_size: header_len as u32,
+                }
+            })
+            .collect::<_>();
+
+        input.write::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_HEADERS>>(
+            encoded_headers_values,
+        );
+
+        let (proof, mut output) = circuit.prove(&input);
+        circuit.verify(&proof, &input, &output);
+
+        let expected_block_hashes = headers
+            .iter()
+            .map(|x| H256::from_slice(&x.hash().0))
+            .collect::<Vec<H256>>();
+
+        for (i, expected_hash) in expected_block_hashes[0..NUM_HEADERS].iter().enumerate() {
+            let calculated_hash = output.read::<Bytes32Variable>();
+            assert_eq!(
+                calculated_hash,
+                *expected_hash,
+                "Hashes do not match for block: {:?}",
+                HEAD_BLOCK_NUM + i as u32
+            );
+        }
+    }
+
+    // @kevin TODO: This is failing because of the incorrect computation of the header hash.
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_blake2b_correctness() {
+        let block_nbr = 397857;
+
+        let mut data_fetcher = RpcDataFetcher::new().await;
+        let header = data_fetcher.get_header(block_nbr).await;
+        let header_bytes = header.encode();
+        let header_size = header_bytes.len();
+        println!("Header size: {:?}", header_size);
+
+        // Create a Blake2b object configured for a 32-byte (256-bit) hash
+        let expected_hash = Blake2Hasher::hash(&header_bytes);
+
+        // Actual hash
+        let actual_hash = header.hash();
+
+        assert_eq!(
+            expected_hash, actual_hash,
+            "Actual header hash is incorrect! Doesn't match the Blake2B hash (out of circuit)."
+        );
+
+        let hex_encoded_hash = hex::encode(actual_hash.0);
+
+        println!("Expected hash: {:?}", hex_encoded_hash);
+
+        // Compute the fixed Blake2B hash
+        const FAILING_HEADER_SIZE: usize = 15360;
+        let mut builder = DefaultBuilder::new();
+        let var_header = builder.read::<ArrayVariable<ByteVariable, FAILING_HEADER_SIZE>>();
+        let calculated_hash = builder.curta_blake2b(var_header.as_slice());
+        builder.write::<Bytes32Variable>(calculated_hash);
+        let circuit = builder.build();
+        let mut input = circuit.input();
+        input.write::<ArrayVariable<ByteVariable, FAILING_HEADER_SIZE>>(header_bytes);
+        let (proof, mut output) = circuit.prove(&input);
+        circuit.verify(&proof, &input, &output);
+        let calculated_hash = output.read::<Bytes32Variable>();
+
+        assert_eq!(
+            expected_hash.0,
+            calculated_hash.0,
+            "Header hash calculated by circuit is incorrect! Expected: {:?}, Calculated: {:?}",
+            hex::encode(expected_hash.0),
+            hex::encode(calculated_hash.0)
+        );
     }
 }

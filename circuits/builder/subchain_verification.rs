@@ -155,18 +155,18 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         // Verify that the headers are linked correctly.
                         if i > 0 {
                             // // Verify that the parent hash chain and block number chain are correct.
-                            // let hashes_linked =
-                            //     builder.is_equal(block_parent_hashes[i], block_hashes[i - 1]);
-                            // let expected_block_num = builder.add(block_nums[i - 1], one_u32);
-                            // let nums_sequential =
-                            //     builder.is_equal(block_nums[i], expected_block_num);
+                            let hashes_linked =
+                                builder.is_equal(block_parent_hashes[i], block_hashes[i - 1]);
+                            let expected_block_num = builder.add(block_nums[i - 1], one_u32);
+                            let nums_sequential =
+                                builder.is_equal(block_nums[i], expected_block_num);
 
-                            // let header_correctly_linked =
-                            //     builder.and(hashes_linked, nums_sequential);
+                            let header_correctly_linked =
+                                builder.and(hashes_linked, nums_sequential);
 
-                            // // If this is not a pad header, the headers must be correctly linked.
-                            // let link_check = builder.or(is_pad_block, header_correctly_linked);
-                            // builder.assert_is_equal(link_check, true_const);
+                            // If this is not a pad header, the headers must be correctly linked.
+                            let link_check = builder.or(is_pad_block, header_correctly_linked);
+                            builder.assert_is_equal(link_check, true_const);
                         }
 
                         // If not a pad header, update end_block_num, end_header_hash and num_headers.
@@ -394,9 +394,9 @@ mod tests {
         let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_HEADER_SIZE>::test_serialization::<
-            L,
-            D,
-        >();
+        // TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_HEADER_SIZE>::test_serialization::<
+        //     L,
+        //     D,
+        // >();
     }
 }

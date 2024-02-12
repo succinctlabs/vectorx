@@ -313,8 +313,15 @@ mod tests {
             "Avail's actual header hash is incorrect! Doesn't match the computed Blake2B hash."
         );
 
-        // Confirm that the header hash computed by the circuit is correct. NOTE: IT IS CURRENTLY WRONG.
+        // For fixed blake2b, set a constant that is equal to the expected header size.
         const FAILING_HEADER_SIZE: usize = 15360;
+        assert_eq!(
+            header_size, FAILING_HEADER_SIZE,
+            "Header size is not equal to the expected fixed size of {} bytes.",
+            FAILING_HEADER_SIZE
+        );
+
+        // Confirm that the header hash computed by the circuit is correct. NOTE: IT IS CURRENTLY WRONG.
         let mut builder = DefaultBuilder::new();
         let var_header = builder.read::<ArrayVariable<ByteVariable, FAILING_HEADER_SIZE>>();
         let calculated_hash = builder.curta_blake2b(var_header.as_slice());

@@ -5,41 +5,26 @@ import "forge-std/Script.sol";
 import {VectorX} from "../src/VectorX.sol";
 import {ERC1967Proxy} from "@openzeppelin/proxy/ERC1967/ERC1967Proxy.sol";
 
-// Deploy or upgrade a new contract.
-// If UPGRADE_VIA_EOA is true, the existing contract address must be provided. It will update
-// the contract to the new implementation with the new parameters.
 contract DeployScript is Script {
     function setUp() public {}
 
     function run() public {
         vm.startBroadcast();
 
-        bytes32 headerRangeFunctionId = vm.envBytes32(
-            "HEADER_RANGE_FUNCTION_ID"
-        );
-        bytes32 rotateFunctionId = vm.envBytes32("ROTATE_FUNCTION_ID");
-        uint32 height = uint32(vm.envUint("GENESIS_HEIGHT"));
-        bytes32 header = vm.envBytes32("GENESIS_HEADER");
-        uint64 authoritySetId = uint64(vm.envUint("GENESIS_AUTHORITY_SET_ID"));
-        bytes32 authoritySetHash = vm.envBytes32("GENESIS_AUTHORITY_SET_HASH");
+        bytes32 create2Salt = bytes32(vm.envBytes("CREATE2_SALT"));
 
-        address gateway = vm.envAddress("GATEWAY_ADDRESS");
-
-        bytes32 CREATE2_SALT = bytes32(vm.envBytes("CREATE2_SALT"));
-
-        bool UPGRADE = vm.envBool("UPGRADE_VIA_EOA");
-        address existingProxyAddress = vm.envAddress("CONTRACT_ADDRESS");
+        bool upgrade = vm.envBool("UPGRADE");
 
         // Deploy contract
-        VectorX lightClientImpl = new VectorX{salt: bytes32(CREATE2_SALT)}();
+        VectorX lightClientImpl = new VectorX{salt: bytes32(create2Salt)}();
 
         console.logAddress(address(lightClientImpl));
 
         VectorX lightClient;
-        if (!UPGRADE) {
+        if (!upgrade) {
             lightClient = VectorX(
                 address(
-                    new ERC1967Proxy{salt: bytes32(CREATE2_SALT)}(
+                    new ERC1967Proxy{salt: bytes32(create2Salt)}(
                         address(lightClientImpl),
                         ""
                     )
@@ -50,22 +35,40 @@ contract DeployScript is Script {
             lightClient.initialize(
                 VectorX.InitParameters({
                     guardian: msg.sender,
-                    gateway: gateway,
-                    height: height,
-                    header: header,
-                    authoritySetId: authoritySetId,
-                    authoritySetHash: authoritySetHash,
-                    headerRangeFunctionId: headerRangeFunctionId,
-                    rotateFunctionId: rotateFunctionId
+                    gateway: vm.envAddress("GATEWAY_ADDRESS"),
+                    height: uint32(vm.envUint("GENESIS_HEIGHT")),
+                    header: vm.envBytes32("GENESIS_HEADER"),
+                    authoritySetId: uint64(vm.envUint("AUTHORITY_SET_ID")),
+                    authoritySetHash: vm.envBytes32("AUTHORITY_SET_HASH"),
+                    headerRangeFunctionId: vm.envBytes32(
+                    "HEADER_RANGE_FUNCTION_ID"
+                    ),
+                    rotateFunctionId: vm.envBytes32("ROTATE_FUNCTION_ID")
                 })
             );
         } else {
+            bool updateGateway = vm.envBool("UPDATE_GATEWAY");
+            bool updateGenesisState = vm.envBool("UPDATE_GENESIS_STATE");
+            bool updateFunctionIds = vm.envBool("UPDATE_FUNCTION_IDS");
+            address existingProxyAddress = vm.envAddress("CONTRACT_ADDRESS");
+
             lightClient = VectorX(existingProxyAddress);
             lightClient.upgradeTo(address(lightClientImpl));
 
-            lightClient.updateGenesisState(height, header, authoritySetId, authoritySetHash);
-            lightClient.updateGateway(gateway);
-            lightClient.updateFunctionIds(headerRangeFunctionId, rotateFunctionId);
+            if (updateGateway) {
+                lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));
+            }
+            if (updateGenesisState) {
+                lightClient.updateGenesisState(uint32(vm.envUint("GENESIS_HEIGHT")),
+                    vm.envBytes32("GENESIS_HEADER"),
+                    uint64(vm.envUint("AUTHORITY_SET_ID")),
+                    vm.envBytes32("AUTHORITY_SET_HASH"));
+            }
+            if (updateFunctionIds) {
+                lightClient.updateFunctionIds(vm.envBytes32(
+                    "HEADER_RANGE_FUNCTION_ID"
+                    ), vm.envBytes32("ROTATE_FUNCTION_ID"));
+            }
         }
 
         console.logAddress(address(lightClient));

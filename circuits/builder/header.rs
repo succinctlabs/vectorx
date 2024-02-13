@@ -117,7 +117,7 @@ mod tests {
     use avail_subxt::config::Header;
     use codec::Encode;
     use ethers::types::H256;
-    use plonky2x::frontend::vars::ByteVariable;
+    use plonky2x::frontend::vars::{ByteVariable, U32Variable};
     use plonky2x::prelude::{ArrayVariable, Bytes32Variable, DefaultBuilder, GoldilocksField};
     use sp_core::{Blake2Hasher, Hasher};
 
@@ -327,7 +327,8 @@ mod tests {
         // Confirm that the header hash computed by the circuit is correct. NOTE: IT IS CURRENTLY WRONG.
         let mut builder = DefaultBuilder::new();
         let var_header = builder.read::<ArrayVariable<ByteVariable, FAILING_HEADER_SIZE>>();
-        let calculated_hash = builder.curta_blake2b(var_header.as_slice());
+        let input_length = builder.constant::<U32Variable>(FAILING_HEADER_SIZE as u32);
+        let calculated_hash = builder.curta_blake2b_variable(var_header.as_slice(), input_length);
         builder.write::<Bytes32Variable>(calculated_hash);
         let circuit = builder.build();
         let mut input = circuit.input();

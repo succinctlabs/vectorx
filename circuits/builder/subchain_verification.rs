@@ -394,9 +394,9 @@ mod tests {
         let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        // TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::test_serialization::<
-        //     L,
-        //     D,
-        // >();
+        TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::test_serialization::<
+            L,
+            D,
+        >();
     }
 }

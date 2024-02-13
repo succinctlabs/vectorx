@@ -115,14 +115,17 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 _endAuthoritySetHash
     ) external onlyGuardian {
         assert(
+            _startBlocks.length > 0 &&
             _startBlocks.length == _endBlocks.length &&
                 _endBlocks.length == _headerHashes.length &&
                 _headerHashes.length == _dataRootCommitments.length &&
                 _dataRootCommitments.length == _stateRootCommitments.length
         );
-
+        require(_startBlocks[0] == latestBlock);
         for (uint256 i = 0; i < _startBlocks.length; i++) {
-            assert(_startBlocks[i] == latestBlock);
+            if (i < _startBlocks.length - 1) {
+                require(_endBlocks[i] == _startBlocks[i + 1] - 1);
+            }
             bytes32 key = keccak256(
                 abi.encode(_startBlocks[i], _endBlocks[i])
             );
@@ -130,7 +133,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             stateRootCommitments[key] = _stateRootCommitments[i];
 
             blockHeightToHeaderHash[_endBlocks[i]] = _headerHashes[i];
-            latestBlock = _endBlocks[i];
 
             emit HeadUpdate(_endBlocks[i], _headerHashes[i]);
 
@@ -142,6 +144,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             );
         }
         authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
+        latestBlock = _endBlocks[_endBlocks.length - 1];
     }
 
     /// @notice Request a header update and data commitment from range (latestBlock, requestedBlock].

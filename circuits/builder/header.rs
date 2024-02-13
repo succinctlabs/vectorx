@@ -294,13 +294,16 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_blake2b_correctness() {
         // TODO: Failing block.
-        let block_nbr = 397857;
+        let block_nbr = 397859;
 
         let mut data_fetcher = RpcDataFetcher::new().await;
         let header = data_fetcher.get_header(block_nbr).await;
         let header_bytes = header.encode();
+        // println!("Header bytes: {:?}", hex::encode(&header_bytes));
         let header_size = header_bytes.len();
         println!("Header size: {:?}", header_size);
+
+        println!("Header size mod 64: {:?}", header_size % 64);
 
         // Confirm the header hash computed by Avail is correct (i.e. matches the Blake2B hash of the
         // encoded bytes.

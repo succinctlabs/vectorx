@@ -1143,6 +1143,7 @@ mod tests {
             let header = data_fetcher.get_header(block).await;
             let header_size = header.encode().len();
             println!("header size {:?}", header_size);
+            println!("header size mod 64 {:?}", header_size % 64);
 
             let authority_set_id = data_fetcher.get_authority_set_id(block).await;
 

@@ -144,17 +144,15 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
     }
 
-    /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
-    /// @param _trustedBlock The block height of the trusted block.
-    /// @param _authoritySetId The authority set id of the header range (trustedBlock, requestedBlock].
+    /// @notice Request a header update and data commitment from range (latestBlock, requestedBlock].
+    /// @param _authoritySetId The authority set id of the header range (latestBlock, requestedBlock].
     /// @param _requestedBlock The block height of the requested block.
     /// @dev The trusted block and requested block must have the same authority id.
     function requestHeaderRange(
-        uint32 _trustedBlock,
         uint64 _authoritySetId,
         uint32 _requestedBlock
     ) external payable {
-        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        bytes32 trustedHeader = blockHeightToHeaderHash[latestBlock];
         if (trustedHeader == bytes32(0)) {
             revert AuthoritySetNotFound();
         }
@@ -165,13 +163,13 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        require(_requestedBlock > _trustedBlock);
-        require(_requestedBlock - _trustedBlock <= MAX_HEADER_RANGE);
+        require(_requestedBlock > latestBlock);
+        require(_requestedBlock - latestBlock <= MAX_HEADER_RANGE);
         // Note: This is needed to prevent a long-range attack on the light client.
         require(_requestedBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
-            _trustedBlock,
+            latestBlock,
             trustedHeader,
             _authoritySetId,
             authoritySetHash,
@@ -180,7 +178,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         bytes memory data = abi.encodeWithSelector(
             this.commitHeaderRange.selector,
-            _trustedBlock,
+            latestBlock,
             _authoritySetId,
             _requestedBlock
         );
@@ -193,7 +191,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             500000
         );
         emit HeaderRangeRequested(
-            _trustedBlock,
+            latestBlock,
             trustedHeader,
             _authoritySetId,
             authoritySetHash,
@@ -201,13 +199,11 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         );
     }
 
-    /// @notice Add target header hash, and data + state commitments for (trustedBlock, targetBlock].
-    /// @param _trustedBlock The block height of the trusted block.
-    /// @param _authoritySetId The authority set id of the header range (trustedBlock, targetBlock].
+    /// @notice Add target header hash, and data + state commitments for (latestBlock, targetBlock].
+    /// @param _authoritySetId The authority set id of the header range (latestBlock, targetBlock].
     /// @param _targetBlock The block height of the target block.
     /// @dev The trusted block and requested block must have the same authority set id.
     function commitHeaderRange(
-        uint32 _trustedBlock,
         uint64 _authoritySetId,
         uint32 _targetBlock
     ) external {
@@ -215,7 +211,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert ContractFrozen();
         }
 
-        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        bytes32 trustedHeader = blockHeightToHeaderHash[latestBlock];
         if (trustedHeader == bytes32(0)) {
             revert TrustedHeaderNotFound();
         }
@@ -224,13 +220,13 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        require(_targetBlock > _trustedBlock);
-        require(_targetBlock - _trustedBlock <= MAX_HEADER_RANGE);
+        require(_targetBlock > latestBlock);
+        require(_targetBlock - latestBlock <= MAX_HEADER_RANGE);
         // Note: This is needed to prevent a long-range attack on the light client.
         require(_targetBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
-            _trustedBlock,
+            latestBlock,
             trustedHeader,
             _authoritySetId,
             authoritySetHash,
@@ -250,8 +246,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         blockHeightToHeaderHash[_targetBlock] = targetHeaderHash;
 
-        // Store the data and state commitments for the range (trustedBlock, targetBlock].
-        bytes32 key = keccak256(abi.encode(_trustedBlock, _targetBlock));
+        // Store the data and state commitments for the range (latestBlock, targetBlock].
+        bytes32 key = keccak256(abi.encode(latestBlock, _targetBlock));
         dataRootCommitments[key] = dataRootCommitment;
         stateRootCommitments[key] = stateRootCommitment;
 
@@ -261,7 +257,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         emit HeadUpdate(_targetBlock, targetHeaderHash);
 
         emit HeaderRangeCommitmentStored(
-            _trustedBlock,
+            latestBlock,
             _targetBlock,
             dataRootCommitment,
             stateRootCommitment

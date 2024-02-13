@@ -103,12 +103,9 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     input_stream.write(&last_block);
                     input_stream.write(&map_ctx.target_block);
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
-                    let output_stream = builder
-                        .async_hint(input_stream, header_fetcher);
-                    let headers = output_stream.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
-                            builder,
-                        );
-                    let header_hashes = output_stream.read::<ArrayVariable<Bytes32Variable, HEADERS_PER_MAP>>(
+                    let headers = builder
+                        .async_hint(input_stream, header_fetcher)
+                        .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
                             builder,
                         );
 
@@ -143,7 +140,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                         // Decode the header and save relevant fields.
                         let header_variable =
-                            builder.decode_header::<MAX_HEADER_SIZE>(header, &header_hashes.as_vec()[i]);
+                            builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
                         block_nums.push(header_variable.block_number);
                         block_parent_hashes.push(header_variable.parent_hash);
                         block_state_roots.push(header_variable.state_root);

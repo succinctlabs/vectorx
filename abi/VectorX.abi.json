@@ -125,11 +125,6 @@
         "name": "commitHeaderRange",
         "inputs": [
             {
-                "name": "_trustedBlock",
-                "type": "uint32",
-                "internalType": "uint32"
-            },
-            {
                 "name": "_authoritySetId",
                 "type": "uint64",
                 "internalType": "uint64"
@@ -365,11 +360,6 @@
         "type": "function",
         "name": "requestHeaderRange",
         "inputs": [
-            {
-                "name": "_trustedBlock",
-                "type": "uint32",
-                "internalType": "uint32"
-            },
             {
                 "name": "_authoritySetId",
                 "type": "uint64",

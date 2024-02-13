@@ -279,7 +279,6 @@ mod tests {
         println!("data root merkle root {:?}", data_root_merkle_root);
     }
 
-    // TODO: THIS TEST FAILED ON MODAL.
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_step_large() {

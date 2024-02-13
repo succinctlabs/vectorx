@@ -1,5 +1,6 @@
 use alloy_primitives::Address;
 use clap::Parser;
+use ethers::abi::AbiEncode;
 use ethers::middleware::SignerMiddleware;
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::TransactionReceipt;
@@ -19,10 +20,14 @@ use ethers::providers::{Http, Provider};
 use vectorx::input::RpcDataFetcher;
 
 #[derive(Parser, Debug, Clone)]
-#[command(about = "Get the last block of the block range to fill.")]
+#[command(
+    about = "Get the last block of the block range to fill and whether to post the data on-chain."
+)]
 pub struct FillBlockRangeArgs {
-    #[arg(long, default_value = "1")]
+    #[arg(long, required = true)]
     pub end_block: u32,
+    #[arg(long, default_value = "false")]
+    pub post: bool,
 }
 
 pub struct BlockRangeData {
@@ -73,7 +78,9 @@ async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeDat
 
 #[tokio::main]
 async fn main() {
+    env::set_var("RUST_LOG", "info");
     dotenv::dotenv().ok();
+    env_logger::init();
     let args = FillBlockRangeArgs::parse();
 
     let end_block = args.end_block;
@@ -102,25 +109,43 @@ async fn main() {
 
     let block_range_data = get_block_range_data(latest_block, end_block).await;
 
-    let tx: Option<TransactionReceipt> = contract
-        .update_block_range_data(
-            block_range_data.start_blocks,
-            block_range_data.end_blocks,
-            block_range_data.header_hashes,
-            block_range_data.data_root_commitments,
-            block_range_data.state_root_commitments,
-            block_range_data.end_authority_set_id,
-            block_range_data.end_authority_set_hash,
-        )
-        .send()
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    if let Some(tx) = tx {
+    if args.post {
+        let tx: Option<TransactionReceipt> = contract
+            .update_block_range_data(
+                block_range_data.start_blocks,
+                block_range_data.end_blocks,
+                block_range_data.header_hashes,
+                block_range_data.data_root_commitments,
+                block_range_data.state_root_commitments,
+                block_range_data.end_authority_set_id,
+                block_range_data.end_authority_set_hash,
+            )
+            .send()
+            .await
+            .unwrap()
+            .await
+            .unwrap();
+        if let Some(tx) = tx {
+            info!(
+                "Proof relayed successfully! Transaction Hash: {:?}",
+                tx.transaction_hash
+            );
+        }
+    } else {
+        // If we don't want to post the data on-chain, we can just print the data that would be posted.
+        let update_block_range_call = vector_x::UpdateBlockRangeDataCall {
+            start_blocks: block_range_data.start_blocks,
+            end_blocks: block_range_data.end_blocks,
+            header_hashes: block_range_data.header_hashes,
+            data_root_commitments: block_range_data.data_root_commitments,
+            state_root_commitments: block_range_data.state_root_commitments,
+            end_authority_set_id: block_range_data.end_authority_set_id,
+            end_authority_set_hash: block_range_data.end_authority_set_hash,
+        };
+        let calldata = update_block_range_call.encode();
         info!(
-            "Proof relayed successfully! Transaction Hash: {:?}",
-            tx.transaction_hash
+            "Calldata for update block range call:\n {:?}",
+            hex::encode(calldata)
         );
     }
 }

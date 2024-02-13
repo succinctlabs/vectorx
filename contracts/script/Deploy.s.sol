@@ -34,6 +34,7 @@ contract DeployScript is Script {
             // Initialize the Vector X light client.
             lightClient.initialize(
                 VectorX.InitParameters({
+                    // TODO: Migrate to using upgrade scripts in SuccinctX that work with Gnosis Safe.
                     guardian: vm.envAddress("GUARDIAN_ADDRESS"),
                     gateway: vm.envAddress("GATEWAY_ADDRESS"),
                     height: uint32(vm.envUint("GENESIS_HEIGHT")),

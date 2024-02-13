@@ -282,17 +282,14 @@ mod tests {
         }
     }
 
-    // @kevin TODO: This is failing because of the incorrect computation of the header hash.
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_blake2b_correctness() {
-        // TODO: Failing block.
         let block_nbr = 397859;
 
         let mut data_fetcher = RpcDataFetcher::new().await;
         let header = data_fetcher.get_header(block_nbr).await;
         let header_bytes = header.encode();
-        // println!("Header bytes: {:?}", hex::encode(&header_bytes));
         let header_size = header_bytes.len();
         println!("Header size: {:?}", header_size);
 
@@ -310,22 +307,22 @@ mod tests {
         );
 
         // For fixed blake2b, set a constant that is equal to the expected header size.
-        const FAILING_HEADER_SIZE: usize = 15360;
+        const HEADER_SIZE: usize = 15360;
         assert_eq!(
-            header_size, FAILING_HEADER_SIZE,
+            header_size, HEADER_SIZE,
             "Header size is not equal to the expected fixed size of {} bytes.",
-            FAILING_HEADER_SIZE
+            HEADER_SIZE
         );
 
-        // Confirm that the header hash computed by the circuit is correct. NOTE: IT IS CURRENTLY WRONG.
+        // Confirm that the header hash computed by the circuit is correct.
         let mut builder = DefaultBuilder::new();
-        let var_header = builder.read::<ArrayVariable<ByteVariable, FAILING_HEADER_SIZE>>();
-        let input_length = builder.constant::<U32Variable>(FAILING_HEADER_SIZE as u32);
+        let var_header = builder.read::<ArrayVariable<ByteVariable, HEADER_SIZE>>();
+        let input_length = builder.constant::<U32Variable>(HEADER_SIZE as u32);
         let calculated_hash = builder.curta_blake2b_variable(var_header.as_slice(), input_length);
         builder.write::<Bytes32Variable>(calculated_hash);
         let circuit = builder.build();
         let mut input = circuit.input();
-        input.write::<ArrayVariable<ByteVariable, FAILING_HEADER_SIZE>>(header_bytes);
+        input.write::<ArrayVariable<ByteVariable, HEADER_SIZE>>(header_bytes);
         let (proof, mut output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
         let calculated_hash = output.read::<Bytes32Variable>();

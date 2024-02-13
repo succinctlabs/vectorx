@@ -7273,7 +7273,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "avail-subxt",
- "blake2",
  "clap 4.5.0",
  "dotenv",
  "ed25519-dalek 1.0.1",

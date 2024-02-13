@@ -34,7 +34,7 @@ contract DeployScript is Script {
             // Initialize the Vector X light client.
             lightClient.initialize(
                 VectorX.InitParameters({
-                    guardian: msg.sender,
+                    guardian: vm.envAddress("GUARDIAN_ADDRESS"),
                     gateway: vm.envAddress("GATEWAY_ADDRESS"),
                     height: uint32(vm.envUint("GENESIS_HEIGHT")),
                     header: vm.envBytes32("GENESIS_HEADER"),

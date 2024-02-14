@@ -34,7 +34,6 @@ contract DeployScript is Script {
             // Initialize the Vector X light client.
             lightClient.initialize(
                 VectorX.InitParameters({
-                    // TODO: Migrate to using upgrade scripts in SuccinctX that work with Gnosis Safe.
                     guardian: vm.envAddress("GUARDIAN_ADDRESS"),
                     gateway: vm.envAddress("GATEWAY_ADDRESS"),
                     height: uint32(vm.envUint("GENESIS_HEIGHT")),
@@ -48,28 +47,24 @@ contract DeployScript is Script {
                 })
             );
         } else {
-            bool updateGateway = vm.envBool("UPDATE_GATEWAY");
-            bool updateGenesisState = vm.envBool("UPDATE_GENESIS_STATE");
-            bool updateFunctionIds = vm.envBool("UPDATE_FUNCTION_IDS");
             address existingProxyAddress = vm.envAddress("CONTRACT_ADDRESS");
 
             lightClient = VectorX(existingProxyAddress);
             lightClient.upgradeTo(address(lightClientImpl));
-
-            if (updateGateway) {
-                lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));
-            }
-            if (updateGenesisState) {
-                lightClient.updateGenesisState(uint32(vm.envUint("GENESIS_HEIGHT")),
-                    vm.envBytes32("GENESIS_HEADER"),
-                    uint64(vm.envUint("AUTHORITY_SET_ID")),
-                    vm.envBytes32("AUTHORITY_SET_HASH"));
-            }
-            if (updateFunctionIds) {
-                lightClient.updateFunctionIds(vm.envBytes32(
-                    "HEADER_RANGE_FUNCTION_ID"
-                    ), vm.envBytes32("ROTATE_FUNCTION_ID"));
-            }
+        }
+        if (vm.envBool("UPDATE_GATEWAY")) {
+            lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));
+        }
+        if (vm.envBool("UPDATE_GENESIS_STATE")) {
+            lightClient.updateGenesisState(uint32(vm.envUint("GENESIS_HEIGHT")),
+                vm.envBytes32("GENESIS_HEADER"),
+                uint64(vm.envUint("AUTHORITY_SET_ID")),
+                vm.envBytes32("AUTHORITY_SET_HASH"));
+        }
+        if (vm.envBool("UPDATE_FUNCTION_IDS")) {
+            lightClient.updateFunctionIds(vm.envBytes32(
+                "HEADER_RANGE_FUNCTION_ID"
+                ), vm.envBytes32("ROTATE_FUNCTION_ID"));
         }
 
         console.logAddress(address(lightClient));

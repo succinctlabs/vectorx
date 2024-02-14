@@ -125,11 +125,6 @@
         "name": "commitHeaderRange",
         "inputs": [
             {
-                "name": "_trustedBlock",
-                "type": "uint32",
-                "internalType": "uint32"
-            },
-            {
                 "name": "_authoritySetId",
                 "type": "uint64",
                 "internalType": "uint64"
@@ -158,6 +153,19 @@
                 "name": "",
                 "type": "bytes32",
                 "internalType": "bytes32"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "frozen",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "internalType": "bool"
             }
         ],
         "stateMutability": "view"
@@ -353,11 +361,6 @@
         "name": "requestHeaderRange",
         "inputs": [
             {
-                "name": "_trustedBlock",
-                "type": "uint32",
-                "internalType": "uint32"
-            },
-            {
                 "name": "_authoritySetId",
                 "type": "uint64",
                 "internalType": "uint64"
@@ -460,13 +463,95 @@
     },
     {
         "type": "function",
-        "name": "updateGenesisState",
+        "name": "updateBlockRangeData",
+        "inputs": [
+            {
+                "name": "_startBlocks",
+                "type": "uint32[]",
+                "internalType": "uint32[]"
+            },
+            {
+                "name": "_endBlocks",
+                "type": "uint32[]",
+                "internalType": "uint32[]"
+            },
+            {
+                "name": "_headerHashes",
+                "type": "bytes32[]",
+                "internalType": "bytes32[]"
+            },
+            {
+                "name": "_dataRootCommitments",
+                "type": "bytes32[]",
+                "internalType": "bytes32[]"
+            },
+            {
+                "name": "_stateRootCommitments",
+                "type": "bytes32[]",
+                "internalType": "bytes32[]"
+            },
+            {
+                "name": "_endAuthoritySetId",
+                "type": "uint64",
+                "internalType": "uint64"
+            },
+            {
+                "name": "_endAuthoritySetHash",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "updateFreeze",
+        "inputs": [
+            {
+                "name": "_freeze",
+                "type": "bool",
+                "internalType": "bool"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "updateFunctionIds",
+        "inputs": [
+            {
+                "name": "_headerRangeFunctionId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            },
+            {
+                "name": "_rotateFunctionId",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "updateGateway",
         "inputs": [
             {
                 "name": "_gateway",
                 "type": "address",
                 "internalType": "address"
-            },
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "updateGenesisState",
+        "inputs": [
             {
                 "name": "_height",
                 "type": "uint32",
@@ -484,16 +569,6 @@
             },
             {
                 "name": "_authoritySetHash",
-                "type": "bytes32",
-                "internalType": "bytes32"
-            },
-            {
-                "name": "_headerRangeFunctionId",
-                "type": "bytes32",
-                "internalType": "bytes32"
-            },
-            {
-                "name": "_rotateFunctionId",
                 "type": "bytes32",
                 "internalType": "bytes32"
             }
@@ -804,6 +879,16 @@
     },
     {
         "type": "error",
+        "name": "AuthoritySetNotFound",
+        "inputs": []
+    },
+    {
+        "type": "error",
+        "name": "ContractFrozen",
+        "inputs": []
+    },
+    {
+        "type": "error",
         "name": "OnlyGuardian",
         "inputs": [
             {
@@ -823,5 +908,10 @@
                 "internalType": "address"
             }
         ]
+    },
+    {
+        "type": "error",
+        "name": "TrustedHeaderNotFound",
+        "inputs": []
     }
 ]

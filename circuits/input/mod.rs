@@ -467,9 +467,7 @@ impl RpcDataFetcher {
 
         let mut headers = Vec::new();
         for block_number in start_block_number..end_block_number + 1 {
-            let block_hash = self.get_block_hash(block_number).await;
-            let header_result = self.client.rpc().header(Some(block_hash)).await;
-            let header: Header = header_result.unwrap().unwrap();
+            let header = self.get_header(block_number).await;
             headers.push(header);
         }
         headers
@@ -512,6 +510,10 @@ impl RpcDataFetcher {
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
     pub async fn get_authorities(&mut self, block_number: u32) -> Vec<CompressedEdwardsY> {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities_bytes = self
@@ -584,6 +586,10 @@ impl RpcDataFetcher {
         &mut self,
         block_number: u32,
     ) -> SimpleJustificationData {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
         // Note: grandpa_proveFinality will serve the proof for the last justified block in an epoch.
         // get_simple_justification should fail for any block that is not the last justified block
         // in an epoch.
@@ -1085,7 +1091,7 @@ mod tests {
         let mut data_fetcher = RpcDataFetcher::new().await;
 
         // let head = data_fetcher.get_head().await.number;
-        let mut start_epoch = 180;
+        let mut start_epoch = 179;
         loop {
             let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
             if epoch_end_block == 0 {

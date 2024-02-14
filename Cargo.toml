@@ -38,6 +38,10 @@ path = "bin/indexer.rs"
 name = "events"
 path = "bin/events.rs"
 
+[[bin]]
+name = "fill_block_range"
+path = "bin/fill_block_range.rs"
+
 [features]
 ci = []
 

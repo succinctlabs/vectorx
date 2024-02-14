@@ -132,7 +132,6 @@ impl VectorXOperator {
         // Encode the call into calldata.
         // Note: Use vector_x because the calls are the same.
         let commit_header_range_call = vector_x::CommitHeaderRangeCall {
-            trusted_block,
             authority_set_id: trusted_authority_set_id,
             target_block,
         };

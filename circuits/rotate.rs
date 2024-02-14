@@ -74,23 +74,23 @@ impl<
 
 #[derive(Clone, Debug)]
 pub struct RotateCircuit<
+    const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_SIZE: usize,
     const MAX_HEADER_CHUNK_SIZE: usize,
-    const MAX_AUTHORITY_SET_SIZE: usize,
     // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH).
     const MAX_SUBARRAY_SIZE: usize,
 > {}
 
 impl<
+        const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_HEADER_SIZE: usize,
         const MAX_HEADER_CHUNK_SIZE: usize,
-        const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_SUBARRAY_SIZE: usize,
     > Circuit
     for RotateCircuit<
+        MAX_AUTHORITY_SET_SIZE,
         MAX_HEADER_SIZE,
         MAX_HEADER_CHUNK_SIZE,
-        MAX_AUTHORITY_SET_SIZE,
         MAX_SUBARRAY_SIZE,
     >
 {
@@ -178,7 +178,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>::define(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
             &mut builder,
         );
         let circuit = builder.build();
@@ -186,10 +186,10 @@ mod tests {
 
         let mut hint_registry = HintRegistry::new();
         let mut gate_registry = GateRegistry::new();
-        RotateCircuit::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>::register_generators(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::register_generators(
             &mut hint_registry,
         );
-        RotateCircuit::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>::register_gates(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::register_gates(
             &mut gate_registry,
         );
 
@@ -208,7 +208,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>::define(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
             &mut builder,
         );
 
@@ -251,7 +251,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>::define(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
             &mut builder,
         );
 
@@ -292,7 +292,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        RotateCircuit::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>::define(
+        RotateCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_SUBARRAY_SIZE>::define(
             &mut builder,
         );
 

@@ -294,11 +294,13 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+
     use plonky2x::frontend::mapreduce::generator::MapReduceGenerator;
     use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
     use super::*;
-    use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
+    use crate::consts::{BLAKE2B_CHUNK_SIZE_BYTES, MAX_HEADER_CHUNK_SIZE};
 
     // MapReduce circuits requires a circuit to be defined in order to invoke the mapreduce method.
     #[derive(Clone, Debug)]
@@ -363,22 +365,24 @@ mod tests {
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_verify_subchain() {
+        env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
         env_logger::try_init().unwrap_or_default();
 
         let mut builder = DefaultBuilder::new();
 
-        const MAX_NUM_HEADERS: usize = 32;
+        const MAX_NUM_HEADERS: usize = 16;
         const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * BLAKE2B_CHUNK_SIZE_BYTES;
 
         TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::define(&mut builder);
         let circuit = builder.build();
 
         let mut input = circuit.input();
-        let trusted_header = "4cfd147756de6e8004a5f2ba9f2ca29e8488bae40acb97474c7086c45b39ff92"
+        let trusted_header = "42933743127422ab194445ad5bf0d27ea7ccd20f98cdc902ee7fc55df00fca68"
             .parse()
             .unwrap();
-        let trusted_block = 272503u32;
-        let target_block = 272535u32; // mimics test_step_small
+        let trusted_block = 397855u32;
+        let target_block = 397862u32; // mimics test_step_small
 
         input.evm_write::<U32Variable>(trusted_block);
         input.evm_write::<Bytes32Variable>(trusted_header);
@@ -387,7 +391,7 @@ mod tests {
         let (proof, output) = circuit.prove(&input);
         circuit.verify(&proof, &input, &output);
 
-        TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_HEADER_SIZE>::test_serialization::<
+        TestSubchainVerificationCircuit::<MAX_HEADER_SIZE, MAX_NUM_HEADERS>::test_serialization::<
             L,
             D,
         >();

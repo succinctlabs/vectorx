@@ -9,10 +9,10 @@
 
 use std::env;
 
+use circuits::input::RpcDataFetcher;
 use clap::Parser;
 use log::info;
 use subxt::config::Header;
-use vectorx::input::RpcDataFetcher;
 
 #[derive(Parser, Debug, Clone)]
 #[command(about = "Get the genesis parameters from a block.")]

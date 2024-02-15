@@ -15,9 +15,9 @@ use std::env;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use circuits::input::RpcDataFetcher;
 use ethers::contract::abigen;
 use ethers::providers::{Http, Provider};
-use vectorx::input::RpcDataFetcher;
 
 #[derive(Parser, Debug, Clone)]
 #[command(

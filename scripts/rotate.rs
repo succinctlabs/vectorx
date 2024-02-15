@@ -7,11 +7,11 @@
 //!
 //!
 
-use plonky2x::backend::function::Plonky2xFunction;
-use vectorx::consts::{
+use circuits::consts::{
     MAX_AUTHORITY_SET_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE,
 };
-use vectorx::rotate::RotateCircuit;
+use circuits::rotate::RotateCircuit;
+use plonky2x::backend::function::Plonky2xFunction;
 
 fn main() {
     RotateCircuit::<

@@ -4,6 +4,7 @@ use std::env;
 use alloy_primitives::{Address, Bytes, B256};
 use alloy_sol_types::{sol, SolType};
 use anyhow::Result;
+use circuits::input::RpcDataFetcher;
 use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
 use ethers::core::types::Filter;
@@ -11,7 +12,6 @@ use ethers::providers::{Http, Middleware, Provider};
 use ethers::types::H160;
 use log::{error, info};
 use succinct_client::request::SuccinctClient;
-use vectorx::input::RpcDataFetcher;
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);

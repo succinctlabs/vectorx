@@ -2,11 +2,11 @@ use std::env;
 use std::sync::Arc;
 
 use alloy_sol_types::{sol, SolType};
+use circuits::input::{DataCommitmentRange, RpcDataFetcher};
 use ethers::contract::abigen;
 use ethers::core::types::{Address, Filter};
 use ethers::providers::{Middleware, Provider, StreamExt, Ws};
 use log::info;
-use vectorx::input::{DataCommitmentRange, RpcDataFetcher};
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);

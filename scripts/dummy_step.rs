@@ -7,8 +7,8 @@
 //!
 //!
 
+use circuits::dummy_step::DummyStep;
 use rustx::function::RustFunction;
-use vectorx::dummy_step::DummyStep;
 
 fn main() {
     DummyStep::entrypoint();

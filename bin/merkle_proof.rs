@@ -29,7 +29,13 @@ async fn handle_vectorx_query(info: web::Query<VectorXQuery>) -> impl Responder 
     let block_hash;
     let block_nb;
     if let Some(requested_block) = info.blockNumber {
-        block_hash = fetcher.get_block_hash(requested_block).await;
+        let requested_block_hash = fetcher.get_block_hash(requested_block).await;
+        if requested_block_hash.is_none() {
+            return HttpResponse::BadRequest().json(serde_json::json!({
+                "error": "Block not found"
+            }));
+        }
+        block_hash = requested_block_hash.unwrap();
         block_nb = requested_block;
     } else {
         let supplied_block_hash =

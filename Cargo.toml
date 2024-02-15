@@ -42,6 +42,10 @@ path = "bin/events.rs"
 name = "fill_block_range"
 path = "bin/fill_block_range.rs"
 
+[[bin]]
+name = "merkle_proof"
+path = "bin/merkle_proof.rs"
+
 [features]
 ci = []
 
@@ -87,6 +91,7 @@ alloy-primitives = "0.4.2"
 anyhow = "1.0.68"
 clap = "4.4.9"
 rs_merkle = "1.4.1"
+actix-web = "4.5.1"
 [dev-dependencies]
 anyhow = "1.0.68"
 

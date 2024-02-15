@@ -158,6 +158,7 @@ impl RedisClient {
         let address = format!("0x{}", hex::encode(address));
 
         let key = format!("{}:{}:ranges", chain_id, address);
+        println!("Key: {}", key);
 
         let data_commitment: [u8; 32] = range.data_commitment.try_into().unwrap();
 
@@ -175,6 +176,31 @@ impl RedisClient {
             range.end,
             hex::encode(data_commitment)
         );
+    }
+
+    /// Get a commitment containing the data & state commitments for a given block.
+    pub async fn get_commitment_with_block(
+        &mut self,
+        key: &str,
+        block: u32,
+    ) -> (u32, u32, Vec<u8>) {
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
+
+        // THere should be a commitment at least every NUM_LEAVES blocks.
+        let result: Vec<String> = con
+            .zrangebyscore(key, block, block + MAX_NUM_HEADERS as u32)
+            .await
+            .expect("Failed to get keys");
+
+        let encoded_result = hex::decode(result[0].clone()).unwrap();
+        // First 4 bytes are the start block, next 4 bytes are the end block, and the rest is the commitment.
+        let start_block = u32::from_be_bytes(encoded_result[0..4].try_into().unwrap());
+        let end_block = u32::from_be_bytes(encoded_result[4..8].try_into().unwrap());
+        let commitment = encoded_result[8..].to_vec();
+        (start_block, end_block, commitment)
     }
 }
 
@@ -390,6 +416,22 @@ impl RpcDataFetcher {
         epoch_end_block_number
     }
 
+    pub async fn get_block_number(&mut self, block_hash: H256) -> Option<u32> {
+        self.check_client_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
+        let block = self.client.rpc().block(Some(block_hash)).await;
+
+        // If the result is an err, panic.
+        let block = block.unwrap();
+        // If the block is Some, return the block number, else return -1.
+        if let Some(block) = block {
+            return Some(block.block.header.number);
+        }
+        None
+    }
+
     pub async fn get_block_hash(&mut self, block_number: u32) -> H256 {
         self.check_client_connection()
             .await
@@ -403,7 +445,12 @@ impl RpcDataFetcher {
         block_hash.unwrap().unwrap()
     }
 
-    fn get_merkle_root(leaves: Vec<Vec<u8>>) -> Vec<u8> {
+    // Compute the merkle root of the leaves.
+    pub fn get_merkle_root(leaves: Vec<Vec<u8>>) -> Vec<u8> {
+        assert!(
+            leaves.len().is_power_of_two(),
+            "Number of leaves must be a power of 2."
+        );
         if leaves.is_empty() {
             return vec![];
         }
@@ -422,6 +469,65 @@ impl RpcDataFetcher {
         }
 
         nodes[0].clone()
+    }
+
+    pub fn verify_merkle_branch(root: Vec<u8>, leaf: Vec<u8>, branch: Vec<Vec<u8>>, index: usize) {
+        let computed_root = Self::compute_merkle_root_from_branch(branch, leaf, index);
+        assert_eq!(computed_root, root, "Merkle branch is not valid!");
+    }
+
+    pub fn compute_merkle_root_from_branch(
+        branch: Vec<Vec<u8>>,
+        leaf: Vec<u8>,
+        index: usize,
+    ) -> Vec<u8> {
+        let mut hash = leaf;
+        for i in 0..branch.len() {
+            if index & (1 << i) == 0 {
+                hash.extend_from_slice(&branch[i]);
+                hash.extend_from_slice(&hash.clone());
+            } else {
+                hash.extend_from_slice(&hash.clone());
+                hash.extend_from_slice(&branch[i]);
+            }
+            hash = Sha256::digest(&hash).to_vec();
+        }
+        hash
+    }
+
+    pub fn get_merkle_branch(leaves: Vec<Vec<u8>>, index: usize) -> Vec<Vec<u8>> {
+        assert!(
+            leaves.len().is_power_of_two(),
+            "Number of leaves must be a power of 2."
+        );
+        assert!(index < leaves.len(), "Index out of bounds.");
+        let mut index_so_far = index;
+        let mut branch = Vec::new();
+        let mut nodes = leaves.clone();
+        while nodes.len() > 1 {
+            let mut next_level_nodes = Vec::new();
+            for i in (0..nodes.len()).step_by(2) {
+                let left = nodes[i].clone();
+                let right = nodes[i + 1].clone();
+                // Compute SHA256(left || right).
+                let mut hasher = Sha256::new();
+                hasher.update(&left);
+                hasher.update(&right);
+                let hash = hasher.finalize().to_vec();
+                next_level_nodes.push(hash);
+
+                if (index_so_far - (index_so_far % 2)) == i {
+                    if index_so_far % 2 == 0 {
+                        branch.push(right);
+                    } else {
+                        branch.push(left);
+                    }
+                }
+            }
+            nodes = next_level_nodes;
+            index_so_far /= 2;
+        }
+        branch
     }
 
     pub async fn get_merkle_root_commitments(

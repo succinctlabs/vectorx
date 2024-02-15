@@ -1,6 +1,7 @@
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use ethers::abi::AbiEncode;
 use ethers::utils::keccak256;
+use log::info;
 use primitive_types::H256;
 use serde::Deserialize;
 use vectorx::input::RpcDataFetcher;
@@ -44,11 +45,11 @@ async fn handle_vectorx_query(info: web::Query<VectorXQuery>) -> impl Responder 
             }));
         }
     }
+    info!("Fetching commitment for block {}", block_nb);
 
     let key = format!("{}:{}:ranges", info.contractChainId, info.contractAddress);
     // Convert key to lowercase
     let key = key.to_lowercase();
-    println!("Key: {}", key);
 
     let (start_block, end_block, commitment) = fetcher
         .redis_client
@@ -62,29 +63,42 @@ async fn handle_vectorx_query(info: web::Query<VectorXQuery>) -> impl Responder 
     let headers = fetcher
         .get_block_headers_range(start_block + 1, end_block)
         .await;
-    let data_roots = headers
+    let mut data_roots = headers
         .iter()
         .map(|header| header.data_root().as_bytes().to_vec())
         .collect::<Vec<Vec<u8>>>();
+
+    // Extend the data roots to MAX_NUM_HEADERS.
+    data_roots.resize(vectorx::consts::MAX_NUM_HEADERS, vec![0u8; 32]);
 
     // Compute the merkle root of the data roots, and confirm that it matches the commitment.
     let computed_data_commitment =
         vectorx::input::RpcDataFetcher::get_merkle_root(data_roots.clone());
 
     // Assert the computed data commitment matches the commitment.
-    assert_eq!(commitment, computed_data_commitment);
+    let commitment_match = computed_data_commitment == commitment;
+    if !commitment_match {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "Data commitment mismatch"
+        }));
+    }
 
     // Get the merkle branch from the data commitment merkle tree.
     let merkle_branch =
         vectorx::input::RpcDataFetcher::get_merkle_branch(data_roots.clone(), index as usize);
 
     // Confirm the merkle branch is valid.
-    vectorx::input::RpcDataFetcher::verify_merkle_branch(
+    let is_valid_branch = vectorx::input::RpcDataFetcher::verify_merkle_branch(
         commitment.clone(),
         data_roots.clone()[index as usize].clone(),
         merkle_branch.clone(),
         index as usize,
     );
+    if !is_valid_branch {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "Invalid merkle branch"
+        }));
+    }
 
     // Get the range hash. keccak256(abi.encode(startBlock, endBlock))
     // Encode the start and end block numbers as big-endian bytes.

@@ -471,9 +471,14 @@ impl RpcDataFetcher {
         nodes[0].clone()
     }
 
-    pub fn verify_merkle_branch(root: Vec<u8>, leaf: Vec<u8>, branch: Vec<Vec<u8>>, index: usize) {
+    pub fn verify_merkle_branch(
+        root: Vec<u8>,
+        leaf: Vec<u8>,
+        branch: Vec<Vec<u8>>,
+        index: usize,
+    ) -> bool {
         let computed_root = Self::compute_merkle_root_from_branch(branch, leaf, index);
-        assert_eq!(computed_root, root, "Merkle branch is not valid!");
+        computed_root == root
     }
 
     pub fn compute_merkle_root_from_branch(
@@ -482,15 +487,17 @@ impl RpcDataFetcher {
         index: usize,
     ) -> Vec<u8> {
         let mut hash = leaf;
+        let mut index_so_far = index;
         for i in 0..branch.len() {
-            if index & (1 << i) == 0 {
-                hash.extend_from_slice(&branch[i]);
+            if index_so_far % 2 == 0 {
                 hash.extend_from_slice(&hash.clone());
+                hash.extend_from_slice(&branch[i]);
             } else {
-                hash.extend_from_slice(&hash.clone());
                 hash.extend_from_slice(&branch[i]);
+                hash.extend_from_slice(&hash.clone());
             }
             hash = Sha256::digest(&hash).to_vec();
+            index_so_far /= 2;
         }
         hash
     }

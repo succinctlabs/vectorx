@@ -116,7 +116,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ) external onlyGuardian {
         assert(
             _startBlocks.length > 0 &&
-            _startBlocks.length == _endBlocks.length &&
+                _startBlocks.length == _endBlocks.length &&
                 _endBlocks.length == _headerHashes.length &&
                 _headerHashes.length == _dataRootCommitments.length &&
                 _dataRootCommitments.length == _stateRootCommitments.length
@@ -126,9 +126,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             if (i < _startBlocks.length - 1) {
                 require(_endBlocks[i] == _startBlocks[i + 1] - 1);
             }
-            bytes32 key = keccak256(
-                abi.encode(_startBlocks[i], _endBlocks[i])
-            );
+            bytes32 key = keccak256(abi.encode(_startBlocks[i], _endBlocks[i]));
             dataRootCommitments[key] = _dataRootCommitments[i];
             stateRootCommitments[key] = _stateRootCommitments[i];
 
@@ -181,7 +179,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         bytes memory data = abi.encodeWithSelector(
             this.commitHeaderRange.selector,
-            latestBlock,
             _authoritySetId,
             _requestedBlock
         );

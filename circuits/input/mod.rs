@@ -10,7 +10,7 @@ use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
 use avail_subxt::subxt_rpc::RpcParams;
-use avail_subxt::{api, build_client};
+use avail_subxt::{api, build_client, AvailConfig};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
@@ -20,6 +20,7 @@ use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMM
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::{Digest, Sha256};
+use subxt::OnlineClient;
 use tokio::time::sleep;
 
 use self::types::{
@@ -282,6 +283,41 @@ impl RpcDataFetcher {
         }
     }
 
+    async fn retry_on_error<T, E, F, Fut>(
+        &mut self,
+        operation: F,
+        max_attempts: usize,
+        delay: Duration,
+    ) -> Option<T>
+    where
+        F: Fn(&mut Client) -> Fut,
+        Fut: std::future::Future<Output = Result<T, E>>,
+    {
+        for attempt in 0..max_attempts {
+            match operation(&mut self.client).await {
+                Ok(result) => return Some(result),
+                Err(_) => {
+                    debug!("Attempt {} failed. Retrying after {:?}...", attempt, delay);
+                    // If recreating the client or re-establishing connection is necessary, do it here
+                    // For example, if `build_client` is a method or function to recreate `self.client`
+                    match build_client(&self.avail_url, false).await {
+                        Ok(new_client) => self.client = new_client.0,
+                        Err(err) => {
+                            // Handle error, potentially logging it and deciding whether to continue retrying
+                            debug!(
+                                "Failed to rebuild client due to {:?}, stopping retries.",
+                                err
+                            );
+                            return None;
+                        }
+                    }
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        }
+        None // Return None if all attempts fail
+    }
+
     async fn check_client_connection(&mut self) -> Result<(), String> {
         for _ in 0..Self::MAX_RECONNECT_ATTEMPTS {
             match self.client.rpc().system_health().await {
@@ -302,10 +338,6 @@ impl RpcDataFetcher {
     }
 
     pub async fn check_data_commitment(&mut self, block: u32) {
-        self.check_client_connection()
-            .await
-            .expect("Failed to establish connection to Avail WS.");
-
         let header = self.get_header(block).await;
         let data_root = header.data_root().0.to_vec();
         println!("data_root {:?}", data_root);
@@ -421,7 +453,13 @@ impl RpcDataFetcher {
             .await
             .expect("Failed to establish connection to Avail WS.");
 
-        let block = self.client.rpc().block(Some(block_hash)).await;
+        let block = self
+            .retry_on_error(
+                move |client| async move { client.rpc().block(Some(block_hash)).await },
+                3,
+                Duration::from_secs(5),
+            )
+            .await;
 
         // If the result is an err, panic.
         let block = block.unwrap();

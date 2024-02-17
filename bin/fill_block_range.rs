@@ -82,6 +82,7 @@ async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
     let args = FillBlockRangeArgs::parse();
+    info!("Args: {:?}", args);
 
     let end_block = args.end_block;
 

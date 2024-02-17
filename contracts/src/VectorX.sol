@@ -124,7 +124,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         require(_startBlocks[0] == latestBlock);
         for (uint256 i = 0; i < _startBlocks.length; i++) {
             if (i < _startBlocks.length - 1) {
-                require(_endBlocks[i] == _startBlocks[i + 1] - 1);
+                require(_endBlocks[i] == _startBlocks[i + 1]);
             }
             bytes32 key = keccak256(abi.encode(_startBlocks[i], _endBlocks[i]));
             dataRootCommitments[key] = _dataRootCommitments[i];

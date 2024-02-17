@@ -53,7 +53,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     }
 
     function VERSION() external pure override returns (string memory) {
-        return "0.1.0";
+        return "0.1.1";
     }
 
     /// @dev Initializes the contract.

@@ -403,9 +403,17 @@ impl RpcDataFetcher {
         block_hash.unwrap().unwrap()
     }
 
-    fn get_merkle_root(leaves: Vec<Vec<u8>>) -> Vec<u8> {
+    // Computes the simple Merkle root of the leaves.
+    // If the number of leaves is not a power of 2, the leaves are extended with 0s to the next power of 2.
+    pub fn get_merkle_root(leaves: Vec<Vec<u8>>) -> Vec<u8> {
         if leaves.is_empty() {
             return vec![];
+        }
+
+        // Extend leaves to a power of 2.
+        let mut leaves = leaves;
+        while leaves.len().count_ones() != 1 {
+            leaves.push([0u8; 32].to_vec());
         }
 
         // In VectorX, the leaves are not hashed.
@@ -1129,5 +1137,17 @@ mod tests {
             "data_merkle_root {:?}",
             hex::encode(data_merkle_root.as_slice())
         );
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_block_hash() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+
+        let block = 410999;
+        let header_hash = data_fetcher.get_header(block).await.hash();
+        println!("header_hash {:?}", hex::encode(header_hash.0));
+        let block_hash = data_fetcher.get_block_hash(block).await;
+        println!("block_hash {:?}", hex::encode(block_hash.0));
     }
 }

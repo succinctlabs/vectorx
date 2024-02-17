@@ -424,7 +424,7 @@ impl VectorXOperator {
             // justification.
             let valid_blocks = self
                 .data_fetcher
-                .find_justifications_in_range(current_block, max_block_to_request)
+                .find_justifications_in_range(current_block + 1, max_block_to_request)
                 .await;
             if valid_blocks.is_empty() {
                 info!("No valid blocks found in range.");

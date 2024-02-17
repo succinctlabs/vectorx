@@ -220,7 +220,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        require(_targetBlock > latestBlock);
         require(_targetBlock - latestBlock <= MAX_HEADER_RANGE);
         // Note: This is needed to prevent a long-range attack on the light client.
         require(_targetBlock > latestBlock);

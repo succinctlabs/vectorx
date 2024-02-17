@@ -1138,16 +1138,4 @@ mod tests {
             hex::encode(data_merkle_root.as_slice())
         );
     }
-
-    #[tokio::test]
-    #[cfg_attr(feature = "ci", ignore)]
-    async fn test_get_block_hash() {
-        let mut data_fetcher = RpcDataFetcher::new().await;
-
-        let block = 410999;
-        let header_hash = data_fetcher.get_header(block).await.hash();
-        println!("header_hash {:?}", hex::encode(header_hash.0));
-        let block_hash = data_fetcher.get_block_hash(block).await;
-        println!("block_hash {:?}", hex::encode(block_hash.0));
-    }
 }

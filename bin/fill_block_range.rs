@@ -5,6 +5,7 @@ use ethers::middleware::SignerMiddleware;
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::TransactionReceipt;
 use log::info;
+use subxt::config::Header;
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);
@@ -60,6 +61,48 @@ pub struct BlockRangeData {
 //   }
 // }
 
+async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeData {
+    let mut input_data_fetcher = RpcDataFetcher::new().await;
+
+    let mut start_blocks = Vec::new();
+    let mut end_blocks = Vec::new();
+    let mut header_hashes = Vec::new();
+    let mut data_root_commitments = Vec::new();
+    let mut state_root_commitments = Vec::new();
+
+    for i in (start_block..end_block).step_by(256) {
+        let block_range_end = min(i + 256, end_block);
+        let (data_root_commitment, state_root_commitment, header_hash) =
+            query_subgraph(i, block_range_end).await;
+        start_blocks.push(i);
+        end_blocks.push(block_range_end);
+        let header = input_data_fetcher.get_header(block_range_end).await;
+        let expected_header_hash = header.hash();
+
+        assert_eq!(
+            expected_header_hash.0, header_hash,
+            "Header hash from subgraph does not match header hash from RPC."
+        );
+
+        header_hashes.push(expected_header_hash.0);
+        data_root_commitments.push(data_root_commitment);
+        state_root_commitments.push(state_root_commitment);
+    }
+    let end_authority_set_id = input_data_fetcher.get_authority_set_id(end_block).await;
+    let end_authority_set_hash = input_data_fetcher
+        .compute_authority_set_hash(end_block)
+        .await;
+    BlockRangeData {
+        start_blocks,
+        end_blocks,
+        header_hashes,
+        data_root_commitments,
+        state_root_commitments,
+        end_authority_set_id,
+        end_authority_set_hash: end_authority_set_hash.0,
+    }
+}
+
 #[derive(serde::Deserialize, Clone)]
 struct SubgraphResponse {
     data: Blocks,
@@ -102,7 +145,7 @@ struct Commitment {
     dataRoot: String,
 }
 
-async fn query_subgraph(start_block: u32, end_block: u32) -> ([u8; 32], [u8; 32], [u8; 32]) {
+pub async fn query_subgraph(start_block: u32, end_block: u32) -> ([u8; 32], [u8; 32], [u8; 32]) {
     let query = format!(
         r#"{{
         blocks(orderBy: TIMESTAMP_ASC, filter:{{number:{{greaterThan:{}, lessThanOrEqualTo:{}}}}}) {{
@@ -165,39 +208,6 @@ async fn query_subgraph(start_block: u32, end_block: u32) -> ([u8; 32], [u8; 32]
         state_root_commitment.try_into().unwrap(),
         header_hash.try_into().unwrap(),
     )
-}
-async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeData {
-    let mut input_data_fetcher = RpcDataFetcher::new().await;
-
-    let mut start_blocks = Vec::new();
-    let mut end_blocks = Vec::new();
-    let mut header_hashes = Vec::new();
-    let mut data_root_commitments = Vec::new();
-    let mut state_root_commitments = Vec::new();
-
-    for i in (start_block..end_block).step_by(256) {
-        let block_range_end = min(i + 256, end_block);
-        let (data_root_commitment, state_root_commitment, header) =
-            query_subgraph(i, block_range_end).await;
-        start_blocks.push(i);
-        end_blocks.push(block_range_end);
-        header_hashes.push(header);
-        data_root_commitments.push(data_root_commitment);
-        state_root_commitments.push(state_root_commitment);
-    }
-    let end_authority_set_id = input_data_fetcher.get_authority_set_id(end_block).await;
-    let end_authority_set_hash = input_data_fetcher
-        .compute_authority_set_hash(end_block)
-        .await;
-    BlockRangeData {
-        start_blocks,
-        end_blocks,
-        header_hashes,
-        data_root_commitments,
-        state_root_commitments,
-        end_authority_set_id,
-        end_authority_set_hash: end_authority_set_hash.0,
-    }
 }
 
 #[tokio::main]

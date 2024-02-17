@@ -251,9 +251,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         dataRootCommitments[key] = dataRootCommitment;
         stateRootCommitments[key] = stateRootCommitment;
 
-        // Update latest block.
-        latestBlock = _targetBlock;
-
         emit HeadUpdate(_targetBlock, targetHeaderHash);
 
         emit HeaderRangeCommitmentStored(
@@ -262,6 +259,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             dataRootCommitment,
             stateRootCommitment
         );
+
+        // Update latest block.
+        latestBlock = _targetBlock;
     }
 
     /// @notice Requests a rotate to the next authority set, which starts justifying blocks at

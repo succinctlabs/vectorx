@@ -9,9 +9,6 @@ import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
 contract VectorX is IVectorX, TimelockedUpgradeable {
-    /// @notice Indicator of if the contract is frozen.
-    bool public frozen;
-
     /// @notice The address of the gateway contract.
     address public gateway;
 
@@ -40,6 +37,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice Maps block ranges to state commitments. Block ranges are stored as
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
+
+    /// @notice Indicator of if the contract is frozen.
+    bool public frozen;
 
     struct InitParameters {
         address guardian;

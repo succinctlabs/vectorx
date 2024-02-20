@@ -5,7 +5,7 @@ use ethers::middleware::SignerMiddleware;
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::TransactionReceipt;
 use log::info;
-use subxt::config::Header;
+use avail_subxt::config::Header;
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);

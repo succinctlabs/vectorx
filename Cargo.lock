@@ -737,7 +737,7 @@ dependencies = [
 [[package]]
 name = "avail-subxt"
 version = "0.4.0"
-source = "git+https://github.com/availproject/avail.git#673a16985e5a22af30d7da7b780ff0a1564153f9"
+source = "git+https://github.com/availproject/avail.git?rev=673a169#673a16985e5a22af30d7da7b780ff0a1564153f9"
 dependencies = [
  "anyhow",
  "avail-core",
@@ -7571,7 +7571,6 @@ dependencies = [
  "sha2 0.10.8",
  "sha256",
  "sp-core",
- "subxt",
  "succinct-client",
  "tokio",
 ]

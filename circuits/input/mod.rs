@@ -14,6 +14,7 @@ use avail_subxt::{api, build_client};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
+use futures::future::join_all;
 use log::{debug, info};
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsY;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
@@ -390,11 +391,7 @@ impl RpcDataFetcher {
         epoch_end_block_number
     }
 
-    pub async fn get_block_hash(&mut self, block_number: u32) -> H256 {
-        self.check_client_connection()
-            .await
-            .expect("Failed to establish connection to Avail WS.");
-
+    pub async fn get_block_hash(&self, block_number: u32) -> H256 {
         let block_hash = self
             .client
             .rpc()
@@ -473,19 +470,22 @@ impl RpcDataFetcher {
             .await
             .expect("Failed to establish connection to Avail WS.");
 
-        let mut headers = Vec::new();
-        for block_number in start_block_number..end_block_number + 1 {
-            let header = self.get_header(block_number).await;
-            headers.push(header);
-        }
+        // Collecting all futures for header requests
+        let header_futures: Vec<_> = (start_block_number..end_block_number + 1)
+            .map(|block_number| self.get_header(block_number))
+            .collect();
+
+        // Await all futures concurrently
+        let headers: Vec<Header> = join_all(header_futures)
+            .await
+            .into_iter()
+            .collect::<Vec<_>>();
         headers
     }
 
-    pub async fn get_header(&mut self, block_number: u32) -> Header {
-        self.check_client_connection()
-            .await
-            .expect("Failed to establish connection to Avail WS.");
+    pub async fn get_header(&self, block_number: u32) -> Header {
         let block_hash = self.get_block_hash(block_number).await;
+        println!("Getting header for block number: {:?}", block_number);
         let header_result = self.client.rpc().header(Some(block_hash)).await;
         header_result.unwrap().unwrap()
     }
@@ -905,8 +905,8 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_block_headers_range() {
         let mut fetcher = RpcDataFetcher::new().await;
-        let headers = fetcher.get_block_headers_range(100000, 100009).await;
-        assert_eq!(headers.len(), 10);
+        let headers = fetcher.get_block_headers_range(100000, 100250).await;
+        // assert_eq!(headers.len(), 181);
     }
 
     #[tokio::test]

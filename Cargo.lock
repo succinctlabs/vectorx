@@ -7279,6 +7279,7 @@ dependencies = [
  "env_logger 0.9.3",
  "ethers",
  "ff_ce",
+ "futures",
  "hex",
  "itertools 0.10.5",
  "log",

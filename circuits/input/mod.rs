@@ -257,7 +257,7 @@ impl RpcDataFetcher {
         }
     }
 
-    async fn check_client_connection(&mut self) -> Result<(), String> {
+    async fn refresh_ws_connection(&mut self) -> Result<(), String> {
         for _ in 0..Self::MAX_RECONNECT_ATTEMPTS {
             match self.client.rpc().system_health().await {
                 Ok(_) => return Ok(()),
@@ -277,7 +277,7 @@ impl RpcDataFetcher {
     }
 
     pub async fn check_data_commitment(&mut self, block: u32) {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
 
@@ -307,7 +307,7 @@ impl RpcDataFetcher {
         start_block: u32,
         end_block: u32,
     ) -> Vec<u32> {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
         info!(
@@ -356,7 +356,7 @@ impl RpcDataFetcher {
     // also specifies the new authority set, which starts justifying after this block.
     // Returns 0 if curr_authority_set_id <= target_authority_set_id.
     pub async fn last_justified_block(&mut self, target_authority_set_id: u64) -> u32 {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
 
@@ -429,6 +429,8 @@ impl RpcDataFetcher {
         nodes[0].clone()
     }
 
+    /// Get the state root commitment and data root commitment for the range [start_block + 1, end_block].
+    /// Returns a tuple of the state root commitment and data root commitment.
     pub async fn get_merkle_root_commitments(
         &mut self,
         start_block: u32,
@@ -439,17 +441,19 @@ impl RpcDataFetcher {
         }
 
         // Uses the simple merkle tree implementation, which defaults to 256 leaves in Avail.
-        let headers = self.get_block_headers_range(start_block, end_block).await;
+        let headers = self
+            .get_block_headers_range(start_block + 1, end_block)
+            .await;
 
         let mut data_root_leaves = Vec::new();
         let mut state_root_leaves = Vec::new();
-        for i in 1..headers.len() {
+        for i in 0..headers.len() {
             let header = &headers[i];
             data_root_leaves.push(header.data_root().0.to_vec());
             state_root_leaves.push(header.state_root.0.to_vec());
         }
 
-        for _ in headers.len() - 1..MAX_NUM_HEADERS {
+        for _ in headers.len()..MAX_NUM_HEADERS {
             data_root_leaves.push([0u8; 32].to_vec());
             state_root_leaves.push([0u8; 32].to_vec());
         }
@@ -466,12 +470,12 @@ impl RpcDataFetcher {
         start_block_number: u32,
         end_block_number: u32,
     ) -> Vec<Header> {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
 
         // Fetch the headers in batches of MAX_CONCURRENT_WS_REQUESTS. The WS connection will error if there
-        // are too many concurrent requests.
+        // are too many concurrent requests with Rpc(ClientError(MaxSlotsExceeded)).
         // TODO: Find the configuration for the maximum number of concurrent requests.
         const MAX_CONCURRENT_WS_REQUESTS: usize = 200;
         let mut headers = Vec::new();
@@ -499,13 +503,12 @@ impl RpcDataFetcher {
 
     pub async fn get_header(&self, block_number: u32) -> Header {
         let block_hash = self.get_block_hash(block_number).await;
-        println!("Getting header for block number: {:?}", block_number);
         let header_result = self.client.rpc().header(Some(block_hash)).await;
         header_result.unwrap().unwrap()
     }
 
     pub async fn get_head(&mut self) -> Header {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
         let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
@@ -514,7 +517,7 @@ impl RpcDataFetcher {
     }
 
     pub async fn get_authority_set_id(&mut self, block_number: u32) -> u64 {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
         let block_hash = self.get_block_hash(block_number).await;
@@ -532,7 +535,7 @@ impl RpcDataFetcher {
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
     pub async fn get_authorities(&mut self, block_number: u32) -> Vec<CompressedEdwardsY> {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
 
@@ -608,7 +611,7 @@ impl RpcDataFetcher {
         &mut self,
         block_number: u32,
     ) -> SimpleJustificationData {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
 

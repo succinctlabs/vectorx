@@ -4523,7 +4523,7 @@ source = "git+https://github.com/mir-protocol/plonky2.git?rev=d2598bd#d2598bded0
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/derive-update#1db2b6f929d3d016df3846de244842cd6ca4db8d"
+source = "git+https://github.com/succinctlabs/succinctx.git#220875481e702b639581d611bdc0353a6c2af72a"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4565,7 +4565,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/derive-update#1db2b6f929d3d016df3846de244842cd6ca4db8d"
+source = "git+https://github.com/succinctlabs/succinctx.git#220875481e702b639581d611bdc0353a6c2af72a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5320,7 +5320,7 @@ checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
 [[package]]
 name = "rustx"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/derive-update#1db2b6f929d3d016df3846de244842cd6ca4db8d"
+source = "git+https://github.com/succinctlabs/succinctx.git#220875481e702b639581d611bdc0353a6c2af72a"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -6829,7 +6829,7 @@ dependencies = [
 [[package]]
 name = "succinct-client"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/derive-update#1db2b6f929d3d016df3846de244842cd6ca4db8d"
+source = "git+https://github.com/succinctlabs/succinctx.git#220875481e702b639581d611bdc0353a6c2af72a"
 dependencies = [
  "alloy-primitives",
  "anyhow",

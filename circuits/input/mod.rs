@@ -470,16 +470,30 @@ impl RpcDataFetcher {
             .await
             .expect("Failed to establish connection to Avail WS.");
 
-        // Collecting all futures for header requests
-        let header_futures: Vec<_> = (start_block_number..end_block_number + 1)
-            .map(|block_number| self.get_header(block_number))
-            .collect();
+        // Fetch the headers in batches of MAX_CONCURRENT_WS_REQUESTS. The WS connection will error if there
+        // are too many concurrent requests.
+        // TODO: Find the configuration for the maximum number of concurrent requests.
+        const MAX_CONCURRENT_WS_REQUESTS: usize = 200;
+        let mut headers = Vec::new();
+        let mut curr_block = start_block_number;
+        while curr_block <= end_block_number {
+            let end_block = std::cmp::min(
+                curr_block + MAX_CONCURRENT_WS_REQUESTS as u32 - 1,
+                end_block_number,
+            );
+            let header_futures: Vec<_> = (curr_block..end_block)
+                .map(|block_number| self.get_header(block_number))
+                .collect();
 
-        // Await all futures concurrently
-        let headers: Vec<Header> = join_all(header_futures)
-            .await
-            .into_iter()
-            .collect::<Vec<_>>();
+            // Await all futures concurrently
+            let headers_batch: Vec<Header> = join_all(header_futures)
+                .await
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            headers.extend_from_slice(&headers_batch);
+            curr_block += MAX_CONCURRENT_WS_REQUESTS as u32;
+        }
         headers
     }
 
@@ -905,7 +919,7 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_block_headers_range() {
         let mut fetcher = RpcDataFetcher::new().await;
-        let headers = fetcher.get_block_headers_range(100000, 100250).await;
+        let _ = fetcher.get_block_headers_range(100000, 100256).await;
         // assert_eq!(headers.len(), 181);
     }
 

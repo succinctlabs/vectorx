@@ -1,11 +1,11 @@
 use alloy_primitives::Address;
+use avail_subxt::config::Header;
 use clap::Parser;
 use ethers::abi::AbiEncode;
 use ethers::middleware::SignerMiddleware;
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::TransactionReceipt;
 use log::info;
-use subxt::config::Header;
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);
@@ -57,7 +57,7 @@ async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeDat
             .await;
         start_blocks.push(i);
         end_blocks.push(block_range_end);
-        header_hashes.push(header.hash().as_bytes().try_into().unwrap());
+        header_hashes.push(header.hash().0);
         data_root_commitments.push(data_root_commitment.try_into().unwrap());
         state_root_commitments.push(state_root_commitment.try_into().unwrap());
     }

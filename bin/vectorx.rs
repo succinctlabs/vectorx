@@ -420,11 +420,11 @@ impl VectorXOperator {
 
             Some(min(max_block_to_request, last_justified_block))
         } else {
-            // Find all blocks in the range [current_block, block_to_step_to] that have a stored
+            // Find all blocks in the range [current_block + 1, block_to_step_to] that have a stored
             // justification.
             let valid_blocks = self
                 .data_fetcher
-                .find_justifications_in_range(current_block, max_block_to_request)
+                .find_justifications_in_range(current_block + 1, max_block_to_request)
                 .await;
             if valid_blocks.is_empty() {
                 info!("No valid blocks found in range.");

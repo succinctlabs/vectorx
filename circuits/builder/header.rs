@@ -287,7 +287,7 @@ mod tests {
     async fn test_blake2b_correctness() {
         let block_nbr = 397859;
 
-        let mut data_fetcher = RpcDataFetcher::new().await;
+        let data_fetcher = RpcDataFetcher::new().await;
         let header = data_fetcher.get_header(block_nbr).await;
         let header_bytes = header.encode();
         let header_size = header_bytes.len();

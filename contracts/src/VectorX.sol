@@ -9,9 +9,6 @@ import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
 contract VectorX is IVectorX, TimelockedUpgradeable {
-    /// @notice Indicator of if the contract is frozen.
-    bool public frozen;
-
     /// @notice The address of the gateway contract.
     address public gateway;
 
@@ -41,6 +38,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
+    /// @notice Indicator of if the contract is frozen.
+    bool public frozen;
+
     struct InitParameters {
         address guardian;
         address gateway;
@@ -53,7 +53,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     }
 
     function VERSION() external pure override returns (string memory) {
-        return "0.1.0";
+        return "0.1.1";
     }
 
     /// @dev Initializes the contract.
@@ -124,7 +124,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         require(_startBlocks[0] == latestBlock);
         for (uint256 i = 0; i < _startBlocks.length; i++) {
             if (i < _startBlocks.length - 1) {
-                require(_endBlocks[i] == _startBlocks[i + 1] - 1);
+                require(_endBlocks[i] == _startBlocks[i + 1]);
             }
             bytes32 key = keccak256(abi.encode(_startBlocks[i], _endBlocks[i]));
             dataRootCommitments[key] = _dataRootCommitments[i];
@@ -220,7 +220,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        require(_targetBlock > latestBlock);
         require(_targetBlock - latestBlock <= MAX_HEADER_RANGE);
         // Note: This is needed to prevent a long-range attack on the light client.
         require(_targetBlock > latestBlock);
@@ -251,9 +250,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         dataRootCommitments[key] = dataRootCommitment;
         stateRootCommitments[key] = stateRootCommitment;
 
-        // Update latest block.
-        latestBlock = _targetBlock;
-
         emit HeadUpdate(_targetBlock, targetHeaderHash);
 
         emit HeaderRangeCommitmentStored(
@@ -262,6 +258,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             dataRootCommitment,
             stateRootCommitment
         );
+
+        // Update latest block.
+        latestBlock = _targetBlock;
     }
 
     /// @notice Requests a rotate to the next authority set, which starts justifying blocks at

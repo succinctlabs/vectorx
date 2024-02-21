@@ -51,15 +51,13 @@ async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeDat
 
     for i in (start_block..end_block).step_by(256) {
         let block_range_end = min(i + 256, end_block);
+        let header = input_data_fetcher.get_header(block_range_end).await;
         let (state_root_commitment, data_root_commitment) = input_data_fetcher
             .get_merkle_root_commitments(i, block_range_end)
             .await;
         start_blocks.push(i);
         end_blocks.push(block_range_end);
-        let header = input_data_fetcher.get_header(block_range_end).await;
-        let expected_header_hash = header.hash();
-
-        header_hashes.push(expected_header_hash.0);
+        header_hashes.push(header.hash().0);
         data_root_commitments.push(data_root_commitment.try_into().unwrap());
         state_root_commitments.push(state_root_commitment.try_into().unwrap());
     }

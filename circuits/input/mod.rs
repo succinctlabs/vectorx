@@ -485,7 +485,7 @@ impl RpcDataFetcher {
                 curr_block + MAX_CONCURRENT_WS_REQUESTS as u32 - 1,
                 end_block_number,
             );
-            let header_futures: Vec<_> = (curr_block..end_block)
+            let header_futures: Vec<_> = (curr_block..end_block + 1)
                 .map(|block_number| self.get_header(block_number))
                 .collect();
 

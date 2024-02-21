@@ -924,8 +924,7 @@ mod tests {
         let mut fetcher = RpcDataFetcher::new().await;
         let _ = fetcher.get_block_headers_range(100000, 100256).await;
 
-        let (state_root_commitment, data_root_commitment) =
-            fetcher.get_merkle_root_commitments(441000, 441001).await;
+        let (_, data_root_commitment) = fetcher.get_merkle_root_commitments(441000, 441001).await;
 
         println!(
             "data_root_commitment {:?}",

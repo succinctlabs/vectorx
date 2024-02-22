@@ -66,6 +66,7 @@ impl VectorXOperator {
 
         let contract = VectorX::new(address.0 .0, provider.clone().into());
 
+        // Fetch the function IDs from the contract.
         let header_range_function_id: B256 =
             FixedBytes(contract.header_range_function_id().await.unwrap());
         let rotate_function_id: B256 = FixedBytes(contract.rotate_function_id().await.unwrap());

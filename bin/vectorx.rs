@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::env;
 
-use alloy_primitives::{Address, Bytes, B256};
+use alloy_primitives::{Address, Bytes, FixedBytes, B256};
 use alloy_sol_types::{sol, SolType};
 use anyhow::Result;
 use ethers::abi::AbiEncode;
@@ -51,16 +51,31 @@ struct RotateContractData {
 }
 
 impl VectorXOperator {
-    fn new(data_fetcher: RpcDataFetcher, is_dummy_operator: bool) -> Self {
+    async fn new(data_fetcher: RpcDataFetcher, is_dummy_operator: bool) -> Self {
         dotenv::dotenv().ok();
 
-        let config = Self::create_vectorx_config();
+        let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
+        let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
+        let address = contract_address
+            .parse::<Address>()
+            .expect("invalid address");
 
         let ethereum_rpc_url = env::var("ETHEREUM_RPC_URL").expect("ETHEREUM_RPC_URL must be set");
         let provider =
             Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
 
-        let contract = VectorX::new(config.address.0 .0, provider.clone().into());
+        let contract = VectorX::new(address.0 .0, provider.clone().into());
+
+        let header_range_function_id: B256 =
+            FixedBytes(contract.header_range_function_id().await.unwrap());
+        let rotate_function_id: B256 = FixedBytes(contract.rotate_function_id().await.unwrap());
+
+        let config = VectorXConfig {
+            address,
+            chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
+            header_range_function_id,
+            rotate_function_id,
+        };
 
         let succinct_rpc_url = env::var("SUCCINCT_RPC_URL").expect("SUCCINCT_RPC_URL must be set");
         let succinct_api_key = env::var("SUCCINCT_API_KEY").expect("SUCCINCT_API_KEY must be set");
@@ -73,38 +88,6 @@ impl VectorXOperator {
             client,
             data_fetcher,
             is_dummy_operator,
-        }
-    }
-
-    fn create_vectorx_config() -> VectorXConfig {
-        let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
-        let chain_id = env::var("CHAIN_ID").expect("CHAIN_ID must be set");
-        let address = contract_address
-            .parse::<Address>()
-            .expect("invalid address");
-
-        // Load the function IDs.
-        let header_range_id_env =
-            env::var("HEADER_RANGE_FUNCTION_ID").expect("HEADER_RANGE_FUNCTION_ID must be set");
-        let header_range_function_id = B256::from_slice(
-            &hex::decode(
-                header_range_id_env
-                    .strip_prefix("0x")
-                    .unwrap_or(&header_range_id_env),
-            )
-            .expect("invalid hex for header_range_function_id, expected 0x prefix"),
-        );
-        let rotate_id_env = env::var("ROTATE_FUNCTION_ID").expect("ROTATE_FUNCTION_ID must be set");
-        let rotate_function_id = B256::from_slice(
-            &hex::decode(rotate_id_env.strip_prefix("0x").unwrap_or(&rotate_id_env))
-                .expect("invalid hex for rotate_function_id, expected 0x prefix"),
-        );
-
-        VectorXConfig {
-            address,
-            chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
-            header_range_function_id,
-            rotate_function_id,
         }
     }
 
@@ -519,6 +502,6 @@ async fn main() {
     } else {
         info!("Starting VectorX operator!");
     }
-    let mut operator = VectorXOperator::new(data_fetcher, is_dummy_operator_bool);
+    let mut operator = VectorXOperator::new(data_fetcher, is_dummy_operator_bool).await;
     operator.run(loop_delay_mins, update_delay_mins).await;
 }

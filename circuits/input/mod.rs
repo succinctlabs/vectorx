@@ -470,6 +470,8 @@ impl RpcDataFetcher {
         start_block_number: u32,
         end_block_number: u32,
     ) -> Vec<Header> {
+        println!("Release!");
+
         self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");

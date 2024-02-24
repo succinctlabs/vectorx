@@ -71,7 +71,8 @@ cargo run --bin events
 
 ### Query for `dataRoot` Proof Data
 
-Querying with a block number.
+Querying for the merkle proof data for Goldberg testnet block 444841 from the VectorX contract
+deployed on Sepolia (chain ID: 11155111) at address 0x169e50f09A50F3509777cEf63EC59Eeb2aAcd201.
 
 ```
 https://beaconapi.succinct.xyz/api/integrations/vectorx?chainName=goldberg&contractChainId=11155111&contractAddress=0x169e50f09A50F3509777cEf63EC59Eeb2aAcd201&blockNumber=444841
@@ -83,37 +84,6 @@ Example response:
 {
   "data": {
     "blockNumber": 444841,
-    "rangeHash": "0x4fec90e517f92a0b3d1aa0013b55eac4e7afa1eff13baec2e4e7a105de412302",
-    "dataCommitment": "0xcaf4ffea1a32541327ecff021f3794eda7a6d3b24849c852d9b5118854f49fd5",
-    "merkleBranch": [
-      "0xdf68ba9b2ebf98303909688ad6a9ae3671e5f91b3f0beffdedeb106e3ff5aba2",
-      "0x2071b56820d44027691b37fe1b0a43d241b01b46dcc638a8d985998b69499090",
-      "0x45a07b99b1491ec7b4cd4965a9d9eb1031f8668c6b64d20768239ccd2bb437aa",
-      "0xb6ad5b859800aa54ed22250fc5c2a8d1dc916d3f3e57d713bb25bc9b8bd50a74",
-      "0x01c30551f619079565fc89dcc1f3f259a1cd8b6e44aba7d9f42f0406e96689fb",
-      "0x178a3caead2a150f2477b9657ebfbc239b2a385817d61134a40aa97651aee38d",
-      "0x12c13409b858e2224bdee9a44a23abce2ccea875bc92df8e5520a7bc3ae99228",
-      "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c"
-    ],
-    "index": 0,
-    "totalLeaves": 256,
-    "dataRoot": "0xa9fc37b017618cf0a7d4ae4935178c63e8206d76eab3f3322d12e746d3fbee03",
-    "blockHash": "0x7f7f777f4a876d76b71615c329ece9c77ec582398cd92d381ae0257795336849"
-  }
-}
-```
-
-Querying with a block hash.
-
-```
-https://beaconapi.succinct.xyz/api/integrations/vectorx?chainName=goldberg&contractChainId=11155111&contractAddress=0x169e50f09A50F3509777cEf63EC59Eeb2aAcd201&blockHash=0x7f7f777f4a876d76b71615c329ece9c77ec582398cd92d381ae0257795336849
-```
-
-Example response:
-
-```json
-{
-  "data": {
     "rangeHash": "0x4fec90e517f92a0b3d1aa0013b55eac4e7afa1eff13baec2e4e7a105de412302",
     "dataCommitment": "0xcaf4ffea1a32541327ecff021f3794eda7a6d3b24849c852d9b5118854f49fd5",
     "merkleBranch": [

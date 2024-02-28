@@ -319,7 +319,8 @@ impl VectorXOperator {
 
     // Current block, step_range_max and whether next authority set hash exists. (Implement!)
     async fn get_contract_data_for_step(&mut self) -> StepContractData {
-        let header_range_function_id = self.contract.header_range_function_id().await.unwrap();
+        let header_range_function_id: B256 =
+            FixedBytes(self.contract.header_range_function_id().await.unwrap());
         let current_block = self.contract.latest_block().await.unwrap();
         let step_range_max = self.contract.max_header_range().await.unwrap();
 
@@ -346,7 +347,8 @@ impl VectorXOperator {
 
     // Current block and whether next authority set hash exists. (Implement!)
     async fn get_contract_data_for_rotate(&mut self) -> RotateContractData {
-        let rotate_function_id = self.contract.rotate_function_id().await.unwrap();
+        let rotate_function_id: B256 =
+            FixedBytes(self.contract.rotate_function_id().await.unwrap());
         let current_block = self.contract.latest_block().await.unwrap();
 
         let current_authority_set_id = self
@@ -365,7 +367,7 @@ impl VectorXOperator {
             current_block,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
-            rotate_function_id: B256::from_slice(&rotate_function_id),
+            rotate_function_id,
         }
     }
 

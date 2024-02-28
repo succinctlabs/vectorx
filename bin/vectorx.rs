@@ -20,8 +20,6 @@ abigen!(VectorX, "./abi/VectorX.abi.json",);
 pub struct VectorXConfig {
     address: Address,
     chain_id: u32,
-    header_range_function_id: B256,
-    rotate_function_id: B256,
 }
 
 type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
@@ -42,12 +40,14 @@ struct StepContractData {
     current_block: u32,
     step_range_max: u32,
     next_authority_set_hash_exists: bool,
+    header_range_function_id: B256,
 }
 
 #[derive(Debug)]
 struct RotateContractData {
     current_block: u32,
     next_authority_set_hash_exists: bool,
+    rotate_function_id: B256,
 }
 
 impl VectorXOperator {
@@ -66,16 +66,9 @@ impl VectorXOperator {
 
         let contract = VectorX::new(address.0 .0, provider.clone().into());
 
-        // Fetch the function IDs from the contract.
-        let header_range_function_id: B256 =
-            FixedBytes(contract.header_range_function_id().await.unwrap());
-        let rotate_function_id: B256 = FixedBytes(contract.rotate_function_id().await.unwrap());
-
         let config = VectorXConfig {
             address,
             chain_id: chain_id.parse::<u32>().expect("invalid chain id"),
-            header_range_function_id,
-            rotate_function_id,
         };
 
         let succinct_rpc_url = env::var("SUCCINCT_RPC_URL").expect("SUCCINCT_RPC_URL must be set");
@@ -97,6 +90,7 @@ impl VectorXOperator {
         trusted_block: u32,
         trusted_authority_set_id: u64,
         target_block: u32,
+        header_range_function_id: B256,
     ) -> Result<String> {
         let client = self.get_succinct_client();
         let config = self.get_config();
@@ -126,7 +120,7 @@ impl VectorXOperator {
                 config.chain_id,
                 config.address,
                 function_data.into(),
-                config.header_range_function_id,
+                header_range_function_id,
                 Bytes::copy_from_slice(&input),
             )
             .await?;
@@ -138,6 +132,7 @@ impl VectorXOperator {
         &mut self,
         current_authority_set_id: u64,
         epoch_end_block: u32,
+        rotate_function_id: B256,
     ) -> Result<String> {
         let client = self.get_succinct_client();
         let config = self.get_config();
@@ -169,7 +164,7 @@ impl VectorXOperator {
                 config.chain_id,
                 config.address,
                 function_data.into(),
-                config.rotate_function_id,
+                rotate_function_id,
                 Bytes::copy_from_slice(&input),
             )
             .await?;
@@ -205,7 +200,11 @@ impl VectorXOperator {
 
             // Request the next authority set id.
             match self
-                .request_next_authority_set_id(current_authority_set_id, last_justified_block)
+                .request_next_authority_set_id(
+                    current_authority_set_id,
+                    last_justified_block,
+                    rotate_contract_data.rotate_function_id,
+                )
                 .await
             {
                 Ok(request_id) => {
@@ -265,6 +264,7 @@ impl VectorXOperator {
                 step_contract_data.current_block,
                 request_authority_set_id,
                 block_to_step_to.unwrap(),
+                step_contract_data.header_range_function_id,
             )
             .await
         {
@@ -319,6 +319,7 @@ impl VectorXOperator {
 
     // Current block, step_range_max and whether next authority set hash exists. (Implement!)
     async fn get_contract_data_for_step(&mut self) -> StepContractData {
+        let header_range_function_id = self.contract.header_range_function_id().await.unwrap();
         let current_block = self.contract.latest_block().await.unwrap();
         let step_range_max = self.contract.max_header_range().await.unwrap();
 
@@ -339,11 +340,13 @@ impl VectorXOperator {
             step_range_max,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
+            header_range_function_id: B256::from_slice(&header_range_function_id),
         }
     }
 
     // Current block and whether next authority set hash exists. (Implement!)
     async fn get_contract_data_for_rotate(&mut self) -> RotateContractData {
+        let rotate_function_id = self.contract.rotate_function_id().await.unwrap();
         let current_block = self.contract.latest_block().await.unwrap();
 
         let current_authority_set_id = self
@@ -362,6 +365,7 @@ impl VectorXOperator {
             current_block,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
+            rotate_function_id: B256::from_slice(&rotate_function_id),
         }
     }
 

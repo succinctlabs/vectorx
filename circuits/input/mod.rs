@@ -80,7 +80,7 @@ impl RedisClient {
     /// Stores justification data in Redis. Errors if setting the key fails.
     pub async fn add_justification(
         &mut self,
-        chain_name: &str,
+        avail_chain_id: &str,
         justification: StoredJustificationData,
     ) {
         let mut con = match self.get_connection().await {
@@ -90,7 +90,7 @@ impl RedisClient {
 
         let justification_key = format!(
             "{}:justification:{}",
-            chain_name, justification.block_number
+            avail_chain_id, justification.block_number
         );
 
         // Justification is stored as a JSON object.
@@ -99,7 +99,7 @@ impl RedisClient {
             .await
             .expect("Failed to set key");
 
-        let sorted_block_key = format!("{}:justification:blocks", chain_name);
+        let sorted_block_key = format!("{}:justification:blocks", avail_chain_id);
 
         // Add the block number to a sorted set, so we can query for all blocks with justifications.
         let _: () = con
@@ -120,7 +120,7 @@ impl RedisClient {
     /// Gets justification data from Redis. Errors if getting the key fails.
     pub async fn get_justification(
         &mut self,
-        chain_name: &str,
+        avail_chain_id: &str,
         block_number: u32,
     ) -> Result<StoredJustificationData, ()> {
         let mut con = match self.get_connection().await {
@@ -128,7 +128,7 @@ impl RedisClient {
             Err(e) => panic!("{}", e),
         };
 
-        let key = format!("{}:justification:{}", chain_name, block_number);
+        let key = format!("{}:justification:{}", avail_chain_id, block_number);
 
         // Result is always stored as serialized bytes: https://github.com/redis-rs/redis-rs#json-support.
         let serialized_justification: Vec<u8> =
@@ -146,7 +146,7 @@ impl RedisClient {
     /// Gets all blocks in range [start, end] (inclusive) that have justifications in Redis.
     pub async fn get_blocks_in_range(
         &mut self,
-        chain_name: &str,
+        avail_chain_id: &str,
         start: u32,
         end: u32,
     ) -> Vec<u32> {
@@ -155,7 +155,7 @@ impl RedisClient {
             Err(e) => panic!("{}", e),
         };
 
-        let key = format!("{}:justification:blocks", chain_name);
+        let key = format!("{}:justification:blocks", avail_chain_id);
 
         con.zrangebyscore(key, start, end)
             .await
@@ -254,7 +254,7 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
 pub struct RpcDataFetcher {
     pub client: Client,
     pub avail_url: String,
-    pub chain_name: String,
+    pub avail_chain_id: String,
     pub redis_client: RedisClient,
     pub save: Option<String>,
 }
@@ -272,7 +272,7 @@ impl RpcDataFetcher {
         RpcDataFetcher {
             client: client.0,
             avail_url: url,
-            chain_name: env::var("CHAIN_NAME").expect("CHAIN_NAME must be set"),
+            avail_chain_id: env::var("AVAIL_CHAIN_ID ").expect("AVAIL_CHAIN_ID  must be set"),
             redis_client,
             save: None,
         }
@@ -338,7 +338,7 @@ impl RpcDataFetcher {
         // Query Redis for all keys in the range [start_block, end_block].
         let redis_blocks: Vec<u32> = self
             .redis_client
-            .get_blocks_in_range(&self.chain_name, start_block, end_block)
+            .get_blocks_in_range(&self.avail_chain_id, start_block, end_block)
             .await;
 
         info!("Found {} blocks in Redis.", redis_blocks.len());
@@ -730,7 +730,7 @@ impl RpcDataFetcher {
             // If this is not an epoch end block, load the justification data from Redis.
             let stored_justification_data: StoredJustificationData = self
                 .redis_client
-                .get_justification(&self.chain_name, block_number)
+                .get_justification(&self.avail_chain_id, block_number)
                 .await
                 .expect("Failed to get justification from Redis");
 

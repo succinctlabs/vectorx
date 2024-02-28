@@ -152,7 +152,7 @@ async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
         };
         fetcher
             .redis_client
-            .add_justification(&fetcher.chain_name, store_justification_data)
+            .add_justification(&fetcher.avail_chain_id, store_justification_data)
             .await;
     }
 }
@@ -177,7 +177,7 @@ pub async fn main() {
         let fetcher = RpcDataFetcher {
             client: build_client(url, false).await.unwrap().0,
             redis_client: vectorx::input::RedisClient::new().await,
-            chain_name: String::from(chain),
+            avail_chain_id: String::from(chain),
             avail_url: String::from(url),
             save: None,
         };

@@ -163,26 +163,17 @@ pub async fn main() {
     dotenv::dotenv().ok();
     env_logger::init();
 
-    // Create a new map from chain name to WS URL.
-    let mut chain_to_url = HashMap::new();
-    chain_to_url.insert("goldberg", "wss://rpc-testnet.avail.tools:443/ws");
+    // Get the chain from the environment.
+    let avail_url = env::var("AVAIL_URL").unwrap();
+    let avail_chain_id = env::var("AVAIL_CHAIN_ID").unwrap();
 
-    // Spawn new listeners for each chain.
-    for (chain, url) in chain_to_url {
-        debug!(
-            "Starting {} indexer, saving every {} blocks.",
-            chain, BLOCK_SAVE_INTERVAL
-        );
+    let fetcher = RpcDataFetcher {
+        client: build_client(avail_url.clone(), false).await.unwrap().0,
+        redis_client: vectorx::input::RedisClient::new().await,
+        avail_chain_id,
+        avail_url,
+        save: None,
+    };
 
-        let fetcher = RpcDataFetcher {
-            client: build_client(url, false).await.unwrap().0,
-            redis_client: vectorx::input::RedisClient::new().await,
-            avail_chain_id: String::from(chain),
-            avail_url: String::from(url),
-            save: None,
-        };
-        tokio::spawn(async move {
-            listen_for_justifications(fetcher).await;
-        });
-    }
+    listen_for_justifications(fetcher).await;
 }

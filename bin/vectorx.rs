@@ -341,7 +341,7 @@ impl VectorXOperator {
             step_range_max,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
-            header_range_function_id: B256::from_slice(&header_range_function_id),
+            header_range_function_id,
         }
     }
 

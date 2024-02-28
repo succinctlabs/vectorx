@@ -2,21 +2,18 @@ use async_trait::async_trait;
 use ethers::types::H256;
 use log::{debug, Level};
 use plonky2x::backend::circuit::Circuit;
-use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, ValueStream, Variable,
-    VariableStream,
+    Bytes32Variable, CircuitBuilder, Field, PlonkParameters, ValueStream, VariableStream,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::builder::header::HeaderMethods;
-use crate::builder::justification::{GrandpaJustificationVerifier, HintSimpleJustification};
+use crate::builder::justification::HintSimpleJustification;
 use crate::builder::rotate::RotateMethods;
 use crate::input::RpcDataFetcher;
-use crate::vars::{EncodedHeader, EncodedHeaderVariable};
+use crate::vars::{EncodedHeader, RotateStruct, RotateVariable};
 
 // Fetch a single header.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +32,8 @@ impl<
         input_stream: &mut ValueStream<L, D>,
         output_stream: &mut ValueStream<L, D>,
     ) {
+        let authority_set_id = input_stream.read_value::<U64Variable>();
+        let authority_set_hash = input_stream.read_value::<Bytes32Variable>();
         let block_number = input_stream.read_value::<U32Variable>();
 
         debug!(
@@ -48,37 +47,35 @@ impl<
             .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(block_number)
             .await;
 
-        // Encoded header.
-        output_stream.write_value::<EncodedHeaderVariable<HEADER_LENGTH>>(EncodedHeader {
-            header_bytes: rotate_data.header_bytes,
-            header_size: rotate_data.header_size as u32,
-        });
+        let rotate = RotateStruct::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, L::Field> {
+            epoch_end_block_number: block_number,
+            current_authority_set_id: authority_set_id,
+            current_authority_set_hash: authority_set_hash,
+            target_header: EncodedHeader {
+                header_bytes: rotate_data.header_bytes,
+                header_size: rotate_data.header_size as u32,
+            },
+            target_header_num_authorities: L::Field::from_canonical_usize(
+                rotate_data.num_authorities,
+            ),
+            next_authority_set_start_position: L::Field::from_canonical_usize(
+                rotate_data.start_position,
+            ),
+            expected_new_authority_set_hash: H256::from_slice(
+                rotate_data.new_authority_set_hash.as_slice(),
+            ),
+            new_pubkeys: rotate_data.padded_pubkeys,
+        };
 
-        // Number of authorities.
-        output_stream
-            .write_value::<Variable>(L::Field::from_canonical_usize(rotate_data.num_authorities));
-
-        // Start position of consensus log in the header bytes.
-        output_stream
-            .write_value::<Variable>(L::Field::from_canonical_usize(rotate_data.start_position));
-
-        // Expected new authority set hash.
-        output_stream.write_value::<Bytes32Variable>(H256::from_slice(
-            rotate_data.new_authority_set_hash.as_slice(),
-        ));
-
-        // Pubkeys of the new authority set.
-        output_stream
-            .write_value::<ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>>(
-                rotate_data.padded_pubkeys,
-            );
+        // Rotate data.
+        output_stream.write_value::<RotateVariable<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>>(rotate);
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct RotateCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
-    const MAX_HEADER_LENGTH: usize,
+    const MAX_HEADER_SIZE: usize,
     const MAX_HEADER_CHUNK_SIZE: usize,
     // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH).
     const MAX_SUBARRAY_SIZE: usize,
@@ -86,21 +83,21 @@ pub struct RotateCircuit<
 
 impl<
         const MAX_AUTHORITY_SET_SIZE: usize,
-        const MAX_HEADER_LENGTH: usize,
+        const MAX_HEADER_SIZE: usize,
         const MAX_HEADER_CHUNK_SIZE: usize,
         const MAX_SUBARRAY_SIZE: usize,
     > Circuit
     for RotateCircuit<
         MAX_AUTHORITY_SET_SIZE,
-        MAX_HEADER_LENGTH,
+        MAX_HEADER_SIZE,
         MAX_HEADER_CHUNK_SIZE,
         MAX_SUBARRAY_SIZE,
     >
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
-        <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
-            plonky2::plonk::config::AlgebraicHasher<L::Field>,
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+        plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         // Read the on-chain inputs. The validators that signed epoch_end_block_number are defined
         // by authority_set_id and authority_set_hash.
@@ -126,38 +123,19 @@ impl<
         );
 
         // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE> {};
+        let header_fetcher = RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE> {};
         let mut input_stream = VariableStream::new();
+        input_stream.write(&authority_set_id);
+        input_stream.write(&authority_set_hash);
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
 
-        let target_header = output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(builder);
-        let num_authorities = output_stream.read::<Variable>(builder);
-        let start_position = output_stream.read::<Variable>(builder);
-        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(builder);
-        let new_pubkeys = output_stream
-            .read::<ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>>(builder);
+        let rotate =
+            output_stream.read::<RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        // Hash the header at epoch_end_block.
-        let target_header_hash =
-            builder.hash_encoded_header::<MAX_HEADER_LENGTH, MAX_HEADER_CHUNK_SIZE>(&target_header);
-
-        // Verify the epoch end header and the new authority set are valid.
-        builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
-            &target_header,
-            &target_header_hash,
-            &num_authorities,
-            &start_position,
-            &new_pubkeys,
-            &expected_new_authority_set_hash,
-        );
-
-        // Verify the justification from the current authority set on the epoch end header.
-        builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
-            epoch_end_block_number,
-            target_header_hash,
-            authority_set_id,
-            authority_set_hash,
+        let expected_new_authority_set_hash = rotate.expected_new_authority_set_hash;
+        builder.rotate::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+            rotate
         );
 
         // Write the hash of the new authority set to the output.
@@ -167,11 +145,11 @@ impl<
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
         generator_registry: &mut plonky2x::prelude::HintRegistry<L, D>,
     ) where
-        <<L as PlonkParameters<D>>::Config as plonky2::plonk::config::GenericConfig<D>>::Hasher:
-            plonky2::plonk::config::AlgebraicHasher<L::Field>,
+        <<L as PlonkParameters<D>>::Config as plonky2x::prelude::plonky2::plonk::config::GenericConfig<D>>::Hasher:
+        plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<L::Field>,
     {
         generator_registry
-            .register_async_hint::<RotateHint<MAX_HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>>();
+            .register_async_hint::<RotateHint<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>();
         generator_registry.register_async_hint::<HintSimpleJustification<MAX_AUTHORITY_SET_SIZE>>();
     }
 }
@@ -240,7 +218,6 @@ mod tests {
 
         let mut input = circuit.input();
         let authority_set_id = 0u64;
-        // TODO: Get authority set hash from rotate inputs, or a similar function.
         let authority_set_hash = H256::from_slice(
             &hex::decode("54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb")
                 .unwrap(),

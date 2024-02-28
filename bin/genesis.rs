@@ -9,9 +9,9 @@
 
 use std::env;
 
+use avail_subxt::config::Header;
 use clap::Parser;
 use log::info;
-use subxt::config::Header;
 use vectorx::input::RpcDataFetcher;
 
 #[derive(Parser, Debug, Clone)]

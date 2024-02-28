@@ -7,6 +7,14 @@ edition = "2021"
 path = "circuits/lib.rs"
 
 [[bin]]
+name = "dummy_step"
+path = "bin/dummy_step.rs"
+
+[[bin]]
+name = "dummy_rotate"
+path = "bin/dummy_rotate.rs"
+
+[[bin]]
 name = "step"
 path = "bin/step.rs"
 
@@ -30,6 +38,10 @@ path = "bin/indexer.rs"
 name = "events"
 path = "bin/events.rs"
 
+[[bin]]
+name = "fill_block_range"
+path = "bin/fill_block_range.rs"
+
 [features]
 ci = []
 
@@ -41,14 +53,13 @@ itertools = "0.10.5"
 ff = { package = "ff_ce", version = "0.11", features = ["derive"] }
 log = { version = "0.4.14", default-features = false }
 num = { version = "0.4", features = ["rand"] }
-plonky2 = { git = "https://github.com/mir-protocol/plonky2.git" }
+rustx = { git = "https://github.com/succinctlabs/succinctx.git" }
 plonky2x = { git = "https://github.com/succinctlabs/succinctx.git" }
 succinct-client = { git = "https://github.com/succinctlabs/succinctx.git" }
 plonky2x-derive = { git = "https://github.com/succinctlabs/succinctx.git" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.86"
 tokio = { version = "1.2.0", features = ["full"] }
-async-trait = "0.1.73"
 reqwest = "0.11.20"
 ethers = { version = "2.0.10", features = ["ws"] }
 sha256 = "1.4.0"
@@ -61,9 +72,9 @@ redis = { version = "0.23.3", features = [
 ] }
 
 dotenv = "0.15.0"
-avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "df16508" }
+avail-subxt = { git = "https://github.com/availproject/avail.git", tag = "v1.11.0.0" }
+sp-core = { git = "https://github.com/availproject/substrate.git", branch = "goldberg", default-features = false }
 sha2 = { version = "0.10.8", default-features = false }
-sp-core = { version = "21.0.0", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [
     "derive",
     "full",
@@ -71,9 +82,18 @@ codec = { package = "parity-scale-codec", version = "3", default-features = fals
 ] }
 alloy-sol-types = "0.4.2"
 alloy-primitives = "0.4.2"
-subxt = "0.29"
 anyhow = "1.0.68"
 clap = "4.4.9"
 rs_merkle = "1.4.1"
+futures = "0.3.30"
+async-trait = "0.1.77"
 [dev-dependencies]
 anyhow = "1.0.68"
+
+# Dependency `subxt` uses it's own 'version' of sp-core so we need to patch it :)
+[patch.crates-io]
+sp-core = { git = "https://github.com/availproject/substrate.git", branch = "goldberg" }
+sp-io = { git = "https://github.com/availproject/substrate.git", branch = "goldberg" }
+sp-runtime = { git = "https://github.com/availproject/substrate.git", branch = "goldberg" }
+sp-std = { git = "https://github.com/availproject/substrate.git", branch = "goldberg" }
+sp-core-hashing = { git = "https://github.com/availproject/substrate.git", branch = "goldberg" }

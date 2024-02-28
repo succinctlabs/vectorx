@@ -11,45 +11,62 @@ contract DeployScript is Script {
     function run() public {
         vm.startBroadcast();
 
-        bytes32 headerRangeFunctionId = vm.envBytes32(
-            "HEADER_RANGE_FUNCTION_ID"
-        );
-        bytes32 rotateFunctionId = vm.envBytes32("ROTATE_FUNCTION_ID");
-        uint32 height = uint32(vm.envUint("GENESIS_HEIGHT"));
-        bytes32 header = vm.envBytes32("GENESIS_HEADER");
-        uint64 authoritySetId = uint64(vm.envUint("GENESIS_AUTHORITY_SET_ID"));
-        bytes32 authoritySetHash = vm.envBytes32("GENESIS_AUTHORITY_SET_HASH");
+        bytes32 create2Salt = bytes32(vm.envBytes("CREATE2_SALT"));
 
-        address gateway = vm.envAddress("GATEWAY_ADDRESS");
-
-        bytes32 CREATE2_SALT = bytes32(vm.envBytes("CREATE2_SALT"));
+        bool upgrade = vm.envBool("UPGRADE");
 
         // Deploy contract
-        VectorX lightClientImpl = new VectorX{salt: bytes32(CREATE2_SALT)}();
-        VectorX lightClient;
-        lightClient = VectorX(
-            address(
-                new ERC1967Proxy{salt: bytes32(CREATE2_SALT)}(
-                    address(lightClientImpl),
-                    ""
-                )
-            )
-        );
-        console.logAddress(address(lightClient));
+        VectorX lightClientImpl = new VectorX{salt: bytes32(create2Salt)}();
+
         console.logAddress(address(lightClientImpl));
 
-        // Initialize the Vector X light client.
-        lightClient.initialize(
-            VectorX.InitParameters({
-                guardian: msg.sender,
-                gateway: gateway,
-                height: height,
-                header: header,
-                authoritySetId: authoritySetId,
-                authoritySetHash: authoritySetHash,
-                headerRangeFunctionId: headerRangeFunctionId,
-                rotateFunctionId: rotateFunctionId
-            })
-        );
+        VectorX lightClient;
+        if (!upgrade) {
+            lightClient = VectorX(
+                address(
+                    new ERC1967Proxy{salt: bytes32(create2Salt)}(
+                        address(lightClientImpl),
+                        ""
+                    )
+                )
+            );
+
+            // Initialize the Vector X light client.
+            lightClient.initialize(
+                VectorX.InitParameters({
+                    guardian: vm.envAddress("GUARDIAN_ADDRESS"),
+                    gateway: vm.envAddress("GATEWAY_ADDRESS"),
+                    height: uint32(vm.envUint("GENESIS_HEIGHT")),
+                    header: vm.envBytes32("GENESIS_HEADER"),
+                    authoritySetId: uint64(vm.envUint("AUTHORITY_SET_ID")),
+                    authoritySetHash: vm.envBytes32("AUTHORITY_SET_HASH"),
+                    headerRangeFunctionId: vm.envBytes32(
+                    "HEADER_RANGE_FUNCTION_ID"
+                    ),
+                    rotateFunctionId: vm.envBytes32("ROTATE_FUNCTION_ID")
+                })
+            );
+        } else {
+            address existingProxyAddress = vm.envAddress("CONTRACT_ADDRESS");
+
+            lightClient = VectorX(existingProxyAddress);
+            lightClient.upgradeTo(address(lightClientImpl));
+        }
+        if (vm.envBool("UPDATE_GATEWAY")) {
+            lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));
+        }
+        if (vm.envBool("UPDATE_GENESIS_STATE")) {
+            lightClient.updateGenesisState(uint32(vm.envUint("GENESIS_HEIGHT")),
+                vm.envBytes32("GENESIS_HEADER"),
+                uint64(vm.envUint("AUTHORITY_SET_ID")),
+                vm.envBytes32("AUTHORITY_SET_HASH"));
+        }
+        if (vm.envBool("UPDATE_FUNCTION_IDS")) {
+            lightClient.updateFunctionIds(vm.envBytes32(
+                "HEADER_RANGE_FUNCTION_ID"
+                ), vm.envBytes32("ROTATE_FUNCTION_ID"));
+        }
+
+        console.logAddress(address(lightClient));
     }
 }

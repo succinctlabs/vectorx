@@ -38,6 +38,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
+    /// @notice Indicator of if the contract is frozen.
+    bool public frozen;
+
     struct InitParameters {
         address guardian;
         address gateway;
@@ -49,10 +52,16 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 rotateFunctionId;
     }
 
+    function VERSION() external pure override returns (string memory) {
+        return "0.1.1";
+    }
+
     /// @dev Initializes the contract.
     /// @param _params The initialization parameters for the contract.
     function initialize(InitParameters calldata _params) external initializer {
         __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
+
+        frozen = false;
 
         gateway = _params.gateway;
 
@@ -64,53 +73,104 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         headerRangeFunctionId = _params.headerRangeFunctionId;
     }
 
-    /// @notice Update the address of the gateway contract.
+    /// @notice Update the freeze parameter.
+    function updateFreeze(bool _freeze) external onlyGuardian {
+        frozen = _freeze;
+    }
+
+    /// @notice Update the function IDs.
+    function updateFunctionIds(
+        bytes32 _headerRangeFunctionId,
+        bytes32 _rotateFunctionId
+    ) external onlyGuardian {
+        headerRangeFunctionId = _headerRangeFunctionId;
+        rotateFunctionId = _rotateFunctionId;
+    }
+
+    /// @notice Update the gateway address.
     function updateGateway(address _gateway) external onlyGuardian {
         gateway = _gateway;
     }
 
-    /// @notice Update the function id for requesting a header range.
-    function updateHeaderRangeFunctionId(
-        bytes32 _functionId
+    /// @notice Update the genesis state of the light client.
+    function updateGenesisState(
+        uint32 _height,
+        bytes32 _header,
+        uint64 _authoritySetId,
+        bytes32 _authoritySetHash
     ) external onlyGuardian {
-        headerRangeFunctionId = _functionId;
+        blockHeightToHeaderHash[_height] = _header;
+        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestBlock = _height;
     }
 
-    /// @notice Update the function id for requesting a rotate.
-    function updateAddNextAuthoritySetFunctionId(
-        bytes32 _functionId
+    /// @notice Force update the data & state commitments for a range of blocks.
+    function updateBlockRangeData(
+        uint32[] calldata _startBlocks,
+        uint32[] calldata _endBlocks,
+        bytes32[] calldata _headerHashes,
+        bytes32[] calldata _dataRootCommitments,
+        bytes32[] calldata _stateRootCommitments,
+        uint64 _endAuthoritySetId,
+        bytes32 _endAuthoritySetHash
     ) external onlyGuardian {
-        rotateFunctionId = _functionId;
+        assert(
+            _startBlocks.length > 0 &&
+                _startBlocks.length == _endBlocks.length &&
+                _endBlocks.length == _headerHashes.length &&
+                _headerHashes.length == _dataRootCommitments.length &&
+                _dataRootCommitments.length == _stateRootCommitments.length
+        );
+        require(_startBlocks[0] == latestBlock);
+        for (uint256 i = 0; i < _startBlocks.length; i++) {
+            if (i < _startBlocks.length - 1) {
+                require(_endBlocks[i] == _startBlocks[i + 1]);
+            }
+            bytes32 key = keccak256(abi.encode(_startBlocks[i], _endBlocks[i]));
+            dataRootCommitments[key] = _dataRootCommitments[i];
+            stateRootCommitments[key] = _stateRootCommitments[i];
+
+            blockHeightToHeaderHash[_endBlocks[i]] = _headerHashes[i];
+
+            emit HeadUpdate(_endBlocks[i], _headerHashes[i]);
+
+            emit HeaderRangeCommitmentStored(
+                _startBlocks[i],
+                _endBlocks[i],
+                _dataRootCommitments[i],
+                _stateRootCommitments[i]
+            );
+        }
+        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
+        latestBlock = _endBlocks[_endBlocks.length - 1];
     }
 
-    /// @notice Request a header update and data commitment from range (trustedBlock, requestedBlock].
-    /// @param _trustedBlock The block height of the trusted block.
-    /// @param _authoritySetId The authority set id of the header range (trustedBlock, requestedBlock].
+    /// @notice Request a header update and data commitment from range (latestBlock, requestedBlock].
+    /// @param _authoritySetId The authority set id of the header range (latestBlock, requestedBlock].
     /// @param _requestedBlock The block height of the requested block.
     /// @dev The trusted block and requested block must have the same authority id.
     function requestHeaderRange(
-        uint32 _trustedBlock,
         uint64 _authoritySetId,
         uint32 _requestedBlock
     ) external payable {
-        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        bytes32 trustedHeader = blockHeightToHeaderHash[latestBlock];
         if (trustedHeader == bytes32(0)) {
-            revert("Trusted header not found");
+            revert AuthoritySetNotFound();
         }
         // Note: In the case that the trusted block is an epoch end block, the authority set id will
         // be the authority set id of the next epoch.
         bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
         if (authoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
-        require(_requestedBlock > _trustedBlock);
-        require(_requestedBlock - _trustedBlock <= MAX_HEADER_RANGE);
+        require(_requestedBlock > latestBlock);
+        require(_requestedBlock - latestBlock <= MAX_HEADER_RANGE);
         // Note: This is needed to prevent a long-range attack on the light client.
         require(_requestedBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
-            _trustedBlock,
+            latestBlock,
             trustedHeader,
             _authoritySetId,
             authoritySetHash,
@@ -119,7 +179,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         bytes memory data = abi.encodeWithSelector(
             this.commitHeaderRange.selector,
-            _trustedBlock,
             _authoritySetId,
             _requestedBlock
         );
@@ -132,7 +191,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             500000
         );
         emit HeaderRangeRequested(
-            _trustedBlock,
+            latestBlock,
             trustedHeader,
             _authoritySetId,
             authoritySetHash,
@@ -140,32 +199,33 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         );
     }
 
-    /// @notice Add target header hash, and data + state commitments for (trustedBlock, targetBlock].
-    /// @param _trustedBlock The block height of the trusted block.
-    /// @param _authoritySetId The authority set id of the header range (trustedBlock, targetBlock].
+    /// @notice Add target header hash, and data + state commitments for (latestBlock, targetBlock].
+    /// @param _authoritySetId The authority set id of the header range (latestBlock, targetBlock].
     /// @param _targetBlock The block height of the target block.
     /// @dev The trusted block and requested block must have the same authority set id.
     function commitHeaderRange(
-        uint32 _trustedBlock,
         uint64 _authoritySetId,
         uint32 _targetBlock
     ) external {
-        bytes32 trustedHeader = blockHeightToHeaderHash[_trustedBlock];
+        if (frozen) {
+            revert ContractFrozen();
+        }
+
+        bytes32 trustedHeader = blockHeightToHeaderHash[latestBlock];
         if (trustedHeader == bytes32(0)) {
-            revert("Trusted header not found");
+            revert TrustedHeaderNotFound();
         }
         bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
         if (authoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
-        require(_targetBlock > _trustedBlock);
-        require(_targetBlock - _trustedBlock <= MAX_HEADER_RANGE);
+        require(_targetBlock - latestBlock <= MAX_HEADER_RANGE);
         // Note: This is needed to prevent a long-range attack on the light client.
         require(_targetBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
-            _trustedBlock,
+            latestBlock,
             trustedHeader,
             _authoritySetId,
             authoritySetHash,
@@ -178,29 +238,29 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         );
 
         (
-            bytes32 target_header_hash,
-            bytes32 state_root_commitment,
-            bytes32 data_root_commitment
+            bytes32 targetHeaderHash,
+            bytes32 stateRootCommitment,
+            bytes32 dataRootCommitment
         ) = abi.decode(output, (bytes32, bytes32, bytes32));
 
-        blockHeightToHeaderHash[_targetBlock] = target_header_hash;
+        blockHeightToHeaderHash[_targetBlock] = targetHeaderHash;
 
-        // Store the data and state commitments for the range (trustedBlock, targetBlock].
-        bytes32 key = keccak256(abi.encode(_trustedBlock, _targetBlock));
-        dataRootCommitments[key] = data_root_commitment;
-        stateRootCommitments[key] = state_root_commitment;
+        // Store the data and state commitments for the range (latestBlock, targetBlock].
+        bytes32 key = keccak256(abi.encode(latestBlock, _targetBlock));
+        dataRootCommitments[key] = dataRootCommitment;
+        stateRootCommitments[key] = stateRootCommitment;
+
+        emit HeadUpdate(_targetBlock, targetHeaderHash);
+
+        emit HeaderRangeCommitmentStored(
+            latestBlock,
+            _targetBlock,
+            dataRootCommitment,
+            stateRootCommitment
+        );
 
         // Update latest block.
         latestBlock = _targetBlock;
-
-        emit HeadUpdate(_targetBlock, target_header_hash);
-
-        emit HeaderRangeCommitmentStored(
-            _trustedBlock,
-            _targetBlock,
-            data_root_commitment,
-            state_root_commitment
-        );
     }
 
     /// @notice Requests a rotate to the next authority set, which starts justifying blocks at
@@ -220,7 +280,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             _currentAuthoritySetId
         ];
         if (currentAuthoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
         bytes memory input = abi.encodePacked(
@@ -256,12 +316,16 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         uint64 _currentAuthoritySetId,
         uint32 _epochEndBlock
     ) external {
+        if (frozen) {
+            revert ContractFrozen();
+        }
+
         bytes32 currentAuthoritySetHash = authoritySetIdToHash[
             _currentAuthoritySetId
         ];
         // Note: Occurs if requesting a new authority set id that is not the next authority set id.
         if (currentAuthoritySetHash == bytes32(0)) {
-            revert("Authority set hash not found");
+            revert AuthoritySetNotFound();
         }
 
         bytes memory input = abi.encodePacked(
@@ -275,16 +339,14 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             input
         );
 
-        bytes32 new_authority_set_hash = abi.decode(output, (bytes32));
+        bytes32 newAuthoritySetHash = abi.decode(output, (bytes32));
 
         // Store the authority set hash for the next authority set id.
-        authoritySetIdToHash[
-            _currentAuthoritySetId + 1
-        ] = new_authority_set_hash;
+        authoritySetIdToHash[_currentAuthoritySetId + 1] = newAuthoritySetHash;
 
         emit AuthoritySetStored(
             _currentAuthoritySetId + 1,
-            new_authority_set_hash,
+            newAuthoritySetHash,
             _epochEndBlock
         );
     }

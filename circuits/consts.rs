@@ -8,11 +8,14 @@ pub const HEADERS_PER_MAP: usize = 8;
 // Maximum header size (in blake2b chunks) that can be processed by the circuit.
 pub const MAX_HEADER_CHUNK_SIZE: usize = 280;
 
+// Size of a Blake2b chunk (in bytes).
+pub const BLAKE2B_CHUNK_SIZE_BYTES: usize = 128;
+
 // Maximum header size (in bytes) that can be processed by the circuit.
 // (Data limit is 512KB).
-pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * 128;
+pub const MAX_HEADER_SIZE: usize = MAX_HEADER_CHUNK_SIZE * BLAKE2B_CHUNK_SIZE_BYTES;
 
-// Digest byte size
+// Digest byte size.
 pub const HASH_SIZE: usize = 32;
 
 // Length of an Avail validator (pubkey + weight).
@@ -36,7 +39,12 @@ pub const MAX_PREFIX_LENGTH: usize = BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES
 
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.
+// TODO: Link to spec.
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
+
+// The maximum size of the subarray is the max length of the encoded
+// authorities + the delay length.
+pub const MAX_SUBARRAY_SIZE: usize = MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH + DELAY_LENGTH;
 
 // Max number of authorities this circuit currently supports.
 pub const MAX_AUTHORITY_SET_SIZE: usize = 300;

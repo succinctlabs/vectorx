@@ -11,21 +11,19 @@ use std::env;
 use std::ops::Deref;
 
 use avail_subxt::config::Header as HeaderTrait;
+use avail_subxt::subxt_rpc::RpcParams;
 use avail_subxt::{api, build_client};
 use codec::Encode;
 use log::debug;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::DUMMY_SIGNATURE;
 use sp_core::ed25519::{self};
 use sp_core::{blake2_256, Pair, H256};
-use subxt::rpc::RpcParams;
 use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
 use vectorx::input::RpcDataFetcher;
 
-// Save every 90 blocks (every 30 minutes).
-const BLOCK_SAVE_INTERVAL: usize = 90;
-
+const BLOCK_SAVE_INTERVAL: usize = 30;
 async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
-    let sub: Result<avail_subxt::rpc::Subscription<GrandpaJustification>, subxt::Error> = fetcher
+    let sub: Result<avail_subxt::subxt_rpc::Subscription<GrandpaJustification>, _> = fetcher
         .client
         .rpc()
         .deref()
@@ -167,8 +165,7 @@ pub async fn main() {
 
     // Create a new map from chain name to WS URL.
     let mut chain_to_url = HashMap::new();
-    chain_to_url.insert("goldberg", "wss://couscous-devnet.avail.tools:443/ws");
-    chain_to_url.insert("couscous", "wss://goldberg.avail.tools:443/ws");
+    chain_to_url.insert("goldberg", "wss://rpc-testnet.avail.tools:443/ws");
 
     // Spawn new listeners for each chain.
     for (chain, url) in chain_to_url {
@@ -178,7 +175,7 @@ pub async fn main() {
         );
 
         let fetcher = RpcDataFetcher {
-            client: build_client(url, false).await.unwrap(),
+            client: build_client(url, false).await.unwrap().0,
             redis_client: vectorx::input::RedisClient::new().await,
             chain_name: String::from(chain),
             avail_url: String::from(url),

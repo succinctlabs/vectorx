@@ -31,20 +31,6 @@ pub struct StoredJustificationData {
     pub num_authorities: usize,
 }
 
-// Stores the Merkle tree data for Avail data commitments.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct MerkleTreeBranch {
-    pub block_number: u32,
-    pub branch: Vec<[u8; 32]>,
-    // If path_index is true (1), then the new hash_so_far is sha256(branch_node || hash_so_far)
-    // Otherwise, sha256(hash_so_far || branch_node)
-    pub path_indices: Vec<bool>,
-    // The hash of the range the data commitment (root) corresponds to.
-    pub range_hash: Vec<u8>,
-    pub root: Vec<u8>,
-    pub leaf: Vec<u8>,
-}
-
 #[derive(Debug)]
 pub struct CircuitJustification {
     pub authority_set_id: u64,
@@ -123,6 +109,6 @@ pub struct FinalityProof {
     pub block: H256,
     /// Justification of the block F.
     pub justification: Vec<u8>,
-    /// The set of headers in the range (B; F] that we believe are unknown to the caller. Ordered.
+    /// The set of headers in the range (B; F] that are unknown to the caller, ordered by block number.
     pub unknown_headers: Vec<Header>,
 }

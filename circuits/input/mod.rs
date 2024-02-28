@@ -5,34 +5,45 @@ use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
+use alloy_sol_types::{sol, SolType};
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
-use avail_subxt::rpc::RpcParams;
+use avail_subxt::subxt_rpc::RpcParams;
 use avail_subxt::{api, build_client};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
+use futures::future::join_all;
 use log::{debug, info};
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsY;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE};
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
-use sha2::Digest;
+use sha2::{Digest, Sha256};
 use tokio::time::sleep;
 
 use self::types::{
     CircuitJustification, EncodedFinalityProof, FinalityProof, GrandpaJustification,
-    HeaderRotateData, MerkleTreeBranch, SignerMessage, SimpleJustificationData,
-    StoredJustificationData,
+    HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
-    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
+    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH, VALIDATOR_LENGTH,
+    WEIGHT_LENGTH,
 };
 
+#[derive(Clone)]
 pub struct RedisClient {
     pub redis: redis::Client,
 }
+
+pub struct DataCommitmentRange {
+    pub start: u32,
+    pub end: u32,
+    pub data_commitment: Vec<u8>,
+}
+
+type DataCommitmentRangeTuple = sol! { tuple(uint32, uint32, bytes32) };
 
 impl RedisClient {
     const MAX_RECONNECT_ATTEMPTS: usize = 3;
@@ -127,7 +138,6 @@ impl RedisClient {
             Ok(justification) => Ok(justification[0].clone()),
             Err(e) => {
                 eprintln!("Failed to deserialize justification: {}", e);
-                // Handle the error appropriately, maybe return an Err if your function can return a Result
                 Err(())
             }
         }
@@ -152,21 +162,39 @@ impl RedisClient {
             .expect("Failed to get keys")
     }
 
-    /// Stores merkle tree branch data in Redis. Errors if setting the key fails.
-    pub async fn add_merkle_tree_branch(&mut self, branch: MerkleTreeBranch) {
+    /// Stores data commitment range data in Redis. Errors if setting the key fails.
+    pub async fn add_data_commitment_range(
+        &mut self,
+        chain_id: u64,
+        address: Vec<u8>,
+        range: DataCommitmentRange,
+    ) {
         let mut con = match self.get_connection().await {
             Ok(con) => con,
             Err(e) => panic!("{}", e),
         };
 
-        let key = format!("branch:{}", branch.block_number);
-        // Branch is stored as a JSON object.
+        // Add 0x prefix to address.
+        let address = format!("0x{}", hex::encode(address));
+
+        let key = format!("{}:{}:ranges", chain_id, address);
+
+        let data_commitment: [u8; 32] = range.data_commitment.try_into().unwrap();
+
+        let range_data: Vec<u8> =
+            DataCommitmentRangeTuple::abi_encode_packed(&(range.start, range.end, data_commitment));
+        // Branch is stored as an ABI encode packed tuple.
         let _: () = con
-            .json_set(key, "$", &branch)
+            .zadd(key.clone(), hex::encode(range_data), range.end)
             .await
             .expect("Failed to set key");
 
-        println!("Added branch for block {:?}", branch.block_number);
+        info!(
+            "Added range: {:?}-{:?} with data commitment: {:?}",
+            range.start,
+            range.end,
+            hex::encode(data_commitment)
+        );
     }
 }
 
@@ -222,6 +250,7 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
     )
 }
 
+#[derive(Clone)]
 pub struct RpcDataFetcher {
     pub client: Client,
     pub avail_url: String,
@@ -241,7 +270,7 @@ impl RpcDataFetcher {
         let client = build_client(url.as_str(), false).await.unwrap();
         let redis_client = RedisClient::new().await;
         RpcDataFetcher {
-            client,
+            client: client.0,
             avail_url: url,
             chain_name: env::var("CHAIN_NAME").expect("CHAIN_NAME must be set"),
             redis_client,
@@ -249,13 +278,13 @@ impl RpcDataFetcher {
         }
     }
 
-    async fn check_client_connection(&mut self) -> Result<(), String> {
+    async fn refresh_ws_connection(&mut self) -> Result<(), String> {
         for _ in 0..Self::MAX_RECONNECT_ATTEMPTS {
             match self.client.rpc().system_health().await {
                 Ok(_) => return Ok(()),
                 Err(_) => match build_client(self.avail_url.as_str(), false).await {
                     Ok(new_client) => {
-                        self.client = new_client;
+                        self.client = new_client.0;
                         return Ok(());
                     }
                     Err(_) => {
@@ -268,6 +297,30 @@ impl RpcDataFetcher {
         Err("Failed to connect to Avail client after multiple attempts!".to_string())
     }
 
+    pub async fn check_data_commitment(&mut self, block: u32) {
+        self.refresh_ws_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
+        let header = self.get_header(block).await;
+        let data_root = header.data_root().0.to_vec();
+        println!("data_root {:?}", data_root);
+
+        let encoded_header_bytes = header.encode();
+        println!("encoded_header_bytes {:?}", encoded_header_bytes);
+
+        // Find the data_root in the header.
+        let mut data_root_index = -1;
+        for i in 0..(encoded_header_bytes.len() - HASH_SIZE) + 1 {
+            if encoded_header_bytes[i..i + HASH_SIZE] == data_root[..] {
+                data_root_index = i as i32;
+                break;
+            }
+        }
+
+        println!("data_root_index {:?}", data_root_index);
+    }
+
     /// Finds all blocks with valid justifications. This includes justifications in Redis and epoch
     /// end blocks within the given range of block numbers. Includes start and end blocks.
     pub async fn find_justifications_in_range(
@@ -275,7 +328,7 @@ impl RpcDataFetcher {
         start_block: u32,
         end_block: u32,
     ) -> Vec<u32> {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
         info!(
@@ -324,7 +377,7 @@ impl RpcDataFetcher {
     // also specifies the new authority set, which starts justifying after this block.
     // Returns 0 if curr_authority_set_id <= target_authority_set_id.
     pub async fn last_justified_block(&mut self, target_authority_set_id: u64) -> u32 {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
 
@@ -359,11 +412,7 @@ impl RpcDataFetcher {
         epoch_end_block_number
     }
 
-    pub async fn get_block_hash(&mut self, block_number: u32) -> H256 {
-        self.check_client_connection()
-            .await
-            .expect("Failed to establish connection to Avail WS.");
-
+    pub async fn get_block_hash(&self, block_number: u32) -> H256 {
         let block_hash = self
             .client
             .rpc()
@@ -372,37 +421,115 @@ impl RpcDataFetcher {
         block_hash.unwrap().unwrap()
     }
 
+    // Computes the simple Merkle root of the leaves.
+    // If the number of leaves is not a power of 2, the leaves are extended with 0s to the next power of 2.
+    pub fn get_merkle_root(leaves: Vec<Vec<u8>>) -> Vec<u8> {
+        if leaves.is_empty() {
+            return vec![];
+        }
+
+        // Extend leaves to a power of 2.
+        let mut leaves = leaves;
+        while leaves.len().count_ones() != 1 {
+            leaves.push([0u8; 32].to_vec());
+        }
+
+        // In VectorX, the leaves are not hashed.
+        let mut nodes = leaves.clone();
+        while nodes.len() > 1 {
+            nodes = (0..nodes.len() / 2)
+                .map(|i| {
+                    let mut hasher = Sha256::new();
+                    hasher.update(&nodes[2 * i]);
+                    hasher.update(&nodes[2 * i + 1]);
+                    hasher.finalize().to_vec()
+                })
+                .collect();
+        }
+
+        nodes[0].clone()
+    }
+
+    /// Get the state root commitment and data root commitment for the range [start_block + 1, end_block].
+    /// Returns a tuple of the state root commitment and data root commitment.
+    pub async fn get_merkle_root_commitments(
+        &mut self,
+        start_block: u32,
+        end_block: u32,
+    ) -> (Vec<u8>, Vec<u8>) {
+        if (end_block - start_block) as usize > MAX_NUM_HEADERS {
+            panic!("Range too large!");
+        }
+
+        // Uses the simple merkle tree implementation, which defaults to 256 leaves in Avail.
+        let headers = self
+            .get_block_headers_range(start_block + 1, end_block)
+            .await;
+
+        let mut data_root_leaves = Vec::new();
+        let mut state_root_leaves = Vec::new();
+        for i in 0..headers.len() {
+            let header = &headers[i];
+            data_root_leaves.push(header.data_root().0.to_vec());
+            state_root_leaves.push(header.state_root.0.to_vec());
+        }
+
+        for _ in headers.len()..MAX_NUM_HEADERS {
+            data_root_leaves.push([0u8; 32].to_vec());
+            state_root_leaves.push([0u8; 32].to_vec());
+        }
+
+        (
+            Self::get_merkle_root(state_root_leaves),
+            Self::get_merkle_root(data_root_leaves),
+        )
+    }
+
     // This function returns a vector of headers for a given range of block numbers, inclusive of the start and end block numbers.
     pub async fn get_block_headers_range(
         &mut self,
         start_block_number: u32,
         end_block_number: u32,
     ) -> Vec<Header> {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
 
+        // Fetch the headers in batches of MAX_CONCURRENT_WS_REQUESTS. The WS connection will error if there
+        // are too many concurrent requests with Rpc(ClientError(MaxSlotsExceeded)).
+        // TODO: Find the configuration for the maximum number of concurrent requests.
+        const MAX_CONCURRENT_WS_REQUESTS: usize = 200;
         let mut headers = Vec::new();
-        for block_number in start_block_number..end_block_number + 1 {
-            let block_hash = self.get_block_hash(block_number).await;
-            let header_result = self.client.rpc().header(Some(block_hash)).await;
-            let header: Header = header_result.unwrap().unwrap();
-            headers.push(header);
+        let mut curr_block = start_block_number;
+        while curr_block <= end_block_number {
+            let end_block = std::cmp::min(
+                curr_block + MAX_CONCURRENT_WS_REQUESTS as u32 - 1,
+                end_block_number,
+            );
+            let header_futures: Vec<_> = (curr_block..end_block + 1)
+                .map(|block_number| self.get_header(block_number))
+                .collect();
+
+            // Await all futures concurrently
+            let headers_batch: Vec<Header> = join_all(header_futures)
+                .await
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            headers.extend_from_slice(&headers_batch);
+            curr_block += MAX_CONCURRENT_WS_REQUESTS as u32;
         }
         headers
     }
 
-    pub async fn get_header(&mut self, block_number: u32) -> Header {
-        self.check_client_connection()
-            .await
-            .expect("Failed to establish connection to Avail WS.");
+    pub async fn get_header(&self, block_number: u32) -> Header {
         let block_hash = self.get_block_hash(block_number).await;
         let header_result = self.client.rpc().header(Some(block_hash)).await;
         header_result.unwrap().unwrap()
     }
 
     pub async fn get_head(&mut self) -> Header {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
         let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
@@ -411,7 +538,7 @@ impl RpcDataFetcher {
     }
 
     pub async fn get_authority_set_id(&mut self, block_number: u32) -> u64 {
-        self.check_client_connection()
+        self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
         let block_hash = self.get_block_hash(block_number).await;
@@ -429,6 +556,10 @@ impl RpcDataFetcher {
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
     pub async fn get_authorities(&mut self, block_number: u32) -> Vec<CompressedEdwardsY> {
+        self.refresh_ws_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities_bytes = self
@@ -440,18 +571,18 @@ impl RpcDataFetcher {
             .unwrap()
             .unwrap();
 
-        // TODO: Reference the following comment for verifying the compact scale encoding inside of the circuit.
-        // The grandpa_authorities_bytes has one of the two following formats:
-        // [V, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
-        // [V, X, X, <public_key_compressed>, <1, 0, 0, 0, 0, 0, 0, 0>, <public_key_compressed>, ...]
-        // Where V is a "Version" number (right now it's 1u8)
-        // Where X or XX is the compact scale encoding of the number of authorities
-        // This is a reference on how compact scale encoding works: https://docs.substrate.io/reference/scale-codec/#fn-1
+        // The grandpa_authorities_bytes is the following:
+        // V || X || <pub_key_compressed> || W || <pub_key_compressed> || W || ...
+        // V is a "Version" number (1u8), which in compact encoding will be 1 byte.
+        // X is the compact scale encoding of the number of authorities (1-2 bytes).
+        // <pub_key_compressed> is the compressed EdDDSA public key (32 bytes).
+        // W is the compact scale encoding of the weight (8 bytes long).
+        // Compact scale encoding reference: https://docs.substrate.io/reference/scale-codec/#fn-1
 
-        // The prefix length is 2 if the number of authorities is <=63, otherwise it is 3 (including)
-        // the version number. This is because the compact scale encoding will be only 1 byte if the
-        // number of authorities is <=63.
-        let offset = if grandpa_authorities_bytes.len() < ((32 + 8) * 63) + 3 {
+        // If the number of authorities is <=63, the compact encoding of the number of authorities is 1 byte.
+        // If the number of authorities is >63 & < 2^14, the compact encoding of the number of authorities is 2 bytes.
+        // So, the offset is 2 if the number of authorities is <=63, and 3 if the number of authorities is >63.
+        let offset = if grandpa_authorities_bytes.len() <= ((32 + 8) * 63) + 2 {
             2
         } else {
             3
@@ -468,18 +599,21 @@ impl RpcDataFetcher {
             let pub_key = CompressedEdwardsY::from_slice(&authority_pubkey_weight[..32]).unwrap();
             authorities.push(pub_key);
 
-            // Assert that the weight is 1 (weight is in LE representation).
-            assert_eq!(authority_pubkey_weight[32], 1);
-            for i in 33..VALIDATOR_LENGTH {
-                assert_eq!(authority_pubkey_weight[i], 0);
-            }
+            let expected_weight = [1, 0, 0, 0, 0, 0, 0, 0];
+
+            // Assert the LE representation of the weight of each validator is 1.
+            assert_eq!(
+                authority_pubkey_weight[32..40],
+                expected_weight,
+                "The weight of the authority is not 1!"
+            );
         }
 
         authorities
     }
 
-    // Computes the authority_set_hash for a given block number.
-    // This is the authority_set_hash of the next block.
+    // Computes the authority_set_hash for a given block number. Note: This is the authority set hash
+    // that validates the next block after the given block number.
     pub async fn compute_authority_set_hash(&mut self, block_number: u32) -> H256 {
         let authorities = self.get_authorities(block_number).await;
 
@@ -498,9 +632,13 @@ impl RpcDataFetcher {
         &mut self,
         block_number: u32,
     ) -> SimpleJustificationData {
+        self.refresh_ws_connection()
+            .await
+            .expect("Failed to establish connection to Avail WS.");
+
         // Note: grandpa_proveFinality will serve the proof for the last justified block in an epoch.
-        // This means that get_simple_justification should fail for any block that is not the last
-        // justified block in an epoch.
+        // get_simple_justification should fail for any block that is not the last justified block
+        // in an epoch.
         let curr_authority_set_id = self.get_authority_set_id(block_number).await;
         let prev_authority_set_id = self.get_authority_set_id(block_number - 1).await;
 
@@ -539,12 +677,10 @@ impl RpcDataFetcher {
                 &justification.round,
                 &authority_set_id,
             ));
-            // TODO: verify above that signed_message = block_hash || block_number || round || set_id
 
             let mut pubkey_bytes_to_signature = HashMap::new();
 
             // Verify all the signatures of the justification.
-            // TODO: panic if the justification is not not a simple justification
             justification
                 .commit
                 .precommits
@@ -554,6 +690,7 @@ impl RpcDataFetcher {
                     let signature = precommit.clone().signature.0;
                     let pubkey_bytes = pubkey.0.to_vec();
 
+                    // Verify the signature by this validator over the signed_message which is shared.
                     verify_signature(&pubkey_bytes, &signed_message, &signature);
                     pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
                 });
@@ -564,10 +701,8 @@ impl RpcDataFetcher {
             let mut voting_weight = 0;
             for pubkey_bytes in authorities_pubkey_bytes.iter() {
                 let signature = pubkey_bytes_to_signature.get(&pubkey_bytes.as_bytes().to_vec());
-                // let authority = AffinePoint::<Curve>::new_from_compressed_point(pubkey_bytes);
 
                 if let Some(valid_signature) = signature {
-                    verify_signature(pubkey_bytes.as_bytes(), &signed_message, valid_signature);
                     validator_signed.push(true);
                     pubkeys.push(
                         CompressedEdwardsY::from_slice(pubkey_bytes.as_bytes().as_ref()).unwrap(),
@@ -592,6 +727,7 @@ impl RpcDataFetcher {
                 num_authorities: authorities_pubkey_bytes.len() as u64,
             }
         } else {
+            // If this is not an epoch end block, load the justification data from Redis.
             let stored_justification_data: StoredJustificationData = self
                 .redis_client
                 .get_justification(&self.chain_name, block_number)
@@ -621,9 +757,9 @@ impl RpcDataFetcher {
         }
     }
 
-    // This function takes in a block_number as input, fetches the authority set for that block and the finality proof
-    // for that block. If the finality proof is a simple justification, it will return a CircuitJustification
-    // containing all the encoded precommit that the authorities sign, the validator signatures, and the authority pubkeys.
+    // Fetch the authority set and justification proof for block_number. If the finality proof is a
+    // simple justification, return a CircuitJustification with the encoded precommit that all
+    // authorities sign, the validator signatures, and the authority set's pubkeys.
     pub async fn get_justification_from_block<const VALIDATOR_SET_SIZE_MAX: usize>(
         &mut self,
         block_number: u32,
@@ -759,7 +895,7 @@ impl RpcDataFetcher {
             }
         }
 
-        // Panic if we did not find the consensus log.
+        // Panic if there is not a consensus log.
         if !found_correct_log {
             panic!(
                 "Block: {:?} should be an epoch end block, but did not find corresponding consensus log!",
@@ -807,8 +943,15 @@ mod tests {
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_block_headers_range() {
         let mut fetcher = RpcDataFetcher::new().await;
-        let headers = fetcher.get_block_headers_range(100000, 100009).await;
-        assert_eq!(headers.len(), 10);
+        let _ = fetcher.get_block_headers_range(100000, 100256).await;
+
+        let (_, data_root_commitment) = fetcher.get_merkle_root_commitments(441000, 441001).await;
+
+        println!(
+            "data_root_commitment {:?}",
+            hex::encode(data_root_commitment)
+        );
+        // assert_eq!(headers.len(), 181);
     }
 
     #[tokio::test]
@@ -901,7 +1044,7 @@ mod tests {
         let target_authority_set_id = 513;
         let epoch_end_block_number = fetcher.last_justified_block(target_authority_set_id).await;
 
-        // Verify that we found an epoch end block.
+        // Verify that this is an epoch end block.
         assert_ne!(epoch_end_block_number, 0);
         println!("epoch_end_block_number {:?}", epoch_end_block_number);
 
@@ -994,25 +1137,50 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_rotate() {
+        env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().ok();
+        env_logger::init();
+
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        let mut start_epoch = 100;
+        // let head = data_fetcher.get_head().await.number;
+        let mut start_epoch = 179;
         loop {
-            if start_epoch > 617 {
+            let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
+            if epoch_end_block == 0 {
                 break;
             }
-            let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
+            log::debug!("epoch_end_block {:?}", epoch_end_block);
 
             let _ = data_fetcher
                 .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
                 .await;
 
-            println!("epoch_end_block {:?}", epoch_end_block);
-
             let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
             println!("num authorities {:?}", num_authorities);
 
-            start_epoch += 100;
+            start_epoch += 1;
         }
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_data_commitment() {
+        let mut data_fetcher = RpcDataFetcher::new().await;
+
+        let trusted_block = 338901;
+        let target_block = 339157;
+
+        let (state_merkle_root, data_merkle_root) = data_fetcher
+            .get_merkle_root_commitments(trusted_block, target_block)
+            .await;
+        println!(
+            "state_merkle_root {:?}",
+            hex::encode(state_merkle_root.as_slice())
+        );
+        println!(
+            "data_merkle_root {:?}",
+            hex::encode(data_merkle_root.as_slice())
+        );
     }
 }

@@ -272,7 +272,7 @@ impl RpcDataFetcher {
         RpcDataFetcher {
             client: client.0,
             avail_url: url,
-            avail_chain_id: env::var("AVAIL_CHAIN_ID ").expect("AVAIL_CHAIN_ID  must be set"),
+            avail_chain_id: env::var("AVAIL_CHAIN_ID").expect("AVAIL_CHAIN_ID must be set"),
             redis_client,
             save: None,
         }

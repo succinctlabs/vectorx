@@ -10,9 +10,9 @@ use std::collections::HashMap;
 use std::env;
 use std::ops::Deref;
 
-use avail_subxt::api;
 use avail_subxt::config::Header as HeaderTrait;
 use avail_subxt::subxt_rpc::RpcParams;
+use avail_subxt::{api, build_client};
 use codec::Encode;
 use log::debug;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::DUMMY_SIGNATURE;
@@ -21,20 +21,8 @@ use sp_core::{blake2_256, Pair, H256};
 use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
 use vectorx::input::RpcDataFetcher;
 
-#[tokio::main]
-pub async fn main() {
-    env::set_var("RUST_LOG", "debug");
-    dotenv::dotenv().ok();
-    env_logger::init();
-
-    // Save every 30 blocks (every 10 minutes).
-    const BLOCK_SAVE_INTERVAL: usize = 30;
-    debug!(
-        "Starting indexer, saving every {} blocks.",
-        BLOCK_SAVE_INTERVAL
-    );
-
-    let mut fetcher = RpcDataFetcher::new().await;
+const BLOCK_SAVE_INTERVAL: usize = 30;
+async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
     let sub: Result<avail_subxt::subxt_rpc::Subscription<GrandpaJustification>, _> = fetcher
         .client
         .rpc()
@@ -164,7 +152,28 @@ pub async fn main() {
         };
         fetcher
             .redis_client
-            .add_justification(store_justification_data)
+            .add_justification(&fetcher.avail_chain_id, store_justification_data)
             .await;
     }
+}
+
+#[tokio::main]
+pub async fn main() {
+    env::set_var("RUST_LOG", "debug");
+    dotenv::dotenv().ok();
+    env_logger::init();
+
+    // Get the chain from the environment.
+    let avail_url = env::var("AVAIL_URL").unwrap();
+    let avail_chain_id = env::var("AVAIL_CHAIN_ID").unwrap();
+
+    let fetcher = RpcDataFetcher {
+        client: build_client(avail_url.clone(), false).await.unwrap().0,
+        redis_client: vectorx::input::RedisClient::new().await,
+        avail_chain_id,
+        avail_url,
+        save: None,
+    };
+
+    listen_for_justifications(fetcher).await;
 }

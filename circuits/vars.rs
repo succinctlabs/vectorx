@@ -48,9 +48,6 @@ pub struct JustificationVariable<const MAX_AUTHORITY_SET_SIZE: usize> {
 #[derive(Clone, Debug, CircuitVariable)]
 #[value_name(RotateStruct)]
 pub struct RotateVariable<const MAX_HEADER_SIZE: usize, const MAX_AUTHORITY_SET_SIZE: usize> {
-    pub epoch_end_block_number: U32Variable,
-    pub current_authority_set_id: U64Variable,
-    pub current_authority_set_hash: Bytes32Variable,
     pub target_header: EncodedHeaderVariable<MAX_HEADER_SIZE>,
     pub target_header_num_authorities: Variable,
     pub next_authority_set_start_position: Variable,

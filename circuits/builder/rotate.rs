@@ -1,4 +1,6 @@
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
+use plonky2x::frontend::uint::uint64::U64Variable;
+use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
@@ -46,6 +48,9 @@ pub trait RotateMethods {
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
+        epoch_end_block_number: U32Variable,
+        current_authority_set_id: U64Variable,
+        current_authority_set_hash: Bytes32Variable,
         rotate: RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>,
     ) -> Bytes32Variable;
 }
@@ -220,6 +225,9 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
+        epoch_end_block_number: U32Variable,
+        current_authority_set_id: U64Variable,
+        current_authority_set_hash: Bytes32Variable,
         rotate: RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>,
     ) -> Bytes32Variable {
         assert_eq!(
@@ -244,10 +252,10 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify the justification from the current authority set on the epoch end header.
         self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
-            rotate.epoch_end_block_number,
+            epoch_end_block_number,
             target_header_hash,
-            rotate.current_authority_set_id,
-            rotate.current_authority_set_hash,
+            current_authority_set_id,
+            current_authority_set_hash,
         );
 
         rotate.expected_new_authority_set_hash

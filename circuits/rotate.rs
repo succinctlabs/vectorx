@@ -32,8 +32,6 @@ impl<
         input_stream: &mut ValueStream<L, D>,
         output_stream: &mut ValueStream<L, D>,
     ) {
-        let authority_set_id = input_stream.read_value::<U64Variable>();
-        let authority_set_hash = input_stream.read_value::<Bytes32Variable>();
         let block_number = input_stream.read_value::<U32Variable>();
 
         debug!(
@@ -48,9 +46,6 @@ impl<
             .await;
 
         let rotate = RotateStruct::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, L::Field> {
-            epoch_end_block_number: block_number,
-            current_authority_set_id: authority_set_id,
-            current_authority_set_hash: authority_set_hash,
             target_header: EncodedHeader {
                 header_bytes: rotate_data.header_bytes,
                 header_size: rotate_data.header_size as u32,
@@ -125,17 +120,18 @@ impl<
         // Fetch the header at epoch_end_block.
         let header_fetcher = RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE> {};
         let mut input_stream = VariableStream::new();
-        input_stream.write(&authority_set_id);
-        input_stream.write(&authority_set_hash);
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
 
-        let rotate =
+        let rotate_var =
             output_stream.read::<RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        let expected_new_authority_set_hash = rotate.expected_new_authority_set_hash;
+        let expected_new_authority_set_hash = rotate_var.expected_new_authority_set_hash;
         builder.rotate::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
-            rotate
+            epoch_end_block_number,
+            authority_set_id,
+            authority_set_hash,
+            rotate_var
         );
 
         // Write the hash of the new authority set to the output.

@@ -154,7 +154,6 @@ impl<
 mod tests {
     use std::env;
 
-    use ethers::types::H256;
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;

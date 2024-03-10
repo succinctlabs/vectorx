@@ -255,7 +255,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 mod tests {
     use std::env;
 
-    use plonky2x::prelude::{Bytes32Variable, DefaultBuilder};
+    use plonky2x::prelude::DefaultBuilder;
 
     use super::*;
 

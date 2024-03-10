@@ -1,6 +1,5 @@
 use ethers::types::H256;
 use itertools::Itertools;
-use log::{debug, Level};
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
 use plonky2x::frontend::merkle::simple::SimpleMerkleTree;
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
@@ -73,8 +72,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         num_map_jobs = 2usize.pow(num_jobs_power_of_2);
         assert!(num_map_jobs >= 2, "Number of map jobs must be at least 2!");
 
-        debug!("verify_subchain - num_map_jobs: {}", num_map_jobs);
-
         let relative_block_nums =
             (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();
 
@@ -83,26 +80,25 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
-                    // Get the start block that this map job is responsible for
-                    let start_block =
+                    // Get the start block of this batch.
+                    let batch_start_block =
                         builder.add(map_ctx.trusted_block, map_relative_block_nums.as_vec()[0]);
 
-                    // Get the last block that this map job is responsible for
-                    let last_block = builder.add(
+                    // Get the end block of this leaf.
+                    let batch_end_block = builder.add(
                         map_ctx.trusted_block,
                         map_relative_block_nums.as_vec()[HEADERS_PER_MAP - 1],
                     );
 
-                    builder.watch_with_level(&start_block, "map job - start block", Level::Debug);
-                    builder.watch_with_level(&last_block, "map job - last block", Level::Debug);
-
                     // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
                     // If max_block < start_block, then headers will be empty headers.
                     let mut input_stream = VariableStream::new();
-                    input_stream.write(&start_block);
-                    input_stream.write(&last_block);
+                    input_stream.write(&batch_start_block);
+                    input_stream.write(&batch_end_block);
                     input_stream.write(&map_ctx.target_block);
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
+                    // Note: These headers are untrusted as they are fetched via a hint, and so need
+                    // to be explicitly constrained to the public inputs of the circuit.
                     let headers = builder
                         .async_hint(input_stream, header_fetcher)
                         .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
@@ -138,7 +134,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
                         block_hashes.push(hash);
 
-                        // Decode the header and save relevant fields.
+                        // Decode the header and save the relevant fields.
                         let header_variable =
                             builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
                         block_nums.push(header_variable.block_number);
@@ -185,9 +181,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         )
                     }
 
-                    builder.watch_with_level(&end_block_num, "end block num", Level::Debug);
-                    builder.watch_with_level(&end_header_hash, "end header hash", Level::Debug);
-
                     // Pad block_state_roots and block_data_roots to be of length HEADERS_PER_MAP.
                     // Avail's data commitment pads empty leaves with zero bytes.
                     block_state_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
@@ -216,13 +209,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     }
                 },
                 |_, left, right, builder| {
-
-                    builder.watch_with_level(&left.num_blocks, "reduce job - left node num blocks", Level::Debug);
-                    builder.watch_with_level(&left.end_block, "reduce job - left node end block num", Level::Debug);
-                    builder.watch_with_level(&left.end_header_hash, "reduce job - left node end header hash", Level::Debug);
-                    builder.watch_with_level(&right.num_blocks, "reduce job - right node num blocks", Level::Debug);
-                    builder.watch_with_level(&right.end_block, "reduce job - right node first block num", Level::Debug);
-                    builder.watch_with_level(&right.start_parent, "reduce job - right num first block parent hash", Level::Debug);
 
                     let total_num_blocks = builder.add(left.num_blocks, right.num_blocks);
                     let is_right_empty = builder.is_zero(right.num_blocks);
@@ -258,12 +244,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     data_root_bytes.extend(&right.data_merkle_root.as_bytes());
                     let data_merkle_root = builder.sha256(&data_root_bytes);
 
-                    builder.watch_with_level(&total_num_blocks, "reduce job - total num blocks", Level::Debug);
-                    builder.watch_with_level(&left.start_block, "reduce job - first block num", Level::Debug);
-                    builder.watch_with_level(&left.start_parent, "reduce job - first block parent hash", Level::Debug);
-                    builder.watch_with_level(&end_block, "reduce job - end block num", Level::Debug);
-                    builder.watch_with_level(&end_header_hash, "reduce job - end block hash", Level::Debug);
-
                     MapReduceSubchainVariable {
                         num_blocks: total_num_blocks,
                         start_block: left.start_block,
@@ -277,12 +257,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 },
             );
 
-        self.watch_with_level(
-            &output.start_parent,
-            "verify_subchain - first parent hash",
-            Level::Debug,
-        );
+        // Assert the parent of the header chain corresponds to the trsuted_header_hash.
         self.assert_is_equal(trusted_header_hash, output.start_parent);
+
+        // Assert the target_block match the end_block.
+        self.assert_is_equal(target_block, output.end_block);
 
         SubchainVerificationVariable {
             target_header_hash: output.end_header_hash,

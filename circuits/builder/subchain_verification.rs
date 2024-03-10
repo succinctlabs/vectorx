@@ -112,7 +112,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let mut block_data_roots = Vec::new();
 
                     // "end_block_num" and "end_header_hash" are iterators that will store the
-                    // respective values for the last non-padded header.
+                    // respective values for the header corresponding to target_block.
                     let mut end_block_num: U32Variable = builder.zero();
                     let empty_bytes_32_variable =
                         Bytes32Variable::constant(builder, H256::from_slice(&[0u8; 32]));
@@ -124,6 +124,13 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let true_const = builder._true();
 
                     let mut num_headers = zero;
+
+                    // Check if the batch is disabled.
+                    let is_batch_disabled = builder.lt(
+                        map_ctx.target_block,
+                        batch_start_block,
+                    );
+                    let mut curr_block_disabled = is_batch_disabled;
 
                     // The number of enabled leaves in the merkle tree. All leaves after nb_enabled_leaves
                     // are empty leaves.
@@ -142,10 +149,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         block_state_roots.push(header_variable.state_root);
                         block_data_roots.push(header_variable.data_root);
 
-                        // The header is a pad-header if it's size is 0.
-                        let is_pad_block = builder.is_zero(header.header_size.variable);
-
-                        // Verify that the headers are linked correctly.
+                        // Verify that the headers are linked correctly, starting from the start header.
+                        // The start header's backwards link is checked in the reduce stage.
                         if i > 0 {
                             // Verify that the parent hash chain and block number chain are correct.
                             let hashes_linked =
@@ -157,28 +162,32 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             let header_correctly_linked =
                                 builder.and(hashes_linked, nums_sequential);
 
-                            // If this is not a pad header, the headers must be correctly linked.
-                            let link_check = builder.or(is_pad_block, header_correctly_linked);
+                            // If this block is not disabled, the headers must be correctly linked.
+                            let link_check = builder.or(curr_block_disabled, header_correctly_linked);
                             builder.assert_is_equal(link_check, true_const);
                         }
 
-                        // If not a pad header, update end_block_num, end_header_hash and num_headers.
+                        // If this is not the fina block update end_block_num, end_header_hash and num_headers.
                         end_block_num = builder.select(
-                            is_pad_block,
+                            curr_block_disabled,
                             end_block_num,
                             header_variable.block_number,
                         );
-                        end_header_hash = builder.select(is_pad_block, end_header_hash, hash);
+                        end_header_hash = builder.select(curr_block_disabled, end_header_hash, hash);
 
-                        let num_headers_increment = builder.select(is_pad_block, zero, one);
+                        let num_headers_increment = builder.select(curr_block_disabled, zero, one);
                         num_headers = builder.add(num_headers, num_headers_increment);
 
-                        // Increment the number of enabled leaves if the header is not a pad header.
-                        let val = builder.select(is_pad_block, zero, one);
+                        // Increment the number of enabled leaves if the header is not disabled.
+                        let val = builder.select(curr_block_disabled, zero, one);
                         nb_enabled_leaves = builder.add(
                             nb_enabled_leaves,
                             val,
-                        )
+                        );
+
+                        // If this is the final block, set curr_block_disabled to true.
+                        let is_final_block = builder.is_equal(header_variable.block_number, map_ctx.target_block);
+                        curr_block_disabled = builder.or(curr_block_disabled, is_final_block);
                     }
 
                     // Pad block_state_roots and block_data_roots to be of length HEADERS_PER_MAP.
@@ -213,7 +222,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let total_num_blocks = builder.add(left.num_blocks, right.num_blocks);
                     let is_right_empty = builder.is_zero(right.num_blocks);
 
-                    // Check to see if the left and right nodes are correctly linked.
+                    // Check to see if the left and right subchains are correctly linked.
                     let nodes_linked =
                         builder.is_equal(left.end_header_hash, right.start_parent);
                     let one = builder.one();
@@ -300,7 +309,7 @@ mod tests {
             let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
             let target_block = builder.evm_read::<U32Variable>();
 
-            // Note: Trusted_block and target_block are always in the same authority set.
+            // Note: trusted_block and target_block are always in the same authority set.
             let subchain_output = builder.verify_subchain::<Self, MAX_NUM_HEADERS>(
                 trusted_block,
                 trusted_header_hash,

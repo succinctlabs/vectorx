@@ -1173,8 +1173,5 @@ mod tests {
 
         let chain = data_fetcher.client.rpc().system_properties().await;
         println!("chain {:?}", chain);
-
-        // let header = data_fetcher.get_header(400000).await;
-        // let encoded_header_bytes = header.encode();
     }
 }

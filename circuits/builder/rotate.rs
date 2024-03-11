@@ -15,13 +15,18 @@ use crate::consts::{
 use crate::vars::*;
 
 pub trait RotateMethods {
-    /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
-    /// for the epoch end header. Returns the length of the compact encoding of the new authority set
-    /// length.
+    /// Verifies the prefix bytes before the encoded authority set length are valid, according to the spec
+    /// for the epoch end header.
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
         expected_num_authorities: &Variable,
+    );
+
+    /// Returns the length of the compact encoding of the new authority set length.
+    fn get_compact_encoding_byte_length_new_authority_set_size(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
     ) -> Variable;
 
     /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
@@ -60,7 +65,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
         expected_num_authorities: &Variable,
-    ) -> Variable {
+    ) {
         // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
         // Skip 1 unknown byte.
 
@@ -84,18 +89,24 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
         let header_schedule_change_flag = subarray[8];
         self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
+    }
 
-        // Verify the next bytes are the compact encoding of the length of the new authority set.
-        let num_authorities_length_bytes =
+    /// Returns the length of the compact encoding of the new authority set length.
+    fn get_compact_encoding_byte_length_new_authority_set_size(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+    ) -> Variable {
+        // Verify the bytes starting at the base prefix length are the compact encoding of the
+        // length of the new authority set.
+        let encoded_num_authorities_size_bytes =
             ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
                 subarray[BASE_PREFIX_LENGTH..BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES].to_vec(),
             );
         let (num_authorities, compress_mode) =
-            self.decode_compact_int(num_authorities_length_bytes);
+            self.decode_compact_int(encoded_num_authorities_size_bytes);
         self.assert_is_equal(*expected_num_authorities, num_authorities.variable);
 
-        // Number of additional bytes in the compact encoding of the new authority set length.
-        // Specifically, the lengths of the compact_encoding - 1.
+        // Number of bytes in the compact encoding of the new authority set length.
         let all_possible_lengths = vec![
             self.constant::<Variable>(L::Field::from_canonical_usize(1)),
             self.constant::<Variable>(L::Field::from_canonical_usize(2)),
@@ -103,6 +114,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             self.constant::<Variable>(L::Field::from_canonical_usize(5)),
         ];
 
+        // Select the correct length of the compact encoding of the new authority set length.
         self.select_array_random_gate(&all_possible_lengths, compress_mode)
     }
 
@@ -139,9 +151,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
 
         // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
+        self.verify_prefix_epoch_end_header(&prefix_subarray, num_authorities);
+
         // Returns the byte length of the compact encoding of the new authority set length.
         let encoded_num_authorities_byte_len =
-            self.verify_prefix_epoch_end_header(&prefix_subarray, num_authorities);
+            self.get_compact_encoding_byte_length_new_authority_set_size(&prefix_subarray);
 
         // Expected weight for each authority.
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
@@ -314,6 +328,9 @@ pub mod tests {
         );
 
         builder.verify_prefix_epoch_end_header(&prefix_subarray, &num_authorities);
+
+        let _encoded_num_authorities_byte_len =
+            self.get_compact_encoding_byte_length_new_authority_set_size(&prefix_subarray);
 
         let circuit = builder.build();
         let mut input = circuit.input();

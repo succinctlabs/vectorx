@@ -229,7 +229,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
 
         // Verify the signatures of the validators on the encoded_precommit message.
         // `curta_eddsa_verify_sigs_conditional` requires the message for each signature, but because
-        // the message is the same, pass a constant array of the same message.
+        // the signed message is the same for all validators, pass a constant array with the same message.
         let message_byte_lengths = self
             .constant::<ArrayVariable<U32Variable, MAX_NUM_AUTHORITIES>>(vec![
                 ENCODED_PRECOMMIT_LENGTH

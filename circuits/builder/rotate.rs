@@ -20,13 +20,13 @@ pub trait RotateMethods {
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
-        expected_num_authorities: &Variable,
     );
 
     /// Returns the length of the compact encoding of the new authority set length.
     fn get_compact_encoding_byte_length_new_authority_set_size(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        expected_num_authorities: &Variable,
     ) -> Variable;
 
     /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
@@ -64,7 +64,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
-        expected_num_authorities: &Variable,
     ) {
         // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
         // Skip 1 unknown byte.
@@ -95,6 +94,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     fn get_compact_encoding_byte_length_new_authority_set_size(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        expected_num_authorities: &Variable,
     ) -> Variable {
         // Verify the bytes starting at the base prefix length are the compact encoding of the
         // length of the new authority set.
@@ -327,10 +327,13 @@ pub mod tests {
             target_header_dummy_hash,
         );
 
-        builder.verify_prefix_epoch_end_header(&prefix_subarray, &num_authorities);
+        builder.verify_prefix_epoch_end_header(&prefix_subarray);
 
-        let _encoded_num_authorities_byte_len =
-            self.get_compact_encoding_byte_length_new_authority_set_size(&prefix_subarray);
+        let _encoded_num_authorities_byte_len = self
+            .get_compact_encoding_byte_length_new_authority_set_size(
+                &prefix_subarray,
+                &num_authorities,
+            );
 
         let circuit = builder.build();
         let mut input = circuit.input();

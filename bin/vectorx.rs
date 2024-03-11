@@ -217,7 +217,7 @@ impl VectorXOperator {
         }
     }
 
-    async fn find_and_request_step(&mut self) {
+    async fn find_and_request_step(&mut self, max_block_to_step_to: u64) {
         let mut data_fetcher = self.get_data_fetcher();
 
         let step_contract_data = self.get_contract_data_for_step().await;
@@ -248,7 +248,7 @@ impl VectorXOperator {
         let block_to_step_to = self
             .find_block_to_step_to(
                 step_contract_data.current_block,
-                step_contract_data.current_block + step_contract_data.step_range_max,
+                max_block_to_step_to,
                 request_authority_set_id,
             )
             .await;
@@ -441,31 +441,28 @@ impl VectorXOperator {
         }
     }
 
-    async fn run(&mut self, loop_delay_mins: u64, update_delay_mins: u64) {
+    async fn run(&mut self, loop_delay_mins: u64, update_delay_blocks: u64) {
         let config = self.get_config();
         let provider = self.get_provider();
 
         loop {
-            // Get latest block of the chain.
-            let head = provider.get_block_number().await.unwrap();
-
             // Always check if there is a rotate available.
             self.find_and_request_rotate().await;
 
-            // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
-            let header_range_filter = Filter::new()
-                .address(H160::from_slice(&config.address.0 .0))
-                .from_block(head - (update_delay_mins * 5))
-                .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
+            // Get latest block of the chain.
+            let chain_latest_block_nb = provider.get_block_number().await.unwrap();
 
-            let logs = provider.get_logs(&header_range_filter).await.unwrap();
-            if logs.is_empty() {
+            // Get latest block of contract.
+            let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
+
+            // Check if there is a step from the latest_block in the contract to latest_block + update_delay_blocks.
+            if chain_latest_block_nb > contract_latest_block_nb + update_delay_blocks {
                 info!(
                     "No header range commitments found in the last {} minutes. Looking for step update!",
                     update_delay_mins
                 );
-                // Check if there is a step available, and submit a request if so.
-                self.find_and_request_step().await;
+                self.find_and_request_step(contract_latest_block_nb + update_delay_blocks)
+                    .await;
             }
 
             // Sleep for N minutes.
@@ -493,13 +490,13 @@ async fn main() {
             .parse::<u64>()
             .expect("invalid LOOP_DELAY_MINS");
     }
-    let update_delay_mins_env = env::var("UPDATE_DELAY_MINS");
-    let mut update_delay_mins = 20;
-    if update_delay_mins_env.is_ok() {
-        update_delay_mins = update_delay_mins_env
+    let update_delay_blocks_env = env::var("UPDATE_DELAY_BLOCKS");
+    let mut update_delay_blocks = 200;
+    if update_delay_blocks_env.is_ok() {
+        update_delay_blocks = update_delay_blocks_env
             .unwrap()
             .parse::<u64>()
-            .expect("invalid UPDATE_DELAY_MINS");
+            .expect("invalid UPDATE_DELAY_BLOCKS");
     }
     // Optional flag, if set to true, will use the dummy operator.
     let mut is_dummy_operator_bool = false;
@@ -510,5 +507,5 @@ async fn main() {
         info!("Starting VectorX operator!");
     }
     let mut operator = VectorXOperator::new(data_fetcher, is_dummy_operator_bool).await;
-    operator.run(loop_delay_mins, update_delay_mins).await;
+    operator.run(loop_delay_mins, update_delay_blocks).await;
 }

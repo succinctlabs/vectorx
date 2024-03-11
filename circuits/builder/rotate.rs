@@ -329,7 +329,7 @@ pub mod tests {
 
         builder.verify_prefix_epoch_end_header(&prefix_subarray);
 
-        let _encoded_num_authorities_byte_len = self
+        let _encoded_num_authorities_byte_len = builder
             .get_compact_encoding_byte_length_new_authority_set_size(
                 &prefix_subarray,
                 &num_authorities,

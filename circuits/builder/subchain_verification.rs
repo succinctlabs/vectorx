@@ -279,7 +279,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 },
             );
 
-        // Assert the parent of the header chain corresponds to the trsuted_header_hash.
+        // Assert the parent of the header chain corresponds to the trusted_header_hash.
         self.assert_is_equal(trusted_header_hash, output.start_parent);
 
         // Assert the target_block match the end_block.

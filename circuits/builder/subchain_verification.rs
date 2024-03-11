@@ -106,6 +106,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
                     // Note: These headers are untrusted as they are fetched via a hint, and so need
                     // to be explicitly constrained to the public inputs of the circuit.
+                    // Fetches all headers from batch_start_block to max(batch_start_block, min(batch_end_block, target_block)). Fills
+                    // in the rest of the headers with empty headers.
                     let headers = builder
                         .async_hint(input_stream, header_fetcher)
                         .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
@@ -143,14 +145,14 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     // are empty leaves.
                     let mut nb_enabled_leaves = builder.zero();
 
-                    for (i, header) in headers.as_vec().iter().enumerate() {
-                        // Calculate and save the block hash.
-                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(header);
+                    for i in 0..HEADERS_PER_MAP {
+                        // Compute the block hash.
+                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&headers[i]);
                         block_hashes.push(hash);
 
                         // Decode the header and save the relevant fields.
                         let header_variable =
-                            builder.decode_header::<MAX_HEADER_SIZE>(header, &hash);
+                            builder.decode_header::<MAX_HEADER_SIZE>(&headers[i], &hash);
                         block_nums.push(header_variable.block_number);
                         block_parent_hashes.push(header_variable.parent_hash);
                         block_state_roots.push(header_variable.state_root);
@@ -174,7 +176,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             builder.assert_is_equal(link_check, true_const);
                         }
 
-                        // If this is not the fina block update end_block_num, end_header_hash and num_headers.
+                        // If this is not the final block, update end_block_num, end_header_hash and num_headers.
                         end_block_num = builder.select(
                             curr_block_disabled,
                             end_block_num,
@@ -192,16 +194,20 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             val,
                         );
 
-                        // If this is the final block, set curr_block_disabled to true.
+                        // If this is the target block, set curr_block_disabled to true.
                         let is_final_block = builder.is_equal(header_variable.block_number, map_ctx.target_block);
                         curr_block_disabled = builder.or(curr_block_disabled, is_final_block);
                     }
 
-                    // Pad block_state_roots and block_data_roots to be of length HEADERS_PER_MAP.
-                    // Avail's data commitment pads empty leaves with zero bytes.
-                    block_state_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
-                    block_data_roots.resize(HEADERS_PER_MAP, empty_bytes_32_variable);
+                    // Either the batch is disabled OR the first block's block number is batch_start_block.
+                    let first_block_nb_check = builder.is_equal(block_nums[0], batch_start_block);
+                    let first_block_nb_check = builder.or(first_block_nb_check, is_batch_disabled);
+                    builder.assert_is_equal(first_block_nb_check, true_const);
 
+                    // Either the last block is disabled OR the last block's block number in the batch is batch_end_block.
+                    let last_block_nb_check = builder.is_equal(end_block_num, batch_end_block);
+                    let last_block_nb_check = builder.or(last_block_nb_check, curr_block_disabled);
+                    builder.assert_is_equal(last_block_nb_check, true_const);
 
                     // Calculate the state and data merkle roots.
                     let state_merkle_root = builder.get_root_from_hashed_leaves::<HEADERS_PER_MAP>(

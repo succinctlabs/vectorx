@@ -84,9 +84,6 @@ async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
         // Verify all the signatures of the justification and extract the public keys. The ordering
         // of the authority set will already be canonical and sorted in the justification on ID.
 
-        // TODO: Add a check that the authority set hash is correctly computed. Fetch the authorities
-        // for the previous block and check that the hash matches.
-
         let validators = justification
             .commit
             .precommits

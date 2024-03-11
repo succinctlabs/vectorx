@@ -93,7 +93,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         header: &EncodedHeaderVariable<S>,
         header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
-        // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v2.rs
+        // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v3.rs
 
         // The first 32 bytes are the parent hash.
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
@@ -146,7 +146,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         &mut self,
         precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
     ) -> PrecommitVariable {
-        // TODO: Link to Precommit spec.
+        // Link: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30549-L30557.
 
         // The first byte is the equivocation type (Precommit) and should be 1.
         let one = self.one();
@@ -166,7 +166,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let mut authority_set_id_bytes = precommit[45..53].to_vec();
 
         // Reverse the bytes of block_number, justification_round and authority_set_id since they
-        // are stored in LE form.
+        // are stored in LE form, so CircuitVariable decoding works correctly.
         block_number_bytes.reverse();
         justification_round_bytes.reverse();
         authority_set_id_bytes.reverse();

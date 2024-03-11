@@ -1,16 +1,23 @@
+use async_trait::async_trait;
+use codec::Encode;
 use ethers::types::H256;
 use itertools::Itertools;
+use log::debug;
 use plonky2x::backend::circuit::{Circuit, PlonkParameters};
+use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::merkle::simple::SimpleMerkleTree;
 use plonky2x::frontend::vars::{U32Variable, VariableStream};
 use plonky2x::prelude::{
-    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, RichField, Variable,
+    ArrayVariable, Bytes32Variable, CircuitBuilder, CircuitVariable, RichField, ValueStream,
+    Variable,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::builder::decoder::DecodingMethods;
-use crate::builder::header::{HeaderMethods, HeaderRangeFetcherHint};
+use crate::builder::header::HeaderMethods;
 use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
-use crate::vars::{EncodedHeaderVariable, SubchainVerificationVariable};
+use crate::input::RpcDataFetcher;
+use crate::vars::{EncodedHeader, EncodedHeaderVariable, SubchainVerificationVariable};
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
@@ -277,6 +284,80 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
             state_root_merkle_root: output.state_merkle_root,
             data_root_merkle_root: output.data_merkle_root,
         }
+    }
+}
+
+// Fetch a range of headers with a hint. Used to generate a data commitment for step.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HeaderRangeFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
+
+#[async_trait]
+impl<
+        const HEADER_LENGTH: usize,
+        const NUM_HEADERS: usize,
+        L: PlonkParameters<D>,
+        const D: usize,
+    > AsyncHint<L, D> for HeaderRangeFetcherHint<HEADER_LENGTH, NUM_HEADERS>
+{
+    async fn hint(
+        &self,
+        input_stream: &mut ValueStream<L, D>,
+        output_stream: &mut ValueStream<L, D>,
+    ) {
+        let start_block = input_stream.read_value::<U32Variable>();
+        let mut last_block = input_stream.read_value::<U32Variable>();
+        let max_block = input_stream.read_value::<U32Variable>();
+
+        last_block = last_block.min(max_block);
+
+        debug!(
+            "HeaderFetcherHint: downloading header range of start_block={}, last_block={}",
+            start_block, last_block
+        );
+
+        let mut headers = Vec::new();
+        if last_block >= start_block {
+            headers.extend({
+                let mut data_fetcher = RpcDataFetcher::new().await;
+                data_fetcher
+                    .get_block_headers_range(start_block, last_block)
+                    .await
+            });
+        }
+
+        // Pad `headers` to the correct length for `EncodedHeader` variables.
+        let mut header_variables = Vec::new();
+        for (i, header) in headers.iter().enumerate() {
+            let mut header_bytes = header.encode();
+            let header_size = header_bytes.len();
+            if header_size > HEADER_LENGTH {
+                panic!(
+                    "Block {}'s header size is {}, which is greater than the maximum header size of {} bytes.",
+                    start_block + i as u32,
+                    header_size,
+                    HEADER_LENGTH
+                );
+            }
+            header_bytes.resize(HEADER_LENGTH, 0);
+            let header_variable = EncodedHeader {
+                header_bytes,
+                header_size: header_size as u32,
+            };
+            header_variables.push(header_variable);
+        }
+
+        // Pad `header_variables` with empty headers to ensure its length is NUM_HEADERS.
+        for _i in headers.len()..NUM_HEADERS {
+            let header_variable = EncodedHeader {
+                header_bytes: vec![0u8; HEADER_LENGTH],
+                header_size: 0u32,
+            };
+            header_variables.push(header_variable);
+        }
+        output_stream
+            .write_value::<ArrayVariable<EncodedHeaderVariable<HEADER_LENGTH>, NUM_HEADERS>>(
+                header_variables,
+            );
     }
 }
 

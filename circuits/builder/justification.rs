@@ -132,6 +132,12 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         authority_set_commitment: Bytes32Variable,
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     ) {
+        let false_v = self._false();
+        let zero = self.zero();
+        let invalid_num_authorities = self.is_equal(num_active_authorities, zero);
+        // Assert there is at least 1 authority.
+        self.assert_is_equal(invalid_num_authorities, false_v);
+
         let mut authority_enabled = self._true();
 
         let mut commitment_so_far = self.curta_sha256(&authority_set_signers[0].0.as_bytes());
@@ -170,16 +176,16 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         let true_v = self._true();
         let mut num_signed: U32Variable = self.zero();
         for i in 0..MAX_NUM_AUTHORITIES {
-            // 1 if validator signed, 0 otherwise. Already range-checked (as a bool), so use unsafe.
+            // 1 if validator signed, 0 otherwise. BoolVariable is already range-checked (as a bool), so using unsafe
+            // to convert to U32Variable is safe.
             let val_signed_u32 =
                 U32Variable::from_variables_unsafe(&[validator_signed[i].variable]);
             num_signed = self.add(num_signed, val_signed_u32);
         }
 
+        // Verify the number of validators that signed is greater than or equal to the threshold.
         let scaled_num_signed = self.mul(num_signed, threshold_denominator);
         let scaled_threshold = self.mul(num_active_authorities, threshold_numerator);
-
-        // Verify that the number of validators that signed is greater than the threshold.
         let is_valid_num_signed = self.gt(scaled_num_signed, scaled_threshold);
         self.assert_is_equal(is_valid_num_signed, true_v);
     }

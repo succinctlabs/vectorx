@@ -17,7 +17,7 @@ use crate::vars::*;
 pub trait RotateMethods {
     /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
     /// for the epoch end header. Returns the length of the compact encoding of the new authority set
-    /// length. TODO: Link to spec.
+    /// length.
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
@@ -61,7 +61,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
         expected_num_authorities: &Variable,
     ) -> Variable {
-        // TODO: Link to the spec for the prefix of an epoch end header.
+        // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
         // Skip 1 unknown byte.
 
         // Verify subarray[1] is 0x04 (Consensus Flag = 4u32).
@@ -70,7 +70,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
 
         // Verify subarray[2..6] is the Consensus Engine ID: 0x46524e4b [70, 82, 78, 75].
-        // TODO: Link to the Consensus Engine ID in subxt for Grandpa.
+        // Consensus Id: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/examples/download_digest_items.rs#L41-L56
         let consensus_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         self.assert_is_equal(

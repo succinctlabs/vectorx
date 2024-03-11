@@ -6,9 +6,7 @@ use alloy_sol_types::{sol, SolType};
 use anyhow::Result;
 use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
-use ethers::core::types::Filter;
 use ethers::providers::{Http, Middleware, Provider};
-use ethers::types::H160;
 use log::{error, info};
 use succinct_client::request::SuccinctClient;
 use vectorx::input::RpcDataFetcher;
@@ -32,13 +30,11 @@ struct VectorXOperator {
     contract: VectorX<Provider<Http>>,
     client: SuccinctClient,
     data_fetcher: RpcDataFetcher,
-    is_dummy_operator: bool,
 }
 
 #[derive(Debug)]
 struct StepContractData {
     current_block: u32,
-    step_range_max: u32,
     next_authority_set_hash_exists: bool,
     header_range_function_id: B256,
 }
@@ -51,7 +47,7 @@ struct RotateContractData {
 }
 
 impl VectorXOperator {
-    async fn new(data_fetcher: RpcDataFetcher, is_dummy_operator: bool) -> Self {
+    async fn new(data_fetcher: RpcDataFetcher) -> Self {
         dotenv::dotenv().ok();
 
         let contract_address = env::var("CONTRACT_ADDRESS").expect("CONTRACT_ADDRESS must be set");
@@ -81,7 +77,6 @@ impl VectorXOperator {
             contract,
             client,
             data_fetcher,
-            is_dummy_operator,
         }
     }
 
@@ -217,7 +212,7 @@ impl VectorXOperator {
         }
     }
 
-    async fn find_and_request_step(&mut self) {
+    async fn find_and_request_step(&mut self, max_block_to_step_to: u32) {
         let mut data_fetcher = self.get_data_fetcher();
 
         let step_contract_data = self.get_contract_data_for_step().await;
@@ -246,11 +241,7 @@ impl VectorXOperator {
 
         // Step as far as possible within blocks attested by the requested authority set.
         let block_to_step_to = self
-            .find_block_to_step_to(
-                step_contract_data.current_block,
-                step_contract_data.current_block + step_contract_data.step_range_max,
-                request_authority_set_id,
-            )
+            .find_block_to_step_to(max_block_to_step_to, request_authority_set_id)
             .await;
         if block_to_step_to.is_none() {
             return;
@@ -322,7 +313,6 @@ impl VectorXOperator {
         let header_range_function_id: B256 =
             FixedBytes(self.contract.header_range_function_id().await.unwrap());
         let current_block = self.contract.latest_block().await.unwrap();
-        let step_range_max = self.contract.max_header_range().await.unwrap();
 
         let current_authority_set_id = self
             .data_fetcher
@@ -338,7 +328,6 @@ impl VectorXOperator {
 
         StepContractData {
             current_block,
-            step_range_max,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
             header_range_function_id,
@@ -387,85 +376,44 @@ impl VectorXOperator {
         self.provider.clone()
     }
 
-    // Finds the highest block in the range [current_block, block_to_step_to] that has a stored
-    // justification that can be stepped to.
+    // If the authority_set_id is the current authority set, return the max_block_to_request. Else,
+    // return the minimum of max_block_to_request and last_justified_block.
     async fn find_block_to_step_to(
         &mut self,
-        current_block: u32,
         max_block_to_request: u32,
         authority_set_id: u64,
     ) -> Option<u32> {
-        if self.is_dummy_operator {
-            let head_block = self.data_fetcher.get_head().await.number;
+        let last_justified_block = self
+            .data_fetcher
+            .last_justified_block(authority_set_id)
+            .await;
 
-            let last_justified_block = self
-                .data_fetcher
-                .last_justified_block(authority_set_id)
-                .await;
-
-            // Last justified block will be 0 in this is the current authority set.
-            if last_justified_block == 0 {
-                return Some(min(max_block_to_request, head_block));
-            }
-
-            Some(min(max_block_to_request, last_justified_block))
-        } else {
-            // Find all blocks in the range [current_block + 1, block_to_step_to] that have a stored
-            // justification.
-            let valid_blocks = self
-                .data_fetcher
-                .find_justifications_in_range(current_block + 1, max_block_to_request)
-                .await;
-            if valid_blocks.is_empty() {
-                info!("No valid blocks found in range.");
-                return None;
-            }
-
-            // Get the highest block in the range within the requested authority set.
-            // Note: All of these blocks should be valid as they were stored in Redis by the justification
-            // indexer.
-            let mut idx = valid_blocks.len() - 1;
-            while idx > 0 {
-                let block = valid_blocks[idx];
-                let block_authority_set_id =
-                    self.data_fetcher.get_authority_set_id(block - 1).await;
-                if authority_set_id == block_authority_set_id {
-                    break;
-                }
-                if idx == 0 {
-                    return None;
-                }
-                idx -= 1;
-            }
-            Some(valid_blocks[idx])
+        // Last justified block will be 0 in this is the current authority set.
+        if last_justified_block == 0 {
+            return Some(max_block_to_request);
         }
+
+        Some(min(max_block_to_request, last_justified_block))
     }
 
-    async fn run(&mut self, loop_delay_mins: u64, update_delay_mins: u64) {
-        let config = self.get_config();
+    async fn run(&mut self, loop_delay_mins: u64, update_delay_blocks: u32) {
         let provider = self.get_provider();
 
         loop {
-            // Get latest block of the chain.
-            let head = provider.get_block_number().await.unwrap();
-
             // Always check if there is a rotate available.
             self.find_and_request_rotate().await;
 
-            // Check if there were any header range commitments in the last UPDATE_DELAY_MINS.
-            let header_range_filter = Filter::new()
-                .address(H160::from_slice(&config.address.0 .0))
-                .from_block(head - (update_delay_mins * 5))
-                .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
+            // Get latest block of the chain.
+            let chain_latest_block_nb = provider.get_block_number().await.unwrap();
 
-            let logs = provider.get_logs(&header_range_filter).await.unwrap();
-            if logs.is_empty() {
-                info!(
-                    "No header range commitments found in the last {} minutes. Looking for step update!",
-                    update_delay_mins
-                );
-                // Check if there is a step available, and submit a request if so.
-                self.find_and_request_step().await;
+            // Get latest block of contract.
+            let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
+
+            // Attempt to step to contract_latest_block_nb + update_delay_blocks.
+            let next_block_to_request: u32 = contract_latest_block_nb + update_delay_blocks;
+            if chain_latest_block_nb.as_u32() > next_block_to_request {
+                info!("Attempting to step to block: {}", next_block_to_request);
+                self.find_and_request_step(next_block_to_request).await;
             }
 
             // Sleep for N minutes.
@@ -483,8 +431,6 @@ async fn main() {
 
     let data_fetcher = RpcDataFetcher::new().await;
 
-    let is_dummy_operator = env::var("IS_DUMMY_OPERATOR");
-
     let loop_delay_mins_env = env::var("LOOP_DELAY_MINS");
     let mut loop_delay_mins = 5;
     if loop_delay_mins_env.is_ok() {
@@ -493,22 +439,14 @@ async fn main() {
             .parse::<u64>()
             .expect("invalid LOOP_DELAY_MINS");
     }
-    let update_delay_mins_env = env::var("UPDATE_DELAY_MINS");
-    let mut update_delay_mins = 20;
-    if update_delay_mins_env.is_ok() {
-        update_delay_mins = update_delay_mins_env
+    let update_delay_blocks_env = env::var("UPDATE_DELAY_BLOCKS");
+    let mut update_delay_blocks = 200;
+    if update_delay_blocks_env.is_ok() {
+        update_delay_blocks = update_delay_blocks_env
             .unwrap()
-            .parse::<u64>()
-            .expect("invalid UPDATE_DELAY_MINS");
+            .parse::<u32>()
+            .expect("invalid UPDATE_DELAY_BLOCKS");
     }
-    // Optional flag, if set to true, will use the dummy operator.
-    let mut is_dummy_operator_bool = false;
-    if is_dummy_operator.is_ok() && is_dummy_operator.unwrap().parse::<bool>().unwrap() {
-        is_dummy_operator_bool = true;
-        info!("Starting dummy VectorX operator!");
-    } else {
-        info!("Starting VectorX operator!");
-    }
-    let mut operator = VectorXOperator::new(data_fetcher, is_dummy_operator_bool).await;
-    operator.run(loop_delay_mins, update_delay_mins).await;
+    let mut operator = VectorXOperator::new(data_fetcher).await;
+    operator.run(loop_delay_mins, update_delay_blocks).await;
 }

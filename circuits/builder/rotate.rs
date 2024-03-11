@@ -225,10 +225,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         }
 
         // Verify the new authority set commitment.
-        self.verify_authority_set_commitment(
-            *num_authorities,
+        let computed_new_authority_set_hash =
+            self.compute_authority_set_commitment(*num_authorities, new_pubkeys);
+        self.assert_is_equal(
+            computed_new_authority_set_hash,
             *expected_new_authority_set_hash,
-            new_pubkeys,
         );
     }
 

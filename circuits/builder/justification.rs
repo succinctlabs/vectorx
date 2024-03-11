@@ -83,17 +83,16 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
 }
 
 pub trait GrandpaJustificationVerifier {
-    /// Verify the authority set commitment of an authority set. This is the chained hash of the
+    /// Compute the authority set commitment of an authority set. This is the chained hash of the
     /// first num_active_authorities public keys.
     ///
     /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
     ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
-    fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
+    fn compute_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
-        expected_authority_set_commitment: Bytes32Variable,
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
-    );
+    ) -> Bytes32Variable;
 
     /// Verify the number of validators that signed is greater than to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
@@ -121,17 +120,11 @@ pub trait GrandpaJustificationVerifier {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for CircuitBuilder<L, D> {
-    /// Verify the authority set commitment of an authority set. This is the chained hash of the
-    /// first num_active_authorities public keys.
-    ///
-    /// Ex. For a chained hash of 3 public keys, the chained hash takes the form:
-    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
-    fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
+    fn compute_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
-        expected_authority_set_commitment: Bytes32Variable,
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
-    ) {
+    ) -> Bytes32Variable {
         let false_v = self._false();
         let zero = self.zero();
         let invalid_num_authorities = self.is_equal(num_active_authorities, zero);
@@ -161,11 +154,9 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             // Update the commitment_so_far if this authority is enabled.
             commitment_so_far = self.select(authority_enabled, chained_hash, commitment_so_far);
         }
-
-        self.assert_is_equal(expected_authority_set_commitment, commitment_so_far);
+        commitment_so_far
     }
 
-    /// Verify the number of validators that signed is greater than to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: U32Variable,
@@ -212,14 +203,15 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             HintSimpleJustification::<MAX_NUM_AUTHORITIES> {},
         );
 
+        // justification is untrusted, and must be linked to the trusted authority_set_hash.
         let justification = output_stream.read::<JustificationVariable<MAX_NUM_AUTHORITIES>>(self);
 
         // Verify the authority set commitment is valid.
-        self.verify_authority_set_commitment(
+        let computed_authority_set_commitment = self.compute_authority_set_commitment(
             justification.num_authorities.variable,
-            authority_set_hash,
             &justification.pubkeys,
         );
+        self.assert_is_equal(authority_set_hash, computed_authority_set_commitment);
 
         // Verify the correctness of the encoded_precommit message.
         let decoded_precommit = self.decode_precommit(justification.encoded_precommit);

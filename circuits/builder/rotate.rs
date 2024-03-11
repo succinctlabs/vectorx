@@ -151,11 +151,14 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
 
         // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
-        self.verify_prefix_epoch_end_header(&prefix_subarray, num_authorities);
+        self.verify_prefix_epoch_end_header(&prefix_subarray);
 
         // Returns the byte length of the compact encoding of the new authority set length.
-        let encoded_num_authorities_byte_len =
-            self.get_compact_encoding_byte_length_new_authority_set_size(&prefix_subarray);
+        let encoded_num_authorities_byte_len = self
+            .get_compact_encoding_byte_length_new_authority_set_size(
+                &prefix_subarray,
+                num_authorities,
+            );
 
         // Expected weight for each authority.
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(

@@ -6,9 +6,7 @@ use alloy_sol_types::{sol, SolType};
 use anyhow::Result;
 use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
-use ethers::core::types::Filter;
 use ethers::providers::{Http, Middleware, Provider};
-use ethers::types::H160;
 use log::{error, info};
 use succinct_client::request::SuccinctClient;
 use vectorx::input::RpcDataFetcher;
@@ -38,7 +36,6 @@ struct VectorXOperator {
 #[derive(Debug)]
 struct StepContractData {
     current_block: u32,
-    step_range_max: u32,
     next_authority_set_hash_exists: bool,
     header_range_function_id: B256,
 }
@@ -217,7 +214,7 @@ impl VectorXOperator {
         }
     }
 
-    async fn find_and_request_step(&mut self, max_block_to_step_to: u64) {
+    async fn find_and_request_step(&mut self, max_block_to_step_to: u32) {
         let mut data_fetcher = self.get_data_fetcher();
 
         let step_contract_data = self.get_contract_data_for_step().await;
@@ -322,7 +319,6 @@ impl VectorXOperator {
         let header_range_function_id: B256 =
             FixedBytes(self.contract.header_range_function_id().await.unwrap());
         let current_block = self.contract.latest_block().await.unwrap();
-        let step_range_max = self.contract.max_header_range().await.unwrap();
 
         let current_authority_set_id = self
             .data_fetcher
@@ -338,7 +334,6 @@ impl VectorXOperator {
 
         StepContractData {
             current_block,
-            step_range_max,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
             header_range_function_id,
@@ -441,8 +436,7 @@ impl VectorXOperator {
         }
     }
 
-    async fn run(&mut self, loop_delay_mins: u64, update_delay_blocks: u64) {
-        let config = self.get_config();
+    async fn run(&mut self, loop_delay_mins: u64, update_delay_blocks: u32) {
         let provider = self.get_provider();
 
         loop {
@@ -455,14 +449,11 @@ impl VectorXOperator {
             // Get latest block of contract.
             let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
 
-            // Check if there is a step from the latest_block in the contract to latest_block + update_delay_blocks.
-            if chain_latest_block_nb > contract_latest_block_nb + update_delay_blocks {
-                info!(
-                    "No header range commitments found in the last {} minutes. Looking for step update!",
-                    update_delay_mins
-                );
-                self.find_and_request_step(contract_latest_block_nb + update_delay_blocks)
-                    .await;
+            // Attempt to step to contract_latest_block_nb + update_delay_blocks.
+            let next_block_to_request: u32 = contract_latest_block_nb + update_delay_blocks;
+            if chain_latest_block_nb.as_u32() > next_block_to_request {
+                info!("Attempting to step to block: {}", next_block_to_request);
+                self.find_and_request_step(next_block_to_request).await;
             }
 
             // Sleep for N minutes.
@@ -495,7 +486,7 @@ async fn main() {
     if update_delay_blocks_env.is_ok() {
         update_delay_blocks = update_delay_blocks_env
             .unwrap()
-            .parse::<u64>()
+            .parse::<u32>()
             .expect("invalid UPDATE_DELAY_BLOCKS");
     }
     // Optional flag, if set to true, will use the dummy operator.

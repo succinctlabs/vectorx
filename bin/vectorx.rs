@@ -6,7 +6,7 @@ use alloy_sol_types::{sol, SolType};
 use anyhow::Result;
 use ethers::abi::AbiEncode;
 use ethers::contract::abigen;
-use ethers::providers::{Http, Middleware, Provider};
+use ethers::providers::{Http, Provider};
 use log::{error, info};
 use succinct_client::request::SuccinctClient;
 use vectorx::input::RpcDataFetcher;
@@ -26,7 +26,6 @@ type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint
 
 struct VectorXOperator {
     config: VectorXConfig,
-    provider: Provider<Http>,
     contract: VectorX<Provider<Http>>,
     client: SuccinctClient,
     data_fetcher: RpcDataFetcher,
@@ -73,7 +72,6 @@ impl VectorXOperator {
 
         Self {
             config,
-            provider,
             contract,
             client,
             data_fetcher,
@@ -372,10 +370,6 @@ impl VectorXOperator {
         self.data_fetcher.clone()
     }
 
-    fn get_provider(&self) -> Provider<Http> {
-        self.provider.clone()
-    }
-
     // If the authority_set_id is the current authority set, return the max_block_to_request. Else,
     // return the minimum of max_block_to_request and last_justified_block.
     async fn find_block_to_step_to(
@@ -397,21 +391,19 @@ impl VectorXOperator {
     }
 
     async fn run(&mut self, loop_delay_mins: u64, update_delay_blocks: u32) {
-        let provider = self.get_provider();
-
         loop {
             // Always check if there is a rotate available.
             self.find_and_request_rotate().await;
 
-            // Get latest block of the chain.
-            let chain_latest_block_nb = provider.get_block_number().await.unwrap();
+            // Get latest block of the Avail chain.
+            let avail_chain_latest_block_nb = self.data_fetcher.get_head().await.number;
 
             // Get latest block of contract.
             let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
 
             // Attempt to step to contract_latest_block_nb + update_delay_blocks.
             let next_block_to_request: u32 = contract_latest_block_nb + update_delay_blocks;
-            if chain_latest_block_nb.as_u32() > next_block_to_request {
+            if avail_chain_latest_block_nb > next_block_to_request {
                 info!("Attempting to step to block: {}", next_block_to_request);
                 self.find_and_request_step(next_block_to_request).await;
             }

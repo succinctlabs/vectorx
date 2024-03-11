@@ -104,7 +104,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         );
         let (block_number, compress_mode) = self.decode_compact_int(block_number_bytes);
 
-        // The of block_number is 1, 2, 4, or 5 bytes depending of the encoding of the compact int.
+        // The of block_number is 1, 2, 4, or 5 bytes depending on the encoding of the compact int.
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
             Bytes32Variable::from(&header.header_bytes[34..34 + HASH_SIZE]),

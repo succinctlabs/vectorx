@@ -23,7 +23,7 @@ pub trait RotateMethods {
     );
 
     /// Returns the length of the compact encoding of the new authority set length.
-    fn get_compact_encoding_byte_length_new_authority_set_size(
+    fn get_new_authority_set_size_encoded_byte_length(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
         expected_num_authorities: &Variable,
@@ -91,7 +91,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     }
 
     /// Returns the length of the compact encoding of the new authority set length.
-    fn get_compact_encoding_byte_length_new_authority_set_size(
+    fn get_new_authority_set_size_encoded_byte_length(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
         expected_num_authorities: &Variable,
@@ -154,11 +154,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         self.verify_prefix_epoch_end_header(&prefix_subarray);
 
         // Returns the byte length of the compact encoding of the new authority set length.
-        let encoded_num_authorities_byte_len = self
-            .get_compact_encoding_byte_length_new_authority_set_size(
-                &prefix_subarray,
-                num_authorities,
-            );
+        let encoded_num_authorities_byte_len =
+            self.get_new_authority_set_size_encoded_byte_length(&prefix_subarray, num_authorities);
 
         // Expected weight for each authority.
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
@@ -333,10 +330,7 @@ pub mod tests {
         builder.verify_prefix_epoch_end_header(&prefix_subarray);
 
         let _encoded_num_authorities_byte_len = builder
-            .get_compact_encoding_byte_length_new_authority_set_size(
-                &prefix_subarray,
-                &num_authorities,
-            );
+            .get_new_authority_set_size_encoded_byte_length(&prefix_subarray, &num_authorities);
 
         let circuit = builder.build();
         let mut input = circuit.input();

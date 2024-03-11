@@ -148,13 +148,14 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
     ) -> PrecommitVariable {
         // Link: https://github.com/paritytech/finality-grandpa/blob/8c45a664c05657f0c71057158d3ba555ba7d20de/src/lib.rs#L224-L239.
-
         // The first byte is the equivocation type (Precommit) and should be 1.
         let one = self.one();
         let precommit_first_byte = precommit[0].to_variable(self);
         self.assert_is_equal(precommit_first_byte, one);
 
+        // TODO: Add correct link for spec that includes justification round and authority_set_id.
         // The next 32 bytes is the block hash.
+        // Spec: https://github.com/paritytech/finality-grandpa/blob/8c45a664c05657f0c71057158d3ba555ba7d20de/src/lib.rs#L101-L110
         let block_hash: Bytes32Variable = precommit[1..33].into();
 
         // The next 4 bytes is the block number.
@@ -173,7 +174,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         authority_set_id_bytes.reverse();
 
         let block_number = U32Variable::decode(self, &block_number_bytes);
-        let justification_round = U64Variable::decode(self, &precommit[37..45]);
+        let justification_round = U64Variable::decode(self, &justification_round_bytes);
         let authority_set_id = U64Variable::decode(self, &authority_set_id_bytes);
 
         PrecommitVariable {

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use ethers::types::H256;
-use log::{debug, Level};
+use log::Level;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -33,11 +33,6 @@ impl<
         output_stream: &mut ValueStream<L, D>,
     ) {
         let block_number = input_stream.read_value::<U32Variable>();
-
-        debug!(
-            "SingleHeaderFetcherHint: downloading header range of block={}",
-            block_number
-        );
 
         let mut data_fetcher = RpcDataFetcher::new().await;
 
@@ -72,7 +67,6 @@ pub struct RotateCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_SIZE: usize,
     const MAX_HEADER_CHUNK_SIZE: usize,
-    // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH).
     const MAX_SUBARRAY_SIZE: usize,
 > {}
 

@@ -107,7 +107,7 @@ impl<
         let epoch_end_block_number = builder.evm_read::<U32Variable>();
         builder.watch_with_level(
             &epoch_end_block_number,
-            "rotate circuit input - epoch end block",
+            "rotate circuit input - epoch end block number",
             Level::Debug,
         );
 
@@ -117,6 +117,7 @@ impl<
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
 
+        // rotate_var is untrusted and needs to be linked to the public inputs.
         let rotate_var =
             output_stream.read::<RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>(builder);
 

@@ -15,7 +15,7 @@ use crate::builder::rotate::RotateMethods;
 use crate::input::RpcDataFetcher;
 use crate::vars::{EncodedHeader, RotateStruct, RotateVariable};
 
-// Fetch a single header.
+// Get the data for the rotate circuit.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RotateHint<const HEADER_LENGTH: usize, const MAX_AUTHORITY_SET_SIZE: usize> {}
 

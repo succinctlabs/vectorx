@@ -95,7 +95,7 @@ pub trait GrandpaJustificationVerifier {
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     );
 
-    /// Verify the number of validators that signed is greater than or equal to the threshold.
+    /// Verify the number of validators that signed is greater than to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: U32Variable,
@@ -165,7 +165,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         self.assert_is_equal(authority_set_commitment, commitment_so_far);
     }
 
-    /// Verify the number of validators that signed is greater than or equal to the threshold.
+    /// Verify the number of validators that signed is greater than to the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: U32Variable,
@@ -183,7 +183,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             num_signed = self.add(num_signed, val_signed_u32);
         }
 
-        // Verify the number of validators that signed is greater than or equal to the threshold.
+        // Verify the number of validators that signed is greater than to the threshold.
         let scaled_num_signed = self.mul(num_signed, threshold_denominator);
         let scaled_threshold = self.mul(num_active_authorities, threshold_numerator);
         let is_valid_num_signed = self.gt(scaled_num_signed, scaled_threshold);

@@ -42,7 +42,8 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
         let mut data_fetcher = RpcDataFetcher::new().await;
         let justification_data: CircuitJustification = data_fetcher
             .get_justification_from_block::<NUM_AUTHORITIES>(block_number)
-            .await;
+            .await
+            .expect("Failed to get justification");
 
         if justification_data.authority_set_id != authority_set_id {
             panic!("Authority set id does not match");

@@ -6,6 +6,7 @@ use std::env;
 use std::time::Duration;
 
 use alloy_sol_types::{sol, SolType};
+use anyhow::Error;
 use avail_subxt::avail::Client;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
@@ -122,7 +123,7 @@ impl RedisClient {
         &mut self,
         avail_chain_id: &str,
         block_number: u32,
-    ) -> Result<StoredJustificationData, ()> {
+    ) -> Result<StoredJustificationData, Error> {
         let mut con = match self.get_connection().await {
             Ok(con) => con,
             Err(e) => panic!("{}", e),
@@ -136,10 +137,10 @@ impl RedisClient {
 
         match serde_json::from_slice::<Vec<StoredJustificationData>>(&serialized_justification) {
             Ok(justification) => Ok(justification[0].clone()),
-            Err(e) => {
-                eprintln!("Failed to deserialize justification: {}", e);
-                Err(())
-            }
+            Err(e) => Err(anyhow::anyhow!(
+                "Failed to deserialize justification: {}",
+                e
+            )),
         }
     }
 
@@ -631,7 +632,7 @@ impl RpcDataFetcher {
     async fn get_justification_data<const VALIDATOR_SET_SIZE_MAX: usize>(
         &mut self,
         block_number: u32,
-    ) -> SimpleJustificationData {
+    ) -> Result<SimpleJustificationData, Error> {
         self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
@@ -718,21 +719,20 @@ impl RpcDataFetcher {
                     signatures.push(DUMMY_SIGNATURE.to_vec());
                 }
             }
-            SimpleJustificationData {
+            Ok(SimpleJustificationData {
                 pubkeys,
                 signatures,
                 validator_signed,
                 signed_message,
                 voting_weight,
                 num_authorities: authorities_pubkey_bytes.len() as u64,
-            }
+            })
         } else {
             // If this is not an epoch end block, load the justification data from Redis.
             let stored_justification_data: StoredJustificationData = self
                 .redis_client
                 .get_justification(&self.avail_chain_id, block_number)
-                .await
-                .expect("Failed to get justification from Redis");
+                .await?;
 
             let mut voting_weight = 0;
             for validator_signed in stored_justification_data.validator_signed.iter() {
@@ -746,14 +746,14 @@ impl RpcDataFetcher {
                 .iter()
                 .map(|pubkey| CompressedEdwardsY::from_slice(pubkey).unwrap())
                 .collect::<Vec<CompressedEdwardsY>>();
-            SimpleJustificationData {
+            Ok(SimpleJustificationData {
                 pubkeys,
                 signatures: stored_justification_data.signatures,
                 validator_signed: stored_justification_data.validator_signed,
                 signed_message: stored_justification_data.signed_message,
                 voting_weight,
                 num_authorities: stored_justification_data.num_authorities as u64,
-            }
+            })
         }
     }
 
@@ -763,10 +763,10 @@ impl RpcDataFetcher {
     pub async fn get_justification_from_block<const VALIDATOR_SET_SIZE_MAX: usize>(
         &mut self,
         block_number: u32,
-    ) -> CircuitJustification {
+    ) -> Result<CircuitJustification, Error> {
         let data = self
             .get_justification_data::<VALIDATOR_SET_SIZE_MAX>(block_number)
-            .await;
+            .await?;
 
         let current_authority_set_id = self.get_authority_set_id(block_number - 1).await;
         let current_authority_set_hash = compute_authority_set_hash(&data.pubkeys);
@@ -791,7 +791,7 @@ impl RpcDataFetcher {
             padded_signatures.push(DUMMY_SIGNATURE);
         }
 
-        CircuitJustification {
+        Ok(CircuitJustification {
             authority_set_id: current_authority_set_id,
             signed_message: data.signed_message,
             validator_signed: padded_validator_signed,
@@ -799,7 +799,7 @@ impl RpcDataFetcher {
             signatures: padded_signatures,
             num_authorities: data.num_authorities as usize,
             current_authority_set_hash,
-        }
+        })
     }
 
     /// This function takes in a block_number as input, and fetches the new authority set specified

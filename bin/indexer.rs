@@ -21,7 +21,6 @@ use sp_core::{blake2_256, Pair, H256};
 use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
 use vectorx::input::RpcDataFetcher;
 
-const BLOCK_SAVE_INTERVAL: usize = 30;
 async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
     let sub: Result<avail_subxt::subxt_rpc::Subscription<GrandpaJustification>, _> = fetcher
         .client
@@ -37,9 +36,6 @@ async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
 
     // Wait for new justification.
     while let Some(Ok(justification)) = sub.next().await {
-        if justification.commit.target_number % BLOCK_SAVE_INTERVAL as u32 != 0 {
-            continue;
-        }
         debug!(
             "New justification from block {}",
             justification.commit.target_number

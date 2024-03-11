@@ -91,7 +91,7 @@ pub trait GrandpaJustificationVerifier {
     fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
-        authority_set_commitment: Bytes32Variable,
+        expected_authority_set_commitment: Bytes32Variable,
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     );
 
@@ -129,7 +129,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
     fn verify_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
-        authority_set_commitment: Bytes32Variable,
+        expected_authority_set_commitment: Bytes32Variable,
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     ) {
         let false_v = self._false();
@@ -162,7 +162,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             commitment_so_far = self.select(authority_enabled, chained_hash, commitment_so_far);
         }
 
-        self.assert_is_equal(authority_set_commitment, commitment_so_far);
+        self.assert_is_equal(expected_authority_set_commitment, commitment_so_far);
     }
 
     /// Verify the number of validators that signed is greater than to the threshold.

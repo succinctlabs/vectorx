@@ -93,7 +93,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         header: &EncodedHeaderVariable<S>,
         header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
-        // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v2.rs
+        // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/mod.rs#L44-L66
 
         // The first 32 bytes are the parent hash.
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
@@ -104,7 +104,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         );
         let (block_number, compress_mode) = self.decode_compact_int(block_number_bytes);
 
-        // The of block_number is 1, 2, 4, or 5 bytes.
+        // The of block_number is 1, 2, 4, or 5 bytes depending of the encoding of the compact int.
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
             Bytes32Variable::from(&header.header_bytes[34..34 + HASH_SIZE]),
@@ -115,6 +115,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let state_root = self.select_array_random_gate(&all_possible_state_roots, compress_mode);
 
         // The next field is the data root. The data root is the last 32 bytes of the header.
+        // Spec: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v3.rs#L9-L15
         let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END as u32);
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
 

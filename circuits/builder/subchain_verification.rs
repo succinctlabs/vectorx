@@ -87,6 +87,16 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
+                    // Map Stage
+                    // 1. Fetch the headers for the current batch.
+                    // 2. Verify that the batch is connected from batch_start_block to batch_end_block.
+                    //  a. Confirm header N + 1 is linked to header N by 1) header N+1's parent hash 
+                    //      and block number being sequential.
+                    //  b. batch_start_block will be connected to the previous batch in the reduce stage.
+                    //  c. Only verify headers are linked up to global_end_block.
+                    // 3. Verify the first fetched header matches the grounded batch_start_block,
+                    //  and the last fetched header matches batch_end_block if they're enabled.
+                    // 4. Compute the state and data merkle roots for the batch.
 
                     let batch_start_block =
                         builder.add(map_ctx.global_start_block, map_relative_block_nums.as_vec()[0]);

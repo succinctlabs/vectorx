@@ -21,9 +21,9 @@ use crate::vars::{EncodedHeader, EncodedHeaderVariable, SubchainVerificationVari
 
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
-    pub trusted_block: U32Variable,
-    pub trusted_header_hash: Bytes32Variable,
-    pub target_block: U32Variable,
+    pub global_start_block: U32Variable,
+    pub global_start_header_hash: Bytes32Variable,
+    pub global_end_block: U32Variable,
 }
 
 pub trait SubChainVerifier<L: PlonkParameters<D>, const D: usize> {
@@ -65,9 +65,9 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         plonky2x::prelude::plonky2::plonk::config::AlgebraicHasher<<L as PlonkParameters<D>>::Field>,
     {
         let ctx = SubchainVerificationCtx {
-            trusted_block,
-            trusted_header_hash,
-            target_block,
+            global_start_block: trusted_block,
+            global_start_header_hash: trusted_header_hash,
+            global_end_block: target_block,
         };
 
         // The number of map jobs is the smallest power of 2 that is >= to MAX_NUM_HEADERS / HEADERS_PER_MAP.
@@ -87,27 +87,26 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
-                    // Get the start block of this batch.
+                    // Map Stage
+                    // 1. Fetch the headers for the batch ()
+
                     let batch_start_block =
-                        builder.add(map_ctx.trusted_block, map_relative_block_nums.as_vec()[0]);
+                        builder.add(map_ctx.global_start_block, map_relative_block_nums.as_vec()[0]);
 
                     // Get the end block of this leaf.
                     let batch_end_block = builder.add(
-                        map_ctx.trusted_block,
+                        map_ctx.global_start_block,
                         map_relative_block_nums.as_vec()[HEADERS_PER_MAP - 1],
                     );
-
-                    // Retrieve the headers from start_block to min(last_block, max_block) inclusive.
-                    // If max_block < start_block, then headers will be empty headers.
+                    // Note: These headers are untrusted as they are fetched via a hint, and so need
+                    // to be explicitly constrained to the public inputs of the circuit.
+                    // Fetches all headers from batch_start_block to max(batch_start_block, min(batch_end_block, global_end_block)). Fills
+                    // in the rest of the headers with empty headers.
                     let mut input_stream = VariableStream::new();
                     input_stream.write(&batch_start_block);
                     input_stream.write(&batch_end_block);
-                    input_stream.write(&map_ctx.target_block);
+                    input_stream.write(&map_ctx.global_end_block);
                     let header_fetcher = HeaderRangeFetcherHint::<MAX_HEADER_SIZE, HEADERS_PER_MAP> {};
-                    // Note: These headers are untrusted as they are fetched via a hint, and so need
-                    // to be explicitly constrained to the public inputs of the circuit.
-                    // Fetches all headers from batch_start_block to max(batch_start_block, min(batch_end_block, target_block)). Fills
-                    // in the rest of the headers with empty headers.
                     let headers = builder
                         .async_hint(input_stream, header_fetcher)
                         .read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, HEADERS_PER_MAP>>(
@@ -136,7 +135,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     // Check if the batch is disabled.
                     let is_batch_disabled = builder.lt(
-                        map_ctx.target_block,
+                        map_ctx.global_end_block,
                         batch_start_block,
                     );
                     let mut curr_block_disabled = is_batch_disabled;
@@ -195,7 +194,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         );
 
                         // If this is the target block, set curr_block_disabled to true.
-                        let is_final_block = builder.is_equal(header_variable.block_number, map_ctx.target_block);
+                        let is_final_block = builder.is_equal(header_variable.block_number, map_ctx.global_end_block);
                         curr_block_disabled = builder.or(curr_block_disabled, is_final_block);
                     }
 
@@ -233,11 +232,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 |_, left, right, builder| {
                     let true_v = builder._true();
                     let one = builder.one();
-                    // Reduce Stage of MapReduce.
+                    // Reduce Stage
                     // 1. Confirm that the left and right subchains are correctly linked if the
-                    //  right subchain is enabled. Check that a) the last block number of the left subchain
-                    //  is one less than the start block number of the right subchain and b) the 
-                    //  parent of the right subchain is the left subchain's end header hash.
+                    //  right subchain is enabled. Check that
+                    //      a) the last block number of the left subchain is 1 less than the start block number of the right subchain.
+                    //      b) the parent of the right subchain is the left subchain's end header hash.
                     // 2. Get the end header hash and end block number for the combined subchain. If
                     //  the right subchain is disabled, use the left subchain's end values.
                     // 3. Compute the state and data merkle roots for the combined subchain.

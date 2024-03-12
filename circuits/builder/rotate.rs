@@ -29,7 +29,8 @@ pub trait RotateMethods {
         expected_num_authorities: &Variable,
     ) -> Variable;
 
-    /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
+    /// Verifies the epoch end header has a valid encoding, and that the new_pubkeys match the header's
+    /// encoded pubkeys.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -41,7 +42,6 @@ pub trait RotateMethods {
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
-        expected_new_authority_set_hash: &Bytes32Variable,
     );
 
     // Verify the justification from the current authority set on the epoch end header and extract
@@ -129,7 +129,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
-        expected_new_authority_set_hash: &Bytes32Variable,
     ) {
         let false_v = self._false();
         let true_v = self._true();
@@ -223,14 +222,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             let delay_check = self.or(delay_match, not_at_end);
             self.assert_is_equal(delay_check, true_v);
         }
-
-        // Verify the new authority set commitment.
-        let computed_new_authority_set_hash =
-            self.compute_authority_set_commitment(*num_authorities, new_pubkeys);
-        self.assert_is_equal(
-            computed_new_authority_set_hash,
-            *expected_new_authority_set_hash,
-        );
     }
 
     fn rotate<
@@ -255,6 +246,14 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let target_header_hash = self
             .hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&rotate.target_header);
 
+        // Verify the justification from the current authority set on the epoch end header.
+        self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
+            epoch_end_block_number,
+            target_header_hash,
+            current_authority_set_id,
+            current_authority_set_hash,
+        );
+
         // Verify the epoch end header and the new authority set are valid.
         self.verify_epoch_end_header::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
             &rotate.target_header,
@@ -262,15 +261,18 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             &rotate.target_header_num_authorities,
             &rotate.next_authority_set_start_position,
             &rotate.new_pubkeys,
-            &rotate.expected_new_authority_set_hash,
         );
 
-        // Verify the justification from the current authority set on the epoch end header.
-        self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
-            epoch_end_block_number,
-            target_header_hash,
-            current_authority_set_id,
-            current_authority_set_hash,
+        // Sanity check against the witnessed expected_new_authority_set_hash. This doesn't
+        // provide any additional safety, but provides sanity for the hint.
+        // TODO: Decide whether to remove.
+        let computed_new_authority_set_hash = self.compute_authority_set_commitment(
+            rotate.target_header_num_authorities,
+            &rotate.new_pubkeys,
+        );
+        self.assert_is_equal(
+            computed_new_authority_set_hash,
+            rotate.expected_new_authority_set_hash,
         );
 
         rotate.expected_new_authority_set_hash
@@ -382,7 +384,6 @@ pub mod tests {
             &num_authorities,
             &start_position,
             &new_pubkeys,
-            &expected_new_authority_set_hash,
         );
 
         let circuit = builder.build();
@@ -435,7 +436,6 @@ pub mod tests {
             &num_authorities,
             &start_position,
             &new_pubkeys,
-            &expected_new_authority_set_hash,
         );
 
         let circuit = builder.build();

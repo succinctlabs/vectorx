@@ -85,7 +85,8 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
 
 pub trait GrandpaJustificationVerifier {
     /// Compute the authority set commitment of an authority set. This is the chained hash of the
-    /// first num_active_authorities public keys.
+    /// first num_active_authorities public keys. The ordering of the authorities is the same as in
+    /// the encoded authority set in the previous epoch's end block.
     ///
     /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
     ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
@@ -105,6 +106,8 @@ pub trait GrandpaJustificationVerifier {
     );
 
     /// Verify a simple justification on a block from the specified authority set.
+    /// Note: Complex Substrate justifications are not covered in this repository, as they are
+    /// rarely seen on Avail. This function only verifies simple justifications.
     ///
     /// Specifically, this verifies that:
     ///     1) Authority set commitment matches the authority set.

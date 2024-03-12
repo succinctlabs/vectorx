@@ -231,30 +231,37 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     }
                 },
                 |_, left, right, builder| {
-
-                    let total_num_blocks = builder.add(left.num_blocks, right.num_blocks);
-                    let is_right_empty = builder.is_zero(right.num_blocks);
+                    let true_v = builder._true();
+                    let one = builder.one();
+                    // Reduce Stage of MapReduce.
+                    // 1. Confirm that the left and right subchains are correctly linked if the
+                    //  right subchain is enabled. Check that a) the last block number of the left subchain
+                    //  is one less than the start block number of the right subchain and b) the 
+                    //  parent of the right subchain is the left subchain's end header hash.
+                    // 2. Get the end header hash and end block number for the combined subchain. If
+                    //  the right subchain is disabled, use the left subchain's end values.
+                    // 3. Compute the state and data merkle roots for the combined subchain.
+                    // 4. Compute the total number of blocks in the subchain.
 
                     // Check to see if the left and right subchains are correctly linked.
-                    let nodes_linked =
+                    let are_subchains_linked =
                         builder.is_equal(left.end_header_hash, right.start_parent);
-                    let one = builder.one();
-                    let expected_block_num = builder.sub(right.start_block, one);
-                    let nodes_sequential = builder.is_equal(left.end_block, expected_block_num);
-                    let nodes_correctly_linked = builder.and(nodes_linked, nodes_sequential);
+                    let expected_left_end_block_number = builder.sub(right.start_block, one);
+                    let are_subchains_sequential = builder.is_equal(left.end_block, expected_left_end_block_number);
+                    let are_subchains_linked = builder.and(are_subchains_linked, are_subchains_sequential);
 
-                    // If the right node is empty, then don't need to check the "node_correctly_linked"
-                    // boolean.
-                    let link_check = builder.or(is_right_empty, nodes_correctly_linked);
-                    let true_const = builder._true();
-                    builder.assert_is_equal(link_check, true_const);
+                    // If the right subchain is disabled, then don't need to check the 
+                    // are_subchains_linked boolean.
+                    let is_right_subchain_inactive = builder.is_zero(right.num_blocks);
+                    let is_subchain_link_valid = builder.or(is_right_subchain_inactive, are_subchains_linked);
+                    builder.assert_is_equal(is_subchain_link_valid, true_v);
 
                     // Get the right most block num and hash between the two nodes.
                     // If the right node is not empty, this will be the right node's rightmost entry,
                     // otherwise it will be the left block's rightmost entry.
-                    let end_block = builder.select(is_right_empty, left.end_block, right.end_block);
+                    let end_block_nb = builder.select(is_right_subchain_inactive, left.end_block, right.end_block);
                     let end_header_hash =
-                        builder.select(is_right_empty, left.end_header_hash, right.end_header_hash);
+                        builder.select(is_right_subchain_inactive, left.end_header_hash, right.end_header_hash);
 
                     // Compute the merkle roots where the left and right nodes are the merkle roots
                     // from the left and right nodes respectively.
@@ -266,12 +273,15 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     data_root_bytes.extend(&right.data_merkle_root.as_bytes());
                     let data_merkle_root = builder.sha256(&data_root_bytes);
 
+                    // Compute the total number of blocks in the subchain.
+                    let combined_num_blocks = builder.add(left.num_blocks, right.num_blocks);
+
                     MapReduceSubchainVariable {
-                        num_blocks: total_num_blocks,
+                        num_blocks: combined_num_blocks,
                         start_block: left.start_block,
                         start_header_hash: left.start_header_hash,
                         start_parent: left.start_parent,
-                        end_block,
+                        end_block: end_block_nb,
                         end_header_hash,
                         state_merkle_root,
                         data_merkle_root,

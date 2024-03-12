@@ -153,7 +153,6 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let precommit_first_byte = precommit[0].to_variable(self);
         self.assert_is_equal(precommit_first_byte, one);
 
-        // TODO: Add correct link for spec that includes justification round and authority_set_id.
         // The next 32 bytes is the block hash.
         // Spec: https://github.com/paritytech/finality-grandpa/blob/8c45a664c05657f0c71057158d3ba555ba7d20de/src/lib.rs#L101-L110
         let block_hash: Bytes32Variable = precommit[1..33].into();

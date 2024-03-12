@@ -87,8 +87,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                 ctx,
                 relative_block_nums,
                 |map_ctx, map_relative_block_nums, builder| {
-                    // Map Stage
-                    // 1. Fetch the headers for the batch ()
 
                     let batch_start_block =
                         builder.add(map_ctx.global_start_block, map_relative_block_nums.as_vec()[0]);

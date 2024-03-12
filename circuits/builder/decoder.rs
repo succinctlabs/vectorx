@@ -93,7 +93,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         header: &EncodedHeaderVariable<S>,
         header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
-        // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v2.rs
+        // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/mod.rs#L44-L66
 
         // The first 32 bytes are the parent hash.
         let parent_hash: Bytes32Variable = header.header_bytes[0..HASH_SIZE].into();
@@ -104,7 +104,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         );
         let (block_number, compress_mode) = self.decode_compact_int(block_number_bytes);
 
-        // The of block_number is 1, 2, 4, or 5 bytes.
+        // The of block_number is 1, 2, 4, or 5 bytes depending on the encoding of the compact int.
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
             Bytes32Variable::from(&header.header_bytes[34..34 + HASH_SIZE]),
@@ -115,6 +115,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let state_root = self.select_array_random_gate(&all_possible_state_roots, compress_mode);
 
         // The next field is the data root. The data root is the last 32 bytes of the header.
+        // Spec: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v3.rs#L9-L15
         let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END as u32);
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
 
@@ -146,14 +147,14 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         &mut self,
         precommit: BytesVariable<ENCODED_PRECOMMIT_LENGTH>,
     ) -> PrecommitVariable {
-        // TODO: Link to Precommit spec.
-
+        // Link: https://github.com/paritytech/finality-grandpa/blob/8c45a664c05657f0c71057158d3ba555ba7d20de/src/lib.rs#L224-L239.
         // The first byte is the equivocation type (Precommit) and should be 1.
         let one = self.one();
         let precommit_first_byte = precommit[0].to_variable(self);
         self.assert_is_equal(precommit_first_byte, one);
 
         // The next 32 bytes is the block hash.
+        // Spec: https://github.com/paritytech/finality-grandpa/blob/8c45a664c05657f0c71057158d3ba555ba7d20de/src/lib.rs#L101-L110
         let block_hash: Bytes32Variable = precommit[1..33].into();
 
         // The next 4 bytes is the block number.
@@ -166,13 +167,13 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         let mut authority_set_id_bytes = precommit[45..53].to_vec();
 
         // Reverse the bytes of block_number, justification_round and authority_set_id since they
-        // are stored in LE form.
+        // are stored in LE, so CircuitVariable decoding (which expects BE) works correctly.
         block_number_bytes.reverse();
         justification_round_bytes.reverse();
         authority_set_id_bytes.reverse();
 
         let block_number = U32Variable::decode(self, &block_number_bytes);
-        let justification_round = U64Variable::decode(self, &precommit[37..45]);
+        let justification_round = U64Variable::decode(self, &justification_round_bytes);
         let authority_set_id = U64Variable::decode(self, &authority_set_id_bytes);
 
         PrecommitVariable {

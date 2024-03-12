@@ -19,6 +19,11 @@ use ethers::contract::abigen;
 use ethers::providers::{Http, Provider};
 use vectorx::input::RpcDataFetcher;
 
+// To get the calldata for filling the block range run the following script:
+// cargo run --bin fill_block_range -- --end-block <end_block>
+
+// Add --post flag to post the data on-chain.
+
 #[derive(Parser, Debug, Clone)]
 #[command(
     about = "Get the last block of the block range to fill and whether to post the data on-chain."

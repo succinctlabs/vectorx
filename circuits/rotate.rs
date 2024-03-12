@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use ethers::types::H256;
-use log::{debug, Level};
+use log::Level;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -15,7 +15,7 @@ use crate::builder::rotate::RotateMethods;
 use crate::input::RpcDataFetcher;
 use crate::vars::{EncodedHeader, RotateStruct, RotateVariable};
 
-// Fetch a single header.
+// Get the data for the rotate circuit.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RotateHint<const HEADER_LENGTH: usize, const MAX_AUTHORITY_SET_SIZE: usize> {}
 
@@ -32,14 +32,7 @@ impl<
         input_stream: &mut ValueStream<L, D>,
         output_stream: &mut ValueStream<L, D>,
     ) {
-        let authority_set_id = input_stream.read_value::<U64Variable>();
-        let authority_set_hash = input_stream.read_value::<Bytes32Variable>();
         let block_number = input_stream.read_value::<U32Variable>();
-
-        debug!(
-            "SingleHeaderFetcherHint: downloading header range of block={}",
-            block_number
-        );
 
         let mut data_fetcher = RpcDataFetcher::new().await;
 
@@ -48,9 +41,6 @@ impl<
             .await;
 
         let rotate = RotateStruct::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, L::Field> {
-            epoch_end_block_number: block_number,
-            current_authority_set_id: authority_set_id,
-            current_authority_set_hash: authority_set_hash,
             target_header: EncodedHeader {
                 header_bytes: rotate_data.header_bytes,
                 header_size: rotate_data.header_size as u32,
@@ -77,7 +67,6 @@ pub struct RotateCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_SIZE: usize,
     const MAX_HEADER_CHUNK_SIZE: usize,
-    // This should be (MAX_AUTHORITY_SET_SIZE + 1) * (VALIDATOR_LENGTH).
     const MAX_SUBARRAY_SIZE: usize,
 > {}
 
@@ -118,24 +107,26 @@ impl<
         let epoch_end_block_number = builder.evm_read::<U32Variable>();
         builder.watch_with_level(
             &epoch_end_block_number,
-            "rotate circuit input - epoch end block",
+            "rotate circuit input - epoch end block number",
             Level::Debug,
         );
 
         // Fetch the header at epoch_end_block.
         let header_fetcher = RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE> {};
         let mut input_stream = VariableStream::new();
-        input_stream.write(&authority_set_id);
-        input_stream.write(&authority_set_hash);
         input_stream.write(&epoch_end_block_number);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
 
-        let rotate =
+        // rotate_var is untrusted and needs to be linked to the public inputs.
+        let rotate_var =
             output_stream.read::<RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        let expected_new_authority_set_hash = rotate.expected_new_authority_set_hash;
+        let expected_new_authority_set_hash = rotate_var.expected_new_authority_set_hash;
         builder.rotate::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
-            rotate
+            epoch_end_block_number,
+            authority_set_id,
+            authority_set_hash,
+            rotate_var
         );
 
         // Write the hash of the new authority set to the output.
@@ -158,7 +149,6 @@ impl<
 mod tests {
     use std::env;
 
-    use ethers::types::H256;
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;

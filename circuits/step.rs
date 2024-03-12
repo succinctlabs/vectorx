@@ -5,10 +5,11 @@ use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters};
 
-use crate::builder::header::HeaderRangeFetcherHint;
 use crate::builder::justification::HintSimpleJustification;
 use crate::builder::step::StepMethods;
-use crate::builder::subchain_verification::{MapReduceSubchainVariable, SubchainVerificationCtx};
+use crate::builder::subchain_verification::{
+    HeaderRangeFetcherHint, MapReduceSubchainVariable, SubchainVerificationCtx,
+};
 use crate::consts::HEADERS_PER_MAP;
 
 #[derive(Clone, Debug)]

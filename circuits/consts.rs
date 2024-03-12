@@ -39,7 +39,7 @@ pub const MAX_PREFIX_LENGTH: usize = BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES
 
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.
-// TODO: Link to spec.
+// Link: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30549-L30557.
 pub const ENCODED_PRECOMMIT_LENGTH: usize = 53;
 
 // The maximum size of the subarray is the max length of the encoded

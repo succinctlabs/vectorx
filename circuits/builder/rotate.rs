@@ -1,4 +1,6 @@
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
+use plonky2x::frontend::uint::uint64::U64Variable;
+use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
@@ -13,12 +15,17 @@ use crate::consts::{
 use crate::vars::*;
 
 pub trait RotateMethods {
-    /// Verifies the prefix bytes before the encoded authority set are valid, according to the spec
-    /// for the epoch end header. Returns the length of the compact encoding of the new authority set
-    /// length. TODO: Link to spec.
+    /// Verifies the prefix bytes before the encoded authority set length are valid, according to the spec
+    /// for the epoch end header.
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
+    );
+
+    /// Returns the length of the compact encoding of the new authority set length.
+    fn get_new_authority_set_size_encoded_byte_length(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
         expected_num_authorities: &Variable,
     ) -> Variable;
 
@@ -46,6 +53,9 @@ pub trait RotateMethods {
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
+        epoch_end_block_number: U32Variable,
+        current_authority_set_id: U64Variable,
+        current_authority_set_hash: Bytes32Variable,
         rotate: RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>,
     ) -> Bytes32Variable;
 }
@@ -54,9 +64,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
-        expected_num_authorities: &Variable,
-    ) -> Variable {
-        // TODO: Link to the spec for the prefix of an epoch end header.
+    ) {
+        // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
         // Skip 1 unknown byte.
 
         // Verify subarray[1] is 0x04 (Consensus Flag = 4u32).
@@ -65,7 +74,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         self.assert_is_equal(header_consensus_flag, consensus_enum_flag);
 
         // Verify subarray[2..6] is the Consensus Engine ID: 0x46524e4b [70, 82, 78, 75].
-        // TODO: Link to the Consensus Engine ID in subxt for Grandpa.
+        // Consensus Id: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/examples/download_digest_items.rs#L41-L56
         let consensus_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         self.assert_is_equal(
@@ -79,18 +88,25 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
         let header_schedule_change_flag = subarray[8];
         self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
+    }
 
-        // Verify the next bytes are the compact encoding of the length of the new authority set.
-        let num_authorities_length_bytes =
+    /// Returns the length of the compact encoding of the new authority set length.
+    fn get_new_authority_set_size_encoded_byte_length(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        expected_num_authorities: &Variable,
+    ) -> Variable {
+        // Verify the bytes starting at the base prefix length are the compact encoding of the
+        // length of the new authority set.
+        let encoded_num_authorities_size_bytes =
             ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
                 subarray[BASE_PREFIX_LENGTH..BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES].to_vec(),
             );
         let (num_authorities, compress_mode) =
-            self.decode_compact_int(num_authorities_length_bytes);
+            self.decode_compact_int(encoded_num_authorities_size_bytes);
         self.assert_is_equal(*expected_num_authorities, num_authorities.variable);
 
-        // Number of additional bytes in the compact encoding of the new authority set length.
-        // Specifically, the lengths of the compact_encoding - 1.
+        // Number of bytes in the compact encoding of the new authority set length.
         let all_possible_lengths = vec![
             self.constant::<Variable>(L::Field::from_canonical_usize(1)),
             self.constant::<Variable>(L::Field::from_canonical_usize(2)),
@@ -98,6 +114,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             self.constant::<Variable>(L::Field::from_canonical_usize(5)),
         ];
 
+        // Select the correct length of the compact encoding of the new authority set length.
         self.select_array_random_gate(&all_possible_lengths, compress_mode)
     }
 
@@ -134,9 +151,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
 
         // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
+        self.verify_prefix_epoch_end_header(&prefix_subarray);
+
         // Returns the byte length of the compact encoding of the new authority set length.
         let encoded_num_authorities_byte_len =
-            self.verify_prefix_epoch_end_header(&prefix_subarray, num_authorities);
+            self.get_new_authority_set_size_encoded_byte_length(&prefix_subarray, num_authorities);
 
         // Expected weight for each authority.
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
@@ -206,10 +225,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         }
 
         // Verify the new authority set commitment.
-        self.verify_authority_set_commitment(
-            *num_authorities,
+        let computed_new_authority_set_hash =
+            self.compute_authority_set_commitment(*num_authorities, new_pubkeys);
+        self.assert_is_equal(
+            computed_new_authority_set_hash,
             *expected_new_authority_set_hash,
-            new_pubkeys,
         );
     }
 
@@ -220,6 +240,9 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         const MAX_SUBARRAY_SIZE: usize,
     >(
         &mut self,
+        epoch_end_block_number: U32Variable,
+        current_authority_set_id: U64Variable,
+        current_authority_set_hash: Bytes32Variable,
         rotate: RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>,
     ) -> Bytes32Variable {
         assert_eq!(
@@ -244,10 +267,10 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify the justification from the current authority set on the epoch end header.
         self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
-            rotate.epoch_end_block_number,
+            epoch_end_block_number,
             target_header_hash,
-            rotate.current_authority_set_id,
-            rotate.current_authority_set_hash,
+            current_authority_set_id,
+            current_authority_set_hash,
         );
 
         rotate.expected_new_authority_set_hash
@@ -305,7 +328,10 @@ pub mod tests {
             target_header_dummy_hash,
         );
 
-        builder.verify_prefix_epoch_end_header(&prefix_subarray, &num_authorities);
+        builder.verify_prefix_epoch_end_header(&prefix_subarray);
+
+        let _encoded_num_authorities_byte_len = builder
+            .get_new_authority_set_size_encoded_byte_length(&prefix_subarray, &num_authorities);
 
         let circuit = builder.build();
         let mut input = circuit.input();

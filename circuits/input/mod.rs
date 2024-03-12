@@ -498,7 +498,6 @@ impl RpcDataFetcher {
 
         // Fetch the headers in batches of MAX_CONCURRENT_WS_REQUESTS. The WS connection will error if there
         // are too many concurrent requests with Rpc(ClientError(MaxSlotsExceeded)).
-        // TODO: Find the configuration for the maximum number of concurrent requests.
         const MAX_CONCURRENT_WS_REQUESTS: usize = 200;
         let mut headers = Vec::new();
         let mut curr_block = start_block_number;
@@ -914,7 +913,7 @@ impl RpcDataFetcher {
         }
 
         // TODO: Find out what the unknown bytes are (probably an enum).
-        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown,
+        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown bytes,
         // 1 scheduled change, variable length compact encoding of the number of authorities.
         let prefix_length = BASE_PREFIX_LENGTH + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
@@ -1165,22 +1164,14 @@ mod tests {
 
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
-    async fn test_data_commitment() {
-        let mut data_fetcher = RpcDataFetcher::new().await;
+    async fn test_system_chain() {
+        // Get the chain ID.
+        let data_fetcher = RpcDataFetcher::new().await;
 
-        let trusted_block = 338901;
-        let target_block = 339157;
+        let chain = data_fetcher.client.rpc().system_chain().await;
+        println!("chain {:?}", chain);
 
-        let (state_merkle_root, data_merkle_root) = data_fetcher
-            .get_merkle_root_commitments(trusted_block, target_block)
-            .await;
-        println!(
-            "state_merkle_root {:?}",
-            hex::encode(state_merkle_root.as_slice())
-        );
-        println!(
-            "data_merkle_root {:?}",
-            hex::encode(data_merkle_root.as_slice())
-        );
+        let chain = data_fetcher.client.rpc().system_properties().await;
+        println!("chain {:?}", chain);
     }
 }

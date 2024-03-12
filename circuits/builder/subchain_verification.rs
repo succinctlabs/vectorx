@@ -148,7 +148,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     );
                     let mut curr_block_disabled = is_batch_disabled;
 
-                    // The number of enabled leaves in the merkle tree. All leaves after nb_enabled_leaves
+                    // The number of enabled leaves in the merkle tree. All leaves after global_end_block
                     // are empty leaves.
                     let mut nb_enabled_leaves = builder.zero();
 

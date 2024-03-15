@@ -402,9 +402,8 @@ impl VectorXOperator {
             let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
 
             // Get the next multiple of block_interval after the current block.
-            let block_to_request = contract_latest_block_nb
-                + block_interval
-                + (contract_latest_block_nb % block_interval);
+            let block_to_request = contract_latest_block_nb + block_interval
+                - (contract_latest_block_nb % block_interval);
 
             if avail_chain_latest_block_nb > block_to_request {
                 info!("Attempting to step to block: {}", block_to_request);

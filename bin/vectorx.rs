@@ -293,7 +293,7 @@ impl VectorXOperator {
         )
     }
 
-    // Current authority set hash. (Implement!)
+    // Current authority set hash.
     async fn get_next_authority_set_id_input_data(
         &mut self,
         current_authority_set_id: u64,
@@ -306,7 +306,7 @@ impl VectorXOperator {
         )
     }
 
-    // Current block, step_range_max and whether next authority set hash exists. (Implement!)
+    // Current block, step_range_max and whether next authority set hash exists.
     async fn get_contract_data_for_step(&mut self) -> StepContractData {
         let header_range_function_id: B256 =
             FixedBytes(self.contract.header_range_function_id().await.unwrap());
@@ -332,7 +332,7 @@ impl VectorXOperator {
         }
     }
 
-    // Current block and whether next authority set hash exists. (Implement!)
+    // Current block and whether next authority set hash exists.
     async fn get_contract_data_for_rotate(&mut self) -> RotateContractData {
         let rotate_function_id: B256 =
             FixedBytes(self.contract.rotate_function_id().await.unwrap());
@@ -390,9 +390,9 @@ impl VectorXOperator {
         Some(min(max_block_to_request, last_justified_block))
     }
 
-    async fn run(&mut self, loop_delay_mins: u64, update_delay_blocks: u32) {
+    async fn run(&mut self, loop_delay_mins: u64, block_interval: u32) {
         loop {
-            // Always check if there is a rotate available.
+            // Check if there is a rotate available for the next authority set.
             self.find_and_request_rotate().await;
 
             // Get latest block of the Avail chain.
@@ -401,11 +401,13 @@ impl VectorXOperator {
             // Get latest block of contract.
             let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
 
-            // Attempt to step to contract_latest_block_nb + update_delay_blocks.
-            let next_block_to_request: u32 = contract_latest_block_nb + update_delay_blocks;
-            if avail_chain_latest_block_nb > next_block_to_request {
-                info!("Attempting to step to block: {}", next_block_to_request);
-                self.find_and_request_step(next_block_to_request).await;
+            // Get the next multiple of block_interval after the current block.
+            let block_to_request = contract_latest_block_nb + block_interval
+                - (contract_latest_block_nb % block_interval);
+
+            if avail_chain_latest_block_nb > block_to_request {
+                info!("Attempting to step to block: {}", block_to_request);
+                self.find_and_request_step(block_to_request).await;
             }
 
             // Sleep for N minutes.

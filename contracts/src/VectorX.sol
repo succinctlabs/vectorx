@@ -265,9 +265,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
     /// @notice Requests a rotate to the next authority set.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
-    function requestNextAuthoritySetId(
-        uint64 _currentAuthoritySetId
-    ) external payable {
+    function requestRotate(uint64 _currentAuthoritySetId) external payable {
         bytes32 currentAuthoritySetHash = authoritySetIdToHash[
             _currentAuthoritySetId
         ];
@@ -288,7 +286,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         );
 
         bytes memory data = abi.encodeWithSelector(
-            this.addNextAuthoritySetId.selector,
+            this.rotate.selector,
             _currentAuthoritySetId
         );
 
@@ -299,15 +297,12 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             data,
             500000
         );
-        emit NextAuthoritySetIdRequested(
-            _currentAuthoritySetId,
-            currentAuthoritySetHash
-        );
+        emit RotateRequested(_currentAuthoritySetId, currentAuthoritySetHash);
     }
 
     /// @notice Adds the authority set hash for the next authority set id.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
-    function addNextAuthoritySetId(uint64 _currentAuthoritySetId) external {
+    function rotate(uint64 _currentAuthoritySetId) external {
         if (frozen) {
             revert ContractFrozen();
         }

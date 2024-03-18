@@ -66,19 +66,6 @@
     },
     {
         "type": "function",
-        "name": "addNextAuthoritySetId",
-        "inputs": [
-            {
-                "name": "_currentAuthoritySetId",
-                "type": "uint64",
-                "internalType": "uint64"
-            }
-        ],
-        "outputs": [],
-        "stateMutability": "nonpayable"
-    },
-    {
-        "type": "function",
         "name": "authoritySetIdToHash",
         "inputs": [
             {
@@ -371,7 +358,7 @@
     },
     {
         "type": "function",
-        "name": "requestNextAuthoritySetId",
+        "name": "requestRotate",
         "inputs": [
             {
                 "name": "_currentAuthoritySetId",
@@ -395,6 +382,19 @@
                 "name": "account",
                 "type": "address",
                 "internalType": "address"
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    },
+    {
+        "type": "function",
+        "name": "rotate",
+        "inputs": [
+            {
+                "name": "_currentAuthoritySetId",
+                "type": "uint64",
+                "internalType": "uint64"
             }
         ],
         "outputs": [],
@@ -750,25 +750,6 @@
     },
     {
         "type": "event",
-        "name": "NextAuthoritySetIdRequested",
-        "inputs": [
-            {
-                "name": "currentAuthoritySetId",
-                "type": "uint64",
-                "indexed": false,
-                "internalType": "uint64"
-            },
-            {
-                "name": "currentAuthoritySetHash",
-                "type": "bytes32",
-                "indexed": false,
-                "internalType": "bytes32"
-            }
-        ],
-        "anonymous": false
-    },
-    {
-        "type": "event",
         "name": "RoleAdminChanged",
         "inputs": [
             {
@@ -838,6 +819,25 @@
                 "type": "address",
                 "indexed": true,
                 "internalType": "address"
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "RotateRequested",
+        "inputs": [
+            {
+                "name": "currentAuthoritySetId",
+                "type": "uint64",
+                "indexed": false,
+                "internalType": "uint64"
+            },
+            {
+                "name": "currentAuthoritySetHash",
+                "type": "bytes32",
+                "indexed": false,
+                "internalType": "bytes32"
             }
         ],
         "anonymous": false

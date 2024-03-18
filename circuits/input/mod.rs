@@ -670,6 +670,7 @@ impl RpcDataFetcher {
             }
 
             // Form a message which is signed in the justification.
+            // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/primitives/consensus/grandpa/src/lib.rs#L434-L458
             let signed_message = Encode::encode(&(
                 &SignerMessage::PrecommitMessage(
                     justification.commit.precommits[0].clone().precommit,
@@ -912,8 +913,7 @@ impl RpcDataFetcher {
             padded_pubkeys.push(CompressedEdwardsY::from_slice(&DUMMY_PUBLIC_KEY).unwrap());
         }
 
-        // TODO: Find out what the unknown bytes are (probably an enum).
-        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown bytes,
+        // skip 1 byte, 1 consensus id, 4 consensus engine id, skip 2 bytes,
         // 1 scheduled change, variable length compact encoding of the number of authorities.
         let prefix_length = BASE_PREFIX_LENGTH + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
@@ -958,16 +958,22 @@ mod tests {
     async fn test_get_header_hash() {
         let mut fetcher = RpcDataFetcher::new().await;
 
-        let target_block = 645570;
+        let target_block = 529000;
         let header = fetcher.get_header(target_block).await;
-        let _ = fetcher.get_block_hash(target_block).await;
+        // println!("header has hash {:?}", header.hash());
+        let authority_set_id = fetcher.get_authority_set_id(target_block - 1).await;
+        let authority_set_hash = fetcher.compute_authority_set_hash(target_block - 1).await;
+
+        // let _ = fetcher.get_block_hash(target_block).await;
 
         println!("header hash {:?}", hex::encode(header.hash().0));
-
-        let id_1 = fetcher.get_authority_set_id(target_block - 1).await;
-        let authority_set_hash = fetcher.compute_authority_set_hash(target_block - 1).await;
-        println!("authority set id {:?}", id_1);
         println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
+        println!("authority set id {:?}", authority_set_id);
+
+        // let id_1 = fetcher.get_authority_set_id(target_block - 1).await;
+        // let authority_set_hash = fetcher.compute_authority_set_hash(target_block - 1).await;
+        // println!("authority set id {:?}", id_1);
+        // println!("authority set hash {:?}", hex::encode(authority_set_hash.0));
     }
 
     #[tokio::test]

@@ -299,13 +299,13 @@ mod tests {
 
         let mut input = circuit.input();
 
-        let trusted_header = "155e2363b33477fa51a88bfc7f8647a084853b5f2dcc329d0e21e9e1049ded93"
+        let trusted_header = "86f967bbe95f2314e6e6b81d434997672b3d6fa3a1a32c8de80dade137bc74cf"
             .parse()
             .unwrap();
-        let trusted_block = 395190u32;
+        let trusted_block = 529000u32;
         // Step to a block that is a stored justification.
-        let target_block = 395430u32;
-        let authority_set_id = 181u64;
+        let target_block = 529200u32;
+        let authority_set_id = 215u64;
         let authority_set_hash = "a97ebe6c36b2bcde9b8193c0f03b54fe6df67c725ba7b53b915af1735150fc75"
             .parse()
             .unwrap();

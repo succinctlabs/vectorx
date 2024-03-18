@@ -4,14 +4,14 @@ use crate::vars::*;
 
 pub trait HeaderMethods {
     /// Get the Blake2b hash of an encoded header.
-    fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
+    fn hash_encoded_header<const MAX_HEADER_SIZE: usize>(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable;
 }
 
 impl<L: PlonkParameters<D>, const D: usize> HeaderMethods for CircuitBuilder<L, D> {
-    fn hash_encoded_header<const MAX_HEADER_SIZE: usize, const MAX_CHUNK_SIZE: usize>(
+    fn hash_encoded_header<const MAX_HEADER_SIZE: usize>(
         &mut self,
         header: &EncodedHeaderVariable<MAX_HEADER_SIZE>,
     ) -> Bytes32Variable {
@@ -31,7 +31,7 @@ mod tests {
     use sp_core::{Blake2Hasher, Hasher};
 
     use crate::builder::header::HeaderMethods;
-    use crate::consts::{MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
+    use crate::consts::MAX_HEADER_SIZE;
     use crate::input::RpcDataFetcher;
     use crate::vars::{EncodedHeader, EncodedHeaderVariable};
 
@@ -52,8 +52,7 @@ mod tests {
             builder.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_HEADERS>>();
 
         for i in 0..NUM_HEADERS {
-            let calculated_hash =
-                builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&headers[i]);
+            let calculated_hash = builder.hash_encoded_header::<MAX_HEADER_SIZE>(&headers[i]);
             builder.write::<Bytes32Variable>(calculated_hash);
         }
 
@@ -143,8 +142,7 @@ mod tests {
             builder.read::<ArrayVariable<EncodedHeaderVariable<MAX_HEADER_SIZE>, NUM_HEADERS>>();
 
         for i in 0..NUM_HEADERS {
-            let calculated_hash =
-                builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&headers[i]);
+            let calculated_hash = builder.hash_encoded_header::<MAX_HEADER_SIZE>(&headers[i]);
             builder.write::<Bytes32Variable>(calculated_hash);
         }
 

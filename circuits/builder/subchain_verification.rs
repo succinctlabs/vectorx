@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::builder::decoder::DecodingMethods;
 use crate::builder::header::HeaderMethods;
-use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
+use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_SIZE};
 use crate::input::RpcDataFetcher;
 use crate::vars::{EncodedHeader, EncodedHeaderVariable, SubchainVerificationVariable};
 
@@ -154,7 +154,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     for i in 0..HEADERS_PER_MAP {
                         // Compute the block hash.
-                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&headers[i]);
+                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE>(&headers[i]);
                         block_hashes.push(hash);
 
                         // Decode the header and save the relevant fields.
@@ -392,7 +392,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
     use super::*;
-    use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
+    use crate::consts::{BLAKE2B_CHUNK_SIZE_BYTES, MAX_HEADER_CHUNK_SIZE};
 
     // MapReduce circuits requires a circuit to be defined in order to invoke the mapreduce method.
     #[derive(Clone, Debug)]

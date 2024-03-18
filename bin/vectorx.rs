@@ -401,7 +401,7 @@ impl VectorXOperator {
             // Get latest block of contract.
             let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
 
-            // block_to_request is the closest interval of block_interval less than min(latest_tendermint_block_nb, data_commitment_max + current_block)
+            // block_to_request is the closest interval of block_interval less than min(avail_chain_latest_block_nb, data_commitment_max + current_block)
             let max_block = std::cmp::min(
                 avail_chain_latest_block_nb,
                 data_commitment_max + contract_latest_block_nb,

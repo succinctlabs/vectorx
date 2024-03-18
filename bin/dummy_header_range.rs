@@ -8,8 +8,8 @@
 //!
 
 use rustx::function::RustFunction;
-use vectorx::dummy_step::DummyStep;
+use vectorx::dummy_header_range::DummyHeaderRange;
 
 fn main() {
-    DummyStep::entrypoint();
+    DummyHeaderRange::entrypoint();
 }

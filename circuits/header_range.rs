@@ -5,15 +5,15 @@ use plonky2x::frontend::uint::uint64::U64Variable;
 use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{Bytes32Variable, CircuitBuilder, PlonkParameters};
 
+use crate::builder::header_range::HeaderRangeMethods;
 use crate::builder::justification::HintSimpleJustification;
-use crate::builder::step::StepMethods;
 use crate::builder::subchain_verification::{
     HeaderRangeFetcherHint, MapReduceSubchainVariable, SubchainVerificationCtx,
 };
 use crate::consts::HEADERS_PER_MAP;
 
 #[derive(Clone, Debug)]
-pub struct StepCircuit<
+pub struct HeaderRangeCircuit<
     const MAX_AUTHORITY_SET_SIZE: usize,
     const MAX_HEADER_SIZE: usize,
     const MAX_NUM_HEADERS: usize,
@@ -23,7 +23,7 @@ impl<
         const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_HEADER_SIZE: usize,
         const MAX_NUM_HEADERS: usize,
-    > Circuit for StepCircuit<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>
+    > Circuit for HeaderRangeCircuit<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>
 {
     fn define<L: PlonkParameters<D>, const D: usize>(builder: &mut CircuitBuilder<L, D>)
     where
@@ -34,40 +34,40 @@ impl<
         let trusted_block = builder.evm_read::<U32Variable>();
         builder.watch_with_level(
             &trusted_block,
-            "step circuit input - trusted block",
+            "header range circuit input - trusted block",
             Level::Debug,
         );
 
         let trusted_header_hash = builder.evm_read::<Bytes32Variable>();
         builder.watch_with_level(
             &trusted_header_hash,
-            "step circuit input - trusted header hash",
+            "header range circuit input - trusted header hash",
             Level::Debug,
         );
 
         let authority_set_id = builder.evm_read::<U64Variable>();
         builder.watch_with_level(
             &authority_set_id,
-            "step circuit input - authority set id",
+            "header range circuit input - authority set id",
             Level::Debug,
         );
 
         let authority_set_hash = builder.evm_read::<Bytes32Variable>();
         builder.watch_with_level(
             &authority_set_hash,
-            "step circuit input - authority set hash",
+            "header range circuit input - authority set hash",
             Level::Debug,
         );
 
         let target_block = builder.evm_read::<U32Variable>();
         builder.watch_with_level(
             &target_block,
-            "step circuit input - target block",
+            "header range circuit input - target block",
             Level::Debug,
         );
 
         let subchain_output = builder
-            .step::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>(
+            .prove_header_range::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>(
                 trusted_block,
                 trusted_header_hash,
                 authority_set_id,
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_circuit_function_step() {
+    fn test_circuit_function_header_range() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
@@ -134,16 +134,16 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
+        HeaderRangeCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
         let circuit = builder.build();
         log::debug!("Done building circuit");
 
         let mut hint_registry = HintRegistry::new();
         let mut gate_registry = GateRegistry::new();
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::register_generators(
+        HeaderRangeCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::register_generators(
             &mut hint_registry,
         );
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::register_gates(
+        HeaderRangeCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::register_gates(
             &mut gate_registry,
         );
 
@@ -169,7 +169,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
+        HeaderRangeCircuit::<NUM_AUTHORITIES, MAX_HEADER_LENGTH, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_step_small() {
+    fn test_header_range_small() {
         // Only 10 authorities in the authority set for this authority set id.
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
@@ -193,7 +193,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
+        HeaderRangeCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_step() {
+    fn test_header_range() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
@@ -242,7 +242,7 @@ mod tests {
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
+        HeaderRangeCircuit::<NUM_AUTHORITIES, MAX_HEADER_SIZE, NUM_HEADERS>::define(&mut builder);
 
         log::debug!("Building circuit");
         let circuit = builder.build();
@@ -282,14 +282,14 @@ mod tests {
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
-    fn test_step_large() {
+    fn test_header_range_large() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
 
         let mut builder = DefaultBuilder::new();
 
         log::debug!("Defining circuit");
-        StepCircuit::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>::define(
+        HeaderRangeCircuit::<MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS>::define(
             &mut builder,
         );
 

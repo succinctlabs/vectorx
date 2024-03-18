@@ -913,7 +913,6 @@ impl RpcDataFetcher {
             padded_pubkeys.push(CompressedEdwardsY::from_slice(&DUMMY_PUBLIC_KEY).unwrap());
         }
 
-        // TODO: Find out what the unknown bytes are (probably an enum).
         // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown bytes,
         // 1 scheduled change, variable length compact encoding of the number of authorities.
         let prefix_length = BASE_PREFIX_LENGTH + encoded_num_authorities_len;

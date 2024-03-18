@@ -10,15 +10,14 @@ impl Program for DummyRotate {
 
         // First 8 bytes are the authority set id.
         // Next 32 bytes are the authority set hash.
-        // Last 4 bytes are the epoch end block number.
-        let _authority_set_id = u64::from_be_bytes(input_bytes[0..8].try_into().unwrap());
+        let authority_set_id = u64::from_be_bytes(input_bytes[0..8].try_into().unwrap());
         let _authority_set_hash = input_bytes[8..40].to_vec();
-        let epoch_end_block_number = u32::from_be_bytes(input_bytes[40..44].try_into().unwrap());
 
         // Initialize tokio runtime.
         let rt = tokio::runtime::Runtime::new().unwrap();
         let new_authority_set_hash: Vec<u8> = rt.block_on(async {
             let mut data_fetcher = RpcDataFetcher::new().await;
+            let epoch_end_block_number = data_fetcher.last_justified_block(authority_set_id).await;
             data_fetcher
                 .compute_authority_set_hash(epoch_end_block_number)
                 .await

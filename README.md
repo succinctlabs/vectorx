@@ -48,7 +48,7 @@ cargo run --bin vectorx
 ## Avail Indexer
 
 Avail does not currently store justifications for non-era end blocks on archive nodes, so the
-following service indexes Avail and stores the ephermal justifications, which are used for `step`
+following service indexes Avail and stores the ephermal justifications, which are used for `header_range`
 proofs.
 
 ### Run the Indexer
@@ -164,4 +164,4 @@ Example response:
 
 ## Dummy VectorX Set-Up
 
-If you do not want to generate proofs for the `VectorX` light client, you can use `RustX` light client proofs instead with dummy circuits that do not require any intensive proof generation. You can deploy the VectorX contract with the same genesis parameters as the VectorX contract and re-initialize the light client with the new dummy function IDs. Ensure you are using the dummy function IDs for [`dummy_rotate`](https://alpha.succinct.xyz/avail/vectorx/releases/10) and [`dummy_step`](https://alpha.succinct.xyz/avail/vectorx/releases/9).
+If you do not want to generate proofs for the `VectorX` light client, you can use `RustX` light client proofs instead with dummy circuits that do not require any intensive proof generation. You can deploy the VectorX contract with the same genesis parameters as the VectorX contract and re-initialize the light client with the new dummy function IDs. Ensure you are using the dummy function IDs for [`dummy_rotate`](https://alpha.succinct.xyz/avail/vectorx/releases/10) and [`dummy_header_range`](https://alpha.succinct.xyz/avail/vectorx/releases/9).

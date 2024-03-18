@@ -51,7 +51,6 @@ pub trait RotateMethods {
     // the new authority set commitment.
     fn rotate<
         const MAX_HEADER_SIZE: usize,
-        const MAX_HEADER_CHUNK_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_SUBARRAY_SIZE: usize,
     >(
@@ -229,7 +228,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
     fn rotate<
         const MAX_HEADER_SIZE: usize,
-        const MAX_HEADER_CHUNK_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
         const MAX_SUBARRAY_SIZE: usize,
     >(
@@ -245,8 +243,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
 
         // Hash the header at epoch_end_block.
-        let target_header_hash = self
-            .hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&rotate.target_header);
+        let target_header_hash = self.hash_encoded_header::<MAX_HEADER_SIZE>(&rotate.target_header);
 
         // Verify the justification from the current authority set on the epoch end header.
         self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(

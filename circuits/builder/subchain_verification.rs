@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::builder::decoder::DecodingMethods;
 use crate::builder::header::HeaderMethods;
-use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_CHUNK_SIZE, MAX_HEADER_SIZE};
+use crate::consts::{HEADERS_PER_MAP, MAX_HEADER_SIZE};
 use crate::input::RpcDataFetcher;
 use crate::vars::{EncodedHeader, EncodedHeaderVariable, SubchainVerificationVariable};
 
@@ -154,7 +154,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     for i in 0..HEADERS_PER_MAP {
                         // Compute the block hash.
-                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&headers[i]);
+                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE>(&headers[i]);
                         block_hashes.push(hash);
 
                         // Decode the header and save the relevant fields.
@@ -310,7 +310,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
     }
 }
 
-// Fetch a range of headers with a hint. Used to generate a data commitment for step.
+// Fetch a range of headers with a hint. Used to generate a data commitment for header_range.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderRangeFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 
@@ -392,7 +392,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, DefaultParameters, HintRegistry};
 
     use super::*;
-    use crate::consts::BLAKE2B_CHUNK_SIZE_BYTES;
+    use crate::consts::{BLAKE2B_CHUNK_SIZE_BYTES, MAX_HEADER_CHUNK_SIZE};
 
     // MapReduce circuits requires a circuit to be defined in order to invoke the mapreduce method.
     #[derive(Clone, Debug)]
@@ -474,7 +474,7 @@ mod tests {
             .parse()
             .unwrap();
         let trusted_block = 397855u32;
-        let target_block = 397862u32; // mimics test_step_small
+        let target_block = 397862u32; // mimics test_header_range_small
 
         input.evm_write::<U32Variable>(trusted_block);
         input.evm_write::<Bytes32Variable>(trusted_header);

@@ -19,11 +19,9 @@ interface IVectorX {
     /// @notice Emits event with the inputs of a next authority set id request.
     /// @param currentAuthoritySetId The authority set id of the current authority set.
     /// @param currentAuthoritySetHash The authority set hash of the current authority set.
-    /// @param epochEndBlock The height of the epoch end block.
     event NextAuthoritySetIdRequested(
         uint64 currentAuthoritySetId,
-        bytes32 currentAuthoritySetHash,
-        uint64 epochEndBlock
+        bytes32 currentAuthoritySetHash
     );
 
     /// @notice Emitted when the light client's head is updated.
@@ -38,11 +36,10 @@ interface IVectorX {
     );
 
     /// @notice Emitted when a new authority set is stored.
-    event AuthoritySetStored(
-        uint64 authoritySetId,
-        bytes32 authoritySetHash,
-        uint64 epochEndBlock
-    );
+    event AuthoritySetStored(uint64 authoritySetId, bytes32 authoritySetHash);
+
+    /// @notice If the next authority set already exists.
+    error NextAuthoritySetExists();
 
     /// @notice Contract is frozen.
     error ContractFrozen();

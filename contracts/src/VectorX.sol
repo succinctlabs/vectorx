@@ -263,19 +263,11 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         latestBlock = _targetBlock;
     }
 
-    /// @notice Requests a rotate to the next authority set, which starts justifying blocks at
-    ///     _epochEndBlock + 1.
-    /// @param _epochEndBlock The block height of the epoch end block.
+    /// @notice Requests a rotate to the next authority set.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
     function requestNextAuthoritySetId(
-        uint32 _epochEndBlock,
         uint64 _currentAuthoritySetId
     ) external payable {
-        // Note: _epochEndBlock must be >= the latestBlock. Can be equal if we've already
-        // called step to the _epochEndBlock.
-        // This ensures we don't call rotate twice for the same epoch.
-        require(_epochEndBlock >= latestBlock);
-
         bytes32 currentAuthoritySetHash = authoritySetIdToHash[
             _currentAuthoritySetId
         ];
@@ -283,16 +275,21 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
+        bytes32 nextAuthoritySetHash = authoritySetIdToHash[
+            _currentAuthoritySetId + 1
+        ];
+        if (nextAuthoritySetHash != bytes32(0)) {
+            revert NextAuthoritySetExists();
+        }
+
         bytes memory input = abi.encodePacked(
             _currentAuthoritySetId,
-            currentAuthoritySetHash,
-            _epochEndBlock
+            currentAuthoritySetHash
         );
 
         bytes memory data = abi.encodeWithSelector(
             this.addNextAuthoritySetId.selector,
-            _currentAuthoritySetId,
-            _epochEndBlock
+            _currentAuthoritySetId
         );
 
         ISuccinctGateway(gateway).requestCall{value: msg.value}(
@@ -304,18 +301,13 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         );
         emit NextAuthoritySetIdRequested(
             _currentAuthoritySetId,
-            currentAuthoritySetHash,
-            _epochEndBlock
+            currentAuthoritySetHash
         );
     }
 
     /// @notice Adds the authority set hash for the next authority set id.
     /// @param _currentAuthoritySetId The authority set id of the current authority set.
-    /// @param _epochEndBlock The block height of the epoch end block.
-    function addNextAuthoritySetId(
-        uint64 _currentAuthoritySetId,
-        uint32 _epochEndBlock
-    ) external {
+    function addNextAuthoritySetId(uint64 _currentAuthoritySetId) external {
         if (frozen) {
             revert ContractFrozen();
         }
@@ -330,8 +322,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         bytes memory input = abi.encodePacked(
             _currentAuthoritySetId,
-            currentAuthoritySetHash,
-            _epochEndBlock
+            currentAuthoritySetHash
         );
 
         bytes memory output = ISuccinctGateway(gateway).verifiedCall(
@@ -346,8 +337,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         emit AuthoritySetStored(
             _currentAuthoritySetId + 1,
-            newAuthoritySetHash,
-            _epochEndBlock
+            newAuthoritySetHash
         );
     }
 }

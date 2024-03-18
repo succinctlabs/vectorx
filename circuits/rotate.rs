@@ -4,7 +4,6 @@ use log::Level;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
-use plonky2x::frontend::vars::U32Variable;
 use plonky2x::prelude::{
     Bytes32Variable, CircuitBuilder, Field, PlonkParameters, ValueStream, VariableStream,
 };
@@ -32,15 +31,18 @@ impl<
         input_stream: &mut ValueStream<L, D>,
         output_stream: &mut ValueStream<L, D>,
     ) {
-        let block_number = input_stream.read_value::<U32Variable>();
+        let authority_set_id = input_stream.read_value::<U64Variable>();
 
         let mut data_fetcher = RpcDataFetcher::new().await;
 
+        let epoch_end_block_nb = data_fetcher.last_justified_block(authority_set_id).await;
+
         let rotate_data = data_fetcher
-            .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(block_number)
+            .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_nb)
             .await;
 
         let rotate = RotateStruct::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, L::Field> {
+            epoch_end_block_number: epoch_end_block_nb,
             target_header: EncodedHeader {
                 header_bytes: rotate_data.header_bytes,
                 header_size: rotate_data.header_size as u32,
@@ -102,20 +104,12 @@ impl<
             "rotate circuit input - authority set hash",
             Level::Debug,
         );
-        // Note: If the user passes in a block number that is not an epoch end block, the circuit
-        // will error.
-        let epoch_end_block_number = builder.evm_read::<U32Variable>();
-        builder.watch_with_level(
-            &epoch_end_block_number,
-            "rotate circuit input - epoch end block number",
-            Level::Debug,
-        );
 
-        // Fetch the header at epoch_end_block.
-        let header_fetcher = RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE> {};
+        // Fetch the data for the rotate of authority_set_id.
+        let rotate_fetcher = RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE> {};
         let mut input_stream = VariableStream::new();
-        input_stream.write(&epoch_end_block_number);
-        let output_stream = builder.async_hint(input_stream, header_fetcher);
+        input_stream.write(&authority_set_id);
+        let output_stream = builder.async_hint(input_stream, rotate_fetcher);
 
         // rotate_var is untrusted and needs to be linked to the public inputs.
         let rotate_var =
@@ -123,7 +117,6 @@ impl<
 
         let expected_new_authority_set_hash = rotate_var.expected_new_authority_set_hash;
         builder.rotate::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
-            epoch_end_block_number,
             authority_set_id,
             authority_set_hash,
             rotate_var
@@ -212,11 +205,9 @@ mod tests {
             &hex::decode("54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb")
                 .unwrap(),
         );
-        let epoch_end_block_number = 4321u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(authority_set_hash);
-        input.evm_write::<U32Variable>(epoch_end_block_number);
 
         log::debug!("Generating proof");
         let (proof, mut output) = circuit.prove(&input);
@@ -255,11 +246,9 @@ mod tests {
             &hex::decode("54eb3049b763a6a84c391d53ffb5e93515a171b2dbaaa6a900ec09e3b6bb8dfb")
                 .unwrap(),
         );
-        let epoch_end_block_number = 4321u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(authority_set_hash);
-        input.evm_write::<U32Variable>(epoch_end_block_number);
 
         log::debug!("Generating proof");
         let (proof, mut output) = circuit.prove(&input);
@@ -296,11 +285,9 @@ mod tests {
             &hex::decode("a699e49272d2d23f12e1624fba2ed8d28e1fc777ef25a40a7bcacbb8c0d8d252")
                 .unwrap(),
         );
-        let epoch_end_block_number = 100005u32;
 
         input.evm_write::<U64Variable>(authority_set_id);
         input.evm_write::<Bytes32Variable>(authority_set_hash);
-        input.evm_write::<U32Variable>(epoch_end_block_number);
 
         log::debug!("Generating proof");
         let (proof, mut output) = circuit.prove(&input);

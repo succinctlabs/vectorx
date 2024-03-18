@@ -232,6 +232,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
                     as u32;
                 MAX_NUM_AUTHORITIES
             ]);
+        // Note: Sharing one precommit guarantees that all votes occurred during the same round of consensus.
         let messages = vec![justification.encoded_precommit; MAX_NUM_AUTHORITIES];
         self.curta_eddsa_verify_sigs_conditional(
             justification.validator_signed.clone(),

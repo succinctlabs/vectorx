@@ -1,6 +1,6 @@
 //! To build the binary:
 //!
-//!     `cargo build --release --bin dummy_step`
+//!     `cargo build --release --bin dummy_header_range`
 //!
 //!
 //!

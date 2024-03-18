@@ -32,7 +32,7 @@ struct VectorXOperator {
 }
 
 #[derive(Debug)]
-struct StepContractData {
+struct HeaderRangeContractData {
     current_block: u32,
     next_authority_set_hash_exists: bool,
     header_range_function_id: B256,
@@ -199,14 +199,14 @@ impl VectorXOperator {
         }
     }
 
-    async fn find_and_request_step(&mut self, max_block_to_step_to: u32) {
+    async fn find_and_request_header_range(&mut self, max_block_to_step_to: u32) {
         let mut data_fetcher = self.get_data_fetcher();
 
-        let step_contract_data = self.get_contract_data_for_step().await;
+        let header_range_contract_data = self.get_contract_data_for_header_range().await;
 
         // The current authority set id is the authority set id of the block before the current block.
         let current_authority_set_id = data_fetcher
-            .get_authority_set_id(step_contract_data.current_block - 1)
+            .get_authority_set_id(header_range_contract_data.current_block - 1)
             .await;
 
         // Get the last justified block by the current authority set id.
@@ -216,11 +216,11 @@ impl VectorXOperator {
 
         // If this is the last justified block, check for step with next authority set.
         let mut request_authority_set_id = current_authority_set_id;
-        if step_contract_data.current_block == last_justified_block {
+        if header_range_contract_data.current_block == last_justified_block {
             let next_authority_set_id = current_authority_set_id + 1;
 
             // Check if the next authority set id exists in the contract. If not, a rotate is needed.
-            if !step_contract_data.next_authority_set_hash_exists {
+            if !header_range_contract_data.next_authority_set_hash_exists {
                 return;
             }
             request_authority_set_id = next_authority_set_id;
@@ -234,22 +234,25 @@ impl VectorXOperator {
             return;
         }
 
-        info!("Requesting step to block: {:?}.", block_to_step_to.unwrap());
+        info!(
+            "Requesting header range with end block: {:?}.",
+            block_to_step_to.unwrap()
+        );
 
         // Request the header range proof to block_to_step_to.
         match self
             .request_header_range(
-                step_contract_data.current_block,
+                header_range_contract_data.current_block,
                 request_authority_set_id,
                 block_to_step_to.unwrap(),
-                step_contract_data.header_range_function_id,
+                header_range_contract_data.header_range_function_id,
             )
             .await
         {
             Ok(request_id) => {
                 info!(
                     "Header range request submitted from block {} to block {} with request ID: {}",
-                    step_contract_data.current_block,
+                    header_range_contract_data.current_block,
                     block_to_step_to.unwrap(),
                     request_id
                 )
@@ -293,7 +296,7 @@ impl VectorXOperator {
     }
 
     // Current block, step_range_max and whether next authority set hash exists.
-    async fn get_contract_data_for_step(&mut self) -> StepContractData {
+    async fn get_contract_data_for_header_range(&mut self) -> HeaderRangeContractData {
         let header_range_function_id: B256 =
             FixedBytes(self.contract.header_range_function_id().await.unwrap());
         let current_block = self.contract.latest_block().await.unwrap();
@@ -310,7 +313,7 @@ impl VectorXOperator {
             .await
             .unwrap();
 
-        StepContractData {
+        HeaderRangeContractData {
             current_block,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
@@ -396,7 +399,7 @@ impl VectorXOperator {
 
             if block_to_request > contract_latest_block_nb {
                 info!("Attempting to step to block: {}", block_to_request);
-                self.find_and_request_step(block_to_request).await;
+                self.find_and_request_header_range(block_to_request).await;
             }
 
             // Sleep for N minutes.

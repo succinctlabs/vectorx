@@ -1,13 +1,13 @@
 {
     "entrypoints": [
         {
-            "name": "step",
+            "name": "header_range",
             "framework": "plonky2x",
             "baseDir": ".",
-            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin step --release build && mv ./target/release/step ./build/step",
-            "proveCommand": "RUST_LOG=debug ./build/step prove input.json",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin header_range --release build && mv ./target/release/header_range ./build/header_range",
+            "proveCommand": "RUST_LOG=debug ./build/header_range prove input.json",
             "requiredArtifacts": [
-                "step"
+                "header_range"
             ]
         },
         {
@@ -18,11 +18,11 @@
             "proveCommand": "RUST_LOG=debug ./build/rotate prove input.json"
         },
         {
-            "name": "dummy_step",
+            "name": "dummy_header_range",
             "framework": "rustx",
             "baseDir": ".",
-            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_step --release build && mv ./target/release/dummy_step ./build/dummy_step",
-            "proveCommand": "RUST_LOG=debug ./build/dummy_step prove input.json"
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_header_range --release build && mv ./target/release/dummy_header_range ./build/dummy_header_range",
+            "proveCommand": "RUST_LOG=debug ./build/dummy_header_range prove input.json"
         },
         {
             "name": "dummy_rotate",

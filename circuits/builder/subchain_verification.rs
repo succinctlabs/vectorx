@@ -310,7 +310,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
     }
 }
 
-// Fetch a range of headers with a hint. Used to generate a data commitment for step.
+// Fetch a range of headers with a hint. Used to generate a data commitment for header_range.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeaderRangeFetcherHint<const HEADER_LENGTH: usize, const NUM_HEADERS: usize> {}
 
@@ -474,7 +474,7 @@ mod tests {
             .parse()
             .unwrap();
         let trusted_block = 397855u32;
-        let target_block = 397862u32; // mimics test_step_small
+        let target_block = 397862u32; // mimics test_header_range_small
 
         input.evm_write::<U32Variable>(trusted_block);
         input.evm_write::<Bytes32Variable>(trusted_header);

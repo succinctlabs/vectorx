@@ -89,7 +89,7 @@ pub trait GrandpaJustificationVerifier {
     /// the encoded authority set in the previous epoch's end block.
     ///
     /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
-    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
+    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])...
     fn compute_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,

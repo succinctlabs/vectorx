@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use ethers::types::H256;
-use log::Level;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -85,17 +84,7 @@ impl<
         // Read the on-chain inputs. The validators that signed epoch_end_block_number are defined
         // by authority_set_id and authority_set_hash.
         let authority_set_id = builder.evm_read::<U64Variable>();
-        builder.watch_with_level(
-            &authority_set_id,
-            "rotate circuit input - authority set id",
-            Level::Debug,
-        );
         let authority_set_hash = builder.evm_read::<Bytes32Variable>();
-        builder.watch_with_level(
-            &authority_set_hash,
-            "rotate circuit input - authority set hash",
-            Level::Debug,
-        );
 
         // Fetch the data for the rotate of authority_set_id.
         let rotate_fetcher = RotateHint::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE> {};

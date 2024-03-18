@@ -183,10 +183,6 @@ impl VectorXOperator {
                 "Requesting next authority set id, which is {:?}.",
                 current_authority_set_id + 1
             );
-            // Get the last block justified by the current authority set id (also a rotate block).
-            let last_justified_block = data_fetcher
-                .last_justified_block(current_authority_set_id)
-                .await;
 
             // Request the next authority set id.
             match self

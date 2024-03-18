@@ -9,6 +9,12 @@ import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
 contract VectorX is IVectorX, TimelockedUpgradeable {
+    /// @notice The maximum header range that can be requested.
+    uint32 private constant MAX_HEADER_RANGE = 256;
+
+    /// @notice Indicator of if the contract is frozen.
+    bool public frozen;
+
     /// @notice The address of the gateway contract.
     address public gateway;
 
@@ -20,9 +26,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
     /// @notice The function for requesting a rotate.
     bytes32 public rotateFunctionId;
-
-    /// @notice The maximum header range that can be requested.
-    uint32 public constant MAX_HEADER_RANGE = 256;
 
     /// @notice Maps block height to the header hash of the block.
     mapping(uint32 => bytes32) public blockHeightToHeaderHash;
@@ -37,9 +40,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice Maps block ranges to state commitments. Block ranges are stored as
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
-
-    /// @notice Indicator of if the contract is frozen.
-    bool public frozen;
 
     struct InitParameters {
         address guardian;
@@ -59,10 +59,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @dev Initializes the contract.
     /// @param _params The initialization parameters for the contract.
     function initialize(InitParameters calldata _params) external initializer {
-        __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
-
-        frozen = false;
-
         gateway = _params.gateway;
 
         blockHeightToHeaderHash[_params.height] = _params.header;
@@ -71,6 +67,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         rotateFunctionId = _params.rotateFunctionId;
         headerRangeFunctionId = _params.headerRangeFunctionId;
+
+        __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
     }
 
     /// @notice Update the freeze parameter.
@@ -190,6 +188,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             data,
             500000
         );
+
         emit HeaderRangeRequested(
             latestBlock,
             trustedHeader,
@@ -302,6 +301,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             data,
             500000
         );
+        
         emit NextAuthoritySetIdRequested(
             _currentAuthoritySetId,
             currentAuthoritySetHash,

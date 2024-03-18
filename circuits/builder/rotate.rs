@@ -263,19 +263,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             &rotate.new_pubkeys,
         );
 
-        // Sanity check against the witnessed expected_new_authority_set_hash. This doesn't
-        // provide any additional safety, but provides sanity for the hint.
-        // TODO: Decide whether to remove.
-        let computed_new_authority_set_hash = self.compute_authority_set_commitment(
+        // Compute the authority set commitment of the new authority set.
+        self.compute_authority_set_commitment(
             rotate.target_header_num_authorities,
             &rotate.new_pubkeys,
-        );
-        self.assert_is_equal(
-            computed_new_authority_set_hash,
-            rotate.expected_new_authority_set_hash,
-        );
-
-        rotate.expected_new_authority_set_hash
+        )
     }
 }
 

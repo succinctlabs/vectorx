@@ -16,10 +16,10 @@ interface IVectorX {
         uint32 targetBlock
     );
 
-    /// @notice Emits event with the inputs of a next authority set id request.
+    /// @notice Emits event with the inputs of a rotate request.
     /// @param currentAuthoritySetId The authority set id of the current authority set.
     /// @param currentAuthoritySetHash The authority set hash of the current authority set.
-    event NextAuthoritySetIdRequested(
+    event RotateRequested(
         uint64 currentAuthoritySetId,
         bytes32 currentAuthoritySetHash
     );

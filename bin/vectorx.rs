@@ -20,7 +20,7 @@ pub struct VectorXConfig {
     chain_id: u32,
 }
 
-type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32) };
+type RotateInputTuple = sol! { tuple(uint64, bytes32) };
 
 type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint32) };
 
@@ -121,7 +121,7 @@ impl VectorXOperator {
         Ok(request_id)
     }
 
-    async fn request_next_authority_set_id(
+    async fn request_rotate(
         &mut self,
         current_authority_set_id: u64,
         rotate_function_id: B256,
@@ -129,25 +129,22 @@ impl VectorXOperator {
         let client = self.get_succinct_client();
         let config = self.get_config();
 
-        let current_authority_set_hash = self
-            .get_next_authority_set_id_input_data(current_authority_set_id)
-            .await;
+        let current_authority_set_hash = self.get_rotate_input_data(current_authority_set_id).await;
 
         info!(
             "Current authority set hash: {:?}",
             hex::encode(current_authority_set_hash)
         );
 
-        let input = NextAuthoritySetInputTuple::abi_encode_packed(&(
+        let input = RotateInputTuple::abi_encode_packed(&(
             current_authority_set_id,
             current_authority_set_hash,
         ));
 
-        // Note: Use vector_x because the calls are the same.
-        let add_next_authority_set_id_call = vector_x::AddNextAuthoritySetIdCall {
+        let rotate_call = vector_x::RotateCall {
             current_authority_set_id,
         };
-        let function_data = add_next_authority_set_id_call.encode();
+        let function_data = rotate_call.encode();
 
         let request_id = client
             .submit_platform_request(
@@ -180,23 +177,23 @@ impl VectorXOperator {
             && !rotate_contract_data.next_authority_set_hash_exists
         {
             info!(
-                "Requesting next authority set id, which is {:?}.",
+                "Requesting rotate to next authority set id, which is {:?}.",
                 current_authority_set_id + 1
             );
 
-            // Request the next authority set id.
+            // Request a rotate for the next authority set id.
             match self
-                .request_next_authority_set_id(
+                .request_rotate(
                     current_authority_set_id,
                     rotate_contract_data.rotate_function_id,
                 )
                 .await
             {
                 Ok(request_id) => {
-                    info!("Next authority set request submitted: {}", request_id)
+                    info!("Rotate request submitted: {}", request_id)
                 }
                 Err(e) => {
-                    error!("Next authority set request failed: {}", e);
+                    error!("Rotate request failed: {}", e);
                 }
             };
         }
@@ -286,10 +283,7 @@ impl VectorXOperator {
     }
 
     // Current authority set hash.
-    async fn get_next_authority_set_id_input_data(
-        &mut self,
-        current_authority_set_id: u64,
-    ) -> B256 {
+    async fn get_rotate_input_data(&mut self, current_authority_set_id: u64) -> B256 {
         alloy_primitives::FixedBytes(
             self.contract
                 .authority_set_id_to_hash(current_authority_set_id)

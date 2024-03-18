@@ -72,11 +72,6 @@
                 "name": "_currentAuthoritySetId",
                 "type": "uint64",
                 "internalType": "uint64"
-            },
-            {
-                "name": "_epochEndBlock",
-                "type": "uint32",
-                "internalType": "uint32"
             }
         ],
         "outputs": [],
@@ -379,11 +374,6 @@
         "name": "requestNextAuthoritySetId",
         "inputs": [
             {
-                "name": "_epochEndBlock",
-                "type": "uint32",
-                "internalType": "uint32"
-            },
-            {
                 "name": "_currentAuthoritySetId",
                 "type": "uint64",
                 "internalType": "uint64"
@@ -641,12 +631,6 @@
                 "type": "bytes32",
                 "indexed": false,
                 "internalType": "bytes32"
-            },
-            {
-                "name": "epochEndBlock",
-                "type": "uint64",
-                "indexed": false,
-                "internalType": "uint64"
             }
         ],
         "anonymous": false
@@ -779,12 +763,6 @@
                 "type": "bytes32",
                 "indexed": false,
                 "internalType": "bytes32"
-            },
-            {
-                "name": "epochEndBlock",
-                "type": "uint64",
-                "indexed": false,
-                "internalType": "uint64"
             }
         ],
         "anonymous": false
@@ -885,6 +863,11 @@
     {
         "type": "error",
         "name": "ContractFrozen",
+        "inputs": []
+    },
+    {
+        "type": "error",
+        "name": "NextAuthoritySetExists",
         "inputs": []
     },
     {

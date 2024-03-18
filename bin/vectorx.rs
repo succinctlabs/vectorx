@@ -20,7 +20,7 @@ pub struct VectorXConfig {
     chain_id: u32,
 }
 
-type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32, uint32) };
+type NextAuthoritySetInputTuple = sol! { tuple(uint64, bytes32) };
 
 type HeaderRangeInputTuple = sol! { tuple(uint32, bytes32, uint64, bytes32, uint32) };
 
@@ -124,7 +124,6 @@ impl VectorXOperator {
     async fn request_next_authority_set_id(
         &mut self,
         current_authority_set_id: u64,
-        epoch_end_block: u32,
         rotate_function_id: B256,
     ) -> Result<String> {
         let client = self.get_succinct_client();
@@ -142,13 +141,11 @@ impl VectorXOperator {
         let input = NextAuthoritySetInputTuple::abi_encode_packed(&(
             current_authority_set_id,
             current_authority_set_hash,
-            epoch_end_block,
         ));
 
         // Note: Use vector_x because the calls are the same.
         let add_next_authority_set_id_call = vector_x::AddNextAuthoritySetIdCall {
             current_authority_set_id,
-            epoch_end_block,
         };
         let function_data = add_next_authority_set_id_call.encode();
 
@@ -195,7 +192,6 @@ impl VectorXOperator {
             match self
                 .request_next_authority_set_id(
                     current_authority_set_id,
-                    last_justified_block,
                     rotate_contract_data.rotate_function_id,
                 )
                 .await

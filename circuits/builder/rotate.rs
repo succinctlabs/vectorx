@@ -16,7 +16,9 @@ use crate::vars::*;
 
 pub trait RotateMethods {
     /// Verifies the prefix bytes before the encoded authority set length are valid, according to the spec
-    /// for the epoch end header.
+    /// for the epoch end header. The purpose of this function is to ensure that it is difficult for
+    /// a malicious prover to witness an incorrect new authority set by using a fake start_position
+    /// from a header correctly signed by the current authority set.
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
@@ -30,7 +32,9 @@ pub trait RotateMethods {
     ) -> Variable;
 
     /// Verifies the epoch end header has a valid encoding, and that the new_pubkeys match the header's
-    /// encoded pubkeys.
+    /// encoded pubkeys. The purpose of this function is to ensure that it is difficult for
+    /// a malicious prover to prove an incorrect new authority set from a correctly signed header by
+    /// adding constraints on the encoding of the new authority set.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,

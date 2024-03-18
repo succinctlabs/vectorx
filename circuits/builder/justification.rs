@@ -89,7 +89,7 @@ pub trait GrandpaJustificationVerifier {
     /// the encoded authority set in the previous epoch's end block.
     ///
     /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
-    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])
+    ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])...
     fn compute_authority_set_commitment<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: Variable,
@@ -245,6 +245,9 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         // Verify at least 2/3 of the validators have signed the message.
         let two_v = self.constant::<U32Variable>(2u32);
         let three_v = self.constant::<U32Variable>(3u32);
+
+        // Note: All validators have a voting power of 1 in Avail, so the threshold is 2/3 of the total number of validators.
+        // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/frame/grandpa/src/lib.rs#L585
         self.verify_voting_threshold(
             justification.num_authorities,
             &justification.validator_signed,

@@ -158,7 +158,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let encoded_num_authorities_byte_len =
             self.get_new_authority_set_size_encoded_byte_length(&prefix_subarray, num_authorities);
 
-        // Expected weight for each authority.
+        // Note: All validators have a voting power of 1 in Avail.
+        // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/frame/grandpa/src/lib.rs#L585
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
             [1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8].to_vec(),
         );

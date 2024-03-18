@@ -177,11 +177,11 @@ impl VectorXOperator {
             && !rotate_contract_data.next_authority_set_hash_exists
         {
             info!(
-                "Requesting next authority set id, which is {:?}.",
+                "Requesting rotate to next authority set id, which is {:?}.",
                 current_authority_set_id + 1
             );
 
-            // Request the next authority set id.
+            // Request a rotate for the next authority set id.
             match self
                 .request_rotate(
                     current_authority_set_id,
@@ -190,10 +190,10 @@ impl VectorXOperator {
                 .await
             {
                 Ok(request_id) => {
-                    info!("Next authority set request submitted: {}", request_id)
+                    info!("Rotate request submitted: {}", request_id)
                 }
                 Err(e) => {
-                    error!("Next authority set request failed: {}", e);
+                    error!("Rotate request failed: {}", e);
                 }
             };
         }

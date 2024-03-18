@@ -16,7 +16,9 @@ use crate::vars::*;
 
 pub trait RotateMethods {
     /// Verifies the prefix bytes before the encoded authority set length are valid, according to the spec
-    /// for the epoch end header.
+    /// for the epoch end header. The purpose of this function is to ensure that it is difficult for
+    /// a malicious prover to witness an incorrect new authority set by using a fake start_position
+    /// from a header correctly signed by the current authority set.
     fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
@@ -29,7 +31,10 @@ pub trait RotateMethods {
         expected_num_authorities: &Variable,
     ) -> Variable;
 
-    /// Verifies the epoch end header is valid and that the new authority set commitment is correct.
+    /// Verifies the epoch end header has a valid encoding, and that the new_pubkeys match the header's
+    /// encoded pubkeys. The purpose of this function is to ensure that it is difficult for
+    /// a malicious prover to prove an incorrect new authority set from a correctly signed header by
+    /// adding constraints on the encoding of the new authority set.
     fn verify_epoch_end_header<
         const MAX_HEADER_SIZE: usize,
         const MAX_AUTHORITY_SET_SIZE: usize,
@@ -41,7 +46,6 @@ pub trait RotateMethods {
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
-        expected_new_authority_set_hash: &Bytes32Variable,
     );
 
     // Verify the justification from the current authority set on the epoch end header and extract
@@ -66,7 +70,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
     ) {
         // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
-        // Skip 1 unknown byte.
+        // Skip 1 byte.
 
         // Verify subarray[1] is 0x04 (Consensus Flag = 4u32).
         let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
@@ -82,7 +86,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             consensus_id_bytes,
         );
 
-        // Skip 2 unknown bytes.
+        // Skip 2 bytes.
 
         // Verify subarray[8] is 0x01, denoting a ScheduledChange.
         let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
@@ -129,7 +133,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         num_authorities: &Variable,
         start_position: &Variable,
         new_pubkeys: &ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
-        expected_new_authority_set_hash: &Bytes32Variable,
     ) {
         let false_v = self._false();
         let true_v = self._true();
@@ -223,14 +226,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             let delay_check = self.or(delay_match, not_at_end);
             self.assert_is_equal(delay_check, true_v);
         }
-
-        // Verify the new authority set commitment.
-        let computed_new_authority_set_hash =
-            self.compute_authority_set_commitment(*num_authorities, new_pubkeys);
-        self.assert_is_equal(
-            computed_new_authority_set_hash,
-            *expected_new_authority_set_hash,
-        );
     }
 
     fn rotate<
@@ -255,16 +250,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let target_header_hash = self
             .hash_encoded_header::<MAX_HEADER_SIZE, MAX_HEADER_CHUNK_SIZE>(&rotate.target_header);
 
-        // Verify the epoch end header and the new authority set are valid.
-        self.verify_epoch_end_header::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
-            &rotate.target_header,
-            target_header_hash,
-            &rotate.target_header_num_authorities,
-            &rotate.next_authority_set_start_position,
-            &rotate.new_pubkeys,
-            &rotate.expected_new_authority_set_hash,
-        );
-
         // Verify the justification from the current authority set on the epoch end header.
         self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
             epoch_end_block_number,
@@ -273,7 +258,22 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             current_authority_set_hash,
         );
 
-        rotate.expected_new_authority_set_hash
+        // Verify the epoch end header and the new authority set are valid.
+        self.verify_epoch_end_header::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+            &rotate.target_header,
+            target_header_hash,
+            &rotate.target_header_num_authorities,
+            &rotate.next_authority_set_start_position,
+            &rotate.new_pubkeys,
+        );
+
+        // Compute the authority set commitment of the new authority set.
+        // Note: The order of the validators in the authority set commitment matches the order of
+        // the encoded validator data in the epoch end header.
+        self.compute_authority_set_commitment(
+            rotate.target_header_num_authorities,
+            &rotate.new_pubkeys,
+        )
     }
 }
 
@@ -382,7 +382,6 @@ pub mod tests {
             &num_authorities,
             &start_position,
             &new_pubkeys,
-            &expected_new_authority_set_hash,
         );
 
         let circuit = builder.build();
@@ -435,7 +434,6 @@ pub mod tests {
             &num_authorities,
             &start_position,
             &new_pubkeys,
-            &expected_new_authority_set_hash,
         );
 
         let circuit = builder.build();

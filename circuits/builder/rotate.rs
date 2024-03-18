@@ -268,6 +268,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
 
         // Compute the authority set commitment of the new authority set.
+        // Note: The order of the validators in the authority set commitment matches the order of
+        // the encoded validator data in the epoch end header.
         self.compute_authority_set_commitment(
             rotate.target_header_num_authorities,
             &rotate.new_pubkeys,

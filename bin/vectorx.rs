@@ -408,7 +408,7 @@ impl VectorXOperator {
             );
             let block_to_request = max_block - (max_block % block_interval);
 
-            if avail_chain_latest_block_nb > block_to_request {
+            if block_to_request > contract_latest_block_nb {
                 info!("Attempting to step to block: {}", block_to_request);
                 self.find_and_request_step(block_to_request).await;
             }

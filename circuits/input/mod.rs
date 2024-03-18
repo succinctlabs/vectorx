@@ -913,7 +913,7 @@ impl RpcDataFetcher {
             padded_pubkeys.push(CompressedEdwardsY::from_slice(&DUMMY_PUBLIC_KEY).unwrap());
         }
 
-        // 1 unknown, 1 consensus id, 4 consensus engine id, 2 unknown bytes,
+        // skip 1 byte, 1 consensus id, 4 consensus engine id, skip 2 bytes,
         // 1 scheduled change, variable length compact encoding of the number of authorities.
         let prefix_length = BASE_PREFIX_LENGTH + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.

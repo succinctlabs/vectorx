@@ -70,7 +70,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
     ) {
         // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
-        // Skip 1 unknown byte.
+        // Skip 1 byte.
 
         // Verify subarray[1] is 0x04 (Consensus Flag = 4u32).
         let consensus_enum_flag = self.constant::<ByteVariable>(4u8);
@@ -86,7 +86,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             consensus_id_bytes,
         );
 
-        // Skip 2 unknown bytes.
+        // Skip 2 bytes.
 
         // Verify subarray[8] is 0x01, denoting a ScheduledChange.
         let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);

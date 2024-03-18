@@ -9,6 +9,9 @@ import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
 contract VectorX is IVectorX, TimelockedUpgradeable {
+    /// @notice Indicator of if the contract is frozen.
+    bool public frozen;
+
     /// @notice The address of the gateway contract.
     address public gateway;
 
@@ -20,9 +23,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
     /// @notice The function for requesting a rotate.
     bytes32 public rotateFunctionId;
-
-    /// @notice The maximum header range that can be requested.
-    uint32 public constant MAX_HEADER_RANGE = 256;
 
     /// @notice Maps block height to the header hash of the block.
     mapping(uint32 => bytes32) public blockHeightToHeaderHash;
@@ -38,9 +38,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
-    /// @notice Indicator of if the contract is frozen.
-    bool public frozen;
-
     struct InitParameters {
         address guardian;
         address gateway;
@@ -53,16 +50,12 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     }
 
     function VERSION() external pure override returns (string memory) {
-        return "0.1.1";
+        return "0.1.2";
     }
 
     /// @dev Initializes the contract.
     /// @param _params The initialization parameters for the contract.
     function initialize(InitParameters calldata _params) external initializer {
-        __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
-
-        frozen = false;
-
         gateway = _params.gateway;
 
         blockHeightToHeaderHash[_params.height] = _params.header;
@@ -71,6 +64,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         rotateFunctionId = _params.rotateFunctionId;
         headerRangeFunctionId = _params.headerRangeFunctionId;
+
+        __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
     }
 
     /// @notice Update the freeze parameter.
@@ -148,7 +143,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice Request a header update and data commitment from range (latestBlock, requestedBlock].
     /// @param _authoritySetId The authority set id of the header range (latestBlock, requestedBlock].
     /// @param _requestedBlock The block height of the requested block.
-    /// @dev The trusted block and requested block must have the same authority id.
+    /// @dev The trusted block and requested block must have the same authority id. If the target
+    /// block is greater than the max batch size of the circuit, the proof will fail to generate.
     function requestHeaderRange(
         uint64 _authoritySetId,
         uint32 _requestedBlock
@@ -164,9 +160,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        require(_requestedBlock > latestBlock);
-        require(_requestedBlock - latestBlock <= MAX_HEADER_RANGE);
-        // Note: This is needed to prevent a long-range attack on the light client.
         require(_requestedBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
@@ -190,6 +183,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             data,
             500000
         );
+
         emit HeaderRangeRequested(
             latestBlock,
             trustedHeader,
@@ -202,7 +196,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice Add target header hash, and data + state commitments for (latestBlock, targetBlock].
     /// @param _authoritySetId The authority set id of the header range (latestBlock, targetBlock].
     /// @param _targetBlock The block height of the target block.
-    /// @dev The trusted block and requested block must have the same authority set id.
+    /// @dev The trusted block and requested block must have the same authority set id. If the target
+    /// block is greater than the max batch size of the circuit, the proof will fail to generate.
     function commitHeaderRange(
         uint64 _authoritySetId,
         uint32 _targetBlock
@@ -220,8 +215,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        require(_targetBlock - latestBlock <= MAX_HEADER_RANGE);
-        // Note: This is needed to prevent a long-range attack on the light client.
         require(_targetBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
@@ -297,6 +290,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             data,
             500000
         );
+
         emit RotateRequested(_currentAuthoritySetId, currentAuthoritySetHash);
     }
 

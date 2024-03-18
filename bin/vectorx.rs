@@ -214,7 +214,7 @@ impl VectorXOperator {
             .last_justified_block(current_authority_set_id)
             .await;
 
-        // If this is the last justified block, check for step with next authority set.
+        // If this is the last justified block, check for header range with next authority set.
         let mut request_authority_set_id = current_authority_set_id;
         if header_range_contract_data.current_block == last_justified_block {
             let next_authority_set_id = current_authority_set_id + 1;

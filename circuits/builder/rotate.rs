@@ -246,6 +246,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let target_header_hash = self.hash_encoded_header::<MAX_HEADER_SIZE>(&rotate.target_header);
 
         // Verify the justification from the current authority set on the epoch end header.
+        // Note: current_authority_set_id and current_authority_set_hash are trusted at this point.
         self.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
             rotate.epoch_end_block_number,
             target_header_hash,
@@ -254,6 +255,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
 
         // Verify the epoch end header and the new authority set are valid.
+        // Note: The target_header and target_header_hash are trusted at this point.
         self.verify_epoch_end_header::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
             &rotate.target_header,
             target_header_hash,
@@ -262,9 +264,9 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             &rotate.new_pubkeys,
         );
 
-        // Compute the authority set commitment of the new authority set.
-        // Note: The order of the validators in the authority set commitment matches the order of
-        // the encoded validator data in the epoch end header.
+        // Compute the authority set commitment of the new authority set. The order of the validators
+        // in the authority set commitment matches the order of the encoded validator data in the epoch end header.
+        // Note: target_header_num_authorities and next_authority_set_start_position are trusted at this point.
         self.compute_authority_set_commitment(
             rotate.target_header_num_authorities,
             &rotate.new_pubkeys,

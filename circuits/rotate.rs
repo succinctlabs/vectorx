@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use ethers::types::H256;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -52,9 +51,6 @@ impl<
             next_authority_set_start_position: L::Field::from_canonical_usize(
                 rotate_data.start_position,
             ),
-            expected_new_authority_set_hash: H256::from_slice(
-                rotate_data.new_authority_set_hash.as_slice(),
-            ),
             new_pubkeys: rotate_data.padded_pubkeys,
         };
 
@@ -96,15 +92,15 @@ impl<
         let rotate_var =
             output_stream.read::<RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        let expected_new_authority_set_hash = rotate_var.expected_new_authority_set_hash;
-        builder.rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
-            authority_set_id,
-            authority_set_hash,
-            rotate_var,
-        );
+        let new_authority_set_hash = builder
+            .rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+                authority_set_id,
+                authority_set_hash,
+                rotate_var,
+            );
 
         // Write the hash of the new authority set to the output.
-        builder.evm_write::<Bytes32Variable>(expected_new_authority_set_hash);
+        builder.evm_write::<Bytes32Variable>(new_authority_set_hash);
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(
@@ -123,6 +119,7 @@ impl<
 mod tests {
     use std::env;
 
+    use ethers::types::H256;
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;

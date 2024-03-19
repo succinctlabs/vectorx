@@ -96,15 +96,15 @@ impl<
         let rotate_var =
             output_stream.read::<RotateVariable<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>>(builder);
 
-        let expected_new_authority_set_hash = rotate_var.expected_new_authority_set_hash;
-        builder.rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
-            authority_set_id,
-            authority_set_hash,
-            rotate_var,
-        );
+        let new_authority_set_hash = builder
+            .rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE, MAX_SUBARRAY_SIZE>(
+                authority_set_id,
+                authority_set_hash,
+                rotate_var,
+            );
 
         // Write the hash of the new authority set to the output.
-        builder.evm_write::<Bytes32Variable>(expected_new_authority_set_hash);
+        builder.evm_write::<Bytes32Variable>(new_authority_set_hash);
     }
 
     fn register_generators<L: PlonkParameters<D>, const D: usize>(

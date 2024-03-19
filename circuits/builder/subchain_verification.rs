@@ -146,7 +146,8 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         map_ctx.global_end_block,
                         batch_start_block,
                     );
-                    let mut curr_block_disabled = is_batch_disabled;
+                    // Indicates whether to noop over the block.
+                    let mut curr_block_noop = is_batch_disabled;
 
                     // The number of enabled leaves in the merkle tree. All leaves after global_end_block
                     // are empty leaves.
@@ -178,32 +179,32 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                             let header_correctly_linked =
                                 builder.and(hashes_linked, nums_sequential);
 
-                            // If this block is not disabled, the headers must be correctly linked.
-                            let link_check = builder.or(curr_block_disabled, header_correctly_linked);
+                            // If this block is not a no-op, the headers must be correctly linked.
+                            let link_check = builder.or(curr_block_noop, header_correctly_linked);
                             builder.assert_is_equal(link_check, true_const);
                         }
 
-                        // If this is not the final block, update end_block_num, end_header_hash and num_headers.
+                        // If this is not a no-op block, update end_block_num, end_header_hash and num_headers.
                         end_block_num = builder.select(
-                            curr_block_disabled,
+                            curr_block_noop,
                             end_block_num,
                             header_variable.block_number,
                         );
-                        end_header_hash = builder.select(curr_block_disabled, end_header_hash, hash);
+                        end_header_hash = builder.select(curr_block_noop, end_header_hash, hash);
 
-                        let num_headers_increment = builder.select(curr_block_disabled, zero, one);
+                        let num_headers_increment = builder.select(curr_block_noop, zero, one);
                         num_headers = builder.add(num_headers, num_headers_increment);
 
                         // Increment the number of enabled leaves if the header is not disabled.
-                        let val = builder.select(curr_block_disabled, zero, one);
+                        let val = builder.select(curr_block_noop, zero, one);
                         nb_enabled_leaves = builder.add(
                             nb_enabled_leaves,
                             val,
                         );
 
-                        // If this is the target block, set curr_block_disabled to true.
+                        // If this is the target block, set curr_block_noop to true.
                         let is_final_block = builder.is_equal(header_variable.block_number, map_ctx.global_end_block);
-                        curr_block_disabled = builder.or(curr_block_disabled, is_final_block);
+                        curr_block_noop = builder.or(curr_block_noop, is_final_block);
                     }
 
                     // Either the batch is disabled OR the first block's block number is batch_start_block.
@@ -213,7 +214,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                     // Either the last block is disabled OR the last block's block number in the batch is batch_end_block.
                     let last_block_nb_check = builder.is_equal(end_block_num, batch_end_block);
-                    let last_block_nb_check = builder.or(last_block_nb_check, curr_block_disabled);
+                    let last_block_nb_check = builder.or(last_block_nb_check, curr_block_noop);
                     builder.assert_is_equal(last_block_nb_check, true_const);
 
                     // Calculate the state and data merkle roots.

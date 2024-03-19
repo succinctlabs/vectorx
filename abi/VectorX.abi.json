@@ -27,19 +27,6 @@
     },
     {
         "type": "function",
-        "name": "MAX_HEADER_RANGE",
-        "inputs": [],
-        "outputs": [
-            {
-                "name": "",
-                "type": "uint32",
-                "internalType": "uint32"
-            }
-        ],
-        "stateMutability": "view"
-    },
-    {
-        "type": "function",
         "name": "TIMELOCK_ROLE",
         "inputs": [],
         "outputs": [

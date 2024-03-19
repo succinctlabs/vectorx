@@ -113,7 +113,7 @@ pub trait GrandpaJustificationVerifier {
     ///     1) Authority set commitment matches the authority set.
     ///     2) Specified precommit message matches the block #, authority set id, and block hash.
     ///     3) Signatures on the precommit message are valid from each validator marked as signed.
-    ///     4) At least 2/3 of the validators have signed the precommit message.
+    ///     4) More than 2/3 of the validators have signed the precommit message.
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
@@ -191,7 +191,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
     ///     1) Authority set commitment matches the authority set.
     ///     2) Specified precommit message matches the block #, authority set id, and block hash.
     ///     3) Signatures on the precommit message are valid from each validator marked as signed.
-    ///     4) At least 2/3 of the validators have signed the precommit message.
+    ///     4) More than 2/3 of the validators have signed the precommit message.
     fn verify_simple_justification<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         block_number: U32Variable,
@@ -242,7 +242,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             justification.pubkeys,
         );
 
-        // Verify at least 2/3 of the validators have signed the message.
+        // Verify more than 2/3 of the validators have signed the message.
         let two_v = self.constant::<U32Variable>(2u32);
         let three_v = self.constant::<U32Variable>(3u32);
 

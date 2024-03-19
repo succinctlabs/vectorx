@@ -110,11 +110,13 @@ async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
             pubkey_to_signature.insert(pubkey.to_vec(), signature.to_vec());
         }
 
-        // Check that at least 2/3 of the validators signed the justification.
+        // Check that more than 2/3 of the validators signed the justification.
         // Note: Assumes the validator set have equal voting power.
         let authorities = fetcher.get_authorities(header.number - 1).await;
         let num_authorities = authorities.len();
-        if 3 * pubkeys.len() < num_authorities * 2 {
+        let signed_count = pubkeys.len();
+        let required_signatures = (num_authorities * 2) / 3;
+        if signed_count <= required_signatures {
             continue;
         }
 

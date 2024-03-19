@@ -45,6 +45,7 @@ impl<
         );
 
         // Note: target_header_hash and target_block are trusted at this point.
+        // Verify that there is a valid justification on target_header_hash by the authority set at authority_set_id.
         builder.verify_simple_justification::<MAX_AUTHORITY_SET_SIZE>(
             target_block,
             subchain_output.target_header_hash,

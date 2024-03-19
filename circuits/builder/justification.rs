@@ -84,9 +84,9 @@ impl<const NUM_AUTHORITIES: usize, L: PlonkParameters<D>, const D: usize> AsyncH
 }
 
 pub trait GrandpaJustificationVerifier {
-    /// Compute the authority set commitment of an authority set. This is the chained hash of the
-    /// first num_active_authorities public keys. The ordering of the authorities is the same as in
-    /// the encoded authority set in the previous epoch's end block.
+    /// Compute the authority set commitment of an authority set. This is the chained SHA256 hash of
+    /// the first num_active_authorities public keys. The ordering of the authorities is the same as
+    /// in the encoded authority set in the previous epoch's end block.
     ///
     /// Specifically for a chained hash of 3 public keys, the chained hash takes the form:
     ///     SHA256(SHA256(SHA256(pubkey[0]) || pubkey[1]) || pubkey[2])...
@@ -96,7 +96,7 @@ pub trait GrandpaJustificationVerifier {
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     ) -> Bytes32Variable;
 
-    /// Verify the number of validators that signed is greater than to the threshold.
+    /// Verify the number of validators that signed is greater than the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: U32Variable,

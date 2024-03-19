@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use ethers::types::H256;
 use plonky2x::backend::circuit::Circuit;
 use plonky2x::frontend::hint::asynchronous::hint::AsyncHint;
 use plonky2x::frontend::uint::uint64::U64Variable;
@@ -51,9 +50,6 @@ impl<
             ),
             next_authority_set_start_position: L::Field::from_canonical_usize(
                 rotate_data.start_position,
-            ),
-            expected_new_authority_set_hash: H256::from_slice(
-                rotate_data.new_authority_set_hash.as_slice(),
             ),
             new_pubkeys: rotate_data.padded_pubkeys,
         };
@@ -123,6 +119,7 @@ impl<
 mod tests {
     use std::env;
 
+    use ethers::types::H256;
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;

@@ -53,7 +53,6 @@ pub struct RotateVariable<const MAX_HEADER_SIZE: usize, const MAX_AUTHORITY_SET_
     pub target_header_num_authorities: Variable,
     pub next_authority_set_start_position: Variable,
     pub new_pubkeys: ArrayVariable<CompressedEdwardsYVariable, MAX_AUTHORITY_SET_SIZE>,
-    pub expected_new_authority_set_hash: Bytes32Variable,
 }
 
 #[derive(Clone, Debug, CircuitVariable)]

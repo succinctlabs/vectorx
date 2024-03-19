@@ -96,7 +96,7 @@ pub trait GrandpaJustificationVerifier {
         authority_set_signers: &ArrayVariable<CompressedEdwardsYVariable, MAX_NUM_AUTHORITIES>,
     ) -> Bytes32Variable;
 
-    /// Verify the number of validators that signed is greater than the threshold.
+    /// Verify the number of validators that signed is > the threshold.
     fn verify_voting_threshold<const MAX_NUM_AUTHORITIES: usize>(
         &mut self,
         num_active_authorities: U32Variable,
@@ -246,7 +246,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
         let two_v = self.constant::<U32Variable>(2u32);
         let three_v = self.constant::<U32Variable>(3u32);
 
-        // Note: All validators have a voting power of 1 in Avail, so the threshold is 2/3 of the total number of validators.
+        // Note: All validators have a voting power of 1 in Avail, verify > 2/3 of the validators have signed.
         // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/frame/grandpa/src/lib.rs#L585
         self.verify_voting_threshold(
             justification.num_authorities,

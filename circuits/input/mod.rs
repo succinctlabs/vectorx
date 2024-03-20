@@ -7,11 +7,10 @@ use std::time::Duration;
 
 use alloy_sol_types::{sol, SolType};
 use anyhow::Error;
-use avail_subxt::avail::Client;
+use avail_subxt::api;
+use avail_subxt::avail_client::AvailClient;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
-use avail_subxt::subxt_rpc::RpcParams;
-use avail_subxt::{api, build_client};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
@@ -251,9 +250,8 @@ pub fn decode_precommit(precommit: Vec<u8>) -> (H256, u32, u64, u64) {
     )
 }
 
-#[derive(Clone)]
 pub struct RpcDataFetcher {
-    pub client: Client,
+    pub client: AvailClient,
     pub avail_url: String,
     pub avail_chain_id: String,
     pub redis_client: RedisClient,
@@ -268,10 +266,10 @@ impl RpcDataFetcher {
         dotenv::dotenv().ok();
 
         let url = env::var("AVAIL_URL").expect("AVAIL_URL must be set");
-        let client = build_client(url.as_str(), false).await.unwrap();
+        let client = AvailClient::new(url.as_str()).await.unwrap();
         let redis_client = RedisClient::new().await;
         RpcDataFetcher {
-            client: client.0,
+            client,
             avail_url: url,
             avail_chain_id: env::var("AVAIL_CHAIN_ID").expect("AVAIL_CHAIN_ID must be set"),
             redis_client,
@@ -281,11 +279,11 @@ impl RpcDataFetcher {
 
     async fn refresh_ws_connection(&mut self) -> Result<(), String> {
         for _ in 0..Self::MAX_RECONNECT_ATTEMPTS {
-            match self.client.rpc().system_health().await {
+            match self.client.legacy_rpc().system_health().await {
                 Ok(_) => return Ok(()),
-                Err(_) => match build_client(self.avail_url.as_str(), false).await {
+                Err(_) => match AvailClient::new(self.avail_url.as_str()).await {
                     Ok(new_client) => {
-                        self.client = new_client.0;
+                        self.client = new_client;
                         return Ok(());
                     }
                     Err(_) => {
@@ -416,8 +414,8 @@ impl RpcDataFetcher {
     pub async fn get_block_hash(&self, block_number: u32) -> H256 {
         let block_hash = self
             .client
-            .rpc()
-            .block_hash(Some(block_number.into()))
+            .legacy_rpc()
+            .chain_get_block_hash(Some(block_number.into()))
             .await;
         block_hash.unwrap().unwrap()
     }
@@ -524,7 +522,11 @@ impl RpcDataFetcher {
 
     pub async fn get_header(&self, block_number: u32) -> Header {
         let block_hash = self.get_block_hash(block_number).await;
-        let header_result = self.client.rpc().header(Some(block_hash)).await;
+        let header_result = self
+            .client
+            .legacy_rpc()
+            .chain_get_header(Some(block_hash))
+            .await;
         header_result.unwrap().unwrap()
     }
 
@@ -532,8 +534,17 @@ impl RpcDataFetcher {
         self.refresh_ws_connection()
             .await
             .expect("Failed to establish connection to Avail WS.");
-        let head_block_hash = self.client.rpc().finalized_head().await.unwrap();
-        let header = self.client.rpc().header(Some(head_block_hash)).await;
+        let head_block_hash = self
+            .client
+            .legacy_rpc()
+            .chain_get_finalized_head()
+            .await
+            .unwrap();
+        let header = self
+            .client
+            .legacy_rpc()
+            .chain_get_header(Some(head_block_hash))
+            .await;
         header.unwrap().unwrap()
     }
 
@@ -1174,10 +1185,10 @@ mod tests {
         // Get the chain ID.
         let data_fetcher = RpcDataFetcher::new().await;
 
-        let chain = data_fetcher.client.rpc().system_chain().await;
+        let chain = data_fetcher.client.legacy_rpc().system_chain().await;
         println!("chain {:?}", chain);
 
-        let chain = data_fetcher.client.rpc().system_properties().await;
+        let chain = data_fetcher.client.legacy_rpc().system_properties().await;
         println!("chain {:?}", chain);
     }
 }

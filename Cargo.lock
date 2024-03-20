@@ -1277,7 +1277,7 @@ version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa50868b64a9a6fda9d593ce778849ea8715cd2a3d2cc17ffdb4a2f2f2f1961d"
 dependencies = [
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
 ]
 
 [[package]]
@@ -2844,7 +2844,7 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
  "sp-api",
  "sp-arithmetic",
  "sp-core",
@@ -4596,7 +4596,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "redox_syscall",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
  "windows-targets 0.48.5",
 ]
 
@@ -5552,15 +5552,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rs_merkle"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b241d2e59b74ef9e98d94c78c47623d04c8392abaf82014dfd372a16041128f"
-dependencies = [
- "sha2 0.10.8",
-]
-
-[[package]]
 name = "ruint"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5846,7 +5837,7 @@ dependencies = [
  "scale-bits",
  "scale-decode-derive",
  "scale-info",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
 ]
 
 [[package]]
@@ -5874,7 +5865,7 @@ dependencies = [
  "scale-bits",
  "scale-encode-derive",
  "scale-info",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
 ]
 
 [[package]]
@@ -6420,9 +6411,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.13.1"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6ecd384b10a64542d77071bd64bd7b231f4ed5940fba55e98c3de13824cf3d7"
+checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "smol"
@@ -6488,7 +6479,7 @@ dependencies = [
  "sha3",
  "siphasher 1.0.1",
  "slab",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
  "soketto",
  "twox-hash",
  "wasmi",
@@ -6724,7 +6715,7 @@ dependencies = [
 [[package]]
 name = "sp-crypto-ec-utils"
 version = "0.10.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "ark-bls12-377",
  "ark-bls12-377-ext",
@@ -6777,7 +6768,7 @@ dependencies = [
 [[package]]
 name = "sp-debug-derive"
 version = "14.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6798,7 +6789,7 @@ dependencies = [
 [[package]]
 name = "sp-externalities"
 version = "0.25.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "environmental",
  "parity-scale-codec",
@@ -6933,7 +6924,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface"
 version = "24.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "bytes",
  "impl-trait-for-tuples",
@@ -6965,7 +6956,7 @@ dependencies = [
 [[package]]
 name = "sp-runtime-interface-proc-macro"
 version = "17.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "Inflector",
  "expander",
@@ -6999,7 +6990,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot",
  "rand 0.8.5",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
  "sp-core",
  "sp-externalities 0.25.0 (git+https://github.com/availproject/polkadot-sdk.git?tag=polkadot-1.7.1-patch-2)",
  "sp-panic-handler",
@@ -7018,7 +7009,7 @@ source = "git+https://github.com/availproject/polkadot-sdk.git?tag=polkadot-1.7.
 [[package]]
 name = "sp-std"
 version = "14.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 
 [[package]]
 name = "sp-storage"
@@ -7036,7 +7027,7 @@ dependencies = [
 [[package]]
 name = "sp-storage"
 version = "19.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "impl-serde",
  "parity-scale-codec",
@@ -7060,7 +7051,7 @@ dependencies = [
 [[package]]
 name = "sp-tracing"
 version = "16.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "parity-scale-codec",
  "tracing",
@@ -7136,7 +7127,7 @@ dependencies = [
 [[package]]
 name = "sp-wasm-interface"
 version = "20.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk#b74353d3e94ca685e953f5138f0676214140dcdd"
+source = "git+https://github.com/paritytech/polkadot-sdk#1da8a6b88f530b467394a9ead8f3042ebdc50a36"
 dependencies = [
  "anyhow",
  "impl-trait-for-tuples",
@@ -7154,7 +7145,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
  "sp-arithmetic",
  "sp-debug-derive 14.0.0 (git+https://github.com/availproject/polkadot-sdk.git?tag=polkadot-1.7.1-patch-2)",
  "sp-std 14.0.0 (git+https://github.com/availproject/polkadot-sdk.git?tag=polkadot-1.7.1-patch-2)",
@@ -7966,7 +7957,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sharded-slab",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
  "thread_local",
  "tracing",
  "tracing-core",
@@ -7984,7 +7975,7 @@ dependencies = [
  "hashbrown 0.13.2",
  "log",
  "rustc-hex",
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
 ]
 
 [[package]]
@@ -8228,13 +8219,13 @@ dependencies = [
  "primitive-types 0.12.2",
  "redis",
  "reqwest",
- "rs_merkle",
  "rustx",
  "serde",
  "serde_json",
  "sha2 0.10.8",
  "sha256",
  "sp-core",
+ "subxt",
  "succinct-client",
  "tokio",
 ]
@@ -8381,7 +8372,7 @@ version = "0.31.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77a8281d1d660cdf54c76a3efa9ddd0c270cada1383a995db3ccb43d166456c7"
 dependencies = [
- "smallvec 1.13.1",
+ "smallvec 1.13.2",
  "spin 0.9.8",
  "wasmi_arena",
  "wasmi_core",

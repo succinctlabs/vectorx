@@ -21,6 +21,7 @@ use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMM
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::{Digest, Sha256};
+use subxt::backend::rpc::RpcParams;
 use tokio::time::sleep;
 
 use self::types::{

@@ -160,16 +160,15 @@ impl VectorXOperator {
     }
 
     async fn find_and_request_rotate(&mut self) {
-        let mut data_fetcher = self.get_data_fetcher();
-
         let rotate_contract_data = self.get_contract_data_for_rotate().await;
 
-        let head = data_fetcher.get_head().await;
+        let head = self.data_fetcher.get_head().await;
         let head_block = head.number;
-        let head_authority_set_id = data_fetcher.get_authority_set_id(head_block - 1).await;
+        let head_authority_set_id = self.data_fetcher.get_authority_set_id(head_block - 1).await;
 
         // The current authority set id is the authority set id of the block before the current block.
-        let current_authority_set_id = data_fetcher
+        let current_authority_set_id = self
+            .data_fetcher
             .get_authority_set_id(rotate_contract_data.current_block - 1)
             .await;
 
@@ -200,17 +199,17 @@ impl VectorXOperator {
     }
 
     async fn find_and_request_header_range(&mut self, max_block_to_step_to: u32) {
-        let mut data_fetcher = self.get_data_fetcher();
-
         let header_range_contract_data = self.get_contract_data_for_header_range().await;
 
         // The current authority set id is the authority set id of the block before the current block.
-        let current_authority_set_id = data_fetcher
+        let current_authority_set_id = self
+            .data_fetcher
             .get_authority_set_id(header_range_contract_data.current_block - 1)
             .await;
 
         // Get the last justified block by the current authority set id.
-        let last_justified_block = data_fetcher
+        let last_justified_block = self
+            .data_fetcher
             .last_justified_block(current_authority_set_id)
             .await;
 
@@ -353,10 +352,6 @@ impl VectorXOperator {
 
     fn get_config(&mut self) -> VectorXConfig {
         self.config.clone()
-    }
-
-    fn get_data_fetcher(&mut self) -> RpcDataFetcher {
-        self.data_fetcher.clone()
     }
 
     // If the authority_set_id is the current authority set, return the max_block_to_request. Else,

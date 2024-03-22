@@ -7,10 +7,10 @@ use std::time::Duration;
 
 use alloy_sol_types::{sol, SolType};
 use anyhow::Error;
-use avail_subxt::api;
 use avail_subxt::avail_client::AvailClient;
 use avail_subxt::config::substrate::DigestItem;
 use avail_subxt::primitives::Header;
+use avail_subxt::{api, RpcParams};
 use codec::{Compact, Decode, Encode};
 use ed25519_dalek::{PublicKey, Signature, Verifier};
 use ethers::types::H256;
@@ -21,9 +21,8 @@ use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMM
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::{Digest, Sha256};
-use tokio::time::sleep;
-use avail_subxt::RpcParams;
 use sp_core::ed25519;
+use tokio::time::sleep;
 
 use self::types::{
     CircuitJustification, EncodedFinalityProof, FinalityProof, GrandpaJustification,
@@ -577,55 +576,21 @@ impl RpcDataFetcher {
 
         // TODO use runtime api to access grandpa_authorities
         // https://github.com/paritytech/polkadot-sdk/commit/ebcf0a0f1cab2d43718ba96d26e5687f4d14580a
-        let grandpa_authorities =self.
-            client
-                .runtime_api()
-                .at(block_hash)
-                .call_raw::<Vec<(ed25519::Public, u64)>>("GrandpaApi_grandpa_authorities", None)
-                .await
-                .unwrap();
-
-        // let grandpa_authorities_bytes = self
-        //     .client
-        //     .storage()
-        //     .at(block_hash)
-        //     .fetch_raw(b":grandpa_authorities")
-        //     .await
-        //     .unwrap()
-        //     .unwrap();
-
-        // The grandpa_authorities_bytes is the following:
-        // V || X || <pub_key_compressed> || W || <pub_key_compressed> || W || ...
-        // V is a "Version" number (1u8), which in compact encoding will be 1 byte.
-        // X is the compact scale encoding of the number of authorities (1-2 bytes).
-        // <pub_key_compressed> is the compressed EdDDSA public key (32 bytes).
-        // W is the compact scale encoding of the weight (8 bytes long).
-        // Compact scale encoding reference: https://docs.substrate.io/reference/scale-codec/#fn-1
-
-        // If the number of authorities is <=63, the compact encoding of the number of authorities is 1 byte.
-        // If the number of authorities is >63 & < 2^14, the compact encoding of the number of authorities is 2 bytes.
-        // So, the offset is 2 if the number of authorities is <=63, and 3 if the number of authorities is >63.
-        // let offset = if grandpa_authorities_bytes.len() <= ((32 + 8) * 63) + 2 {
-        //     2
-        // } else {
-        //     3
-        // };
-
-        // Each encoded authority is 32 bytes for the public key, and 8 bytes for the weight, so
-        // the rest of the bytes should be a multiple of 40.
-        // assert!((grandpa_authorities_bytes.len() - offset) % (32 + 8) == 0);
-
-        // let pubkey_and_weight_bytes = &grandpa_authorities_bytes[offset..];
+        let grandpa_authorities = self
+            .client
+            .runtime_api()
+            .at(block_hash)
+            .call_raw::<Vec<(ed25519::Public, u64)>>("GrandpaApi_grandpa_authorities", None)
+            .await
+            .unwrap();
 
         let mut authorities: Vec<CompressedEdwardsY> = Vec::new();
         for (pub_key, weight) in grandpa_authorities {
-            // let pub_key = CompressedEdwardsY::from_slice(&authority_pubkey_weight[..32]).unwrap();
             authorities.push(CompressedEdwardsY(pub_key.0));
             let expected_weight = 1;
             // Assert the LE representation of the weight of each validator is 1.
             assert_eq!(
-                weight,
-                expected_weight,
+                weight, expected_weight,
                 "The weight of the authority is not 1!"
             );
         }

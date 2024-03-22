@@ -21,8 +21,9 @@ use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMM
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::{Digest, Sha256};
-use subxt::backend::rpc::RpcParams;
 use tokio::time::sleep;
+use avail_subxt::RpcParams;
+use sp_core::ed25519;
 
 use self::types::{
     CircuitJustification, EncodedFinalityProof, FinalityProof, GrandpaJustification,
@@ -574,14 +575,24 @@ impl RpcDataFetcher {
 
         let block_hash = self.get_block_hash(block_number).await;
 
-        let grandpa_authorities_bytes = self
-            .client
-            .storage()
-            .at(block_hash)
-            .fetch_raw(b":grandpa_authorities")
-            .await
-            .unwrap()
-            .unwrap();
+        // TODO use runtime api to access grandpa_authorities
+        // https://github.com/paritytech/polkadot-sdk/commit/ebcf0a0f1cab2d43718ba96d26e5687f4d14580a
+        let grandpa_authorities =self.
+            client
+                .runtime_api()
+                .at(block_hash)
+                .call_raw::<Vec<(ed25519::Public, u64)>>("GrandpaApi_grandpa_authorities", None)
+                .await
+                .unwrap();
+
+        // let grandpa_authorities_bytes = self
+        //     .client
+        //     .storage()
+        //     .at(block_hash)
+        //     .fetch_raw(b":grandpa_authorities")
+        //     .await
+        //     .unwrap()
+        //     .unwrap();
 
         // The grandpa_authorities_bytes is the following:
         // V || X || <pub_key_compressed> || W || <pub_key_compressed> || W || ...
@@ -594,28 +605,26 @@ impl RpcDataFetcher {
         // If the number of authorities is <=63, the compact encoding of the number of authorities is 1 byte.
         // If the number of authorities is >63 & < 2^14, the compact encoding of the number of authorities is 2 bytes.
         // So, the offset is 2 if the number of authorities is <=63, and 3 if the number of authorities is >63.
-        let offset = if grandpa_authorities_bytes.len() <= ((32 + 8) * 63) + 2 {
-            2
-        } else {
-            3
-        };
+        // let offset = if grandpa_authorities_bytes.len() <= ((32 + 8) * 63) + 2 {
+        //     2
+        // } else {
+        //     3
+        // };
 
         // Each encoded authority is 32 bytes for the public key, and 8 bytes for the weight, so
         // the rest of the bytes should be a multiple of 40.
-        assert!((grandpa_authorities_bytes.len() - offset) % (32 + 8) == 0);
+        // assert!((grandpa_authorities_bytes.len() - offset) % (32 + 8) == 0);
 
-        let pubkey_and_weight_bytes = &grandpa_authorities_bytes[offset..];
+        // let pubkey_and_weight_bytes = &grandpa_authorities_bytes[offset..];
 
         let mut authorities: Vec<CompressedEdwardsY> = Vec::new();
-        for authority_pubkey_weight in pubkey_and_weight_bytes.chunks(VALIDATOR_LENGTH) {
-            let pub_key = CompressedEdwardsY::from_slice(&authority_pubkey_weight[..32]).unwrap();
-            authorities.push(pub_key);
-
-            let expected_weight = [1, 0, 0, 0, 0, 0, 0, 0];
-
+        for (pub_key, weight) in grandpa_authorities {
+            // let pub_key = CompressedEdwardsY::from_slice(&authority_pubkey_weight[..32]).unwrap();
+            authorities.push(CompressedEdwardsY(pub_key.0));
+            let expected_weight = 1;
             // Assert the LE representation of the weight of each validator is 1.
             assert_eq!(
-                authority_pubkey_weight[32..40],
+                weight,
                 expected_weight,
                 "The weight of the authority is not 1!"
             );

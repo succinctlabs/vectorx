@@ -72,8 +72,7 @@ redis = { version = "0.23.3", features = [
 ] }
 
 dotenv = "0.15.0"
-subxt = "0.34"
-avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "1389a9b" }
+avail-subxt = { git = "https://github.com/availproject/avail.git", rev = "74cad74" }
 sp-core = { git = "https://github.com/availproject/polkadot-sdk.git", tag = "polkadot-1.7.1-patch-2", default-features = false }
 sha2 = { version = "0.10.8", default-features = false }
 codec = { package = "parity-scale-codec", version = "3", default-features = false, features = [

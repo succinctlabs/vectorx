@@ -38,6 +38,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ///     keccak256(abi.encode(startBlock, endBlock)).
     mapping(bytes32 => bytes32) public stateRootCommitments;
 
+    /// @notice Maps range hashes to the start block of the range. This allows us
+    ///     to know the block height of an attestation.
+    mapping(bytes32 => uint32) public rangeStartBlocks;
+
     struct InitParameters {
         address guardian;
         address gateway;
@@ -124,6 +128,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             bytes32 key = keccak256(abi.encode(_startBlocks[i], _endBlocks[i]));
             dataRootCommitments[key] = _dataRootCommitments[i];
             stateRootCommitments[key] = _stateRootCommitments[i];
+            rangeStartBlocks[key] = _startBlocks[i];
 
             blockHeightToHeaderHash[_endBlocks[i]] = _headerHashes[i];
 
@@ -242,6 +247,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 key = keccak256(abi.encode(latestBlock, _targetBlock));
         dataRootCommitments[key] = dataRootCommitment;
         stateRootCommitments[key] = stateRootCommitment;
+        rangeStartBlocks[key] = latestBlock;
 
         emit HeadUpdate(_targetBlock, targetHeaderHash);
 

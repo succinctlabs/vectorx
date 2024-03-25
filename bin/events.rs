@@ -72,7 +72,7 @@ async fn main() {
     env_logger::init();
 
     // List of Avail chains to index.
-    let chains = ["Couscous", "Goldberg"];
+    let chains = ["Couscous", "Goldberg", "Hex"];
 
     // For each Avail chain `chainName` to index, set the following environment variables:
     //  {chainName}_ETHEREUM_WS: An Ethereum WS for the chain the deployed VectorX contract is on.

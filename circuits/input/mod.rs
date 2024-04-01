@@ -574,8 +574,6 @@ impl RpcDataFetcher {
 
         let block_hash = self.get_block_hash(block_number).await;
 
-        // TODO use runtime api to access grandpa_authorities
-        // https://github.com/paritytech/polkadot-sdk/commit/ebcf0a0f1cab2d43718ba96d26e5687f4d14580a
         let grandpa_authorities = self
             .client
             .runtime_api()

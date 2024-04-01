@@ -71,7 +71,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         };
 
         // The number of map jobs is the smallest power of 2 that is >= to MAX_NUM_HEADERS / HEADERS_PER_MAP.
-        let mut num_map_jobs = (MAX_NUM_HEADERS / HEADERS_PER_MAP).next_power_of_two();
+        let num_map_jobs = (MAX_NUM_HEADERS / HEADERS_PER_MAP).next_power_of_two();
 
         let relative_block_nums =
             (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();

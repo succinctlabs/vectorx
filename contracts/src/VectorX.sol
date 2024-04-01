@@ -322,13 +322,6 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        bytes32 nextAuthoritySetHash = authoritySetIdToHash[
-            _currentAuthoritySetId + 1
-        ];
-        if (nextAuthoritySetHash != bytes32(0)) {
-            revert NextAuthoritySetExists();
-        }
-
         bytes memory input = abi.encodePacked(
             _currentAuthoritySetId,
             currentAuthoritySetHash

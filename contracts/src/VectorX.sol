@@ -18,6 +18,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice The latest block that has been committed.
     uint32 public latestBlock;
 
+    /// @notice The current authority set id. When a header range is committed, the current authority set id
+    ///     is updated to the authority set id of the header range.
+    uint64 public currentAuthoritySetId;
+
     /// @notice The function for requesting a header range.
     bytes32 public headerRangeFunctionId;
 
@@ -60,6 +64,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         blockHeightToHeaderHash[_params.height] = _params.header;
         authoritySetIdToHash[_params.authoritySetId] = _params.authoritySetHash;
+        currentAuthoritySetId = _params.authoritySetId;
         latestBlock = _params.height;
 
         rotateFunctionId = _params.rotateFunctionId;
@@ -215,6 +220,14 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
+        if (_authoritySetId < currentAuthoritySetId) {
+            revert OldAuthoritySetId();
+        }
+
+        if (_authoritySetId > currentAuthoritySetId) {
+            currentAuthoritySetId = _authoritySetId;
+        }
+
         require(_targetBlock > latestBlock);
 
         bytes memory input = abi.encodePacked(
@@ -256,31 +269,31 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         latestBlock = _targetBlock;
     }
 
-    /// @notice Requests a rotate to the next authority set.
-    /// @param _currentAuthoritySetId The authority set id of the current authority set.
-    function requestRotate(uint64 _currentAuthoritySetId) external payable {
-        bytes32 currentAuthoritySetHash = authoritySetIdToHash[
-            _currentAuthoritySetId
+    /// @notice Requests a rotate to a next authority set after the latest authority set in the contract.
+    /// @param _latestAuthoritySetId The authority set id of the latest authority set stored in the contract.
+    function requestRotate(uint64 _latestAuthoritySetId) external payable {
+        bytes32 latestAuthoritySetHash = authoritySetIdToHash[
+            _latestAuthoritySetId
         ];
-        if (currentAuthoritySetHash == bytes32(0)) {
+        if (latestAuthoritySetHash == bytes32(0)) {
             revert AuthoritySetNotFound();
         }
 
-        bytes32 nextAuthoritySetHash = authoritySetIdToHash[
-            _currentAuthoritySetId + 1
+        bytes32 newAuthoritySetHash = authoritySetIdToHash[
+            _latestAuthoritySetId + 1
         ];
-        if (nextAuthoritySetHash != bytes32(0)) {
+        if (newAuthoritySetHash != bytes32(0)) {
             revert NextAuthoritySetExists();
         }
 
         bytes memory input = abi.encodePacked(
-            _currentAuthoritySetId,
-            currentAuthoritySetHash
+            latestAuthoritySetHash,
+            _latestAuthoritySetId
         );
 
         bytes memory data = abi.encodeWithSelector(
             this.rotate.selector,
-            _currentAuthoritySetId
+            _latestAuthoritySetId
         );
 
         ISuccinctGateway(gateway).requestCall{value: msg.value}(
@@ -291,7 +304,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             500000
         );
 
-        emit RotateRequested(_currentAuthoritySetId, currentAuthoritySetHash);
+        emit RotateRequested(_latestAuthoritySetId, latestAuthoritySetHash);
     }
 
     /// @notice Adds the authority set hash for the next authority set id.

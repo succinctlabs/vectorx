@@ -856,9 +856,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
+name = "avail-base"
+version = "0.1.0"
+source = "git+https://github.com/availproject/avail.git?tag=v2.0.0.0-rc4#508593d59490ec3ea1873e3fce7f28243a1f1179"
+dependencies = [
+ "avail-core",
+ "binary-merkle-tree",
+ "derive_more",
+ "frame-support",
+ "itertools 0.10.5",
+ "log",
+ "once_cell",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-runtime-interface 24.0.0 (git+https://github.com/availproject/polkadot-sdk.git?tag=polkadot-1.7.1-patch-2)",
+ "sp-std 14.0.0 (git+https://github.com/availproject/polkadot-sdk.git?tag=polkadot-1.7.1-patch-2)",
+ "substrate-prometheus-endpoint",
+]
+
+[[package]]
 name = "avail-core"
 version = "0.6.0"
-source = "git+https://github.com/availproject/avail-core?tag=node-v2.0.0.0-rc#56b0d5c1e0b3ae4b91222d584f6e7975ff5f5e62"
+source = "git+https://github.com/availproject/avail-core?branch=main#faafcab4828ca0fe2d37ed62e9d1b1ff74d830d6"
 dependencies = [
  "binary-merkle-tree",
  "bounded-collections",
@@ -886,9 +908,10 @@ dependencies = [
 [[package]]
 name = "avail-subxt"
 version = "0.5.0"
-source = "git+https://github.com/availproject/avail.git?rev=74cad74#74cad743cb068b8b380648cb055db88759e240e3"
+source = "git+https://github.com/availproject/avail.git?tag=v2.0.0.0-rc4#508593d59490ec3ea1873e3fce7f28243a1f1179"
 dependencies = [
  "anyhow",
+ "avail-base",
  "avail-core",
  "bounded-collections",
  "curve25519-dalek 2.1.3",
@@ -902,7 +925,9 @@ dependencies = [
  "schnorrkel 0.9.1",
  "serde",
  "serde-hex",
+ "serde_json",
  "sp-core",
+ "sp-runtime",
  "structopt",
  "subxt",
  "tokio",
@@ -5102,6 +5127,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "449811d15fbdf5ceb5c1144416066429cf82316e2ec8ce0c1f6f8a02e7bbcf8c"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot",
+ "thiserror",
+]
+
+[[package]]
 name = "proptest"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7282,6 +7321,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-prometheus-endpoint"
+version = "0.17.0"
+source = "git+https://github.com/availproject/polkadot-sdk.git?tag=polkadot-1.7.1-patch-2#421b75ae1795b6c4e9a362b214395b3910ed5b8c"
+dependencies = [
+ "hyper",
+ "log",
+ "prometheus",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "subtle"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8196,6 +8247,7 @@ dependencies = [
  "sha2 0.10.8",
  "sha256",
  "sp-core",
+ "subxt",
  "succinct-client",
  "tokio",
 ]

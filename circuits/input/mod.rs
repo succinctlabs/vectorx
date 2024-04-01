@@ -191,10 +191,12 @@ impl RedisClient {
             .expect("Failed to set key");
 
         info!(
-            "Added range: {:?}-{:?} with data commitment: {:?}",
+            "Added range: {:?}-{:?} with data commitment: {:?} to address: {} on chain: {}",
             range.start,
             range.end,
-            hex::encode(data_commitment)
+            hex::encode(data_commitment),
+            address,
+            chain_id
         );
     }
 }

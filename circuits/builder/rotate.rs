@@ -1,5 +1,6 @@
 use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
 use plonky2x::frontend::uint::uint64::U64Variable;
+use plonky2x::frontend::vars::{CircuitVariable, U32Variable};
 use plonky2x::prelude::{
     ArrayVariable, ByteVariable, Bytes32Variable, CircuitBuilder, Field, PlonkParameters, Variable,
 };
@@ -18,16 +19,17 @@ pub trait RotateMethods {
     /// for the epoch end header. The purpose of this function is to ensure that it is difficult for
     /// a malicious prover to witness an incorrect new authority set by using a fake start_position
     /// from a header correctly signed by the current authority set.
-    fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
+    fn verify_base_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
     );
 
-    /// Returns the length of the compact encoding of the new authority set length.
-    fn get_new_authority_set_size_encoded_byte_length(
+    // Returns the length of the variable-size prefix bytes.
+    fn verify_variable_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
-        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
-        expected_num_authorities: &Variable,
+        subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
+        header_hash: Bytes32Variable,
+        expected_num_authorities: Variable,
     ) -> Variable;
 
     /// Verifies the epoch end header has a valid encoding, and that the new_pubkeys match the header's
@@ -62,7 +64,7 @@ pub trait RotateMethods {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
-    fn verify_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
+    fn verify_base_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
     ) {
@@ -82,32 +84,17 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             ArrayVariable::<ByteVariable, 4>::from(subarray[2..6].to_vec()),
             consensus_id_bytes,
         );
-
-        // Skip 2 bytes.
-
-        // Verify subarray[8] is 0x01, denoting a ScheduledChange.
-        let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
-        let header_schedule_change_flag = subarray[8];
-        self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
     }
 
-    /// Returns the length of the compact encoding of the new authority set length.
-    fn get_new_authority_set_size_encoded_byte_length(
+    // Returns the length of the variable-size prefix bytes.
+    fn verify_variable_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
         &mut self,
-        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
-        expected_num_authorities: &Variable,
+        subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
+        header_hash: Bytes32Variable,
+        expected_num_authorities: Variable,
     ) -> Variable {
-        // Verify the bytes starting at the base prefix length are the compact encoding of the
-        // length of the new authority set.
-        let encoded_num_authorities_size_bytes =
-            ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
-                subarray[BASE_PREFIX_LENGTH..BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES].to_vec(),
-            );
-        let (num_authorities, compress_mode) =
-            self.decode_compact_int(encoded_num_authorities_size_bytes);
-        self.assert_is_equal(*expected_num_authorities, num_authorities.variable);
-
-        // Number of bytes in the compact encoding of the new authority set length.
+        let one_v = self.one();
+        // All possible lengths of a SCALE-encoded compact int.
         let all_possible_lengths = vec![
             self.constant::<Variable>(L::Field::from_canonical_usize(1)),
             self.constant::<Variable>(L::Field::from_canonical_usize(2)),
@@ -115,8 +102,49 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             self.constant::<Variable>(L::Field::from_canonical_usize(5)),
         ];
 
+        // The variable-length section of the prefix starts after the fixed-size base prefix bytes.
+        let mut prefix_cursor =
+            self.constant::<Variable>(L::Field::from_canonical_usize(BASE_PREFIX_LENGTH));
+
+        // Skip over the encoded scheduled change message length size bytes.
+        let encoded_scheduled_change_message_length_size_bytes =
+            ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
+                subarray[BASE_PREFIX_LENGTH..BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES].to_vec(),
+            );
+        let (_, compress_mode) =
+            self.decode_compact_int(encoded_scheduled_change_message_length_size_bytes);
+
         // Select the correct length of the compact encoding of the new authority set length.
-        self.select_array_random_gate(&all_possible_lengths, compress_mode)
+        let encoded_scheduled_change_message_length_byte_length =
+            self.select_array_random_gate(&all_possible_lengths, compress_mode);
+
+        prefix_cursor = self.add(
+            prefix_cursor,
+            encoded_scheduled_change_message_length_byte_length,
+        );
+
+        // Verify the next byte is the scheduled change enum flag.
+        let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
+        let header_schedule_change_flag =
+            self.select_array_random_gate(&subarray.data, prefix_cursor);
+        self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
+
+        prefix_cursor = self.add(prefix_cursor, one_v);
+
+        // Verify the encoded num authorities size bytes are correct.
+        let encoded_num_authorities_size_bytes =
+            self.get_fixed_subarray(subarray, prefix_cursor, &header_hash.as_bytes());
+        let (decoded_num_authorities, compress_mode) =
+            self.decode_compact_int(encoded_num_authorities_size_bytes);
+        let num_authorities_u32 = U32Variable::from_variables(self, &[expected_num_authorities]);
+        self.assert_is_equal(decoded_num_authorities, num_authorities_u32);
+
+        // Select the correct length of the compact encoding of the new authority set length.
+        let encoded_new_authority_set_length_size_bytes =
+            self.select_array_random_gate(&all_possible_lengths, compress_mode);
+
+        prefix_cursor = self.add(prefix_cursor, encoded_new_authority_set_length_size_bytes);
+        prefix_cursor
     }
 
     fn verify_epoch_end_header<
@@ -150,13 +178,21 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             &header_hash.as_bytes(),
         );
 
-        // Verify the prefix bytes before the encoded authority set are valid, according to the spec.
-        self.verify_prefix_epoch_end_header(&prefix_subarray);
+        // Verify the fixed-size "base" prefix bytes before the encoded authority set are valid, according to the spec.
+        self.verify_base_prefix_epoch_end_header(&prefix_subarray);
 
-        // Returns the byte length of the compact encoding of the new authority set length.
-        let encoded_num_authorities_byte_len =
-            self.get_new_authority_set_size_encoded_byte_length(&prefix_subarray, num_authorities);
+        let prefix_length = self.verify_variable_prefix_epoch_end_header(
+            &prefix_subarray,
+            header_hash,
+            *num_authorities,
+        );
+        // Get to the start of the encoded authority set. The cursor is the total length of the prefix,
+        // which includes the Consensus Flag, Consensus Engine ID, the length of the scheduled change
+        // message, the scheduled change flag, and the length of the new authority set.
+        cursor = self.add(cursor, prefix_length);
 
+        let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
+        let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
         // Note: All validators have a voting power of 1 in Avail.
         // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/frame/grandpa/src/lib.rs#L585
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
@@ -165,16 +201,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // Expected delay for the authority set.
         let expected_delay_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([0u8, 0u8, 0u8, 0u8].to_vec());
-
-        let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
-        let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
-        let base_prefix_len =
-            self.constant::<Variable>(L::Field::from_canonical_usize(BASE_PREFIX_LENGTH));
-
-        // Get to the start of the encoded authority set. The cursor is the base prefix length
-        // plus the length of the compact encoding of the new authority set length.
-        cursor = self.add(cursor, base_prefix_len);
-        cursor = self.add(cursor, encoded_num_authorities_byte_len);
 
         let enc_validator_subarray = self.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_SUBARRAY_SIZE>(
             &header.header_bytes,
@@ -278,15 +304,13 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 pub mod tests {
     use std::env;
 
-    use plonky2x::frontend::curta::ec::point::CompressedEdwardsYVariable;
-    use plonky2x::prelude::{
-        ArrayVariable, Bytes32Variable, DefaultBuilder, U32Variable, Variable, VariableStream,
-    };
+    use plonky2x::frontend::uint::uint64::U64Variable;
+    use plonky2x::prelude::{DefaultBuilder, VariableStream};
 
     use crate::builder::rotate::RotateMethods;
-    use crate::consts::{DELAY_LENGTH, MAX_HEADER_SIZE, MAX_PREFIX_LENGTH, VALIDATOR_LENGTH};
+    use crate::consts::{MAX_HEADER_SIZE, MAX_PREFIX_LENGTH};
     use crate::rotate::RotateHint;
-    use crate::vars::EncodedHeaderVariable;
+    use crate::vars::RotateVariable;
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -299,42 +323,33 @@ pub mod tests {
 
         let mut builder = DefaultBuilder::new();
 
-        let epoch_end_block_number = builder.read::<U32Variable>();
+        let authority_set_id = builder.read::<U64Variable>();
 
         // Fetch the header at epoch_end_block.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
         let mut input_stream = VariableStream::new();
-        input_stream.write(&epoch_end_block_number);
+        input_stream.write(&authority_set_id);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
 
-        let target_header =
-            output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
-
-        let num_authorities = output_stream.read::<Variable>(&mut builder);
-        let start_position = output_stream.read::<Variable>(&mut builder);
-        let _ = output_stream.read::<Bytes32Variable>(&mut builder);
-        let _ = output_stream
-            .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let rotate_var =
+            output_stream.read::<RotateVariable<MAX_HEADER_LENGTH, NUM_AUTHORITIES>>(&mut builder);
 
         // Note: In prod, get_fixed_subarray uses the header_hash as the seed for randomness. The
         // below is unsafe, but it's fine for testing purposes.
-        let target_header_dummy_hash = &target_header.header_bytes.as_vec()[0..32];
+        let target_header_dummy_hash = &rotate_var.target_header.header_bytes.as_vec()[0..32];
         let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
-            &target_header.header_bytes,
-            start_position,
+            &rotate_var.target_header.header_bytes,
+            rotate_var.next_authority_set_start_position,
             target_header_dummy_hash,
         );
 
-        builder.verify_prefix_epoch_end_header(&prefix_subarray);
-
-        let _encoded_num_authorities_byte_len = builder
-            .get_new_authority_set_size_encoded_byte_length(&prefix_subarray, &num_authorities);
+        builder.verify_base_prefix_epoch_end_header(&prefix_subarray);
 
         let circuit = builder.build();
         let mut input = circuit.input();
 
-        let epoch_end_block_number = 4321u32;
-        input.write::<U32Variable>(epoch_end_block_number);
+        let authority_set_id = 1u64;
+        input.write::<U64Variable>(authority_set_id);
         let (proof, output) = circuit.prove(&input);
 
         circuit.verify(&proof, &input, &output);
@@ -348,45 +363,36 @@ pub mod tests {
 
         const NUM_AUTHORITIES: usize = 16;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 
-        let epoch_end_block_number = builder.read::<U32Variable>();
+        let authority_set_id = builder.read::<U64Variable>();
 
         // Fetch the header at epoch_end_block.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
         let mut input_stream = VariableStream::new();
-        input_stream.write(&epoch_end_block_number);
+        input_stream.write(&authority_set_id);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
 
-        let target_header =
-            output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
-
-        let num_authorities = output_stream.read::<Variable>(&mut builder);
-        let start_position = output_stream.read::<Variable>(&mut builder);
-        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
-        let new_pubkeys = output_stream
-            .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let rotate_var =
+            output_stream.read::<RotateVariable<MAX_HEADER_LENGTH, NUM_AUTHORITIES>>(&mut builder);
 
         // Note: In prod, get_fixed_subarray uses the header_hash as the seed for randomness. The
         // below is unsafe, but it's fine for testing purposes.
-        let target_header_hash = expected_new_authority_set_hash;
-
-        builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
-            &target_header,
-            target_header_hash,
-            &num_authorities,
-            &start_position,
-            &new_pubkeys,
+        let target_header_dummy_hash = &rotate_var.target_header.header_bytes.as_vec()[0..32];
+        let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
+            &rotate_var.target_header.header_bytes,
+            rotate_var.next_authority_set_start_position,
+            target_header_dummy_hash,
         );
+
+        builder.verify_base_prefix_epoch_end_header(&prefix_subarray);
 
         let circuit = builder.build();
         let mut input = circuit.input();
 
-        // Authority set size is 5.
-        let epoch_end_block_number = 4321u32;
-        input.write::<U32Variable>(epoch_end_block_number);
+        let authority_set_id = 1u64;
+        input.write::<U64Variable>(authority_set_id);
         let (proof, output) = circuit.prove(&input);
 
         circuit.verify(&proof, &input, &output);
@@ -400,44 +406,36 @@ pub mod tests {
 
         const NUM_AUTHORITIES: usize = 100;
         const MAX_HEADER_LENGTH: usize = MAX_HEADER_SIZE;
-        const MAX_SUBARRAY_SIZE: usize = NUM_AUTHORITIES * VALIDATOR_LENGTH + DELAY_LENGTH;
 
         let mut builder = DefaultBuilder::new();
 
-        let epoch_end_block_number = builder.read::<U32Variable>();
+        let authority_set_id = builder.read::<U64Variable>();
 
         // Fetch the header at epoch_end_block.
         let header_fetcher = RotateHint::<MAX_HEADER_LENGTH, NUM_AUTHORITIES> {};
         let mut input_stream = VariableStream::new();
-        input_stream.write(&epoch_end_block_number);
+        input_stream.write(&authority_set_id);
         let output_stream = builder.async_hint(input_stream, header_fetcher);
 
-        let target_header =
-            output_stream.read::<EncodedHeaderVariable<MAX_HEADER_LENGTH>>(&mut builder);
-
-        let num_authorities = output_stream.read::<Variable>(&mut builder);
-        let start_position = output_stream.read::<Variable>(&mut builder);
-        let expected_new_authority_set_hash = output_stream.read::<Bytes32Variable>(&mut builder);
-        let new_pubkeys = output_stream
-            .read::<ArrayVariable<CompressedEdwardsYVariable, NUM_AUTHORITIES>>(&mut builder);
+        let rotate_var =
+            output_stream.read::<RotateVariable<MAX_HEADER_LENGTH, NUM_AUTHORITIES>>(&mut builder);
 
         // Note: In prod, get_fixed_subarray uses the header_hash as the seed for randomness. The
         // below is unsafe, but it's fine for testing purposes.
-        let target_header_hash = expected_new_authority_set_hash;
-
-        builder.verify_epoch_end_header::<MAX_HEADER_LENGTH, NUM_AUTHORITIES, MAX_SUBARRAY_SIZE>(
-            &target_header,
-            target_header_hash,
-            &num_authorities,
-            &start_position,
-            &new_pubkeys,
+        let target_header_dummy_hash = &rotate_var.target_header.header_bytes.as_vec()[0..32];
+        let prefix_subarray = builder.get_fixed_subarray::<MAX_HEADER_SIZE, MAX_PREFIX_LENGTH>(
+            &rotate_var.target_header.header_bytes,
+            rotate_var.next_authority_set_start_position,
+            target_header_dummy_hash,
         );
+
+        builder.verify_base_prefix_epoch_end_header(&prefix_subarray);
 
         let circuit = builder.build();
         let mut input = circuit.input();
 
-        let epoch_end_block_number = 4321u32;
-        input.write::<U32Variable>(epoch_end_block_number);
+        let authority_set_id = 1u64;
+        input.write::<U64Variable>(authority_set_id);
         let (proof, output) = circuit.prove(&input);
 
         circuit.verify(&proof, &input, &output);

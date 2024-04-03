@@ -9,8 +9,8 @@ use super::decoder::DecodingMethods;
 use super::header::HeaderMethods;
 use crate::builder::justification::GrandpaJustificationVerifier;
 use crate::consts::{
-    BASE_PREFIX_LENGTH, DELAY_LENGTH, MAX_COMPACT_UINT_BYTES, MAX_PREFIX_LENGTH, PUBKEY_LENGTH,
-    VALIDATOR_LENGTH, WEIGHT_LENGTH,
+    CONSENSUS_ENGINE_ID_PREFIX_LENGTH, DELAY_LENGTH, MAX_COMPACT_UINT_BYTES, MAX_PREFIX_LENGTH,
+    PUBKEY_LENGTH, VALIDATOR_LENGTH, WEIGHT_LENGTH,
 };
 use crate::vars::*;
 
@@ -75,11 +75,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Verify subarray[2..6] is the Consensus Engine ID: 0x46524e4b [70, 82, 78, 75].
         // Consensus Id: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/examples/download_digest_items.rs#L41-L56
-        let consensus_id_bytes =
+        let consensus_engine_id_bytes =
             self.constant::<ArrayVariable<ByteVariable, 4>>([70u8, 82u8, 78u8, 75u8].to_vec());
         self.assert_is_equal(
             ArrayVariable::<ByteVariable, 4>::from(subarray[2..6].to_vec()),
-            consensus_id_bytes,
+            consensus_engine_id_bytes,
         );
     }
 
@@ -102,21 +102,25 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         ];
 
         // The variable-length section of the prefix starts after the fixed-size base prefix bytes.
-        let mut prefix_cursor =
-            self.constant::<Variable>(L::Field::from_canonical_usize(BASE_PREFIX_LENGTH));
+        let mut prefix_cursor = self.constant::<Variable>(L::Field::from_canonical_usize(
+            CONSENSUS_ENGINE_ID_PREFIX_LENGTH,
+        ));
 
-        // Skip over the encoded scheduled change message length size bytes.
-        let encoded_scheduled_change_message_length_size_bytes =
+        // The SCALE-encoded scheduled change message length.
+        let encoded_scheduled_change_message_length =
             ArrayVariable::<ByteVariable, MAX_COMPACT_UINT_BYTES>::from(
-                subarray[BASE_PREFIX_LENGTH..BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES].to_vec(),
+                subarray[CONSENSUS_ENGINE_ID_PREFIX_LENGTH
+                    ..CONSENSUS_ENGINE_ID_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES]
+                    .to_vec(),
             );
-        let (_, compress_mode) =
-            self.decode_compact_int(encoded_scheduled_change_message_length_size_bytes);
+        // Note: Discard the value of the scheduled change message length as it is not checked.
+        let (_, compress_mode) = self.decode_compact_int(encoded_scheduled_change_message_length);
 
-        // Select the correct length of the compact encoding of the new authority set length.
+        // Compute the size in bytes of the compact int representing the scheduled change message length.
         let encoded_scheduled_change_message_length_byte_length =
             self.select_array_random_gate(&all_possible_lengths, compress_mode);
 
+        // Skip over the encoded scheduled change message length.
         prefix_cursor = self.add(
             prefix_cursor,
             encoded_scheduled_change_message_length_byte_length,

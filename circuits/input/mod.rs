@@ -29,7 +29,8 @@ use self::types::{
     HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
-    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH, VALIDATOR_LENGTH,
+    CONSENSUS_ENGINE_ID_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH,
+    VALIDATOR_LENGTH,
 };
 
 #[derive(Clone)]
@@ -921,9 +922,10 @@ impl RpcDataFetcher {
             padded_pubkeys.push(CompressedEdwardsY::from_slice(&DUMMY_PUBLIC_KEY).unwrap());
         }
 
-        // skip 1 byte, 1 consensus id, 4 consensus engine id, skip 2 bytes,
-        // 1 scheduled change, variable length compact encoding of the number of authorities.
-        let prefix_length = BASE_PREFIX_LENGTH
+        // skip 1 byte, 1 consensus id, 4 consensus engine id, variable length compact encoding of the
+        // scheduled change message length, 1 scheduled change flag, variable length compact encoding of
+        // the number of authorities.
+        let prefix_length = CONSENSUS_ENGINE_ID_PREFIX_LENGTH
             + encoded_scheduled_change_message_length_size
             + 1
             + encoded_num_authorities_len;
@@ -1168,12 +1170,17 @@ mod tests {
             }
             log::debug!("epoch_end_block {:?}", epoch_end_block);
 
-            let _ = data_fetcher
+            let rotate_data = data_fetcher
                 .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
                 .await;
 
             let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
             println!("num authorities {:?}", num_authorities);
+
+            println!(
+                "start byte {:?}",
+                rotate_data.header_bytes[rotate_data.start_position]
+            );
 
             start_epoch += 1;
         }

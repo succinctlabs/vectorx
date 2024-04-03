@@ -269,42 +269,39 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         latestBlock = _targetBlock;
     }
 
-    /// @notice Requests a rotate to a next authority set after the latest authority set in the contract.
-    /// @param _latestAuthoritySetId The authority set id of the latest authority set stored in the contract.
-    function requestRotate(uint64 _latestAuthoritySetId) external payable {
-        bytes32 latestAuthoritySetHash = authoritySetIdToHash[
-            _latestAuthoritySetId
+    /// @notice Requests a rotate to the next authority set.
+    /// @param _currentAuthoritySetId The authority set id of the current authority set.
+    function requestRotate(uint64 _currentAuthoritySetId) external payable {
+        bytes32 currentAuthoritySetHash = authoritySetIdToHash[
+            _currentAuthoritySetId
         ];
-        if (latestAuthoritySetHash == bytes32(0)) {
+        if (currentAuthoritySetHash == bytes32(0)) {
             revert AuthoritySetNotFound();
         }
 
-        bytes32 newAuthoritySetHash = authoritySetIdToHash[
-            _latestAuthoritySetId + 1
+        bytes32 nextAuthoritySetHash = authoritySetIdToHash[
+            _currentAuthoritySetId + 1
         ];
-        if (newAuthoritySetHash != bytes32(0)) {
+        if (nextAuthoritySetHash != bytes32(0)) {
             revert NextAuthoritySetExists();
         }
 
         bytes memory input = abi.encodePacked(
-            latestAuthoritySetHash,
-            _latestAuthoritySetId
+            _currentAuthoritySetId,
+            currentAuthoritySetHash
         );
 
         bytes memory data = abi.encodeWithSelector(
             this.rotate.selector,
-            _latestAuthoritySetId
+            _currentAuthoritySetId
         );
 
         ISuccinctGateway(gateway).requestCall{value: msg.value}(
-            rotateFunctionId,
-            input,
-            address(this),
-            data,
+	@@ -291,7 +304,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             500000
         );
 
-        emit RotateRequested(_latestAuthoritySetId, latestAuthoritySetHash);
+        emit RotateRequested(_currentAuthoritySetId, currentAuthoritySetHash);
     }
 
     /// @notice Adds the authority set hash for the next authority set id.

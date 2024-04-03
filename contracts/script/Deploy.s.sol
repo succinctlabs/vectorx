@@ -51,8 +51,11 @@ contract DeployScript is Script {
 
             lightClient = VectorX(existingProxyAddress);
 
-            // Upgrades.upgradeProxy()
-            lightClient.upgradeTo(address(lightClientImpl));
+            Upgrades.upgradeProxy(
+                existingProxyAddress,
+                "VectorX.sol",
+                bytes("")
+            );
         }
         if (vm.envBool("UPDATE_GATEWAY")) {
             lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));

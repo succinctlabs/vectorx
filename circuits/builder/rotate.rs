@@ -29,7 +29,8 @@ pub trait RotateMethods {
     ) -> Variable;
 
     /// Verify the encoded new authority set size matches the untrusted_authority_set_size supplied
-    /// from the hint and return the index after the encoded new authority set size.
+    /// from the hint and return the index after the encoded new authority set size (which is the
+    /// total prefix length).
     fn verify_encoded_num_authorities<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
@@ -201,13 +202,15 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // incorrect new authority set by using a fake start_position.
         self.verify_consensus_log(&prefix_subarray);
 
-        // Verify the SCALE-encoded scheduled change message length and scheduled change flag.
-        let prefix_cursor = self.verify_scheduled_change_message_length_and_flag(&prefix_subarray);
+        // Verify the SCALE-encoded scheduled change message length and scheduled change flag and get
+        // the index after the scheduled change flag.
+        let prefix_idx_after_scheduled_change_flag =
+            self.verify_scheduled_change_message_length_and_flag(&prefix_subarray);
 
-        // Verify the encoded authority set size.
+        // Verify the encoded authority set size and get the total prefix length.
         let total_prefix_length = self.verify_encoded_num_authorities(
             &prefix_subarray,
-            prefix_cursor,
+            prefix_idx_after_scheduled_change_flag,
             header_hash,
             *num_authorities,
         );
@@ -215,8 +218,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // Add the total length of the prefix to get to the start of the encoded authority set.
         cursor = self.add(cursor, total_prefix_length);
 
-        let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
-        let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));
         // Note: All validators have a voting power of 1 in Avail.
         // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/frame/grandpa/src/lib.rs#L585
         let expected_weight_bytes = self.constant::<ArrayVariable<ByteVariable, WEIGHT_LENGTH>>(
@@ -246,7 +247,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             let pubkey_match = self.is_equal(extracted_pubkey, new_pubkeys[i].0);
             let pubkey_check = self.or(pubkey_match, validator_disabled);
             self.assert_is_equal(pubkey_check, true_v);
-            cursor = self.add(cursor, pubkey_len);
 
             // Verify the correctness of the extracted weight for each enabled validator and
             // increment the cursor by the weight length.
@@ -256,7 +256,6 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             let weight_match = self.is_equal(extracted_weight, expected_weight_bytes.clone());
             let weight_check = self.or(weight_match, validator_disabled);
             self.assert_is_equal(weight_check, true_v);
-            cursor = self.add(cursor, weight_len);
 
             // Set validator_disabled to true if the cursor if this is the last validator.
             let at_end = self.is_equal(curr_validator, *num_authorities);

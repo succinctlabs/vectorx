@@ -18,9 +18,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice The latest block that has been committed.
     uint32 public latestBlock;
 
-    /// @notice The current authority set id. When a header range is committed, the current authority set id
-    ///     is updated to the authority set id of the header range.
-    uint64 public currentAuthoritySetId;
+    /// @notice The latest authority set id used in commitHeaderRange.
+    uint64 public latestAuthoritySetId;
 
     /// @notice The function for requesting a header range.
     bytes32 public headerRangeFunctionId;
@@ -64,7 +63,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         blockHeightToHeaderHash[_params.height] = _params.header;
         authoritySetIdToHash[_params.authoritySetId] = _params.authoritySetHash;
-        currentAuthoritySetId = _params.authoritySetId;
+        latestAuthoritySetId = _params.authoritySetId;
         latestBlock = _params.height;
 
         rotateFunctionId = _params.rotateFunctionId;
@@ -220,12 +219,12 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             revert AuthoritySetNotFound();
         }
 
-        if (_authoritySetId < currentAuthoritySetId) {
+        if (_authoritySetId < latestAuthoritySetId) {
             revert OldAuthoritySetId();
         }
 
-        if (_authoritySetId > currentAuthoritySetId) {
-            currentAuthoritySetId = _authoritySetId;
+        if (_authoritySetId > latestAuthoritySetId) {
+            latestAuthoritySetId = _authoritySetId;
         }
 
         require(_targetBlock > latestBlock);

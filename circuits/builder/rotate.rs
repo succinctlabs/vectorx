@@ -28,13 +28,14 @@ pub trait RotateMethods {
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
     ) -> Variable;
 
-    /// Verify the encoded new authority set size and return the index after the encoded new authority set size.
+    /// Verify the encoded new authority set size matches the untrusted_authority_set_size supplied
+    /// from the hint and return the index after the encoded new authority set size.
     fn verify_encoded_num_authorities<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
         prefix_cursor: Variable,
         header_hash: Bytes32Variable,
-        expected_num_authorities: Variable,
+        untrusted_authority_set_size: Variable,
     ) -> Variable;
 
     /// Verifies the epoch end header has a valid encoding, and that the new_pubkeys match the header's
@@ -138,17 +139,23 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
         prefix_cursor: Variable,
         header_hash: Bytes32Variable,
-        expected_num_authorities: Variable,
+        untrusted_authority_set_size: Variable,
     ) -> Variable {
         // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
 
-        // Verify the encoded num authorities size bytes are correct.
-        let encoded_num_authorities_size_bytes =
-            self.get_fixed_subarray(subarray, prefix_cursor, &header_hash.as_bytes());
-        let (decoded_num_authorities, compress_mode) =
-            self.decode_compact_int(encoded_num_authorities_size_bytes);
-        let num_authorities_u32 = U32Variable::from_variables(self, &[expected_num_authorities]);
-        self.assert_is_equal(decoded_num_authorities, num_authorities_u32);
+        // Verify the encoded authority set size matches the untrusted_authority_set_size supplied by
+        // the hint.
+        let encoded_authority_set_size = self
+            .get_fixed_subarray::<MAX_PREFIX_LENGTH, MAX_COMPACT_UINT_BYTES>(
+                subarray,
+                prefix_cursor,
+                &header_hash.as_bytes(),
+            );
+        let (decoded_authority_set_size, compress_mode) =
+            self.decode_compact_int(encoded_authority_set_size);
+        let num_authorities_u32 =
+            U32Variable::from_variables(self, &[untrusted_authority_set_size]);
+        self.assert_is_equal(decoded_authority_set_size, num_authorities_u32);
 
         // Compute the size in bytes of the compact int representing the new authority set size.
         let encoded_new_authority_set_length_size_bytes =
@@ -190,9 +197,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
 
         // Verify the log start_position corresponds to is a consensus log.
-        // Note: Checking this encoding makes it more difficult for a malicious prover to witness an
-        // incorrect new authority set by using a fake start_position from a header correctly signed by the
-        // current authority set.
+        // Note: Checking encoding makes it more difficult for a malicious prover to witness an
+        // incorrect new authority set by using a fake start_position.
         self.verify_consensus_log(&prefix_subarray);
 
         // Verify the SCALE-encoded scheduled change message length and scheduled change flag.
@@ -205,9 +211,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             header_hash,
             *num_authorities,
         );
-        // Get to the start of the encoded authority set. Add the total length of the prefix,
-        // which includes the Consensus Flag, Consensus Engine ID, the encoded length of the scheduled change
-        // message, the scheduled change flag, and the encoded length of the new authority set.
+
+        // Add the total length of the prefix to get to the start of the encoded authority set.
         cursor = self.add(cursor, total_prefix_length);
 
         let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));

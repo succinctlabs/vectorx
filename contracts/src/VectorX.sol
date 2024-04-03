@@ -296,10 +296,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             _currentAuthoritySetId
         );
 
-        ISuccinctGateway(gateway).requestCall{value: msg.value}(
-	@@ -291,7 +304,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
-            500000
-        );
+        ISuccinctGateway(gateway).requestCall{value: msg.value}(500000);
 
         emit RotateRequested(_currentAuthoritySetId, currentAuthoritySetHash);
     }

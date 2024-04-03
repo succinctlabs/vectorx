@@ -128,13 +128,14 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             self.select_array_random_gate(&subarray.data, prefix_cursor);
         self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
 
+        // Return the index after the scheduled change flag.
         self.add(prefix_cursor, one_v)
     }
 
     fn verify_encoded_num_authorities<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
-        mut prefix_cursor: Variable,
+        prefix_cursor: Variable,
         header_hash: Bytes32Variable,
         expected_num_authorities: Variable,
     ) -> Variable {
@@ -152,8 +153,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let encoded_new_authority_set_length_size_bytes =
             self.get_compact_int_byte_length(compress_mode);
 
-        prefix_cursor = self.add(prefix_cursor, encoded_new_authority_set_length_size_bytes);
-        prefix_cursor
+        // Return the index after the encoded new authority set size in the prefix.
+        self.add(prefix_cursor, encoded_new_authority_set_length_size_bytes)
     }
 
     fn verify_epoch_end_header<

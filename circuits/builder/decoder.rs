@@ -116,7 +116,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // The next field is the data root. The data root is the last 32 bytes of the header.
         // Spec: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v3.rs#L9-L15
-        let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END as u32);
+        let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END);
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
 
         // If header_size == 0, then set data_root_start to 0.

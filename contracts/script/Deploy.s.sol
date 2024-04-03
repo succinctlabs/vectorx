@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.16;
+pragma solidity ^0.8.22;
 
 import "forge-std/Script.sol";
 import {VectorX} from "../src/VectorX.sol";
@@ -41,7 +41,7 @@ contract DeployScript is Script {
                     authoritySetId: uint64(vm.envUint("AUTHORITY_SET_ID")),
                     authoritySetHash: vm.envBytes32("AUTHORITY_SET_HASH"),
                     headerRangeFunctionId: vm.envBytes32(
-                    "HEADER_RANGE_FUNCTION_ID"
+                        "HEADER_RANGE_FUNCTION_ID"
                     ),
                     rotateFunctionId: vm.envBytes32("ROTATE_FUNCTION_ID")
                 })
@@ -56,15 +56,18 @@ contract DeployScript is Script {
             lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));
         }
         if (vm.envBool("UPDATE_GENESIS_STATE")) {
-            lightClient.updateGenesisState(uint32(vm.envUint("GENESIS_HEIGHT")),
+            lightClient.updateGenesisState(
+                uint32(vm.envUint("GENESIS_HEIGHT")),
                 vm.envBytes32("GENESIS_HEADER"),
                 uint64(vm.envUint("AUTHORITY_SET_ID")),
-                vm.envBytes32("AUTHORITY_SET_HASH"));
+                vm.envBytes32("AUTHORITY_SET_HASH")
+            );
         }
         if (vm.envBool("UPDATE_FUNCTION_IDS")) {
-            lightClient.updateFunctionIds(vm.envBytes32(
-                "HEADER_RANGE_FUNCTION_ID"
-                ), vm.envBytes32("ROTATE_FUNCTION_ID"));
+            lightClient.updateFunctionIds(
+                vm.envBytes32("HEADER_RANGE_FUNCTION_ID"),
+                vm.envBytes32("ROTATE_FUNCTION_ID")
+            );
         }
 
         console.logAddress(address(lightClient));

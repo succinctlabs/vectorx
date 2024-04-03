@@ -1,5 +1,5 @@
 forge-std/=lib/forge-std/src/
 @openzeppelin-upgradeable/=lib/succinctx/contracts/lib/openzeppelin-contracts-upgradeable/
 @openzeppelin-foundry-upgrades/=lib/openzeppelin-foundry-upgrades/src/
-@openzeppelin/=lib/openzeppelin-foundry-upgrades/lib/openzeppelin-contracts/contracts/
+@openzeppelin/=lib/openzeppelin-contracts/contracts/
 @succinctx/=lib/succinctx/contracts/src/

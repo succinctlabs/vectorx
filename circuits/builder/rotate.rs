@@ -97,7 +97,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     ) -> Variable {
         let one_v = self.one();
 
-        // The variable-length section of the prefix starts after the fixed-size base prefix bytes.
+        // The scheduled change section of the prefix starts after the consensus engine id section.
         let mut prefix_cursor = self.constant::<Variable>(L::Field::from_canonical_usize(
             CONSENSUS_ENGINE_ID_PREFIX_LENGTH,
         ));
@@ -122,7 +122,8 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             encoded_scheduled_change_message_length_byte_length,
         );
 
-        // Verify the next byte is the scheduled change enum flag.
+        // Verify the next byte after the encoded scheduled change message length is the scheduled
+        // change enum flag.
         let scheduled_change_enum_flag = self.constant::<ByteVariable>(1u8);
         let header_schedule_change_flag =
             self.select_array_random_gate(&subarray.data, prefix_cursor);

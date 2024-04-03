@@ -3,8 +3,7 @@ pragma solidity ^0.8.22;
 
 import "forge-std/Script.sol";
 import {VectorX} from "../src/VectorX.sol";
-import {ERC1967Upgrade} from "@openzeppelin/proxy/ERC1967/ERC1967Upgrade.sol";
-import {Upgrades} from "@openzeppelin-foundry-upgrades/Upgrades.sol";
+import "@openzeppelin-foundry-upgrades/Upgrades.sol";
 
 contract DeployScript is Script {
     function setUp() public {}

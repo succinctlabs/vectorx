@@ -15,19 +15,16 @@ use crate::consts::{
 use crate::vars::*;
 
 pub trait RotateMethods {
-    /// Verifies the prefix bytes before the encoded authority set length are valid, according to the spec
-    /// for the epoch end header. The purpose of this function is to ensure that it is difficult for
-    /// a malicious prover to witness an incorrect new authority set by using a fake start_position
-    /// from a header correctly signed by the current authority set.
-    fn verify_base_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
+    /// Verifies the log is a consensus log.
+    fn verify_consensus_log<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
-        subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
     );
 
     // Returns the length of the variable-size prefix bytes.
-    fn verify_variable_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
+    fn verify_variable_prefix_epoch_end_header<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
-        subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
         header_hash: Bytes32Variable,
         expected_num_authorities: Variable,
     ) -> Variable;
@@ -64,9 +61,9 @@ pub trait RotateMethods {
 }
 
 impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, D> {
-    fn verify_base_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
+    fn verify_consensus_log<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
-        subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
     ) {
         // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
         // Skip 1 byte.
@@ -87,12 +84,14 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
     }
 
     // Returns the length of the variable-size prefix bytes.
-    fn verify_variable_prefix_epoch_end_header<const PREFIX_LENGTH: usize>(
+    fn verify_variable_prefix_epoch_end_header<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
-        subarray: &ArrayVariable<ByteVariable, PREFIX_LENGTH>,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
         header_hash: Bytes32Variable,
         expected_num_authorities: Variable,
     ) -> Variable {
+        // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
+
         let one_v = self.one();
         // All possible lengths of a SCALE-encoded compact int.
         let all_possible_lengths = vec![
@@ -178,8 +177,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             &header_hash.as_bytes(),
         );
 
-        // Verify the fixed-size "base" prefix bytes before the encoded authority set are valid, according to the spec.
-        self.verify_base_prefix_epoch_end_header(&prefix_subarray);
+        // Verify the log start_position corresponds to is a consensus log.
+        // Note: Checking this encoding makes it more difficult for a malicious prover to witness an
+        // incorrect new authority set by using a fake start_position from a header correctly signed by the
+        // current authority set.
+        self.verify_consensus_log(&prefix_subarray);
 
         let prefix_length = self.verify_variable_prefix_epoch_end_header(
             &prefix_subarray,
@@ -343,7 +345,7 @@ pub mod tests {
             target_header_dummy_hash,
         );
 
-        builder.verify_base_prefix_epoch_end_header(&prefix_subarray);
+        builder.verify_consensus_log(&prefix_subarray);
 
         let circuit = builder.build();
         let mut input = circuit.input();
@@ -386,7 +388,7 @@ pub mod tests {
             target_header_dummy_hash,
         );
 
-        builder.verify_base_prefix_epoch_end_header(&prefix_subarray);
+        builder.verify_consensus_log(&prefix_subarray);
 
         let circuit = builder.build();
         let mut input = circuit.input();
@@ -429,7 +431,7 @@ pub mod tests {
             target_header_dummy_hash,
         );
 
-        builder.verify_base_prefix_epoch_end_header(&prefix_subarray);
+        builder.verify_consensus_log(&prefix_subarray);
 
         let circuit = builder.build();
         let mut input = circuit.input();

@@ -21,10 +21,18 @@ pub trait RotateMethods {
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
     );
 
-    // Returns the length of the variable-size prefix bytes.
-    fn verify_variable_prefix_epoch_end_header<const MAX_PREFIX_LENGTH: usize>(
+    /// Verify the prefix's scheduled change message length & scheduled change flag. Return the
+    /// index in the prefix after the scheduled change flag.
+    fn verify_scheduled_change_message_length_and_flag<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+    ) -> Variable;
+
+    /// Verify the encoded new authority set size and return the index after the encoded new authority set size.
+    fn verify_encoded_num_authorities<const MAX_PREFIX_LENGTH: usize>(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        prefix_cursor: Variable,
         header_hash: Bytes32Variable,
         expected_num_authorities: Variable,
     ) -> Variable;
@@ -83,23 +91,11 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         );
     }
 
-    // Returns the length of the variable-size prefix bytes.
-    fn verify_variable_prefix_epoch_end_header<const MAX_PREFIX_LENGTH: usize>(
+    fn verify_scheduled_change_message_length_and_flag<const MAX_PREFIX_LENGTH: usize>(
         &mut self,
         subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
-        header_hash: Bytes32Variable,
-        expected_num_authorities: Variable,
     ) -> Variable {
-        // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
-
         let one_v = self.one();
-        // All possible lengths of a SCALE-encoded compact int.
-        let all_possible_lengths = vec![
-            self.constant::<Variable>(L::Field::from_canonical_usize(1)),
-            self.constant::<Variable>(L::Field::from_canonical_usize(2)),
-            self.constant::<Variable>(L::Field::from_canonical_usize(4)),
-            self.constant::<Variable>(L::Field::from_canonical_usize(5)),
-        ];
 
         // The variable-length section of the prefix starts after the fixed-size base prefix bytes.
         let mut prefix_cursor = self.constant::<Variable>(L::Field::from_canonical_usize(
@@ -118,7 +114,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
 
         // Compute the size in bytes of the compact int representing the scheduled change message length.
         let encoded_scheduled_change_message_length_byte_length =
-            self.select_array_random_gate(&all_possible_lengths, compress_mode);
+            self.get_compact_int_byte_length(compress_mode);
 
         // Skip over the encoded scheduled change message length.
         prefix_cursor = self.add(
@@ -132,7 +128,17 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             self.select_array_random_gate(&subarray.data, prefix_cursor);
         self.assert_is_equal(header_schedule_change_flag, scheduled_change_enum_flag);
 
-        prefix_cursor = self.add(prefix_cursor, one_v);
+        self.add(prefix_cursor, one_v)
+    }
+
+    fn verify_encoded_num_authorities<const MAX_PREFIX_LENGTH: usize>(
+        &mut self,
+        subarray: &ArrayVariable<ByteVariable, MAX_PREFIX_LENGTH>,
+        mut prefix_cursor: Variable,
+        header_hash: Bytes32Variable,
+        expected_num_authorities: Variable,
+    ) -> Variable {
+        // Digest Spec: https://github.com/availproject/avail/blob/188c20d6a1577670da65e0c6e1c2a38bea8239bb/avail-subxt/src/api_dev.rs#L30820-L30842
 
         // Verify the encoded num authorities size bytes are correct.
         let encoded_num_authorities_size_bytes =
@@ -142,9 +148,9 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         let num_authorities_u32 = U32Variable::from_variables(self, &[expected_num_authorities]);
         self.assert_is_equal(decoded_num_authorities, num_authorities_u32);
 
-        // Select the correct length of the compact encoding of the new authority set length.
+        // Compute the size in bytes of the compact int representing the new authority set size.
         let encoded_new_authority_set_length_size_bytes =
-            self.select_array_random_gate(&all_possible_lengths, compress_mode);
+            self.get_compact_int_byte_length(compress_mode);
 
         prefix_cursor = self.add(prefix_cursor, encoded_new_authority_set_length_size_bytes);
         prefix_cursor
@@ -187,15 +193,20 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
         // current authority set.
         self.verify_consensus_log(&prefix_subarray);
 
-        let prefix_length = self.verify_variable_prefix_epoch_end_header(
+        // Verify the SCALE-encoded scheduled change message length and scheduled change flag.
+        let prefix_cursor = self.verify_scheduled_change_message_length_and_flag(&prefix_subarray);
+
+        // Verify the encoded authority set size.
+        let total_prefix_length = self.verify_encoded_num_authorities(
             &prefix_subarray,
+            prefix_cursor,
             header_hash,
             *num_authorities,
         );
-        // Get to the start of the encoded authority set. The cursor is the total length of the prefix,
-        // which includes the Consensus Flag, Consensus Engine ID, the length of the scheduled change
-        // message, the scheduled change flag, and the length of the new authority set.
-        cursor = self.add(cursor, prefix_length);
+        // Get to the start of the encoded authority set. Add the total length of the prefix,
+        // which includes the Consensus Flag, Consensus Engine ID, the encoded length of the scheduled change
+        // message, the scheduled change flag, and the encoded length of the new authority set.
+        cursor = self.add(cursor, total_prefix_length);
 
         let pubkey_len = self.constant::<Variable>(L::Field::from_canonical_usize(PUBKEY_LENGTH));
         let weight_len = self.constant::<Variable>(L::Field::from_canonical_usize(WEIGHT_LENGTH));

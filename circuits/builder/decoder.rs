@@ -17,6 +17,9 @@ pub trait DecodingMethods {
         compact_bytes: ArrayVariable<ByteVariable, 5>,
     ) -> (U32Variable, Variable);
 
+    /// Get the byte length of a compact int based on the compress mode.
+    fn get_compact_int_byte_length(&mut self, compress_mode: Variable) -> Variable;
+
     /// Decode a header into its components: {block_nb, parent_hash, state_root and data_root}.
     /// header_hash is used for the RLC challenge in get_fixed_subarray.
     fn decode_header<const S: usize>(
@@ -88,6 +91,16 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         (value, compress_mode)
     }
 
+    fn get_compact_int_byte_length(&mut self, compress_mode: Variable) -> Variable {
+        // All possible lengths of a SCALE-encoded compact int.
+        let all_possible_lengths = vec![
+            self.constant::<Variable>(L::Field::from_canonical_usize(1)),
+            self.constant::<Variable>(L::Field::from_canonical_usize(2)),
+            self.constant::<Variable>(L::Field::from_canonical_usize(4)),
+            self.constant::<Variable>(L::Field::from_canonical_usize(5)),
+        ];
+        self.select_array_random_gate(&all_possible_lengths, compress_mode)
+    }
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,

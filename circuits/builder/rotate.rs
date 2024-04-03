@@ -208,7 +208,7 @@ impl<L: PlonkParameters<D>, const D: usize> RotateMethods for CircuitBuilder<L, 
             self.assert_is_equal(weight_check, true_v);
             cursor = self.add(cursor, weight_len);
 
-            // Set validator_disabled to true if the cursor if this is the last validator.
+            // Set validator_disabled to true if this is the last validator.
             let at_end = self.is_equal(curr_validator, *num_authorities);
             validator_disabled = self.select(at_end, true_v, validator_disabled);
 

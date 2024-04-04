@@ -99,8 +99,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 _authoritySetHash
     ) external onlyGuardian {
         blockHeightToHeaderHash[_height] = _header;
-        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
         latestBlock = _height;
+
+        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestAuthoritySetId = _authoritySetId;
     }
 
     /// @notice Force update the data & state commitments for a range of blocks.
@@ -140,8 +142,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
                 _stateRootCommitments[i]
             );
         }
-        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
         latestBlock = _endBlocks[_endBlocks.length - 1];
+
+        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
+        latestAuthoritySetId = _endAuthoritySetId;
     }
 
     /// @notice Request a header update and data commitment from range (latestBlock, requestedBlock].

@@ -8,6 +8,8 @@ import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 /// @notice VectorX is a light client for Avail's consensus.
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
+/// @dev Ensure that all new storage variables are placed after existing storage variables to avoid
+/// storage corruption during upgrades.
 contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice Indicator of if the contract is frozen.
     bool public frozen;

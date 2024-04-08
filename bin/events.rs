@@ -1,15 +1,56 @@
 use std::env;
+use std::fs::File;
 use std::sync::Arc;
 
 use alloy_sol_types::{sol, SolType};
 use ethers::contract::abigen;
 use ethers::core::types::{Address, Filter};
-use ethers::providers::{Middleware, Provider, StreamExt, Ws};
+use ethers::providers::{Http, Middleware, Provider};
 use log::info;
+use serde::{Deserialize, Serialize};
 use vectorx::input::{DataCommitmentRange, RedisClient};
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Deployment {
+    source_chain_name: String,
+    contract_chain_id: u64,
+    contract_address: Address,
+    cursor_start_block: u64,
+}
+
+// Read deployments.json and get the list of deployments.
+fn get_deployments() -> Vec<Deployment> {
+    let deployments_file = File::open("deployments.json").unwrap();
+    let deployments_json: serde_json::Value = serde_json::from_reader(deployments_file).unwrap();
+    let deployments_array = deployments_json["deployments"].as_array().unwrap();
+    let deployments: Vec<Deployment> = deployments_array
+        .iter()
+        .map(|d| Deployment {
+            source_chain_name: d["sourceChainName"]
+                .as_str()
+                .unwrap()
+                .to_string()
+                .to_uppercase(),
+            contract_chain_id: d["contractChainId"].as_u64().unwrap(),
+            contract_address: d["contractAddress"].as_str().unwrap().parse().unwrap(),
+            cursor_start_block: d["cursorStartBlock"].as_u64().unwrap(),
+        })
+        .collect();
+    deployments
+}
+
+fn get_ethereum_rpc(chain_id: u64) -> Option<String> {
+    // Read RPC URL from environment variable.
+    let rpc_url = env::var(format!("RPC_{}", chain_id));
+    if let Ok(ethereum_rpc_url) = rpc_url {
+        Some(ethereum_rpc_url)
+    } else {
+        None
+    }
+}
 
 type HeaderRangeCommitmentStoredTuple = sol! { tuple(uint32, uint32, bytes32, bytes32) };
 
@@ -18,32 +59,33 @@ sol! { struct RangeHashInput {
     uint32 end_block;
 } }
 
-async fn listen_for_events(ethereum_ws: &str, contract_address: &str) {
-    let address = contract_address
-        .parse::<Address>()
-        .expect("invalid address");
+async fn store_events(
+    ethereum_rpc_url: &str,
+    contract_address: Address,
+    start_block: u64,
+    end_block: u64,
+    redis_client: &mut RedisClient,
+) {
+    let provider =
+        Provider::<Http>::try_from(ethereum_rpc_url).expect("could not connect to client");
 
-    let client = Provider::<Ws>::connect(ethereum_ws)
-        .await
-        .expect("could not connect to client");
-
-    let chain_id = client.get_chainid().await.unwrap();
+    let chain_id = provider.get_chainid().await.unwrap();
 
     info!(
         "Listening for VectorX events on chain {} at address: {}",
         chain_id, contract_address
     );
 
-    let mut redis_client = RedisClient::new().await;
-
-    let client = Arc::new(client);
+    let client = Arc::new(provider);
 
     let header_range_filter = Filter::new()
-        .address(address)
+        .address(contract_address)
+        .from_block(start_block)
+        .to_block(end_block)
         .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
-    let mut stream = client.subscribe_logs(&header_range_filter).await.unwrap();
-    while let Some(log) = stream.next().await {
+    let logs = client.get_logs(&header_range_filter).await.unwrap();
+    for log in logs {
         let log_bytes = log.data;
         let decoded = HeaderRangeCommitmentStoredTuple::abi_decode(&log_bytes.0, true).unwrap();
 
@@ -59,55 +101,75 @@ async fn listen_for_events(ethereum_ws: &str, contract_address: &str) {
         };
 
         redis_client
-            .add_data_commitment_range(chain_id.as_u64(), address.0.to_vec(), data_commitment_range)
+            .add_data_commitment_range(
+                chain_id.as_u64(),
+                contract_address.0.to_vec(),
+                data_commitment_range,
+            )
             .await;
     }
 }
 
 #[tokio::main]
 async fn main() {
-    env::set_var("RUST_LOG", "info");
-    dotenv::dotenv().ok();
-    env_logger::init();
+    let deployments = get_deployments();
 
-    // List of Avail chains to index.
-    let chains = ["Hex", "Turing"];
+    // Every minute, check if there are new events.
+    const LOOP_INTERVAL: u64 = 60;
 
-    // For each Avail chain `chainName` to index, set the following environment variables:
-    //  {chainName}_ETHEREUM_WS: An Ethereum WS for the chain the deployed VectorX contract is on.
-    //  {chainName}_CONTRACT_ADDRESS: The address of the deployed VectorX contract.
-    // Note: Not all chains need to be indexed.
-    let mut ethereum_ws_vec = Vec::new();
-    let mut contract_addresses = Vec::new();
-    for chain in &chains {
-        let ethereum_ws_var = format!("{}_ETHEREUM_WS", chain.to_uppercase());
-        let contract_address_var = format!("{}_CONTRACT_ADDRESS", chain.to_uppercase());
+    // For each deployment:
+    //  1. Get the Ethereum RPC corresponding to contractChainId. If it doesn't exist, error.
+    //  2. Get the cursor corresponding to the contract address. If it doesn't exist, default to cursorStartBlock.
+    //  3. Store all events from the cursor to the current block in Redis. Then, update the current block.
+    //  4. Sleep for LOOP_INTERVAL seconds.
 
-        let ethereum_ws = env::var(&ethereum_ws_var);
-        let contract_address = env::var(&contract_address_var);
+    loop {
+        let mut redis_client = RedisClient::new().await;
+        for deployment in &deployments {
+            let rpc_url = match get_ethereum_rpc(deployment.contract_chain_id) {
+                Some(url) => url,
+                None => {
+                    panic!(
+                        "Ethereum RPC URL not found for chain ID: {}",
+                        &deployment.contract_chain_id
+                    );
+                }
+            };
 
-        if ethereum_ws.is_err() || contract_address.is_err() {
-            info!("Not indexing {} for events!", chain);
-            continue;
+            // Initialize Ethereum client.
+            let provider =
+                Provider::<Http>::try_from(rpc_url.clone()).expect("could not connect to client");
+            let current_block = provider.get_block_number().await.unwrap().as_u64();
+
+            let contract_address = deployment.contract_address;
+            let cursor = redis_client
+                .get_contract_cursor(deployment.contract_chain_id, contract_address)
+                .await;
+
+            // If the cursor is None, use the start block.
+            let cursor = match cursor {
+                Some(cursor) => cursor,
+                None => deployment.cursor_start_block,
+            };
+
+            if current_block > cursor {
+                store_events(
+                    &rpc_url,
+                    contract_address,
+                    cursor,
+                    current_block,
+                    &mut redis_client,
+                )
+                .await;
+                redis_client
+                    .set_contract_cursor(
+                        deployment.contract_chain_id,
+                        contract_address,
+                        current_block,
+                    )
+                    .await;
+            }
         }
-
-        ethereum_ws_vec.push(ethereum_ws.unwrap());
-        contract_addresses.push(contract_address.unwrap());
-    }
-
-    let mut join_handles = Vec::new();
-
-    for (ethereum_ws, contract_address) in ethereum_ws_vec
-        .into_iter()
-        .zip(contract_addresses.into_iter())
-    {
-        let handle = tokio::spawn(async move {
-            listen_for_events(&ethereum_ws, &contract_address).await;
-        });
-        join_handles.push(handle);
-    }
-
-    for handle in join_handles {
-        handle.await.expect("Task panicked or failed");
+        tokio::time::sleep(tokio::time::Duration::from_secs(LOOP_INTERVAL)).await;
     }
 }

@@ -6,7 +6,7 @@ use ethers::contract::abigen;
 use ethers::core::types::{Address, Filter};
 use ethers::providers::{Middleware, Provider, StreamExt, Ws};
 use log::info;
-use vectorx::input::{DataCommitmentRange, RpcDataFetcher};
+use vectorx::input::{DataCommitmentRange, RedisClient};
 
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);
@@ -34,7 +34,7 @@ async fn listen_for_events(ethereum_ws: &str, contract_address: &str) {
         chain_id, contract_address
     );
 
-    let mut data_fetcher = RpcDataFetcher::new().await;
+    let mut redis_client = RedisClient::new().await;
 
     let client = Arc::new(client);
 
@@ -58,8 +58,7 @@ async fn listen_for_events(ethereum_ws: &str, contract_address: &str) {
             data_commitment: expected_data_commitment.to_vec(),
         };
 
-        data_fetcher
-            .redis_client
+        redis_client
             .add_data_commitment_range(chain_id.as_u64(), address.0.to_vec(), data_commitment_range)
             .await;
     }

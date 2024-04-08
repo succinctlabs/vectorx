@@ -17,8 +17,8 @@ use vectorx::input::RpcDataFetcher;
 #[derive(Parser, Debug, Clone)]
 #[command(about = "Get the genesis parameters from a block.")]
 pub struct GenesisArgs {
-    #[arg(long, default_value = "1")]
-    pub block: u32,
+    #[arg(long)]
+    pub block: Option<u32>,
 }
 
 #[tokio::main]
@@ -30,19 +30,21 @@ pub async fn main() {
 
     let args = GenesisArgs::parse();
 
-    let genesis_block = args.block;
-
-    let header = fetcher.get_header(genesis_block).await;
+    let header;
+    if let Some(block) = args.block {
+        header = fetcher.get_header(block).await;
+    } else {
+        header = fetcher.get_head().await;
+    }
     let header_hash = header.hash();
-    let authority_set_id = fetcher.get_authority_set_id(genesis_block).await;
-    let authority_set_hash = fetcher.compute_authority_set_hash(genesis_block).await;
-    info!("Block {}'s header hash: {:?}", genesis_block, header_hash);
+    let authority_set_id = fetcher.get_authority_set_id(header.number).await;
+    let authority_set_hash = fetcher.compute_authority_set_hash(header.number).await;
+
     info!(
-        "Block {}'s authority set id: {:?}",
-        genesis_block, authority_set_id
-    );
-    info!(
-        "Block {}'s authority set hash: {:?}",
-        genesis_block, authority_set_hash
+        "\nGENESIS_HEIGHT={:?}\nGENESIS_HEADER={}\nGENESIS_AUTHORITY_SET_ID={}\nGENESIS_AUTHORITY_SET_HASH={}\n",
+        header.number,
+        format!("{:#x}", header_hash),
+        authority_set_id,
+        format!("{:#x}", authority_set_hash)
     );
 }

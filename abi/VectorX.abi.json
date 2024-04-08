@@ -283,6 +283,19 @@
     },
     {
         "type": "function",
+        "name": "latestAuthoritySetId",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint64",
+                "internalType": "uint64"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
         "name": "latestBlock",
         "inputs": [],
         "outputs": [
@@ -303,6 +316,25 @@
                 "name": "",
                 "type": "bytes32",
                 "internalType": "bytes32"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
+        "name": "rangeStartBlocks",
+        "inputs": [
+            {
+                "name": "",
+                "type": "bytes32",
+                "internalType": "bytes32"
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint32",
+                "internalType": "uint32"
             }
         ],
         "stateMutability": "view"
@@ -855,6 +887,11 @@
     {
         "type": "error",
         "name": "NextAuthoritySetExists",
+        "inputs": []
+    },
+    {
+        "type": "error",
+        "name": "OldAuthoritySetId",
         "inputs": []
     },
     {

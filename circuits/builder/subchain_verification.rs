@@ -71,13 +71,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
         };
 
         // The number of map jobs is the smallest power of 2 that is >= to MAX_NUM_HEADERS / HEADERS_PER_MAP.
-        let mut num_map_jobs = MAX_NUM_HEADERS / HEADERS_PER_MAP;
-        if MAX_NUM_HEADERS % HEADERS_PER_MAP != 0 {
-            num_map_jobs += 1;
-        }
-        let num_jobs_power_of_2 = f32::log2(num_map_jobs as f32).ceil() as u32;
-        num_map_jobs = 2usize.pow(num_jobs_power_of_2);
-        assert!(num_map_jobs >= 2, "Number of map jobs must be at least 2!");
+        let num_map_jobs = (MAX_NUM_HEADERS / HEADERS_PER_MAP).next_power_of_two();
 
         let relative_block_nums =
             (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();

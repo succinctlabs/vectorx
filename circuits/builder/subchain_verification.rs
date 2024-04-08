@@ -93,12 +93,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     // 4. Compute the state and data merkle roots for the batch.
 
                     let batch_start_block =
-                        builder.add(map_ctx.global_start_block, map_relative_block_nums.as_vec()[0]);
+                        builder.add(map_ctx.global_start_block, map_relative_block_nums[0]);
 
                     // Get the end block of this leaf.
                     let batch_end_block = builder.add(
                         map_ctx.global_start_block,
-                        map_relative_block_nums.as_vec()[HEADERS_PER_MAP - 1],
+                        map_relative_block_nums[HEADERS_PER_MAP - 1],
                     );
                     // Note: These headers are untrusted as they are fetched via a hint, and so need
                     // to be explicitly constrained to the public inputs of the circuit.

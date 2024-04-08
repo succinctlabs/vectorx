@@ -38,10 +38,14 @@ contract DeployScript is Script {
                     gateway: vm.envAddress("GATEWAY_ADDRESS"),
                     height: uint32(vm.envUint("GENESIS_HEIGHT")),
                     header: vm.envBytes32("GENESIS_HEADER"),
-                    authoritySetId: uint64(vm.envUint("AUTHORITY_SET_ID")),
-                    authoritySetHash: vm.envBytes32("AUTHORITY_SET_HASH"),
+                    authoritySetId: uint64(
+                        vm.envUint("GENESIS_AUTHORITY_SET_ID")
+                    ),
+                    authoritySetHash: vm.envBytes32(
+                        "GENESIS_AUTHORITY_SET_HASH"
+                    ),
                     headerRangeFunctionId: vm.envBytes32(
-                    "HEADER_RANGE_FUNCTION_ID"
+                        "HEADER_RANGE_FUNCTION_ID"
                     ),
                     rotateFunctionId: vm.envBytes32("ROTATE_FUNCTION_ID")
                 })
@@ -56,15 +60,18 @@ contract DeployScript is Script {
             lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));
         }
         if (vm.envBool("UPDATE_GENESIS_STATE")) {
-            lightClient.updateGenesisState(uint32(vm.envUint("GENESIS_HEIGHT")),
+            lightClient.updateGenesisState(
+                uint32(vm.envUint("GENESIS_HEIGHT")),
                 vm.envBytes32("GENESIS_HEADER"),
-                uint64(vm.envUint("AUTHORITY_SET_ID")),
-                vm.envBytes32("AUTHORITY_SET_HASH"));
+                uint64(vm.envUint("GENESIS_AUTHORITY_SET_ID")),
+                vm.envBytes32("GENESIS_AUTHORITY_SET_HASH")
+            );
         }
         if (vm.envBool("UPDATE_FUNCTION_IDS")) {
-            lightClient.updateFunctionIds(vm.envBytes32(
-                "HEADER_RANGE_FUNCTION_ID"
-                ), vm.envBytes32("ROTATE_FUNCTION_ID"));
+            lightClient.updateFunctionIds(
+                vm.envBytes32("HEADER_RANGE_FUNCTION_ID"),
+                vm.envBytes32("ROTATE_FUNCTION_ID")
+            );
         }
 
         console.logAddress(address(lightClient));

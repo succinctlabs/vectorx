@@ -8,6 +8,8 @@ import {ISuccinctGateway} from "@succinctx/interfaces/ISuccinctGateway.sol";
 /// @notice VectorX is a light client for Avail's consensus.
 /// @dev The light client tracks both the state of Avail's Grandpa consensus and Vector, Avail's
 ///     data commitment solution.
+/// @dev Ensure that all new storage variables are placed after existing storage variables to avoid
+/// storage corruption during upgrades.
 contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice Indicator of if the contract is frozen.
     bool public frozen;
@@ -17,6 +19,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
     /// @notice The latest block that has been committed.
     uint32 public latestBlock;
+
+    /// @notice The latest authority set id used in commitHeaderRange.
+    uint64 public latestAuthoritySetId;
 
     /// @notice The function for requesting a header range.
     bytes32 public headerRangeFunctionId;
@@ -60,6 +65,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         blockHeightToHeaderHash[_params.height] = _params.header;
         authoritySetIdToHash[_params.authoritySetId] = _params.authoritySetHash;
+        latestAuthoritySetId = _params.authoritySetId;
         latestBlock = _params.height;
 
         rotateFunctionId = _params.rotateFunctionId;
@@ -95,8 +101,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 _authoritySetHash
     ) external onlyGuardian {
         blockHeightToHeaderHash[_height] = _header;
-        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
         latestBlock = _height;
+
+        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestAuthoritySetId = _authoritySetId;
     }
 
     /// @notice Force update the data & state commitments for a range of blocks.
@@ -136,8 +144,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
                 _stateRootCommitments[i]
             );
         }
-        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
         latestBlock = _endBlocks[_endBlocks.length - 1];
+
+        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
+        latestAuthoritySetId = _endAuthoritySetId;
     }
 
     /// @notice Request a header update and data commitment from range (latestBlock, requestedBlock].
@@ -213,6 +223,14 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
         if (authoritySetHash == bytes32(0)) {
             revert AuthoritySetNotFound();
+        }
+
+        if (_authoritySetId < latestAuthoritySetId) {
+            revert OldAuthoritySetId();
+        }
+
+        if (_authoritySetId > latestAuthoritySetId) {
+            latestAuthoritySetId = _authoritySetId;
         }
 
         require(_targetBlock > latestBlock);
@@ -307,6 +325,13 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         // Note: Occurs if requesting a new authority set id that is not the next authority set id.
         if (currentAuthoritySetHash == bytes32(0)) {
             revert AuthoritySetNotFound();
+        }
+
+        bytes32 nextAuthoritySetHash = authoritySetIdToHash[
+            _currentAuthoritySetId + 1
+        ];
+        if (nextAuthoritySetHash != bytes32(0)) {
+            revert NextAuthoritySetExists();
         }
 
         bytes memory input = abi.encodePacked(

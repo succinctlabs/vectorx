@@ -2094,8 +2094,25 @@ version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
+<<<<<<< HEAD
  "pkcs8",
  "signature",
+=======
+ "pkcs8 0.10.2",
+ "signature 2.2.0",
+]
+
+[[package]]
+name = "ed25519-dalek"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
+dependencies = [
+ "curve25519-dalek 3.2.0",
+ "ed25519 1.5.3",
+ "sha2 0.9.9",
+ "zeroize",
+>>>>>>> origin/main
 ]
 
 [[package]]
@@ -8292,7 +8309,11 @@ dependencies = [
  "avail-subxt",
  "clap 4.5.2",
  "dotenv",
+<<<<<<< HEAD
  "ed25519-dalek",
+=======
+ "ed25519-dalek 2.1.1",
+>>>>>>> origin/main
  "env_logger 0.9.3",
  "ethers",
  "ff_ce",

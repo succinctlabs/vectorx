@@ -22,7 +22,6 @@ use crate::vars::{EncodedHeader, EncodedHeaderVariable, SubchainVerificationVari
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
     pub global_start_block: U32Variable,
-    pub global_start_header_hash: Bytes32Variable,
     pub global_end_block: U32Variable,
 }
 
@@ -66,18 +65,11 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
     {
         let ctx = SubchainVerificationCtx {
             global_start_block: trusted_block,
-            global_start_header_hash: trusted_header_hash,
             global_end_block: target_block,
         };
 
         // The number of map jobs is the smallest power of 2 that is >= to MAX_NUM_HEADERS / HEADERS_PER_MAP.
-        let mut num_map_jobs = MAX_NUM_HEADERS / HEADERS_PER_MAP;
-        if MAX_NUM_HEADERS % HEADERS_PER_MAP != 0 {
-            num_map_jobs += 1;
-        }
-        let num_jobs_power_of_2 = f32::log2(num_map_jobs as f32).ceil() as u32;
-        num_map_jobs = 2usize.pow(num_jobs_power_of_2);
-        assert!(num_map_jobs >= 2, "Number of map jobs must be at least 2!");
+        let num_map_jobs = (MAX_NUM_HEADERS / HEADERS_PER_MAP).next_power_of_two();
 
         let relative_block_nums =
             (1u32..(num_map_jobs as u32 * HEADERS_PER_MAP as u32) + 1).collect_vec();
@@ -99,12 +91,12 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     // 4. Compute the state and data merkle roots for the batch.
 
                     let batch_start_block =
-                        builder.add(map_ctx.global_start_block, map_relative_block_nums.as_vec()[0]);
+                        builder.add(map_ctx.global_start_block, map_relative_block_nums[0]);
 
                     // Get the end block of this leaf.
                     let batch_end_block = builder.add(
                         map_ctx.global_start_block,
-                        map_relative_block_nums.as_vec()[HEADERS_PER_MAP - 1],
+                        map_relative_block_nums[HEADERS_PER_MAP - 1],
                     );
                     // Note: These headers are untrusted as they are fetched via a hint, and so need
                     // to be explicitly constrained to the public inputs of the circuit.

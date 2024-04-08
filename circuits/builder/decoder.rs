@@ -17,6 +17,9 @@ pub trait DecodingMethods {
         compact_bytes: ArrayVariable<ByteVariable, 5>,
     ) -> (U32Variable, Variable);
 
+    /// Get the byte length of a compact int based on the compress mode.
+    fn get_compact_int_byte_length(&mut self, compress_mode: Variable) -> Variable;
+
     /// Decode a header into its components: {block_nb, parent_hash, state_root and data_root}.
     /// header_hash is used for the RLC challenge in get_fixed_subarray.
     fn decode_header<const S: usize>(
@@ -88,6 +91,16 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         (value, compress_mode)
     }
 
+    fn get_compact_int_byte_length(&mut self, compress_mode: Variable) -> Variable {
+        // All possible lengths of a SCALE-encoded compact int.
+        let all_possible_lengths = vec![
+            self.constant::<Variable>(L::Field::from_canonical_usize(1)),
+            self.constant::<Variable>(L::Field::from_canonical_usize(2)),
+            self.constant::<Variable>(L::Field::from_canonical_usize(4)),
+            self.constant::<Variable>(L::Field::from_canonical_usize(5)),
+        ];
+        self.select_array_random_gate(&all_possible_lengths, compress_mode)
+    }
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
@@ -116,7 +129,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // The next field is the data root. The data root is the last 32 bytes of the header.
         // Spec: https://github.com/availproject/avail-core/blob/main/core/src/header/extension/v3.rs#L9-L15
-        let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END as u32);
+        let data_root_offset = self.constant::<U32Variable>(DATA_ROOT_OFFSET_FROM_END);
         let mut data_root_start = self.sub(header.header_size, data_root_offset);
 
         // If header_size == 0, then set data_root_start to 0.
@@ -222,7 +235,18 @@ pub mod tests {
         let circuit = builder.build();
 
         // Test cases are (compact int, compress mode).
-        let test_cases = [(1u32, 0), (64u32, 1), (16384u32, 2), (4294967295u32, 3)];
+        let test_cases = [
+            (u32::MIN, 0),
+            (1u32, 0),
+            (63u32, 0),
+            (64u32, 1),
+            (16383u32, 1),
+            (16384u32, 2),
+            (1073741823u32, 2),
+            (1073741824u32, 3),
+            (4294967295u32, 3),
+            (u32::MAX, 3),
+        ];
 
         for i in 0..test_cases.len() {
             let mut input = circuit.input();

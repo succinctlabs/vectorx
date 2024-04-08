@@ -39,6 +39,11 @@ impl<
             .get_header_rotate::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_nb)
             .await;
 
+        // Note: This is a developer sanity check & not necessary for the security of the circuit.
+        if rotate_data.num_authorities > MAX_AUTHORITY_SET_SIZE {
+            panic!("The number of authorities is greater than the maximum authority set size.");
+        }
+
         let rotate = RotateStruct::<HEADER_LENGTH, MAX_AUTHORITY_SET_SIZE, L::Field> {
             epoch_end_block_number: epoch_end_block_nb,
             target_header: EncodedHeader {

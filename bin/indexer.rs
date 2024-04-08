@@ -1,31 +1,21 @@
-//! To build the binary:
-//!
-//!     `cargo build --release --bin indexer`
-//!
-//!
-//!
-//!
-//!
 use std::collections::HashMap;
 use std::env;
-use std::ops::Deref;
 
 use avail_subxt::config::Header as HeaderTrait;
-use avail_subxt::subxt_rpc::RpcParams;
-use avail_subxt::{api, build_client};
+use avail_subxt::{api, AvailClient, RpcParams};
 use codec::Encode;
 use log::debug;
 use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::DUMMY_SIGNATURE;
 use sp_core::ed25519::{self};
 use sp_core::{blake2_256, Pair, H256};
+use subxt::backend::rpc::RpcSubscription;
 use vectorx::input::types::{GrandpaJustification, SignerMessage, StoredJustificationData};
 use vectorx::input::RpcDataFetcher;
 
 async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
-    let sub: Result<avail_subxt::subxt_rpc::Subscription<GrandpaJustification>, _> = fetcher
+    let sub: Result<RpcSubscription<GrandpaJustification>, _> = fetcher
         .client
         .rpc()
-        .deref()
         .subscribe(
             "grandpa_subscribeJustifications",
             RpcParams::new(),
@@ -44,8 +34,8 @@ async fn listen_for_justifications(mut fetcher: RpcDataFetcher) {
         // Get the header corresponding to the new justification.
         let header = fetcher
             .client
-            .rpc()
-            .header(Some(justification.commit.target_hash))
+            .legacy_rpc()
+            .chain_get_header(Some(justification.commit.target_hash))
             .await
             .unwrap()
             .unwrap();
@@ -163,7 +153,7 @@ pub async fn main() {
     let avail_chain_id = env::var("AVAIL_CHAIN_ID").unwrap();
 
     let fetcher = RpcDataFetcher {
-        client: build_client(avail_url.clone(), false).await.unwrap().0,
+        client: AvailClient::new(avail_url.clone()).await.unwrap(),
         redis_client: vectorx::input::RedisClient::new().await,
         avail_chain_id,
         avail_url,

@@ -13,7 +13,7 @@ use avail_subxt::primitives::Header;
 use avail_subxt::subxt_rpc::RpcParams;
 use avail_subxt::{api, build_client};
 use codec::{Compact, Decode, Encode};
-use ed25519_dalek::{PublicKey, Signature, Verifier};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use ethers::types::H256;
 use futures::future::join_all;
 use log::{debug, info};
@@ -202,9 +202,9 @@ impl RedisClient {
 }
 
 /// This function is useful for verifying that a Ed25519 signature is valid, it will panic if the signature is not valid
-pub fn verify_signature(pubkey_bytes: &[u8], signed_message: &[u8], signature: &[u8; 64]) {
-    let pubkey_dalek = PublicKey::from_bytes(pubkey_bytes).unwrap();
-    let verified = pubkey_dalek.verify(signed_message, &Signature::from_bytes(signature).unwrap());
+pub fn verify_signature(pubkey_bytes: &[u8; 32], signed_message: &[u8], signature: &[u8; 64]) {
+    let pubkey = VerifyingKey::from_bytes(pubkey_bytes).unwrap();
+    let verified = pubkey.verify(signed_message, &Signature::from_bytes(signature));
     if verified.is_err() {
         panic!("Signature is not valid");
     }
@@ -691,7 +691,7 @@ impl RpcDataFetcher {
                 .for_each(|precommit| {
                     let pubkey = precommit.clone().id;
                     let signature = precommit.clone().signature.0;
-                    let pubkey_bytes = pubkey.0.to_vec();
+                    let pubkey_bytes = pubkey.0;
 
                     // Verify the signature by this validator over the signed_message which is shared.
                     verify_signature(&pubkey_bytes, &signed_message, &signature);
@@ -703,7 +703,7 @@ impl RpcDataFetcher {
             let mut pubkeys = Vec::new();
             let mut voting_weight = 0;
             for pubkey_bytes in authorities_pubkey_bytes.iter() {
-                let signature = pubkey_bytes_to_signature.get(&pubkey_bytes.as_bytes().to_vec());
+                let signature = pubkey_bytes_to_signature.get(pubkey_bytes.as_bytes());
 
                 if let Some(valid_signature) = signature {
                     validator_signed.push(true);

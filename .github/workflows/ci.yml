@@ -40,6 +40,11 @@ jobs:
           toolchain: nightly-2024-02-22
           override: true
 
+      - name: Run cargo audit
+        uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:

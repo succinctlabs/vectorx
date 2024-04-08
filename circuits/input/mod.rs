@@ -21,7 +21,7 @@ use plonky2x::frontend::ecc::curve25519::ed25519::eddsa::{DUMMY_PUBLIC_KEY, DUMM
 use redis::aio::Connection;
 use redis::{AsyncCommands, JsonAsyncCommands};
 use sha2::{Digest, Sha256};
-use sp_core::ed25519;
+use sp_core::{ed25519, H160};
 use tokio::time::sleep;
 
 use self::types::{
@@ -161,6 +161,43 @@ impl RedisClient {
         con.zrangebyscore(key, start, end)
             .await
             .expect("Failed to get keys")
+    }
+
+    pub async fn get_contract_cursor(
+        &mut self,
+        ethereum_chain_id: u64,
+        address: H160,
+    ) -> Option<u64> {
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
+
+        let key = format!("{}:{:#x}:cursor", ethereum_chain_id, address);
+
+        // Return None if the key does not exist.
+        let cursor_opt = con.get(key).await;
+        if let Ok(cursor) = cursor_opt {
+            return Some(cursor);
+        }
+
+        None
+    }
+
+    pub async fn set_contract_cursor(
+        &mut self,
+        ethereum_chain_id: u64,
+        address: H160,
+        cursor: u64,
+    ) {
+        let mut con = match self.get_connection().await {
+            Ok(con) => con,
+            Err(e) => panic!("{}", e),
+        };
+
+        let key = format!("{}:{:#x}:cursor", ethereum_chain_id, address);
+
+        let _: () = con.set(key, cursor).await.expect("Failed to set key");
     }
 
     /// Stores data commitment range data in Redis. Errors if setting the key fails.

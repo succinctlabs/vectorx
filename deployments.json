@@ -1,0 +1,22 @@
+{
+    "deployments": [
+        {
+            "sourceChainName": "TURING",
+            "contractChainId": 11155111,
+            "contractAddress": "0xe542db219a7e2b29c7aeaeace242c9a2cd528f96",
+            "cursorStartBlock": 5655941
+        },
+        {
+            "sourceChainName": "HEX",
+            "contractChainId": 11155111,
+            "contractAddress": "0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75",
+            "cursorStartBlock": 5655976
+        },
+        {
+            "sourceChainName": "HEX",
+            "contractChainId": 421614,
+            "contractAddress": "0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75",
+            "cursorStartBlock": 31672190
+        }
+    ]
+}

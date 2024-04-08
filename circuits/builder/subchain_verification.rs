@@ -22,7 +22,6 @@ use crate::vars::{EncodedHeader, EncodedHeaderVariable, SubchainVerificationVari
 #[derive(Clone, Debug, CircuitVariable)]
 pub struct SubchainVerificationCtx {
     pub global_start_block: U32Variable,
-    pub global_start_header_hash: Bytes32Variable,
     pub global_end_block: U32Variable,
 }
 
@@ -66,7 +65,6 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
     {
         let ctx = SubchainVerificationCtx {
             global_start_block: trusted_block,
-            global_start_header_hash: trusted_header_hash,
             global_end_block: target_block,
         };
 

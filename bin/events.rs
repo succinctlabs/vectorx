@@ -42,8 +42,8 @@ fn get_deployments() -> Vec<Deployment> {
     deployments
 }
 
+// Read the RPC URL from the corresponding environment variable.
 fn get_ethereum_rpc(chain_id: u64) -> Option<String> {
-    // Read RPC URL from environment variable.
     let rpc_url = env::var(format!("RPC_{}", chain_id));
     if let Ok(ethereum_rpc_url) = rpc_url {
         Some(ethereum_rpc_url)

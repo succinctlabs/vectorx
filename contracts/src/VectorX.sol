@@ -18,6 +18,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     /// @notice The latest block that has been committed.
     uint32 public latestBlock;
 
+    /// @notice The latest authority set id used in commitHeaderRange.
+    uint64 public latestAuthoritySetId;
+
     /// @notice The function for requesting a header range.
     bytes32 public headerRangeFunctionId;
 
@@ -60,6 +63,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         blockHeightToHeaderHash[_params.height] = _params.header;
         authoritySetIdToHash[_params.authoritySetId] = _params.authoritySetHash;
+        latestAuthoritySetId = _params.authoritySetId;
         latestBlock = _params.height;
 
         rotateFunctionId = _params.rotateFunctionId;
@@ -95,8 +99,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 _authoritySetHash
     ) external onlyGuardian {
         blockHeightToHeaderHash[_height] = _header;
-        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
         latestBlock = _height;
+
+        authoritySetIdToHash[_authoritySetId] = _authoritySetHash;
+        latestAuthoritySetId = _authoritySetId;
     }
 
     /// @notice Force update the data & state commitments for a range of blocks.
@@ -136,8 +142,10 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
                 _stateRootCommitments[i]
             );
         }
-        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
         latestBlock = _endBlocks[_endBlocks.length - 1];
+
+        authoritySetIdToHash[_endAuthoritySetId] = _endAuthoritySetHash;
+        latestAuthoritySetId = _endAuthoritySetId;
     }
 
     /// @notice Request a header update and data commitment from range (latestBlock, requestedBlock].
@@ -213,6 +221,14 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 authoritySetHash = authoritySetIdToHash[_authoritySetId];
         if (authoritySetHash == bytes32(0)) {
             revert AuthoritySetNotFound();
+        }
+
+        if (_authoritySetId < latestAuthoritySetId) {
+            revert OldAuthoritySetId();
+        }
+
+        if (_authoritySetId > latestAuthoritySetId) {
+            latestAuthoritySetId = _authoritySetId;
         }
 
         require(_targetBlock > latestBlock);

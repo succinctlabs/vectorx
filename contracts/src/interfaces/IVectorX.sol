@@ -49,4 +49,7 @@ interface IVectorX {
 
     /// @notice Authority set not found.
     error AuthoritySetNotFound();
+
+    /// @notice The authority set id is older than the authority set id of the latest commitHeaderRange.
+    error OldAuthoritySetId();
 }

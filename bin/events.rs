@@ -72,8 +72,8 @@ async fn store_events(
     let chain_id = provider.get_chainid().await.unwrap();
 
     info!(
-        "Listening for VectorX events on chain {} at address: {}",
-        chain_id, contract_address
+        "Storing VectorX events on chain {} at address: {:#x} from block {} to {}",
+        chain_id, contract_address, start_block, end_block
     );
 
     let client = Arc::new(provider);
@@ -112,6 +112,9 @@ async fn store_events(
 
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
+    env_logger::init();
+
     let deployments = get_deployments();
 
     // Every minute, check if there are new events.
@@ -170,6 +173,7 @@ async fn main() {
                     .await;
             }
         }
+        info!("Sleeping for {} seconds", LOOP_INTERVAL);
         tokio::time::sleep(tokio::time::Duration::from_secs(LOOP_INTERVAL)).await;
     }
 }

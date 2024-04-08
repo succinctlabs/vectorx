@@ -30,12 +30,14 @@ pub const WEIGHT_LENGTH: usize = 8;
 // Length of the delay in an Avail header.
 pub const DELAY_LENGTH: usize = 4;
 
-// The base length of the prefix excluding the variable length encoded new authority set length.
-pub const BASE_PREFIX_LENGTH: usize = 9;
+// The size in bytes of the section of the prefix corresponding to the consensus engine id.
+pub const CONSENSUS_ENGINE_ID_PREFIX_LENGTH: usize = 6;
 
-// The maximum length of the prefix before the encoded new authority set. This is the maximum length
-// including the encoded new authority set length.
-pub const MAX_PREFIX_LENGTH: usize = BASE_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES;
+// The maximum length of the prefix before the encoded new authority set. Includes the consensus
+// engine id, the encoded scheduled change message length (up to MAX_COMPACT_UINT_BYTES), the
+// schedule change flag, and the encoded new authority set length (up to MAX_COMPACT_UINT_BYTES).
+pub const MAX_PREFIX_LENGTH: usize =
+    CONSENSUS_ENGINE_ID_PREFIX_LENGTH + MAX_COMPACT_UINT_BYTES + 1 + MAX_COMPACT_UINT_BYTES;
 
 // Length of the justification encoded precommit message.  This is what is
 // signed by the authorities.

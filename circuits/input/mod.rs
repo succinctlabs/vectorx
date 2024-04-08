@@ -29,8 +29,8 @@ use self::types::{
     HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
-    BASE_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH, VALIDATOR_LENGTH,
-    WEIGHT_LENGTH,
+    CONSENSUS_ENGINE_ID_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH,
+    VALIDATOR_LENGTH,
 };
 
 #[derive(Clone)]
@@ -838,6 +838,17 @@ impl RpcDataFetcher {
         let num_authorities = new_authorities.len();
         let encoded_num_authorities_len = Compact(num_authorities as u32).encode().len();
 
+        // Compute the length of the ScheduleChange message which is a function of the number of authorities.
+        // Within the encoded ScheduledChange message, the ConsensusLog::ScheduleChange enum flag requires 1 byte, the authority count
+        // requires 1, 2 , 4 or 5 bytes; each authority requires exactly 40 bytes and the delay field requires an additional 4 bytes.
+        let scheduled_change_message_length =
+            1 + encoded_num_authorities_len + (40 * num_authorities) + DELAY_LENGTH;
+        // Byte size of the encoded scheduled change message length.
+        let encoded_scheduled_change_message_length_size =
+            Compact(scheduled_change_message_length as u32)
+                .encode()
+                .len();
+
         let mut position = 0;
         let number_encoded = Compact(epoch_end_block).encode();
         // Skip past parent_hash, number, state_root, extrinsics_root.
@@ -867,17 +878,13 @@ impl RpcDataFetcher {
                         let pubkey = &authority_chunk[..PUBKEY_LENGTH];
                         let weight = &authority_chunk[PUBKEY_LENGTH..];
 
+                        let expected_weight = &[1u8, 0, 0, 0, 0, 0, 0, 0];
+
                         // Assert the pubkey in the encoded log is correct.
                         assert_eq!(*pubkey, new_authorities[i].0);
 
-                        // Assert weight's LE representation == 1
-                        for j in 0..WEIGHT_LENGTH {
-                            if j == 0 {
-                                assert_eq!(weight[j], 1);
-                            } else {
-                                assert_eq!(weight[j], 0);
-                            }
-                        }
+                        // Assert the weight is correct.
+                        assert_eq!(weight, expected_weight);
 
                         cursor += VALIDATOR_LENGTH;
                     }
@@ -915,9 +922,13 @@ impl RpcDataFetcher {
             padded_pubkeys.push(CompressedEdwardsY::from_slice(&DUMMY_PUBLIC_KEY).unwrap());
         }
 
-        // skip 1 byte, 1 consensus id, 4 consensus engine id, skip 2 bytes,
-        // 1 scheduled change, variable length compact encoding of the number of authorities.
-        let prefix_length = BASE_PREFIX_LENGTH + encoded_num_authorities_len;
+        // skip 1 byte, 1 consensus id, 4 consensus engine id, variable length compact encoding of the
+        // scheduled change message length, 1 scheduled change flag, variable length compact encoding of
+        // the number of authorities.
+        let prefix_length = CONSENSUS_ENGINE_ID_PREFIX_LENGTH
+            + encoded_scheduled_change_message_length_size
+            + 1
+            + encoded_num_authorities_len;
         // The end position is the position + prefix_length + encoded pubkeys len + 4 delay bytes.
         let end_position = position + prefix_length + ((32 + 8) * new_authorities.len()) + 4;
 
@@ -1150,8 +1161,7 @@ mod tests {
 
         let mut data_fetcher = RpcDataFetcher::new().await;
 
-        // let head = data_fetcher.get_head().await.number;
-        let mut start_epoch = 179;
+        let mut start_epoch = 1;
         loop {
             let epoch_end_block = data_fetcher.last_justified_block(start_epoch).await;
             if epoch_end_block == 0 {
@@ -1159,12 +1169,17 @@ mod tests {
             }
             log::debug!("epoch_end_block {:?}", epoch_end_block);
 
-            let _ = data_fetcher
+            let rotate_data = data_fetcher
                 .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block)
                 .await;
 
             let num_authorities = data_fetcher.get_authorities(epoch_end_block).await.len();
             println!("num authorities {:?}", num_authorities);
+
+            println!(
+                "start byte {:?}",
+                rotate_data.header_bytes[rotate_data.start_position]
+            );
 
             start_epoch += 1;
         }

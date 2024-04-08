@@ -178,7 +178,7 @@ impl<L: PlonkParameters<D>, const D: usize> GrandpaJustificationVerifier for Cir
             num_signed = self.add(num_signed, val_signed_u32);
         }
 
-        // Verify the number of validators that signed is greater than to the threshold.
+        // Verify the number of validators that signed is greater than the threshold.
         let scaled_num_signed = self.mul(num_signed, threshold_denominator);
         let scaled_threshold = self.mul(num_active_authorities, threshold_numerator);
         let is_valid_num_signed = self.gt(scaled_num_signed, scaled_threshold);

@@ -82,35 +82,45 @@ async fn store_events(
 
     let client = Arc::new(provider);
 
-    let header_range_filter = Filter::new()
-        .address(contract_address)
-        .from_block(start_block)
-        .to_block(end_block)
-        .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
+    let mut curr_start_block = start_block;
+    while curr_start_block < end_block {
+        // Max 100000 blocks per query.
+        let mut batch_end_block = curr_start_block + 50000;
+        if batch_end_block > end_block {
+            batch_end_block = end_block;
+        }
+        let header_range_filter = Filter::new()
+            .address(contract_address)
+            .from_block(curr_start_block)
+            .to_block(batch_end_block)
+            .event("HeaderRangeCommitmentStored(uint32,uint32,bytes32,bytes32)");
 
-    let logs = client.get_logs(&header_range_filter).await.unwrap();
-    for log in logs {
-        let log_bytes = log.data;
-        let decoded = HeaderRangeCommitmentStoredTuple::abi_decode(&log_bytes.0, true).unwrap();
+        let logs = client.get_logs(&header_range_filter).await.unwrap();
+        for log in logs {
+            let log_bytes = log.data;
+            let decoded = HeaderRangeCommitmentStoredTuple::abi_decode(&log_bytes.0, true).unwrap();
 
-        let trusted_block = decoded.0;
-        let end_block = decoded.1;
-        let expected_data_commitment: Vec<u8> = decoded.2.to_vec();
-        let expected_data_commitment: [u8; 32] = expected_data_commitment.try_into().unwrap();
+            let trusted_block = decoded.0;
+            let end_block = decoded.1;
+            let expected_data_commitment: Vec<u8> = decoded.2.to_vec();
+            let expected_data_commitment: [u8; 32] = expected_data_commitment.try_into().unwrap();
 
-        let data_commitment_range = DataCommitmentRange {
-            start: trusted_block,
-            end: end_block,
-            data_commitment: expected_data_commitment.to_vec(),
-        };
+            let data_commitment_range = DataCommitmentRange {
+                start: trusted_block,
+                end: end_block,
+                data_commitment: expected_data_commitment.to_vec(),
+            };
 
-        redis_client
-            .add_data_commitment_range(
-                chain_id.as_u64(),
-                contract_address.0.to_vec(),
-                data_commitment_range,
-            )
-            .await;
+            redis_client
+                .add_data_commitment_range(
+                    chain_id.as_u64(),
+                    contract_address.0.to_vec(),
+                    data_commitment_range,
+                )
+                .await;
+        }
+
+        curr_start_block = batch_end_block;
     }
 }
 

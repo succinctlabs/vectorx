@@ -14,6 +14,12 @@
         },
         {
             "sourceChainName": "HEX",
+            "contractChainId": 11155111,
+            "contractAddress": "0x570f6a1936386a4e060C2Daebbd0b6f5C091e13f",
+            "cursorStartBlock": 5540894
+        },
+        {
+            "sourceChainName": "HEX",
             "contractChainId": 421614,
             "contractAddress": "0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75",
             "cursorStartBlock": 31672190

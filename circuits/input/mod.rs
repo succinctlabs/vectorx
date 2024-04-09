@@ -1218,4 +1218,14 @@ mod tests {
         let chain = data_fetcher.client.legacy_rpc().system_properties().await;
         println!("chain {:?}", chain);
     }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_justification_data() {
+        let mut fetcher = RpcDataFetcher::new().await;
+
+        let block = 49500;
+        let data = fetcher.get_justification_data::<100>(block).await;
+        println!("data {:?}", data.unwrap());
+    }
 }

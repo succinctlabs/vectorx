@@ -42,6 +42,7 @@ pub struct CircuitJustification {
     pub current_authority_set_hash: Vec<u8>,
 }
 
+#[derive(Debug, Clone)]
 pub struct SimpleJustificationData {
     pub pubkeys: Vec<CompressedEdwardsY>,
     pub signatures: Vec<Vec<u8>>,

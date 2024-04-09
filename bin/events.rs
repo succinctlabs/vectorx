@@ -10,6 +10,10 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use vectorx::input::{DataCommitmentRange, RedisClient};
 
+// Necessary environment variables.
+//  - REDIS_URL: The URL of the Redis server to connect to.
+//  - RPC_{CHAIN_ID}'s: The RPC URL's corresponding to the deployments in deployments.json
+
 // Note: Update ABI when updating contract.
 abigen!(VectorX, "./abi/VectorX.abi.json",);
 

@@ -1075,12 +1075,15 @@ mod tests {
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_new_authority_set() {
+        dotenv::dotenv().ok();
+        env_logger::init();
+
         let mut fetcher = RpcDataFetcher::new().await;
 
         // A binary search given a target_authority_set_id, returns the last block justified by
         // target_authority_set_id. This block also specifies the new authority set,
         // target_authority_set_id + 1.
-        let target_authority_set_id = 513;
+        let target_authority_set_id = 2;
         let epoch_end_block_number = fetcher.last_justified_block(target_authority_set_id).await;
 
         // Verify that this is an epoch end block.
@@ -1094,7 +1097,7 @@ mod tests {
 
         // Verify this is an epoch end block.
         assert_eq!(previous_authority_set_id + 1, authority_set_id);
-        assert_eq!(authority_set_id, target_authority_set_id);
+        assert_eq!(previous_authority_set_id, target_authority_set_id);
 
         let rotate_data = fetcher
             .get_header_rotate::<MAX_HEADER_SIZE, MAX_AUTHORITY_SET_SIZE>(epoch_end_block_number)

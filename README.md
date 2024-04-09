@@ -7,18 +7,25 @@ Implementation of zero-knowledge proof circuits for [Vector](https://blog.availp
 Vector X's core contract is `VectorX`, which stores commitments to ranges of data roots and state
 roots from Avail blocks.
 
+The circuits are available on the Succinct Platform [here](https://platform.succinct.xyz/succinctlabs/vectorx).
+
 ## Deployment
 
-The circuits are available on Succinct X [here](https://platform.succinct.xyz/succinctlabs/vectorx).
+VectorX's current maintained contract deployments are listed below.
 
-Vector X is currently deployed for Avail's Goldberg testnet on Sepolia [here](https://sepolia.etherscan.io/address/0x5ac10644a873AAcd288775A90d6D0303496A4304#events).
+| Src            | Dest       | Contract                                                                                           |
+|----------------|------------|----------------------------------------------------------------------------------------------------|
+| Hex Devnet     | Sepolia    | [0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75](https://sepolia.etherscan.io/address/0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75#events)                     |
+| Hex Devnet     | Arb Sepolia| [0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75](https://sepolia.arbiscan.io/address/0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75#events) |
+| Turing Testnet | Sepolia    | [0xe542db219a7e2b29c7aeaeace242c9a2cd528f96](https://sepolia.etherscan.io/address/0xe542db219a7e2b29c7aeaeace242c9a2cd528f96#events)                         |
+
 
 ## Run the VectorX Light Client
 
-Get the genesis parameters for the `VectorX` contract with a specific Avail block (with no input defaults to block 1).
+Get the genesis parameters for the `VectorX` contract.
 
 ```
-cargo run --bin genesis -- --block 240000
+cargo run --bin genesis
 ```
 
 Update `contracts/.env` following `contracts/README.md`.
@@ -59,7 +66,7 @@ cargo run --bin indexer
 
 ## Avail Merkle Proof Service
 
-Whenever a new data root commitment is stored on-chain, the merkle proofs need to be made available for end-users to prove the data root's of blocks within those data commitments. This service listens for data root commitment events on-chain and stores the merkle proofs for each data root in the range, which is then exposed via a separate endpoint.
+Whenever a new data root commitment is stored on-chain, the merkle proofs need to be made available for end-users to prove the data root's of blocks within those data commitments. This service listens for data root commitment events on-chain and stores the merkle proofs for each data root in the range, which is then exposed via a separate endpoint. You can configure the contracts to index with `deployments.json`.
 
 ### Run the Merkle Proof Indexer Service
 
@@ -84,21 +91,7 @@ Example response:
   "data": {
     "blockNumber": 444841,
     "rangeHash": "0x4fec90e517f92a0b3d1aa0013b55eac4e7afa1eff13baec2e4e7a105de412302",
-    "dataCommitment": "0xcaf4ffea1a32541327ecff021f3794eda7a6d3b24849c852d9b5118854f49fd5",
-    "merkleBranch": [
-      "0xdf68ba9b2ebf98303909688ad6a9ae3671e5f91b3f0beffdedeb106e3ff5aba2",
-      "0x2071b56820d44027691b37fe1b0a43d241b01b46dcc638a8d985998b69499090",
-      "0x45a07b99b1491ec7b4cd4965a9d9eb1031f8668c6b64d20768239ccd2bb437aa",
-      "0xb6ad5b859800aa54ed22250fc5c2a8d1dc916d3f3e57d713bb25bc9b8bd50a74",
-      "0x01c30551f619079565fc89dcc1f3f259a1cd8b6e44aba7d9f42f0406e96689fb",
-      "0x178a3caead2a150f2477b9657ebfbc239b2a385817d61134a40aa97651aee38d",
-      "0x12c13409b858e2224bdee9a44a23abce2ccea875bc92df8e5520a7bc3ae99228",
-      "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c"
-    ],
-    "index": 0,
-    "totalLeaves": 256,
-    "dataRoot": "0xa9fc37b017618cf0a7d4ae4935178c63e8206d76eab3f3322d12e746d3fbee03",
-    "blockHash": "0x7f7f777f4a876d76b71615c329ece9c77ec582398cd92d381ae0257795336849"
+    ...
   }
 }
 ```
@@ -116,20 +109,7 @@ Example response:
   "data": {
     "rangeHash": "0x4fec90e517f92a0b3d1aa0013b55eac4e7afa1eff13baec2e4e7a105de412302",
     "dataCommitment": "0xcaf4ffea1a32541327ecff021f3794eda7a6d3b24849c852d9b5118854f49fd5",
-    "merkleBranch": [
-      "0xdf68ba9b2ebf98303909688ad6a9ae3671e5f91b3f0beffdedeb106e3ff5aba2",
-      "0x2071b56820d44027691b37fe1b0a43d241b01b46dcc638a8d985998b69499090",
-      "0x45a07b99b1491ec7b4cd4965a9d9eb1031f8668c6b64d20768239ccd2bb437aa",
-      "0xb6ad5b859800aa54ed22250fc5c2a8d1dc916d3f3e57d713bb25bc9b8bd50a74",
-      "0x01c30551f619079565fc89dcc1f3f259a1cd8b6e44aba7d9f42f0406e96689fb",
-      "0x178a3caead2a150f2477b9657ebfbc239b2a385817d61134a40aa97651aee38d",
-      "0x12c13409b858e2224bdee9a44a23abce2ccea875bc92df8e5520a7bc3ae99228",
-      "0x87eb0ddba57e35f6d286673802a4af5975e22506c7cf4c64bb6be5ee11527f2c"
-    ],
-    "index": 0,
-    "totalLeaves": 256,
-    "dataRoot": "0xa9fc37b017618cf0a7d4ae4935178c63e8206d76eab3f3322d12e746d3fbee03",
-    "blockHash": "0x7f7f777f4a876d76b71615c329ece9c77ec582398cd92d381ae0257795336849"
+    ...
   }
 }
 ```

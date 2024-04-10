@@ -152,7 +152,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
 
                         // Decode the header and save the relevant fields.
                         let header_variable =
-                            builder.decode_header::<MAX_HEADER_SIZE>(&headers[i], &hash);
+                            builder.decode_header::<MAX_HEADER_SIZE>(&headers[i]);
                         block_nums.push(header_variable.block_number);
                         block_parent_hashes.push(header_variable.parent_hash);
                         block_state_roots.push(header_variable.state_root);

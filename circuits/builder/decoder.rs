@@ -6,6 +6,7 @@ use plonky2x::prelude::{
 
 use crate::consts::{
     DATA_ROOT_OFFSET_FROM_END, ENCODED_PRECOMMIT_LENGTH, HASH_SIZE, MAX_COMPACT_UINT_BYTES,
+    MAX_HEADER_SIZE,
 };
 use crate::vars::*;
 
@@ -25,7 +26,6 @@ pub trait DecodingMethods {
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-        header_hash: &Bytes32Variable,
     ) -> HeaderVariable;
 
     /// Decode a precommit message into its components: {block_hash, block_nb, justification_round, authority_set_id}.
@@ -104,7 +104,6 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
     fn decode_header<const S: usize>(
         &mut self,
         header: &EncodedHeaderVariable<S>,
-        header_hash: &Bytes32Variable,
     ) -> HeaderVariable {
         // Spec for Avail header: https://github.com/availproject/avail-core/blob/main/core/src/header/mod.rs#L44-L66
 
@@ -139,11 +138,10 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // Extract the data root from the header.
         let data_root_bytes: Vec<ByteVariable> = self
-            .get_fixed_subarray::<S, HASH_SIZE>(
+            .get_fixed_subarray::<S, MAX_HEADER_SIZE>(
                 &header.header_bytes,
                 data_root_start.variable,
-                // Seed the RLC challenge with a commitment of the header (header_hash).
-                &header_hash.as_bytes(),
+                &header.header_bytes.data,
             )
             .as_vec();
         let data_root = Bytes32Variable::from(data_root_bytes.as_slice());
@@ -293,8 +291,7 @@ pub mod tests {
         let expected_data_roots = builder.read::<ArrayVariable<Bytes32Variable, NUM_BLOCKS>>();
 
         for i in 0..NUM_BLOCKS {
-            let decoded_header =
-                builder.decode_header::<MAX_HEADER_SIZE>(&encoded_headers[i], &header_hashes[i]);
+            let decoded_header = builder.decode_header::<MAX_HEADER_SIZE>(&encoded_headers[i]);
 
             builder.assert_is_equal(decoded_header.block_number, expected_header_nums[i]);
             builder.assert_is_equal(decoded_header.parent_hash, expected_parent_hashes[i]);

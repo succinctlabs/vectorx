@@ -138,7 +138,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
 
         // Extract the data root from the header.
         let data_root_bytes: Vec<ByteVariable> = self
-            .get_fixed_subarray::<S, MAX_HEADER_SIZE>(
+            .get_fixed_subarray::<S, HASH_SIZE>(
                 &header.header_bytes,
                 data_root_start.variable,
                 &header.header_bytes.data,
@@ -272,9 +272,10 @@ pub mod tests {
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
     fn test_decode_headers() {
-        const HEAD_BLOCK_NUM: u32 = 272515;
+        const HEAD_BLOCK_NUM: u32 = 500;
         const NUM_BLOCKS: usize = 1;
         env::set_var("RUST_LOG", "debug");
+        dotenv::dotenv().unwrap();
         env_logger::try_init().unwrap_or_default();
 
         type F = GoldilocksField;

@@ -114,7 +114,7 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                         );
 
                     let mut block_nums = Vec::new();
-                    let mut block_hashes = Vec::new();
+                    // let mut block_hashes = Vec::new();
                     let mut block_parent_hashes = Vec::new();
                     let mut block_state_roots = Vec::new();
                     let mut block_data_roots = Vec::new();
@@ -146,9 +146,9 @@ impl<L: PlonkParameters<D>, const D: usize> SubChainVerifier<L, D> for CircuitBu
                     let mut nb_enabled_leaves = builder.zero();
 
                     for i in 0..HEADERS_PER_MAP {
-                        // Compute the block hash.
-                        let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE>(&headers[i]);
-                        block_hashes.push(hash);
+                        // // Compute the block hash.
+                        // let hash = builder.hash_encoded_header::<MAX_HEADER_SIZE>(&headers[i]);
+                        // block_hashes.push(hash);
 
                         // Decode the header and save the relevant fields.
                         let header_variable =

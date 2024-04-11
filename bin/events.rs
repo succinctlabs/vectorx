@@ -187,7 +187,5 @@ async fn main() {
                     .await;
             }
         }
-        info!("Sleeping for {} seconds", LOOP_INTERVAL);
-        tokio::time::sleep(tokio::time::Duration::from_secs(LOOP_INTERVAL)).await;
     }
 }

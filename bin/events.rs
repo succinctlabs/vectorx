@@ -131,9 +131,6 @@ async fn main() {
 
     let deployments = get_deployments();
 
-    // Every minute, check if there are new events.
-    const LOOP_INTERVAL: u64 = 60;
-
     // For each deployment:
     //  1. Get the Ethereum RPC corresponding to contractChainId. If it doesn't exist, error.
     //  2. Get the cursor corresponding to the contract address. If it doesn't exist, default to cursorStartBlock.

@@ -13,6 +13,7 @@ contract DeployScript is Script {
 
         bytes32 create2Salt = bytes32(vm.envBytes("CREATE2_SALT"));
 
+        bool deploy = vm.envBool("DEPLOY");
         bool upgrade = vm.envBool("UPGRADE");
 
         // Deploy contract
@@ -21,7 +22,7 @@ contract DeployScript is Script {
         console.logAddress(address(lightClientImpl));
 
         VectorX lightClient;
-        if (!upgrade) {
+        if (deploy) {
             lightClient = VectorX(
                 address(
                     new ERC1967Proxy{salt: bytes32(create2Salt)}(
@@ -50,11 +51,13 @@ contract DeployScript is Script {
                     rotateFunctionId: vm.envBytes32("ROTATE_FUNCTION_ID")
                 })
             );
-        } else {
+        } else if (upgrade) {
             address existingProxyAddress = vm.envAddress("CONTRACT_ADDRESS");
 
             lightClient = VectorX(existingProxyAddress);
             lightClient.upgradeTo(address(lightClientImpl));
+        } else {
+            lightClient = VectorX(vm.envAddress("CONTRACT_ADDRESS"));
         }
         if (vm.envBool("UPDATE_GATEWAY")) {
             lightClient.updateGateway(vm.envAddress("GATEWAY_ADDRESS"));

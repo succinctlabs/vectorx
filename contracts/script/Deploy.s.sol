@@ -16,13 +16,12 @@ contract DeployScript is Script {
         bool deploy = vm.envBool("DEPLOY");
         bool upgrade = vm.envBool("UPGRADE");
 
-        // Deploy contract
-        VectorX lightClientImpl = new VectorX{salt: bytes32(create2Salt)}();
-
-        console.logAddress(address(lightClientImpl));
-
         VectorX lightClient;
         if (deploy) {
+            // Deploy contract
+            VectorX lightClientImpl = new VectorX{salt: bytes32(create2Salt)}();
+
+            console.logAddress(address(lightClientImpl));
             lightClient = VectorX(
                 address(
                     new ERC1967Proxy{salt: bytes32(create2Salt)}(
@@ -52,6 +51,10 @@ contract DeployScript is Script {
                 })
             );
         } else if (upgrade) {
+            // Deploy contract
+            VectorX lightClientImpl = new VectorX{salt: bytes32(create2Salt)}();
+
+            console.logAddress(address(lightClientImpl));
             address existingProxyAddress = vm.envAddress("CONTRACT_ADDRESS");
 
             lightClient = VectorX(existingProxyAddress);

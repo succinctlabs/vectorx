@@ -674,6 +674,16 @@ impl RpcDataFetcher {
             panic!("Too many authorities");
         }
 
+        // Check that the block_number matches the precommit block_number.
+        assert_eq!(
+            justification.commit.precommits[0]
+                .clone()
+                .precommit
+                .target_number,
+            block_number,
+            "Block number does not match precommit block number!"
+        );
+
         // Form a message which is signed in the justification.
         // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/primitives/consensus/grandpa/src/lib.rs#L434-L458
         let signed_message = Encode::encode(&(

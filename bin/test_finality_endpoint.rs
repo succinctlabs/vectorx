@@ -18,10 +18,15 @@ pub async fn main() {
     env_logger::init();
     let fetcher = RpcDataFetcher::new().await;
 
-    let mut start_block = 10000;
+    let mut start_block = 126000;
     let mut valid_blocks = Vec::new();
 
-    while start_block < 10400 {
+    fetcher
+        .get_justification_from_prove_finality_endpoint::<300>(120000)
+        .await
+        .unwrap();
+
+    while start_block < 126400 {
         println!(
             "Fetching justification for blocks {} to {}...",
             start_block,

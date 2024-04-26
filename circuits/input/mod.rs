@@ -588,10 +588,7 @@ impl RpcDataFetcher {
         header.unwrap().unwrap()
     }
 
-    pub async fn get_authority_set_id(&mut self, block_number: u32) -> u64 {
-        self.refresh_ws_connection()
-            .await
-            .expect("Failed to establish connection to Avail WS.");
+    pub async fn get_authority_set_id(&self, block_number: u32) -> u64 {
         let block_hash = self.get_block_hash(block_number).await;
 
         let set_id_key = api::storage().grandpa().current_set_id();
@@ -606,11 +603,7 @@ impl RpcDataFetcher {
 
     // This function returns the authorities (as AffinePoint and public key bytes) for a given block number
     // by fetching the "authorities_bytes" from storage and decoding the bytes to a VersionedAuthorityList.
-    pub async fn get_authorities(&mut self, block_number: u32) -> Vec<CompressedEdwardsY> {
-        self.refresh_ws_connection()
-            .await
-            .expect("Failed to establish connection to Avail WS.");
-
+    pub async fn get_authorities(&self, block_number: u32) -> Vec<CompressedEdwardsY> {
         let block_hash = self.get_block_hash(block_number).await;
 
         let grandpa_authorities = self
@@ -651,10 +644,12 @@ impl RpcDataFetcher {
         H256::from_slice(&hash_so_far)
     }
 
-    pub async fn get_justification_from_prove_finality_endpoint(
+    pub async fn get_justification_from_prove_finality_endpoint<
+        const VALIDATOR_SET_SIZE_MAX: usize,
+    >(
         &self,
         block_number: u32,
-    ) -> Result<GrandpaJustification, Error> {
+    ) -> Result<SimpleJustificationData, Error> {
         let mut params = RpcParams::new();
         let _ = params.push(block_number);
 
@@ -669,7 +664,72 @@ impl RpcDataFetcher {
         let justification: GrandpaJustification =
             Decode::decode(&mut finality_proof.justification.as_slice())?;
 
-        Ok(justification)
+        // The authority set id for the current block is defined in the previous block.
+        let authority_set_id = self.get_authority_set_id(block_number - 1).await;
+
+        // The authorities for the current block are defined in the previous block.
+        let authorities_pubkey_bytes = self.get_authorities(block_number - 1).await;
+
+        if authorities_pubkey_bytes.len() > VALIDATOR_SET_SIZE_MAX {
+            panic!("Too many authorities");
+        }
+
+        // Form a message which is signed in the justification.
+        // Spec: https://github.com/availproject/polkadot-sdk/blob/70e569d5112f879001a987e94402ff70f9683cb5/substrate/primitives/consensus/grandpa/src/lib.rs#L434-L458
+        let signed_message = Encode::encode(&(
+            &SignerMessage::PrecommitMessage(justification.commit.precommits[0].clone().precommit),
+            &justification.round,
+            &authority_set_id,
+        ));
+
+        let mut pubkey_bytes_to_signature = HashMap::new();
+
+        // Verify all the signatures of the justification.
+        justification
+            .commit
+            .precommits
+            .iter()
+            .for_each(|precommit| {
+                let pubkey = precommit.clone().id;
+                let signature = precommit.clone().signature.0;
+                let pubkey_bytes = pubkey.0;
+
+                // Verify the signature by this validator over the signed_message which is shared.
+                verify_signature(&pubkey_bytes, &signed_message, &signature);
+                pubkey_bytes_to_signature.insert(pubkey_bytes, signature);
+            });
+
+        let mut validator_signed = Vec::new();
+        let mut signatures = Vec::new();
+        let mut pubkeys = Vec::new();
+        let mut voting_weight = 0;
+        for pubkey_bytes in authorities_pubkey_bytes.iter() {
+            let signature = pubkey_bytes_to_signature.get(pubkey_bytes.as_bytes());
+
+            if let Some(valid_signature) = signature {
+                validator_signed.push(true);
+                pubkeys.push(
+                    CompressedEdwardsY::from_slice(pubkey_bytes.as_bytes().as_ref()).unwrap(),
+                );
+                signatures.push((*valid_signature).to_vec());
+                voting_weight += 1;
+            } else {
+                validator_signed.push(false);
+                pubkeys.push(
+                    CompressedEdwardsY::from_slice(pubkey_bytes.as_bytes().as_ref()).unwrap(),
+                );
+                // Push a dummy signature, since this validator did not sign.
+                signatures.push(DUMMY_SIGNATURE.to_vec());
+            }
+        }
+        Ok(SimpleJustificationData {
+            pubkeys,
+            signatures,
+            validator_signed,
+            signed_message,
+            voting_weight,
+            num_authorities: authorities_pubkey_bytes.len() as u64,
+        })
     }
 
     async fn get_justification_data<const VALIDATOR_SET_SIZE_MAX: usize>(

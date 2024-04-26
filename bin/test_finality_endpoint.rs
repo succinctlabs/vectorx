@@ -21,15 +21,15 @@ pub async fn main() {
     let mut start_block = 10000;
     let mut valid_blocks = Vec::new();
 
-    while start_block < 15000 {
+    while start_block < 10400 {
         println!(
             "Fetching justification for blocks {} to {}...",
             start_block,
-            start_block + 300
+            start_block + 200
         );
         let mut futures = Vec::new();
-        for block in start_block..start_block + 300 {
-            futures.push(fetcher.get_justification_from_prove_finality_endpoint(block));
+        for block in start_block..start_block + 200 {
+            futures.push(fetcher.get_justification_from_prove_finality_endpoint::<300>(block));
         }
         let results = futures::future::join_all(futures).await;
 
@@ -39,7 +39,7 @@ pub async fn main() {
             }
         }
 
-        start_block += 300;
+        start_block += 200;
     }
 
     println!("Valid blocks: {:?}", valid_blocks);

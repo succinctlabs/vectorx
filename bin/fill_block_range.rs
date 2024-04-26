@@ -19,6 +19,8 @@ use ethers::contract::abigen;
 use ethers::providers::{Http, Provider};
 use vectorx::input::RpcDataFetcher;
 
+// If the VectorX contract falls behind, you can use this script to forcefully fill the intermediate
+// batches of data.
 // To get the calldata for filling the block range run the following script:
 // cargo run --bin fill_block_range -- --end-block <end_block>
 

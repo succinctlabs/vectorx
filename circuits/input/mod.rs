@@ -651,6 +651,27 @@ impl RpcDataFetcher {
         H256::from_slice(&hash_so_far)
     }
 
+    pub async fn get_justification_from_prove_finality_endpoint(
+        &self,
+        block_number: u32,
+    ) -> Result<GrandpaJustification, Error> {
+        let mut params = RpcParams::new();
+        let _ = params.push(block_number);
+
+        let encoded_finality_proof = self
+            .client
+            .rpc()
+            .request::<EncodedFinalityProof>("grandpa_proveFinality", params)
+            .await?;
+
+        let finality_proof: FinalityProof =
+            Decode::decode(&mut encoded_finality_proof.0 .0.as_slice())?;
+        let justification: GrandpaJustification =
+            Decode::decode(&mut finality_proof.justification.as_slice())?;
+
+        Ok(justification)
+    }
+
     async fn get_justification_data<const VALIDATOR_SET_SIZE_MAX: usize>(
         &mut self,
         block_number: u32,

@@ -19,6 +19,10 @@ name = "header_range"
 path = "bin/header_range.rs"
 
 [[bin]]
+name = "test_finality_endpoint"
+path = "bin/test_finality_endpoint.rs"
+
+[[bin]]
 name = "rotate"
 path = "bin/rotate.rs"
 

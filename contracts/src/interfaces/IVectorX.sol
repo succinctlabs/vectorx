@@ -28,11 +28,13 @@ interface IVectorX {
     event HeadUpdate(uint32 blockNumber, bytes32 headerHash);
 
     /// @notice Emitted when data + state commitment for range (startBlock, endBlock] are stored.
+    /// @param headerRangeCommitmentTreeSize The commitment tree size for the header range.
     event HeaderRangeCommitmentStored(
         uint32 startBlock,
         uint32 endBlock,
         bytes32 dataCommitment,
-        bytes32 stateCommitment
+        bytes32 stateCommitment,
+        uint32 headerRangeCommitmentTreeSize
     );
 
     /// @notice Emitted when a new authority set is stored.

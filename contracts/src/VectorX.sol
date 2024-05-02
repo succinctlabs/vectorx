@@ -47,6 +47,9 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ///     to know the block height of an attestation.
     mapping(bytes32 => uint32) public rangeStartBlocks;
 
+    /// @notice The commitment tree size for the header range.
+    uint32 public headerRangeCommitmentTreeSize;
+
     struct InitParameters {
         address guardian;
         address gateway;
@@ -56,6 +59,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         bytes32 authoritySetHash;
         bytes32 headerRangeFunctionId;
         bytes32 rotateFunctionId;
+        uint32 headerRangeCommitmentTreeSize;
     }
 
     function VERSION() external pure override returns (string memory) {
@@ -74,6 +78,7 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
 
         rotateFunctionId = _params.rotateFunctionId;
         headerRangeFunctionId = _params.headerRangeFunctionId;
+        headerRangeCommitmentTreeSize = _params.headerRangeCommitmentTreeSize;
 
         __TimelockedUpgradeable_init(_params.guardian, _params.guardian);
     }
@@ -90,6 +95,13 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
     ) external onlyGuardian {
         headerRangeFunctionId = _headerRangeFunctionId;
         rotateFunctionId = _rotateFunctionId;
+    }
+
+    /// @notice Update the commitment tree size for the header range.
+    function updateHeaderRangeCommitmentTreeSize(
+        uint32 _headerRangeCommitmentTreeSize
+    ) external onlyGuardian {
+        headerRangeCommitmentTreeSize = _headerRangeCommitmentTreeSize;
     }
 
     /// @notice Update the gateway address.
@@ -146,7 +158,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
                 _startBlocks[i],
                 _endBlocks[i],
                 _dataRootCommitments[i],
-                _stateRootCommitments[i]
+                _stateRootCommitments[i],
+                headerRangeCommitmentTreeSize
             );
         }
         latestBlock = _endBlocks[_endBlocks.length - 1];
@@ -273,7 +286,8 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
             latestBlock,
             _targetBlock,
             dataRootCommitment,
-            stateRootCommitment
+            stateRootCommitment,
+            headerRangeCommitmentTreeSize
         );
 
         // Update latest block.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.25;
 
 import {IVectorX} from "./interfaces/IVectorX.sol";
 import {TimelockedUpgradeable} from "@succinctx/upgrades/TimelockedUpgradeable.sol";

@@ -392,7 +392,7 @@ impl VectorXOperator {
                 .await
                 .unwrap();
 
-            // block_to_request is the closest interval of block_interval less than min(avail_chain_latest_block_nb, data_commitment_max + current_block)
+            // block_to_request is the closest interval of block_interval less than min(avail_chain_latest_block_nb, header_range_commitment_tree_size + current_block)
             let max_block = std::cmp::min(
                 avail_chain_latest_block_nb,
                 header_range_commitment_tree_size + contract_latest_block_nb,

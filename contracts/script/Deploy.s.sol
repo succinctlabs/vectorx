@@ -47,7 +47,10 @@ contract DeployScript is Script {
                     headerRangeFunctionId: vm.envBytes32(
                         "HEADER_RANGE_FUNCTION_ID"
                     ),
-                    rotateFunctionId: vm.envBytes32("ROTATE_FUNCTION_ID")
+                    rotateFunctionId: vm.envBytes32("ROTATE_FUNCTION_ID"),
+                    headerRangeCommitmentTreeSize: uint32(
+                        vm.envUint("HEADER_RANGE_COMMITMENT_TREE_SIZE")
+                    )
                 })
             );
         } else {
@@ -70,7 +73,8 @@ contract DeployScript is Script {
         if (vm.envBool("UPDATE_FUNCTION_IDS")) {
             lightClient.updateFunctionIds(
                 vm.envBytes32("HEADER_RANGE_FUNCTION_ID"),
-                vm.envBytes32("ROTATE_FUNCTION_ID")
+                vm.envBytes32("ROTATE_FUNCTION_ID"),
+                uint32(vm.envUint("HEADER_RANGE_COMMITMENT_TREE_SIZE"))
             );
         }
 

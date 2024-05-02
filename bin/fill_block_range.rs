@@ -45,7 +45,11 @@ pub struct BlockRangeData {
     pub end_authority_set_hash: [u8; 32],
 }
 
-async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeData {
+async fn get_block_range_data(
+    header_range_commitment_tree_size: u32,
+    start_block: u32,
+    end_block: u32,
+) -> BlockRangeData {
     let mut input_data_fetcher = RpcDataFetcher::new().await;
 
     let mut start_blocks = Vec::new();
@@ -54,11 +58,11 @@ async fn get_block_range_data(start_block: u32, end_block: u32) -> BlockRangeDat
     let mut data_root_commitments = Vec::new();
     let mut state_root_commitments = Vec::new();
 
-    for i in (start_block..end_block).step_by(256) {
-        let block_range_end = min(i + 256, end_block);
+    for i in (start_block..end_block).step_by(header_range_commitment_tree_size as usize) {
+        let block_range_end = min(i + header_range_commitment_tree_size, end_block);
         let header = input_data_fetcher.get_header(block_range_end).await;
         let (state_root_commitment, data_root_commitment) = input_data_fetcher
-            .get_merkle_root_commitments(i, block_range_end)
+            .get_merkle_root_commitments(header_range_commitment_tree_size, i, block_range_end)
             .await;
         start_blocks.push(i);
         end_blocks.push(block_range_end);
@@ -110,9 +114,14 @@ async fn main() {
 
     let contract = VectorX::new(address.0 .0, client);
 
+    // Read the header range commitment tree size from the contract.
+    let header_range_commitment_tree_size: u32 =
+        contract.header_range_commitment_tree_size().await.unwrap();
+
     let latest_block = contract.latest_block().await.unwrap();
 
-    let block_range_data = get_block_range_data(latest_block, end_block).await;
+    let block_range_data =
+        get_block_range_data(header_range_commitment_tree_size, latest_block, end_block).await;
 
     if args.post {
         let tx: Option<TransactionReceipt> = contract

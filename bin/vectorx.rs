@@ -374,7 +374,7 @@ impl VectorXOperator {
         Some(min(max_block_to_request, last_justified_block))
     }
 
-    async fn run(&mut self, loop_delay_mins: u64, block_interval: u32, data_commitment_max: u32) {
+    async fn run(&mut self, loop_delay_mins: u64, block_interval: u32) {
         loop {
             // Check if there is a rotate available for the next authority set.
             self.find_and_request_rotate().await;
@@ -385,10 +385,17 @@ impl VectorXOperator {
             // Get latest block of contract.
             let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
 
-            // block_to_request is the closest interval of block_interval less than min(avail_chain_latest_block_nb, data_commitment_max + current_block)
+            // Get the header range commitment tree size.
+            let header_range_commitment_tree_size: u32 = self
+                .contract
+                .header_range_commitment_tree_size()
+                .await
+                .unwrap();
+
+            // block_to_request is the closest interval of block_interval less than min(avail_chain_latest_block_nb, header_range_commitment_tree_size + current_block)
             let max_block = std::cmp::min(
                 avail_chain_latest_block_nb,
-                data_commitment_max + contract_latest_block_nb,
+                header_range_commitment_tree_size + contract_latest_block_nb,
             );
             let block_to_request = max_block - (max_block % block_interval);
 
@@ -429,8 +436,5 @@ async fn main() {
             .expect("invalid UPDATE_DELAY_BLOCKS");
     }
     let mut operator = VectorXOperator::new(data_fetcher).await;
-    const DATA_COMMITMENT_MAX: u32 = 256;
-    operator
-        .run(loop_delay_mins, update_delay_blocks, DATA_COMMITMENT_MAX)
-        .await;
+    operator.run(loop_delay_mins, update_delay_blocks).await;
 }

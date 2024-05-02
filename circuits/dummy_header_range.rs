@@ -4,8 +4,10 @@ use rustx::program::Program;
 use crate::input::RpcDataFetcher;
 
 #[derive(Debug, Clone)]
-pub struct DummyHeaderRange;
-impl Program for DummyHeaderRange {
+pub struct DummyHeaderRange<const HEADER_RANGE_COMMITMENT_TREE_SIZE: usize>;
+impl<const HEADER_RANGE_COMMITMENT_TREE_SIZE: usize> Program
+    for DummyHeaderRange<HEADER_RANGE_COMMITMENT_TREE_SIZE>
+{
     fn run(input_bytes: Vec<u8>) -> Vec<u8> {
         // First 4 bytes are the trusted block number.
         // Next 32 bytes are the trusted header hash.
@@ -30,7 +32,11 @@ impl Program for DummyHeaderRange {
                 .to_vec();
 
             let (state_merkle_root, data_merkle_root) = data_fetcher
-                .get_merkle_root_commitments(trusted_block, target_block)
+                .get_merkle_root_commitments(
+                    HEADER_RANGE_COMMITMENT_TREE_SIZE as u32,
+                    trusted_block,
+                    target_block,
+                )
                 .await;
 
             (target_header_hash, state_merkle_root, data_merkle_root)
@@ -61,7 +67,7 @@ mod tests {
         let input_bytes = hex::decode(input).unwrap();
 
         // Compute the output.
-        let output = DummyHeaderRange::run(input_bytes);
+        let output = DummyHeaderRange::<256>::run(input_bytes);
 
         let expected_output =
             hex::decode("3aaa82535ce715acb251047c280d5492d1330c41fe24c9841db508ba961dce464cb5c2a82cc64e401ac01ba85c471fe1dab4fe4baf7a96c306d4e94dcb428f47ead156d58c77adfa928845f048b50fd92e871776dfa76ed2f98c6ef823aa7a2d")

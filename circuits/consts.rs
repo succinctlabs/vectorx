@@ -51,8 +51,5 @@ pub const MAX_SUBARRAY_SIZE: usize = MAX_AUTHORITY_SET_SIZE * VALIDATOR_LENGTH +
 // Max number of authorities this circuit currently supports.
 pub const MAX_AUTHORITY_SET_SIZE: usize = 300;
 
-// Max number of headers this circuit currently supports. This is one era.
-pub const MAX_NUM_HEADERS: usize = 256;
-
 // Can need up to 5 bytes to represent a compact u32.
 pub const MAX_COMPACT_UINT_BYTES: usize = 5;

@@ -1,13 +1,23 @@
 {
     "entrypoints": [
         {
-            "name": "header_range",
+            "name": "header_range_256",
             "framework": "plonky2x",
             "baseDir": ".",
-            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin header_range --release build && mv ./target/release/header_range ./build/header_range",
-            "proveCommand": "RUST_LOG=debug ./build/header_range prove input.json",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin header_range_256 --release build && mv ./target/release/header_range_256 ./build/header_range_256",
+            "proveCommand": "RUST_LOG=debug ./build/header_range_256 prove input.json",
             "requiredArtifacts": [
-                "header_range"
+                "header_range_256"
+            ]
+        },
+        {
+            "name": "header_range_512",
+            "framework": "plonky2x",
+            "baseDir": ".",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin header_range_512 --release build && mv ./target/release/header_range_512 ./build/header_range_512",
+            "proveCommand": "RUST_LOG=debug ./build/header_range_512 prove input.json",
+            "requiredArtifacts": [
+                "header_range_512"
             ]
         },
         {
@@ -18,11 +28,18 @@
             "proveCommand": "RUST_LOG=debug ./build/rotate prove input.json"
         },
         {
-            "name": "dummy_header_range",
+            "name": "dummy_header_range_256",
             "framework": "rustx",
             "baseDir": ".",
-            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_header_range --release build && mv ./target/release/dummy_header_range ./build/dummy_header_range",
-            "proveCommand": "RUST_LOG=debug ./build/dummy_header_range prove input.json"
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_header_range_256 --release build && mv ./target/release/dummy_header_range_256 ./build/dummy_header_range_256",
+            "proveCommand": "RUST_LOG=debug ./build/dummy_header_range_256 prove input.json"
+        },
+        {
+            "name": "dummy_header_range_512",
+            "framework": "rustx",
+            "baseDir": ".",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_header_range_512 --release build && mv ./target/release/dummy_header_range_512 ./build/dummy_header_range_512",
+            "proveCommand": "RUST_LOG=debug ./build/dummy_header_range_512 prove input.json"
         },
         {
             "name": "dummy_rotate",

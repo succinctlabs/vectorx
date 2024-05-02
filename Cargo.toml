@@ -11,6 +11,10 @@ name = "dummy_header_range_256"
 path = "bin/dummy_header_range_256.rs"
 
 [[bin]]
+name = "dummy_header_range_512"
+path = "bin/dummy_header_range_512.rs"
+
+[[bin]]
 name = "dummy_rotate"
 path = "bin/dummy_rotate.rs"
 

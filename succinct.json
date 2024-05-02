@@ -35,6 +35,13 @@
             "proveCommand": "RUST_LOG=debug ./build/dummy_header_range_256 prove input.json"
         },
         {
+            "name": "dummy_header_range_512",
+            "framework": "rustx",
+            "baseDir": ".",
+            "buildCommand": "mkdir -p build && RUST_LOG=debug cargo run --bin dummy_header_range_512 --release build && mv ./target/release/dummy_header_range_512 ./build/dummy_header_range_512",
+            "proveCommand": "RUST_LOG=debug ./build/dummy_header_range_512 prove input.json"
+        },
+        {
             "name": "dummy_rotate",
             "framework": "rustx",
             "baseDir": ".",

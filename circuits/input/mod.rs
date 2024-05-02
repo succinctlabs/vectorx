@@ -503,7 +503,6 @@ impl RpcDataFetcher {
             panic!("Range too large!");
         }
 
-        // Uses the simple merkle tree implementation, which defaults to 256 leaves in Avail.
         let headers = self
             .get_block_headers_range(start_block + 1, end_block)
             .await;
@@ -521,6 +520,7 @@ impl RpcDataFetcher {
             state_root_leaves.push([0u8; 32].to_vec());
         }
 
+        // Uses the simple merkle tree implementation.
         (
             Self::get_merkle_root(state_root_leaves),
             Self::get_merkle_root(data_root_leaves),

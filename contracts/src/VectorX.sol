@@ -88,19 +88,14 @@ contract VectorX is IVectorX, TimelockedUpgradeable {
         frozen = _freeze;
     }
 
-    /// @notice Update the function IDs.
+    /// @notice Update the function IDs and the commitment tree size for the header range function id.
     function updateFunctionIds(
         bytes32 _headerRangeFunctionId,
-        bytes32 _rotateFunctionId
+        bytes32 _rotateFunctionId,
+        uint32 _headerRangeCommitmentTreeSize
     ) external onlyGuardian {
         headerRangeFunctionId = _headerRangeFunctionId;
         rotateFunctionId = _rotateFunctionId;
-    }
-
-    /// @notice Update the commitment tree size for the header range.
-    function updateHeaderRangeCommitmentTreeSize(
-        uint32 _headerRangeCommitmentTreeSize
-    ) external onlyGuardian {
         headerRangeCommitmentTreeSize = _headerRangeCommitmentTreeSize;
     }
 

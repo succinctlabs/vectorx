@@ -215,6 +215,19 @@
     },
     {
         "type": "function",
+        "name": "headerRangeCommitmentTreeSize",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint32",
+                "internalType": "uint32"
+            }
+        ],
+        "stateMutability": "view"
+    },
+    {
+        "type": "function",
         "name": "headerRangeFunctionId",
         "inputs": [],
         "outputs": [
@@ -274,6 +287,11 @@
                         "name": "rotateFunctionId",
                         "type": "bytes32",
                         "internalType": "bytes32"
+                    },
+                    {
+                        "name": "headerRangeCommitmentTreeSize",
+                        "type": "uint32",
+                        "internalType": "uint32"
                     }
                 ]
             }
@@ -539,6 +557,11 @@
                 "name": "_rotateFunctionId",
                 "type": "bytes32",
                 "internalType": "bytes32"
+            },
+            {
+                "name": "_headerRangeCommitmentTreeSize",
+                "type": "uint32",
+                "internalType": "uint32"
             }
         ],
         "outputs": [],
@@ -713,6 +736,12 @@
                 "type": "bytes32",
                 "indexed": false,
                 "internalType": "bytes32"
+            },
+            {
+                "name": "headerRangeCommitmentTreeSize",
+                "type": "uint32",
+                "indexed": false,
+                "internalType": "uint32"
             }
         ],
         "anonymous": false

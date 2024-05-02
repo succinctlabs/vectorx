@@ -96,7 +96,7 @@ mod tests {
     use plonky2x::prelude::{DefaultBuilder, GateRegistry, HintRegistry};
 
     use super::*;
-    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE, MAX_NUM_HEADERS};
+    use crate::consts::{MAX_AUTHORITY_SET_SIZE, MAX_HEADER_SIZE};
 
     #[test]
     #[cfg_attr(feature = "ci", ignore)]
@@ -230,6 +230,8 @@ mod tests {
     fn test_header_range_large() {
         env::set_var("RUST_LOG", "debug");
         env_logger::try_init().unwrap_or_default();
+
+        const MAX_NUM_HEADERS: usize = 256;
 
         let mut builder = DefaultBuilder::new();
 

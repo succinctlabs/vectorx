@@ -11,5 +11,6 @@ use rustx::function::RustFunction;
 use vectorx::dummy_header_range::DummyHeaderRange;
 
 fn main() {
-    DummyHeaderRange::entrypoint();
+    const HEADER_RANGE_COMMITMENT_TREE_SIZE: usize = 256;
+    DummyHeaderRange::<HEADER_RANGE_COMMITMENT_TREE_SIZE>::entrypoint();
 }

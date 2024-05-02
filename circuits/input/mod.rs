@@ -29,8 +29,7 @@ use self::types::{
     HeaderRotateData, SignerMessage, SimpleJustificationData, StoredJustificationData,
 };
 use crate::consts::{
-    CONSENSUS_ENGINE_ID_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, MAX_NUM_HEADERS, PUBKEY_LENGTH,
-    VALIDATOR_LENGTH,
+    CONSENSUS_ENGINE_ID_PREFIX_LENGTH, DELAY_LENGTH, HASH_SIZE, PUBKEY_LENGTH, VALIDATOR_LENGTH,
 };
 
 #[derive(Clone)]
@@ -493,10 +492,14 @@ impl RpcDataFetcher {
     /// Returns a tuple of the state root commitment and data root commitment.
     pub async fn get_merkle_root_commitments(
         &mut self,
+        header_range_commitment_tree_size: u32,
         start_block: u32,
         end_block: u32,
     ) -> (Vec<u8>, Vec<u8>) {
-        if (end_block - start_block) as usize > MAX_NUM_HEADERS {
+        // Assert header_range_commitment_tree_size is a power of 2.
+        assert!(header_range_commitment_tree_size.is_power_of_two());
+
+        if end_block - start_block > header_range_commitment_tree_size {
             panic!("Range too large!");
         }
 
@@ -513,7 +516,7 @@ impl RpcDataFetcher {
             state_root_leaves.push(header.state_root.0.to_vec());
         }
 
-        for _ in headers.len()..MAX_NUM_HEADERS {
+        for _ in headers.len()..header_range_commitment_tree_size as usize {
             data_root_leaves.push([0u8; 32].to_vec());
             state_root_leaves.push([0u8; 32].to_vec());
         }
@@ -978,7 +981,9 @@ mod tests {
         let mut fetcher = RpcDataFetcher::new().await;
         let _ = fetcher.get_block_headers_range(100000, 100256).await;
 
-        let (_, data_root_commitment) = fetcher.get_merkle_root_commitments(441000, 441001).await;
+        let (_, data_root_commitment) = fetcher
+            .get_merkle_root_commitments(256, 441000, 441001)
+            .await;
 
         println!(
             "data_root_commitment {:?}",

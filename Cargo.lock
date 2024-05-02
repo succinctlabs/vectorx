@@ -4907,7 +4907,7 @@ source = "git+https://github.com/0xPolygonZero/plonky2.git?tag=v0.2.0#7445ec911b
 [[package]]
 name = "plonky2x"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/fix-plonky2-pin#f116c7783094c0e516e9d57aab02e2230ba761c4"
+source = "git+https://github.com/succinctlabs/succinctx.git?tag=v1.1.0#71f2b3aa395f4e7f824e35f89e75d4a368f963b8"
 dependencies = [
  "anyhow",
  "array-macro",
@@ -4949,7 +4949,7 @@ dependencies = [
 [[package]]
 name = "plonky2x-derive"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/fix-plonky2-pin#f116c7783094c0e516e9d57aab02e2230ba761c4"
+source = "git+https://github.com/succinctlabs/succinctx.git?tag=v1.1.0#71f2b3aa395f4e7f824e35f89e75d4a368f963b8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5793,7 +5793,7 @@ checksum = "80af6f9131f277a45a3fba6ce8e2258037bb0477a67e610d3c1fe046ab31de47"
 [[package]]
 name = "rustx"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/fix-plonky2-pin#f116c7783094c0e516e9d57aab02e2230ba761c4"
+source = "git+https://github.com/succinctlabs/succinctx.git?tag=v1.1.0#71f2b3aa395f4e7f824e35f89e75d4a368f963b8"
 dependencies = [
  "alloy-primitives",
  "alloy-sol-types",
@@ -7231,7 +7231,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 [[package]]
 name = "starkyx"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/starkyx.git?branch=ratan/fix-plonky2-pin#e8b856902a83ae57e8f8b4092d06a00673039bb5"
+source = "git+https://github.com/succinctlabs/starkyx.git?tag=v1.0.0#1644af58bfc7d305c0066597c303a129fec7f427"
 dependencies = [
  "anyhow",
  "bincode",
@@ -7476,7 +7476,7 @@ dependencies = [
 [[package]]
 name = "succinct-client"
 version = "0.1.0"
-source = "git+https://github.com/succinctlabs/succinctx.git?branch=ratan/fix-plonky2-pin#f116c7783094c0e516e9d57aab02e2230ba761c4"
+source = "git+https://github.com/succinctlabs/succinctx.git?tag=v1.1.0#71f2b3aa395f4e7f824e35f89e75d4a368f963b8"
 dependencies = [
  "alloy-primitives",
  "anyhow",

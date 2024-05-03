@@ -401,7 +401,7 @@ impl VectorXOperator {
         }
 
         let mut block_to_step_to = vectorx_current_block + ideal_block_interval;
-
+        // If the block to step to is greater than the current head of Avail, return None.
         if block_to_step_to > avail_current_block {
             return None;
         }

@@ -994,6 +994,14 @@ mod tests {
 
     #[tokio::test]
     #[cfg_attr(feature = "ci", ignore)]
+    async fn test_get_block_hash() {
+        let fetcher = RpcDataFetcher::new().await;
+        let block_hash = fetcher.get_block_hash(70440).await;
+        println!("block hash {:?}", hex::encode(block_hash.0));
+    }
+
+    #[tokio::test]
+    #[cfg_attr(feature = "ci", ignore)]
     async fn test_get_header_hash() {
         let mut fetcher = RpcDataFetcher::new().await;
 

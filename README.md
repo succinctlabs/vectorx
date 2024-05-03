@@ -114,20 +114,6 @@ Example response:
 }
 ```
 
-### Range of blocks stored in the `VectorX` contract
-
-Querying for the range of blocks stored in the VectorX contract deployed on Sepolia (chain ID: 11155111) at address 0x169e50f09A50F3509777cEf63EC59Eeb2aAcd201.
-
-```
-https://beaconapi.succinct.xyz/api/integrations/vectorx/range?contractChainId=11155111&contractAddress=0x169e50f09A50F3509777cEf63EC59Eeb2aAcd201
-```
-
-Example response:
-
-```json
-{ "data": { "rangeStart": 444840, "rangeEnd": 448140 } }
-```
-
 ### Health of the `VectorX` contract
 
 Querying for the health of the VectorX contract deployed on Sepolia (chain ID: 11155111) at address 0x169e50f09A50F3509777cEf63EC59Eeb2aAcd201.

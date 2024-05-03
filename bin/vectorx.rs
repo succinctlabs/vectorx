@@ -29,6 +29,7 @@ struct VectorXOperator {
     contract: VectorX<Provider<Http>>,
     client: SuccinctClient,
     data_fetcher: RpcDataFetcher,
+    is_dummy_operator: bool,
 }
 
 #[derive(Debug)]
@@ -72,11 +73,18 @@ impl VectorXOperator {
         let succinct_api_key = env::var("SUCCINCT_API_KEY").expect("SUCCINCT_API_KEY must be set");
         let client = SuccinctClient::new(succinct_rpc_url, succinct_api_key, false, false);
 
+        // is_dummy_operator defaults to false.
+        let is_dummy_operator = env::var("IS_DUMMY_OPERATOR")
+            .unwrap_or("false".to_string())
+            .parse::<bool>()
+            .unwrap();
+
         Self {
             config,
             contract,
             client,
             data_fetcher,
+            is_dummy_operator,
         }
     }
 
@@ -404,6 +412,11 @@ impl VectorXOperator {
         // If the block to step to is greater than the current head of Avail, return None.
         if block_to_step_to > avail_current_block {
             return None;
+        }
+
+        // If dummy operator, return the block to step to.
+        if self.is_dummy_operator {
+            return Some(block_to_step_to);
         }
 
         // Check that block_to_step_to has a valid justification. If not, iterate up until the maximum_vectorx_target_block

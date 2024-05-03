@@ -374,8 +374,11 @@ impl VectorXOperator {
         Some(min(max_block_to_request, last_justified_block))
     }
 
-    async fn run(&mut self, loop_delay_mins: u64, block_interval: u32) {
+    async fn run(&mut self) {
         loop {
+            let loop_delay_mins = get_loop_delay_mins();
+            let block_interval = get_update_delay_blocks();
+
             // Check if there is a rotate available for the next authority set.
             self.find_and_request_rotate().await;
 
@@ -411,6 +414,30 @@ impl VectorXOperator {
     }
 }
 
+fn get_loop_delay_mins() -> u64 {
+    let loop_delay_mins_env = env::var("LOOP_DELAY_MINS");
+    let mut loop_delay_mins = 15;
+    if loop_delay_mins_env.is_ok() {
+        loop_delay_mins = loop_delay_mins_env
+            .unwrap()
+            .parse::<u64>()
+            .expect("invalid LOOP_DELAY_MINS");
+    }
+    loop_delay_mins
+}
+
+fn get_update_delay_blocks() -> u32 {
+    let update_delay_blocks_env = env::var("UPDATE_DELAY_BLOCKS");
+    let mut update_delay_blocks = 180;
+    if update_delay_blocks_env.is_ok() {
+        update_delay_blocks = update_delay_blocks_env
+            .unwrap()
+            .parse::<u32>()
+            .expect("invalid UPDATE_DELAY_BLOCKS");
+    }
+    update_delay_blocks
+}
+
 #[tokio::main]
 async fn main() {
     env::set_var("RUST_LOG", "info");
@@ -419,22 +446,6 @@ async fn main() {
 
     let data_fetcher = RpcDataFetcher::new().await;
 
-    let loop_delay_mins_env = env::var("LOOP_DELAY_MINS");
-    let mut loop_delay_mins = 5;
-    if loop_delay_mins_env.is_ok() {
-        loop_delay_mins = loop_delay_mins_env
-            .unwrap()
-            .parse::<u64>()
-            .expect("invalid LOOP_DELAY_MINS");
-    }
-    let update_delay_blocks_env = env::var("UPDATE_DELAY_BLOCKS");
-    let mut update_delay_blocks = 200;
-    if update_delay_blocks_env.is_ok() {
-        update_delay_blocks = update_delay_blocks_env
-            .unwrap()
-            .parse::<u32>()
-            .expect("invalid UPDATE_DELAY_BLOCKS");
-    }
     let mut operator = VectorXOperator::new(data_fetcher).await;
-    operator.run(loop_delay_mins, update_delay_blocks).await;
+    operator.run().await;
 }

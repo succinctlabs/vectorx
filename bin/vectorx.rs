@@ -1,4 +1,3 @@
-use std::cmp::min;
 use std::env;
 
 use alloy_primitives::{Address, Bytes, FixedBytes, B256};
@@ -9,6 +8,7 @@ use ethers::contract::abigen;
 use ethers::providers::{Http, Provider};
 use log::{error, info};
 use succinct_client::request::SuccinctClient;
+use vectorx::consts::MAX_AUTHORITY_SET_SIZE;
 use vectorx::input::RpcDataFetcher;
 
 // Note: Update ABI when updating contract.
@@ -33,7 +33,9 @@ struct VectorXOperator {
 
 #[derive(Debug)]
 struct HeaderRangeContractData {
-    current_block: u32,
+    vectorx_latest_block: u32,
+    avail_current_block: u32,
+    header_range_commitment_tree_size: u32,
     next_authority_set_hash_exists: bool,
     header_range_function_id: B256,
 }
@@ -198,13 +200,14 @@ impl VectorXOperator {
         }
     }
 
-    async fn find_and_request_header_range(&mut self, max_block_to_step_to: u32) {
+    // Ideally, post a header range update every ideal_block_interval blocks.
+    async fn find_and_request_header_range(&mut self, ideal_block_interval: u32) {
         let header_range_contract_data = self.get_contract_data_for_header_range().await;
 
         // The current authority set id is the authority set id of the block before the current block.
         let current_authority_set_id = self
             .data_fetcher
-            .get_authority_set_id(header_range_contract_data.current_block - 1)
+            .get_authority_set_id(header_range_contract_data.vectorx_latest_block - 1)
             .await;
 
         // Get the last justified block by the current authority set id.
@@ -215,7 +218,7 @@ impl VectorXOperator {
 
         // If this is the last justified block, check for header range with next authority set.
         let mut request_authority_set_id = current_authority_set_id;
-        if header_range_contract_data.current_block == last_justified_block {
+        if header_range_contract_data.vectorx_latest_block == last_justified_block {
             let next_authority_set_id = current_authority_set_id + 1;
 
             // Check if the next authority set id exists in the contract. If not, a rotate is needed.
@@ -225,9 +228,16 @@ impl VectorXOperator {
             request_authority_set_id = next_authority_set_id;
         }
 
-        // Step as far as possible within blocks attested by the requested authority set.
+        // Find the block to step to. If no block is returned, either 1) there is no block satisfying
+        // the conditions that is available to step to or 2) something has gone wrong with the indexer.
         let block_to_step_to = self
-            .find_block_to_step_to(max_block_to_step_to, request_authority_set_id)
+            .find_block_to_step_to(
+                ideal_block_interval,
+                header_range_contract_data.header_range_commitment_tree_size,
+                header_range_contract_data.vectorx_latest_block,
+                header_range_contract_data.avail_current_block,
+                request_authority_set_id,
+            )
             .await;
         if block_to_step_to.is_none() {
             return;
@@ -241,7 +251,7 @@ impl VectorXOperator {
         // Request the header range proof to block_to_step_to.
         match self
             .request_header_range(
-                header_range_contract_data.current_block,
+                header_range_contract_data.vectorx_latest_block,
                 request_authority_set_id,
                 block_to_step_to.unwrap(),
                 header_range_contract_data.header_range_function_id,
@@ -251,7 +261,7 @@ impl VectorXOperator {
             Ok(request_id) => {
                 info!(
                     "Header range request submitted from block {} to block {} with request ID: {}",
-                    header_range_contract_data.current_block,
+                    header_range_contract_data.vectorx_latest_block,
                     block_to_step_to.unwrap(),
                     request_id
                 )
@@ -298,13 +308,20 @@ impl VectorXOperator {
     async fn get_contract_data_for_header_range(&mut self) -> HeaderRangeContractData {
         let header_range_function_id: B256 =
             FixedBytes(self.contract.header_range_function_id().await.unwrap());
-        let current_block = self.contract.latest_block().await.unwrap();
+        let vectorx_latest_block = self.contract.latest_block().await.unwrap();
+        let header_range_commitment_tree_size = self
+            .contract
+            .header_range_commitment_tree_size()
+            .await
+            .unwrap();
 
-        let current_authority_set_id = self
+        let avail_current_block = self.data_fetcher.get_head().await.number;
+
+        let vectorx_current_authority_set_id = self
             .data_fetcher
-            .get_authority_set_id(current_block - 1)
+            .get_authority_set_id(vectorx_latest_block - 1)
             .await;
-        let next_authority_set_id = current_authority_set_id + 1;
+        let next_authority_set_id = vectorx_current_authority_set_id + 1;
 
         let next_authority_set_hash = self
             .contract
@@ -313,7 +330,9 @@ impl VectorXOperator {
             .unwrap();
 
         HeaderRangeContractData {
-            current_block,
+            vectorx_latest_block,
+            avail_current_block,
+            header_range_commitment_tree_size,
             next_authority_set_hash_exists: B256::from_slice(&next_authority_set_hash)
                 != B256::ZERO,
             header_range_function_id,
@@ -354,11 +373,17 @@ impl VectorXOperator {
         self.config.clone()
     }
 
-    // If the authority_set_id is the current authority set, return the max_block_to_request. Else,
-    // return the minimum of max_block_to_request and last_justified_block.
+    // The logic for finding the block to step to is as follows:
+    // 1. If the current epoch in the contract is not the latest epoch, step to the last justified block
+    // of the epoch.
+    // 2. If the block has a valid justification, return the block number.
+    // 3. If the block has no valid justification, return None.
     async fn find_block_to_step_to(
         &mut self,
-        max_block_to_request: u32,
+        ideal_block_interval: u32,
+        header_range_commitment_tree_size: u32,
+        vectorx_current_block: u32,
+        avail_current_block: u32,
         authority_set_id: u64,
     ) -> Option<u32> {
         let last_justified_block = self
@@ -366,12 +391,46 @@ impl VectorXOperator {
             .last_justified_block(authority_set_id)
             .await;
 
-        // Last justified block will be 0 in this is the current authority set.
-        if last_justified_block == 0 {
-            return Some(max_block_to_request);
+        // Step to the last justified block of the current epoch if it is in range. When the last
+        // justified block is 0, the VectorX contract's latest epoch is the current epoch on the
+        // Avail chain.
+        if last_justified_block != 0
+            && last_justified_block <= vectorx_current_block + header_range_commitment_tree_size
+        {
+            return Some(last_justified_block);
         }
 
-        Some(min(max_block_to_request, last_justified_block))
+        let mut block_to_step_to = vectorx_current_block + ideal_block_interval;
+        // If the block to step to is greater than the current head of Avail, return None.
+        if block_to_step_to > avail_current_block {
+            return None;
+        }
+
+        // Check that block_to_step_to has a valid justification. If not, iterate up until the maximum_vectorx_target_block
+        // to find a valid justification. If we're unable to find a justification, something has gone
+        // deeply wrong with the jusitification indexer.
+        loop {
+            if block_to_step_to > vectorx_current_block + header_range_commitment_tree_size {
+                info!(
+                    "Unable to find any valid justifications after searching from block {} to block {}. This is likely caused by an issue with the justification indexer.",
+                    vectorx_current_block + ideal_block_interval,
+                    vectorx_current_block + header_range_commitment_tree_size
+                );
+                return None;
+            }
+
+            if self
+                .data_fetcher
+                .get_justification_from_block::<MAX_AUTHORITY_SET_SIZE>(block_to_step_to)
+                .await
+                .is_ok()
+            {
+                break;
+            }
+            block_to_step_to += 1;
+        }
+
+        Some(block_to_step_to)
     }
 
     async fn run(&mut self) {
@@ -382,30 +441,8 @@ impl VectorXOperator {
             // Check if there is a rotate available for the next authority set.
             self.find_and_request_rotate().await;
 
-            // Get latest block of the Avail chain.
-            let avail_chain_latest_block_nb = self.data_fetcher.get_head().await.number;
-
-            // Get latest block of contract.
-            let contract_latest_block_nb = self.contract.latest_block().await.unwrap();
-
-            // Get the header range commitment tree size.
-            let header_range_commitment_tree_size: u32 = self
-                .contract
-                .header_range_commitment_tree_size()
-                .await
-                .unwrap();
-
-            // block_to_request is the closest interval of block_interval less than min(avail_chain_latest_block_nb, header_range_commitment_tree_size + current_block)
-            let max_block = std::cmp::min(
-                avail_chain_latest_block_nb,
-                header_range_commitment_tree_size + contract_latest_block_nb,
-            );
-            let block_to_request = max_block - (max_block % block_interval);
-
-            if block_to_request > contract_latest_block_nb {
-                info!("Attempting to step to block: {}", block_to_request);
-                self.find_and_request_header_range(block_to_request).await;
-            }
+            // Check if there is a header range request available.
+            self.find_and_request_header_range(block_interval).await;
 
             // Sleep for N minutes.
             info!("Sleeping for {} minutes.", loop_delay_mins);

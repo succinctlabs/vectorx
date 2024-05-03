@@ -8,7 +8,7 @@ import {ERC1967Proxy} from "@openzeppelin/proxy/ERC1967/ERC1967Proxy.sol";
 contract DeployScript is Script {
     function setUp() public {}
 
-    function run() public {
+    function run() public returns (address, address) {
         vm.startBroadcast();
 
         bytes32 create2Salt = bytes32(vm.envBytes("CREATE2_SALT"));
@@ -17,8 +17,6 @@ contract DeployScript is Script {
 
         // Deploy contract
         VectorX lightClientImpl = new VectorX{salt: bytes32(create2Salt)}();
-
-        console.logAddress(address(lightClientImpl));
 
         VectorX lightClient;
         if (!upgrade) {
@@ -78,6 +76,6 @@ contract DeployScript is Script {
             );
         }
 
-        console.logAddress(address(lightClient));
+        return (address(lightClientImpl), address(lightClient));
     }
 }

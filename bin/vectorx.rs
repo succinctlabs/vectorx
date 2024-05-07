@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::env;
 
 use alloy_primitives::{Address, Bytes, FixedBytes, B256};
@@ -408,11 +409,17 @@ impl VectorXOperator {
             return Some(last_justified_block);
         }
 
-        let mut block_to_step_to = vectorx_current_block + ideal_block_interval;
-        // If the block to step to is greater than the current head of Avail, return None.
-        if block_to_step_to > avail_current_block {
-            return None;
-        }
+        // The maximum valid block to step to is the either header_range_commitment_tree_size blocks
+        // ahead of the current block in the contract or the latest block on Avail.
+        let max_valid_block_to_step_to = min(
+            vectorx_current_block + header_range_commitment_tree_size,
+            avail_current_block,
+        );
+
+        // Find the closest block to the maximum valid block to step to that is a multiple of
+        // ideal_block_interval.
+        let mut block_to_step_to =
+            max_valid_block_to_step_to - (max_valid_block_to_step_to % ideal_block_interval);
 
         // If dummy operator, return the block to step to.
         if self.is_dummy_operator {

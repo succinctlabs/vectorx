@@ -18,6 +18,7 @@ VectorX's current maintained contract deployments are listed below.
 | Hex Devnet     | Sepolia    | [0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75](https://sepolia.etherscan.io/address/0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75#events)                     |
 | Hex Devnet     | Arb Sepolia| [0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75](https://sepolia.arbiscan.io/address/0xbc281367e1F2dB1c3e92255AA2F040B1c642ec75#events) |
 | Turing Testnet | Sepolia    | [0xe542db219a7e2b29c7aeaeace242c9a2cd528f96](https://sepolia.etherscan.io/address/0xe542db219a7e2b29c7aeaeace242c9a2cd528f96#events)                         |
+| Turing Testnet | Arb Sepolia    | [0xA712dfec48AF3a78419A8FF90fE8f97Ae74680F0](https://sepolia.arbiscan.io/address/0xA712dfec48AF3a78419A8FF90fE8f97Ae74680F0#events)                         |
 
 
 ## Run the VectorX Light Client

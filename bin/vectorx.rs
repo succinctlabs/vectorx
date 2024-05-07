@@ -421,6 +421,11 @@ impl VectorXOperator {
         let mut block_to_step_to =
             max_valid_block_to_step_to - (max_valid_block_to_step_to % ideal_block_interval);
 
+        /// If block_to_step_to is the current block, return None.
+        if block_to_step_to == vectorx_current_block {
+            return None;
+        }
+
         // If dummy operator, return the block to step to.
         if self.is_dummy_operator {
             return Some(block_to_step_to);

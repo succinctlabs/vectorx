@@ -126,10 +126,10 @@ https://beaconapi.succinct.xyz/api/integrations/vectorx/health?chainName=goldber
 Example response:
 
 ```json
-{ "data": { "logEmitted": true, "ethBlocksSinceLastLog": 32, "blocksBehindHead": 81 } }
+{"data":{"logEmitted":true,"ethBlocksSinceLastLog":35,"lastLogTimestamp":1717707768,"blocksBehindHead":50}}
 ```
 
-Note: If `logEmitted` is false, the contract has not emitted a log in at least the last "ethBlocksSinceLastLog" blocks.
+Note: If `logEmitted` is false, the contract has not emitted a log in at least the last `ethBlocksSinceLastLog` blocks.
 
 ## Dummy VectorX Set-Up
 

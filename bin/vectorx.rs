@@ -421,8 +421,8 @@ impl VectorXOperator {
         let mut block_to_step_to =
             max_valid_block_to_step_to - (max_valid_block_to_step_to % ideal_block_interval);
 
-        // If block_to_step_to is the current block, return None.
-        if block_to_step_to == vectorx_current_block {
+        // If block_to_step_to is <= to the current block, return None.
+        if block_to_step_to <= vectorx_current_block {
             return None;
         }
 
@@ -460,6 +460,8 @@ impl VectorXOperator {
 
     async fn run(&mut self) {
         loop {
+            self.data_fetcher = RpcDataFetcher::new().await;
+
             let loop_delay_mins = get_loop_delay_mins();
             let block_interval = get_update_delay_blocks();
 

@@ -460,6 +460,8 @@ impl VectorXOperator {
 
     async fn run(&mut self) {
         loop {
+            self.data_fetcher = RpcDataFetcher::new().await;
+
             let loop_delay_mins = get_loop_delay_mins();
             let block_interval = get_update_delay_blocks();
 

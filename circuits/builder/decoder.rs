@@ -10,7 +10,7 @@ use crate::consts::{
 use crate::vars::*;
 
 pub trait DecodingMethods {
-    /// Decode the byte representation of a compact u32 into it's integer representation and SCALE
+    /// Decode the byte representation of a compact u32 into its integer representation and SCALE
     /// compress mode. Spec: https://docs.substrate.io/reference/scale-codec/#fn-1
     fn decode_compact_int(
         &mut self,
@@ -117,7 +117,7 @@ impl<L: PlonkParameters<D>, const D: usize> DecodingMethods for CircuitBuilder<L
         );
         let (block_number, compress_mode) = self.decode_compact_int(block_number_bytes);
 
-        // The of block_number is 1, 2, 4, or 5 bytes depending on the encoding of the compact int.
+        // The value of block_number is 1, 2, 4, or 5 bytes depending on the encoding of the compact int.
         let all_possible_state_roots = vec![
             Bytes32Variable::from(&header.header_bytes[33..33 + HASH_SIZE]),
             Bytes32Variable::from(&header.header_bytes[34..34 + HASH_SIZE]),

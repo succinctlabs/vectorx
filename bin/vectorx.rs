@@ -433,7 +433,7 @@ impl VectorXOperator {
 
         // Check that block_to_step_to has a valid justification. If not, iterate up until the maximum_vectorx_target_block
         // to find a valid justification. If we're unable to find a justification, something has gone
-        // deeply wrong with the jusitification indexer.
+        // deeply wrong with the justification indexer.
         loop {
             if block_to_step_to > vectorx_current_block + header_range_commitment_tree_size {
                 info!(
